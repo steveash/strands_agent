@@ -81,8 +81,9 @@ What exists now:
 - a runnable Textual TUI scaffold,
 - a thin runtime boundary separate from the UI,
 - a deterministic **fake Strands runtime** for reliable local verification,
-- a live-runtime adapter seam for the real Strands SDK,
-- tests that prove prompt submission updates the TUI state.
+- a live **Strands + OpenAI** runtime path driven by environment variables,
+- tests that prove prompt submission updates the TUI state,
+- a local smoke script for validating the real runtime without committing secrets.
 
 Why the fake runtime exists:
 - It gives us a stable way to verify the TUI-to-agent loop even if live model credentials are missing or flaky.
@@ -93,7 +94,9 @@ How we know Phase 1 is working right now:
 - unit tests verify runtime behavior,
 - app tests verify prompt submission updates history and output,
 - the TUI status line updates with runtime/mode/turn count,
-- `pytest` currently passes for the Phase 1 scaffold.
+- runtime errors are surfaced visibly in the UI,
+- `pytest` currently passes for the Phase 1 scaffold,
+- a live local smoke check has succeeded against the OpenAI-backed Strands runtime.
 
 ## First five phases
 
@@ -257,6 +260,30 @@ strands-agent
 
 Current default behavior uses the fake runtime, which is intentional for Phase 1 verification.
 
+### Use live runtime locally
+
+If `OPENAI_API_KEY` is already present in your shell environment, you can switch the app to live mode without storing any secrets in the repo:
+
+```bash
+export STRANDS_AGENT_RUNTIME=live
+export STRANDS_AGENT_OPENAI_MODEL=gpt-4o-mini
+strands-agent
+```
+
+The app will then use the Strands SDK with the OpenAI model provider.
+
+### Live smoke check
+
+To verify the live runtime outside the TUI:
+
+```bash
+export STRANDS_AGENT_RUNTIME=live
+export STRANDS_AGENT_OPENAI_MODEL=gpt-4o-mini
+python scripts/live_smoke.py
+```
+
+Expected result is a short successful reply plus a provider/mode line.
+
 ### Run tests
 
 ```bash
@@ -269,11 +296,14 @@ pytest
   - fake runtime returns deterministic output
   - empty prompt handling works
   - runtime builder defaults safely
+  - live runtime selection works
+  - live runtime fails safely when `OPENAI_API_KEY` is missing
 
 - `tests/test_app.py`
   - app renders runtime status
   - entering text and pressing Enter updates the transcript/history
   - status line reflects turn count and runtime mode
+  - runtime failures are rendered in the UI instead of crashing silently
 
 This is the current anti-regression contract for Phase 1.
 
@@ -292,8 +322,8 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. keep Phase 1 green while adding a selectable live Strands runtime path
-2. expose runtime mode in config/CLI
+1. keep Phase 1 green while polishing the selectable live Strands runtime path
+2. add explicit CLI/config controls for runtime and model selection
 3. add streaming/event hooks without breaking the passing fake-runtime tests
 4. add coding tools only after the base loop remains stable
 5. grow observability and steering on top of the tested runtime seam

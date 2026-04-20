@@ -9,7 +9,7 @@ description = "Interactive TUI coding-agent platform prototype built on the Stra
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "strands-agents",
+  "strands-agents[openai]",
   "textual>=0.61.0",
 ]
 
