@@ -75,7 +75,9 @@ strands_agent/
 
 ## Current status
 
-Phase 1 is now **actively implemented as a working vertical slice**, with a deliberate testing-first shape.
+**Phase 1 is complete.**
+
+Phase 1 is implemented as a working vertical slice with a deliberate testing-first shape.
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -96,13 +98,21 @@ How we know Phase 1 is working right now:
 - the TUI status line updates with runtime/mode/turn count,
 - runtime errors are surfaced visibly in the UI,
 - `pytest` currently passes for the Phase 1 scaffold,
-- a live local smoke check has succeeded against the OpenAI-backed Strands runtime.
+- a live local smoke check has succeeded against the OpenAI-backed Strands runtime,
+- a manual live TUI interaction pass succeeded and confirmed prompt -> response rendering in the actual app.
+
+Phase 1 completion evidence:
+- automated tests: `9 passed`
+- live smoke result: successful OpenAI-backed Strands response
+- manual live TUI result: prompt `hi` rendered a real assistant response and updated status to `Runtime: strands-openai | Mode: live | Turns: 1`
 
 ## First five phases
 
 The first five phases should optimize for learning Strands through a runnable vertical slice, not for shipping a giant framework.
 
 ### Phase 1, Basic Strands-backed TUI shell
+
+Status: **Complete**
 
 **Objective**
 Build a minimal terminal UI that can:
@@ -126,7 +136,8 @@ This proves the base interaction loop and forces us to understand the core Stran
 - user can enter a prompt,
 - the runtime produces a response in the TUI,
 - a deterministic fake runtime proves the UI loop without needing live credentials,
-- tests validate app startup, runtime invocation boundary, and prompt submission behavior.
+- tests validate app startup, runtime invocation boundary, and prompt submission behavior,
+- a live OpenAI-backed Strands run succeeds locally.
 
 ### Phase 2, Coding tools + workspace awareness
 
