@@ -73,6 +73,28 @@ strands_agent/
   reports/daily/
 ```
 
+## Current status
+
+Phase 1 is now **actively implemented as a working vertical slice**, with a deliberate testing-first shape.
+
+What exists now:
+- a runnable Textual TUI scaffold,
+- a thin runtime boundary separate from the UI,
+- a deterministic **fake Strands runtime** for reliable local verification,
+- a live-runtime adapter seam for the real Strands SDK,
+- tests that prove prompt submission updates the TUI state.
+
+Why the fake runtime exists:
+- It gives us a stable way to verify the TUI-to-agent loop even if live model credentials are missing or flaky.
+- It prevents Phase 1 from being "conceptually done" but operationally untestable.
+- It gives future phases a safe regression harness.
+
+How we know Phase 1 is working right now:
+- unit tests verify runtime behavior,
+- app tests verify prompt submission updates history and output,
+- the TUI status line updates with runtime/mode/turn count,
+- `pytest` currently passes for the Phase 1 scaffold.
+
 ## First five phases
 
 The first five phases should optimize for learning Strands through a runnable vertical slice, not for shipping a giant framework.
@@ -99,8 +121,9 @@ This proves the base interaction loop and forces us to understand the core Stran
 **Success test for Phase 1**
 - app launches locally with one command,
 - user can enter a prompt,
-- Strands agent produces a response in the TUI,
-- a smoke test validates app startup + runtime invocation boundary.
+- the runtime produces a response in the TUI,
+- a deterministic fake runtime proves the UI loop without needing live credentials,
+- tests validate app startup, runtime invocation boundary, and prompt submission behavior.
 
 ### Phase 2, Coding tools + workspace awareness
 
@@ -215,6 +238,45 @@ A phase is only done when:
 - README usage notes are updated,
 - and the TUI demonstrates the new capability clearly.
 
+## How to run locally
+
+### Setup
+
+```bash
+cd /home/steve/.openclaw/workspace/strands_agent
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+```
+
+### Launch the TUI
+
+```bash
+strands-agent
+```
+
+Current default behavior uses the fake runtime, which is intentional for Phase 1 verification.
+
+### Run tests
+
+```bash
+pytest
+```
+
+### What the current tests prove
+
+- `tests/test_runtime.py`
+  - fake runtime returns deterministic output
+  - empty prompt handling works
+  - runtime builder defaults safely
+
+- `tests/test_app.py`
+  - app renders runtime status
+  - entering text and pressing Enter updates the transcript/history
+  - status line reflects turn count and runtime mode
+
+This is the current anti-regression contract for Phase 1.
+
 ## Suggested near-term technical choices
 
 My current recommendation:
@@ -229,6 +291,12 @@ Why this stack:
 - keeping the runtime wrapper thin should make the learning sharper.
 
 ## Next highest-value implementation order
+
+1. keep Phase 1 green while adding a selectable live Strands runtime path
+2. expose runtime mode in config/CLI
+3. add streaming/event hooks without breaking the passing fake-runtime tests
+4. add coding tools only after the base loop remains stable
+5. grow observability and steering on top of the tested runtime seam
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper

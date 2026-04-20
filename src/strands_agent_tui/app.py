@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import Footer, Header, Input, Static
+
+from strands_agent_tui.runtime import AgentRuntime, FakeStrandsRuntime
 
 
 class StrandsAgentApp(App):
@@ -22,23 +26,60 @@ class StrandsAgentApp(App):
         border: solid green;
     }
 
+    #status {
+        height: auto;
+        padding: 0 2;
+        color: cyan;
+    }
+
     #prompt {
         dock: bottom;
     }
     """
 
+    def __init__(self, runtime: AgentRuntime | None = None) -> None:
+        super().__init__()
+        self.runtime = runtime or FakeStrandsRuntime()
+        self.history: list[tuple[str, str]] = []
+
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(id="body"):
             yield Static(
-                "strands_agent prototype scaffold\n\n"
-                "Phase 1 target: prove a basic Strands-backed TUI shell.\n"
-                "This is the initial scaffold, not the final runtime.\n\n"
-                "Next: wire this input to a Strands runtime wrapper.",
+                "Welcome to strands_agent.\n\n"
+                "Phase 1 proves the basic TUI-to-agent loop.\n"
+                "Submit a prompt below to exercise the runtime boundary.",
                 id="output",
+            )
+            yield Static(
+                f"Runtime: {self.runtime.__class__.__name__}",
+                id="status",
             )
         yield Input(placeholder="Ask the coding agent something...", id="prompt")
         yield Footer()
+
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        prompt = event.value
+        event.input.value = ""
+        response = self.runtime.run(prompt)
+        self.history.append((prompt, response.text))
+        self.query_one("#output", Static).update(self.render_history())
+        self.query_one("#status", Static).update(
+            f"Runtime: {response.provider} | Mode: {response.mode} | Turns: {len(self.history)}"
+        )
+
+    def render_history(self) -> str:
+        if not self.history:
+            return (
+                "Welcome to strands_agent.\n\n"
+                "Phase 1 proves the basic TUI-to-agent loop.\n"
+                "Submit a prompt below to exercise the runtime boundary."
+            )
+
+        parts: list[str] = []
+        for index, (prompt, response) in enumerate(self.history, start=1):
+            parts.append(f"Turn {index}\nUser: {prompt}\nAgent: {response}")
+        return "\n\n".join(parts)
 
 
 def main() -> None:
