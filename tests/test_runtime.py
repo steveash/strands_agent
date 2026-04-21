@@ -1,5 +1,6 @@
 import pytest
 
+from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import AgentResponse, FakeStrandsRuntime, StrandsSDKRuntime, build_runtime
 
 
@@ -34,3 +35,20 @@ def test_live_runtime_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = StrandsSDKRuntime()
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
         runtime.run("hello")
+
+
+def test_app_config_merge_applies_non_empty_overrides() -> None:
+    config = AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini")
+
+    updated = config.merge(runtime_mode="LIVE", openai_model="gpt-4.1-mini")
+
+    assert updated.runtime_mode == "live"
+    assert updated.openai_model == "gpt-4.1-mini"
+
+
+def test_app_config_merge_ignores_empty_overrides() -> None:
+    config = AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini")
+
+    updated = config.merge(runtime_mode="   ", openai_model=None)
+
+    assert updated == config

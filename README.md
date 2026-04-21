@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete.**
+**Phase 1 is complete, and the next configuration seam is now in place.**
 
 Phase 1 is implemented as a working vertical slice with a deliberate testing-first shape.
 
@@ -84,25 +84,35 @@ What exists now:
 - a thin runtime boundary separate from the UI,
 - a deterministic **fake Strands runtime** for reliable local verification,
 - a live **Strands + OpenAI** runtime path driven by environment variables,
+- explicit CLI overrides for runtime and model selection,
+- status-line rendering that makes the selected runtime mode and model visible,
 - tests that prove prompt submission updates the TUI state,
 - a local smoke script for validating the real runtime without committing secrets.
+
+What changed this run:
+- added `--runtime {fake,live}` and `--model <model-id>` CLI controls to `strands-agent`,
+- added config merge logic so one-off launches can override environment defaults cleanly,
+- updated the TUI status line to show runtime, mode, model, and turn count together,
+- expanded tests to cover config merging and CLI argument parsing.
 
 Why the fake runtime exists:
 - It gives us a stable way to verify the TUI-to-agent loop even if live model credentials are missing or flaky.
 - It prevents Phase 1 from being "conceptually done" but operationally untestable.
 - It gives future phases a safe regression harness.
 
-How we know Phase 1 is working right now:
+How we know the prototype is working right now:
 - unit tests verify runtime behavior,
 - app tests verify prompt submission updates history and output,
-- the TUI status line updates with runtime/mode/turn count,
+- the TUI status line updates with runtime/mode/model/turn count,
 - runtime errors are surfaced visibly in the UI,
 - `pytest` currently passes for the Phase 1 scaffold,
+- the CLI help renders correctly for the new launch controls,
 - a live local smoke check has succeeded against the OpenAI-backed Strands runtime,
 - a manual live TUI interaction pass succeeded and confirmed prompt -> response rendering in the actual app.
 
-Phase 1 completion evidence:
-- automated tests: `9 passed`
+Current evidence:
+- automated tests: `12 passed`
+- CLI verification: `strands-agent --help` shows `--runtime` and `--model`
 - live smoke result: successful OpenAI-backed Strands response
 - manual live TUI result: prompt `hi` rendered a real assistant response and updated status to `Runtime: strands-openai | Mode: live | Turns: 1`
 
@@ -271,6 +281,17 @@ strands-agent
 
 Current default behavior uses the fake runtime, which is intentional for Phase 1 verification.
 
+### Override runtime or model at launch
+
+You can now override config per launch without editing environment defaults:
+
+```bash
+strands-agent --runtime fake
+strands-agent --runtime live --model gpt-4.1-mini
+```
+
+This matters because it makes runtime experimentation explicit and visible, which is useful for comparing fake vs live Strands behavior during development.
+
 ### Use live runtime locally
 
 If `OPENAI_API_KEY` is already present in your shell environment, you can switch the app to live mode without storing any secrets in the repo:
@@ -309,12 +330,14 @@ pytest
   - runtime builder defaults safely
   - live runtime selection works
   - live runtime fails safely when `OPENAI_API_KEY` is missing
+  - config merge logic applies CLI-style overrides safely
 
 - `tests/test_app.py`
   - app renders runtime status
   - entering text and pressing Enter updates the transcript/history
-  - status line reflects turn count and runtime mode
+  - status line reflects turn count, runtime mode, and selected model
   - runtime failures are rendered in the UI instead of crashing silently
+  - CLI argument parsing overrides runtime/model selection correctly
 
 This is the current anti-regression contract for Phase 1.
 
@@ -333,10 +356,10 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. keep Phase 1 green while polishing the selectable live Strands runtime path
-2. add explicit CLI/config controls for runtime and model selection
-3. add streaming/event hooks without breaking the passing fake-runtime tests
-4. add coding tools only after the base loop remains stable
+1. add the first workspace-aware coding tools, starting with read-only file inspection and directory listing
+2. surface tool activity in a small event/timeline pane instead of burying everything in chat history
+3. thread workspace identity into the UI so the agent's operating context is always visible
+4. keep the fake runtime path green while introducing real tool registration seams
 5. grow observability and steering on top of the tested runtime seam
 
 1. scaffold Python project + TUI entrypoint
@@ -362,3 +385,10 @@ Future daily iterations should:
 - keep the app runnable,
 - keep tests green or clearly document failures,
 - and update this README as the architecture and findings evolve.
+
+## Next iteration ideas
+
+- add a read-only workspace tool pair (`list_files`, `read_file`) to start Phase 2 conservatively
+- introduce a dedicated event pane so tool activity can be inspected separately from assistant prose
+- add a small workspace banner or footer section showing current repo/root context
+- keep live runtime support optional so fake-mode regression tests stay fast and deterministic
