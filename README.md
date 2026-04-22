@@ -75,46 +75,44 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, and the next configuration seam is now in place.**
-
-Phase 1 is implemented as a working vertical slice with a deliberate testing-first shape.
+**Phase 1 is complete, and Phase 2 has now started with a conservative read-only workspace tool seam.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
 - a thin runtime boundary separate from the UI,
 - a deterministic **fake Strands runtime** for reliable local verification,
 - a live **Strands + OpenAI** runtime path driven by environment variables,
-- explicit CLI overrides for runtime and model selection,
-- status-line rendering that makes the selected runtime mode and model visible,
-- tests that prove prompt submission updates the TUI state,
+- explicit CLI overrides for runtime, model, and workspace selection,
+- status-line rendering plus a dedicated workspace banner in the TUI,
+- read-only workspace tools for `list_files` and `read_file`,
+- live runtime tool registration that binds those tools to the active workspace root,
+- tests that cover TUI state, config merging, tool safety, and runtime selection,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added `--runtime {fake,live}` and `--model <model-id>` CLI controls to `strands-agent`,
-- added config merge logic so one-off launches can override environment defaults cleanly,
-- updated the TUI status line to show runtime, mode, model, and turn count together,
-- expanded tests to cover config merging and CLI argument parsing.
+- added a `WorkspaceTools` module with bounded `list_files` and `read_file` helpers,
+- enforced workspace-root path confinement so read-only tools cannot escape the selected repo,
+- wired the live Strands runtime to register those tools with `Agent(..., tools=[...])`,
+- added `--workspace <path>` CLI override support and surfaced the resolved workspace path in the TUI,
+- expanded tests to cover tool registration, file listing/reading, and path escape rejection.
 
-Why the fake runtime exists:
-- It gives us a stable way to verify the TUI-to-agent loop even if live model credentials are missing or flaky.
-- It prevents Phase 1 from being "conceptually done" but operationally untestable.
-- It gives future phases a safe regression harness.
+Why this matters now:
+- It is the first real Step 2 move from generic chat shell toward coding-agent platform.
+- It makes Strands tool exposure concrete instead of hypothetical.
+- It gives us a safe place to learn how much product value comes from workspace awareness before we add mutation or shell power.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior,
-- app tests verify prompt submission updates history and output,
-- the TUI status line updates with runtime/mode/model/turn count,
+- unit tests verify runtime behavior and config merging,
+- tool tests verify bounded workspace reads and path confinement,
+- app tests verify prompt submission, status rendering, and workspace banner rendering,
 - runtime errors are surfaced visibly in the UI,
-- `pytest` currently passes for the Phase 1 scaffold,
-- the CLI help renders correctly for the new launch controls,
-- a live local smoke check has succeeded against the OpenAI-backed Strands runtime,
-- a manual live TUI interaction pass succeeded and confirmed prompt -> response rendering in the actual app.
+- `pytest` currently passes for the expanded Phase 1 plus early Phase 2 scaffold,
+- the CLI help renders correctly for the new launch controls.
 
 Current evidence:
-- automated tests: `12 passed`
-- CLI verification: `strands-agent --help` shows `--runtime` and `--model`
-- live smoke result: successful OpenAI-backed Strands response
-- manual live TUI result: prompt `hi` rendered a real assistant response and updated status to `Runtime: strands-openai | Mode: live | Turns: 1`
+- automated tests: `16 passed`
+- CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
+- live runtime seam: read-only Strands tool registration now exists for the active workspace root
 
 ## First five phases
 
@@ -151,6 +149,8 @@ This proves the base interaction loop and forces us to understand the core Stran
 
 ### Phase 2, Coding tools + workspace awareness
 
+Status: **In progress**
+
 **Objective**
 Add a compact local toolbelt so the agent can act like a coding assistant in a workspace.
 
@@ -160,6 +160,13 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - list/search workspace tool,
 - shell command tool with conservative limits,
 - current working directory / repo context indicator in UI.
+
+**Implemented so far**
+- read-only `list_files` tool with optional recursive listing,
+- read-only `read_file` tool with bounded excerpts,
+- workspace-root confinement checks,
+- workspace root banner in the TUI,
+- launch-time workspace override via `--workspace`.
 
 **Why this matters**
 This is the point where the app stops being a generic chat shell and starts becoming a coding-agent platform.
@@ -288,9 +295,10 @@ You can now override config per launch without editing environment defaults:
 ```bash
 strands-agent --runtime fake
 strands-agent --runtime live --model gpt-4.1-mini
+strands-agent --runtime live --model gpt-4.1-mini --workspace /path/to/repo
 ```
 
-This matters because it makes runtime experimentation explicit and visible, which is useful for comparing fake vs live Strands behavior during development.
+This matters because it makes runtime experimentation explicit and visible, which is useful for comparing fake vs live Strands behavior during development, and for pointing the coding tools at a specific repo without changing shell state.
 
 ### Use live runtime locally
 
@@ -334,10 +342,17 @@ pytest
 
 - `tests/test_app.py`
   - app renders runtime status
+  - app renders the active workspace banner
   - entering text and pressing Enter updates the transcript/history
   - status line reflects turn count, runtime mode, and selected model
   - runtime failures are rendered in the UI instead of crashing silently
-  - CLI argument parsing overrides runtime/model selection correctly
+  - CLI argument parsing overrides runtime/model/workspace selection correctly
+
+- `tests/test_tools.py`
+  - workspace listing returns workspace-relative paths
+  - file reads return bounded excerpts with line metadata
+  - path traversal outside the workspace is rejected
+  - live-runtime tool registration returns the expected Strands tool pair
 
 This is the current anti-regression contract for Phase 1.
 
@@ -356,10 +371,10 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add the first workspace-aware coding tools, starting with read-only file inspection and directory listing
-2. surface tool activity in a small event/timeline pane instead of burying everything in chat history
-3. thread workspace identity into the UI so the agent's operating context is always visible
-4. keep the fake runtime path green while introducing real tool registration seams
+1. surface tool activity in a small event/timeline pane instead of burying everything in chat history
+2. teach the fake runtime test seam how to emit deterministic tool events
+3. add a conservative workspace search tool and a tightly scoped edit/write path
+4. keep the fake runtime path green while introducing richer Strands tool registration seams
 5. grow observability and steering on top of the tested runtime seam
 
 1. scaffold Python project + TUI entrypoint
@@ -388,7 +403,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add a read-only workspace tool pair (`list_files`, `read_file`) to start Phase 2 conservatively
 - introduce a dedicated event pane so tool activity can be inspected separately from assistant prose
-- add a small workspace banner or footer section showing current repo/root context
+- add a deterministic event model so fake mode can simulate tool start/end for UI tests
+- add a conservative search tool for repo-wide code inspection before introducing mutation
+- experiment with a tightly bounded write/edit flow after the event pane exists
 - keep live runtime support optional so fake-mode regression tests stay fast and deterministic

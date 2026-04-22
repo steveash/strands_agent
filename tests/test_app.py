@@ -17,20 +17,22 @@ class FailingRuntime:
 async def test_app_renders_runtime_status() -> None:
     app = StrandsAgentApp(
         runtime=FakeStrandsRuntime(),
-        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini"),
+        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini", workspace_root="."),
     )
     async with app.run_test() as pilot:
         await pilot.pause()
         status = app.query_one("#status").render()
+        workspace = app.query_one("#workspace").render()
         assert "FakeStrandsRuntime" in str(status)
         assert "Model: gpt-4o-mini" in str(status)
+        assert "Workspace:" in str(workspace)
 
 
 @pytest.mark.asyncio
 async def test_submit_prompt_updates_history_and_output() -> None:
     app = StrandsAgentApp(
         runtime=FakeStrandsRuntime(),
-        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini"),
+        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini", workspace_root="."),
     )
     async with app.run_test() as pilot:
         await pilot.press("h", "i", "enter")
@@ -53,7 +55,7 @@ async def test_submit_prompt_updates_history_and_output() -> None:
 async def test_runtime_error_is_rendered_in_ui() -> None:
     app = StrandsAgentApp(
         runtime=FailingRuntime(),
-        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini"),
+        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini", workspace_root="."),
     )
     async with app.run_test() as pilot:
         await pilot.press("x", "enter")
@@ -67,10 +69,15 @@ async def test_runtime_error_is_rendered_in_ui() -> None:
         assert "Runtime error" in status
 
 
-def test_parse_args_overrides_runtime_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["strands-agent", "--runtime", "live", "--model", "gpt-4.1-mini"])
+def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["strands-agent", "--runtime", "live", "--model", "gpt-4.1-mini", "--workspace", "/tmp/demo"],
+    )
 
     config = parse_args()
 
     assert config.runtime_mode == "live"
     assert config.openai_model == "gpt-4.1-mini"
+    assert config.workspace_root == "/tmp/demo"

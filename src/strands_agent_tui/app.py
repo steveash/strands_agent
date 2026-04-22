@@ -51,6 +51,7 @@ class StrandsAgentApp(App):
         self.runtime = runtime or build_runtime(
             mode=config.runtime_mode,
             openai_model=config.openai_model,
+            workspace_root=config.workspace_root,
         )
         self.history: list[tuple[str, str]] = []
 
@@ -67,6 +68,7 @@ class StrandsAgentApp(App):
                 self.render_status_summary(),
                 id="status",
             )
+            yield Static(f"Workspace: {self.config.workspace_path}", id="workspace")
         yield Input(placeholder="Ask the coding agent something...", id="prompt")
         yield Footer()
 
@@ -125,10 +127,15 @@ def parse_args() -> AppConfig:
         "--model",
         help="Override the OpenAI model id used by the live runtime.",
     )
+    parser.add_argument(
+        "--workspace",
+        help="Override the workspace root used by coding tools.",
+    )
     args = parser.parse_args()
     return load_config().merge(
         runtime_mode=args.runtime,
         openai_model=args.model,
+        workspace_root=args.workspace,
     )
 
 
