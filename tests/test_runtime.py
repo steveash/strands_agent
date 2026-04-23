@@ -1,8 +1,8 @@
+from pathlib import Path
+
 import pytest
 
 from strands_agent_tui.config import AppConfig
-from pathlib import Path
-
 from strands_agent_tui.runtime import AgentResponse, FakeStrandsRuntime, StrandsSDKRuntime, build_runtime
 
 
@@ -19,6 +19,17 @@ def test_fake_runtime_handles_empty_prompt() -> None:
     runtime = FakeStrandsRuntime()
     result = runtime.run("   ")
     assert result.text == "Please enter a prompt."
+    assert result.events[0].kind == "input_rejected"
+
+
+def test_fake_runtime_emits_deterministic_workspace_tool_events() -> None:
+    runtime = FakeStrandsRuntime()
+    result = runtime.run("list files in the workspace")
+
+    event_kinds = [event.kind for event in result.events]
+
+    assert event_kinds == ["prompt_received", "tool_started", "tool_finished", "response_completed"]
+    assert result.events[1].title == "list_files"
 
 
 def test_build_runtime_defaults_to_fake() -> None:

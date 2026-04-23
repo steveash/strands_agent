@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os import getenv
 from pathlib import Path
 from typing import Protocol
@@ -11,10 +11,18 @@ from strands_agent_tui.tools.workspace import WorkspaceTools
 
 
 @dataclass(slots=True)
+class RuntimeEvent:
+    kind: str
+    title: str
+    detail: str
+
+
+@dataclass(slots=True)
 class AgentResponse:
     text: str
     provider: str
     mode: str
+    events: list[RuntimeEvent] = field(default_factory=list)
 
 
 class AgentRuntime(Protocol):
@@ -38,11 +46,48 @@ class FakeStrandsRuntime:
                 text="Please enter a prompt.",
                 provider=self.provider_name,
                 mode="fake",
+                events=[
+                    RuntimeEvent(
+                        kind="input_rejected",
+                        title="Empty prompt",
+                        detail="Prompt contained only whitespace, so the fake runtime returned guidance instead of running tools.",
+                    )
+                ],
             )
+
+        events = [
+            RuntimeEvent(kind="prompt_received", title="Prompt accepted", detail=normalized),
+        ]
+
+        lowered = normalized.lower()
+        if any(keyword in lowered for keyword in ["file", "workspace", "repo", "read", "list"]):
+            events.extend(
+                [
+                    RuntimeEvent(
+                        kind="tool_started",
+                        title="list_files",
+                        detail="Deterministic fake tool event for workspace inspection.",
+                    ),
+                    RuntimeEvent(
+                        kind="tool_finished",
+                        title="list_files",
+                        detail="Returned a simulated workspace listing without touching disk.",
+                    ),
+                ]
+            )
+
+        events.append(
+            RuntimeEvent(
+                kind="response_completed",
+                title="Assistant response ready",
+                detail=f"Provider={self.provider_name}, mode=fake",
+            )
+        )
         return AgentResponse(
             text=f"(fake-strands) Echo: {normalized}",
             provider=self.provider_name,
             mode="fake",
+            events=events,
         )
 
 
@@ -103,7 +148,19 @@ class StrandsSDKRuntime:
         )
         result = agent(prompt)
         text = str(result)
-        return AgentResponse(text=text, provider=self.provider_name, mode="live")
+        return AgentResponse(
+            text=text,
+            provider=self.provider_name,
+            mode="live",
+            events=[
+                RuntimeEvent(kind="prompt_received", title="Prompt accepted", detail=prompt.strip() or "<empty>"),
+                RuntimeEvent(
+                    kind="response_completed",
+                    title="Assistant response ready",
+                    detail=f"Provider={self.provider_name}, mode=live, tools={len(build_workspace_tools(self.workspace_root))}",
+                ),
+            ],
+        )
 
 
 def build_runtime(

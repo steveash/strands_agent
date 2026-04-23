@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 
 from textual.app import App, ComposeResult
-from textual.containers import Container
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input, Static
 
 from strands_agent_tui.config import AppConfig, load_config
-from strands_agent_tui.runtime import AgentRuntime, build_runtime
+from strands_agent_tui.runtime import AgentRuntime, RuntimeEvent, build_runtime
 
 
 class StrandsAgentApp(App):
@@ -23,16 +23,33 @@ class StrandsAgentApp(App):
         height: 1fr;
     }
 
-    #output {
+    #main-pane {
+        width: 2fr;
+        height: 1fr;
+    }
+
+    #event-pane {
+        width: 1fr;
+        height: 1fr;
+    }
+
+    #output, #events {
         height: 1fr;
         padding: 1 2;
         border: solid green;
     }
 
-    #status {
+    #status, #workspace {
         height: auto;
         padding: 0 2;
+    }
+
+    #status {
         color: cyan;
+    }
+
+    #workspace {
+        color: yellow;
     }
 
     #prompt {
@@ -54,20 +71,17 @@ class StrandsAgentApp(App):
             workspace_root=config.workspace_root,
         )
         self.history: list[tuple[str, str]] = []
+        self.events: list[RuntimeEvent] = []
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with Container(id="body"):
-            yield Static(
-                "Welcome to strands_agent.\n\n"
-                "Phase 1 proves the basic TUI-to-agent loop.\n"
-                "Submit a prompt below to exercise the runtime boundary.",
-                id="output",
-            )
-            yield Static(
-                self.render_status_summary(),
-                id="status",
-            )
+        with Vertical(id="body"):
+            with Horizontal():
+                with Vertical(id="main-pane"):
+                    yield Static(self.render_history(), id="output")
+                with Vertical(id="event-pane"):
+                    yield Static(self.render_events(), id="events")
+            yield Static(self.render_status_summary(), id="status")
             yield Static(f"Workspace: {self.config.workspace_path}", id="workspace")
         yield Input(placeholder="Ask the coding agent something...", id="prompt")
         yield Footer()
@@ -78,13 +92,16 @@ class StrandsAgentApp(App):
         try:
             response = self.runtime.run(prompt)
             self.history.append((prompt, response.text))
+            self.events.extend(response.events)
             self.query_one("#status", Static).update(self.render_status_summary(response.provider, response.mode))
         except Exception as exc:
             self.history.append((prompt, f"Error: {exc}"))
+            self.events.append(RuntimeEvent(kind="runtime_error", title="Runtime error", detail=str(exc)))
             self.query_one("#status", Static).update(
                 self.render_status_summary(runtime_label="Runtime error")
             )
         self.query_one("#output", Static).update(self.render_history())
+        self.query_one("#events", Static).update(self.render_events())
 
     def render_status_summary(
         self,
@@ -96,14 +113,15 @@ class StrandsAgentApp(App):
         mode_value = mode or self.config.runtime_mode
         return (
             f"Runtime: {runtime_value} | Mode: {mode_value} | "
-            f"Model: {self.config.openai_model} | Turns: {len(self.history)}"
+            f"Model: {self.config.openai_model} | Turns: {len(self.history)} | Events: {len(self.events)}"
         )
 
     def render_history(self) -> str:
         if not self.history:
             return (
-                "Welcome to strands_agent.\n\n"
+                "Conversation\n\n"
                 "Phase 1 proves the basic TUI-to-agent loop.\n"
+                "Phase 2 now starts making agent behavior visible.\n"
                 "Submit a prompt below to exercise the runtime boundary."
             )
 
@@ -111,6 +129,20 @@ class StrandsAgentApp(App):
         for index, (prompt, response) in enumerate(self.history, start=1):
             parts.append(f"Turn {index}\nUser: {prompt}\nAgent: {response}")
         return "\n\n".join(parts)
+
+    def render_events(self) -> str:
+        if not self.events:
+            return (
+                "Event Timeline\n\n"
+                "No events yet.\n"
+                "Tool calls, runtime milestones, and failures will appear here."
+            )
+
+        lines = ["Event Timeline", ""]
+        for index, item in enumerate(self.events[-12:], start=max(len(self.events) - 11, 1)):
+            lines.append(f"{index}. kind={item.kind} | {item.title}")
+            lines.append(f"   {item.detail}")
+        return "\n".join(lines)
 
 
 def parse_args() -> AppConfig:

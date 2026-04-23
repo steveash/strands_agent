@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, and Phase 2 has now started with a conservative read-only workspace tool seam.**
+**Phase 1 is complete, and Phase 2 now includes the first real observability seam with an event timeline pane plus deterministic fake tool events.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -86,33 +86,35 @@ What exists now:
 - status-line rendering plus a dedicated workspace banner in the TUI,
 - read-only workspace tools for `list_files` and `read_file`,
 - live runtime tool registration that binds those tools to the active workspace root,
-- tests that cover TUI state, config merging, tool safety, and runtime selection,
+- a dedicated event timeline pane for runtime milestones, tool activity, and failures,
+- deterministic fake-runtime event emission so UI behavior is testable without live model calls,
+- tests that cover TUI state, config merging, tool safety, runtime selection, and event rendering,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a `WorkspaceTools` module with bounded `list_files` and `read_file` helpers,
-- enforced workspace-root path confinement so read-only tools cannot escape the selected repo,
-- wired the live Strands runtime to register those tools with `Agent(..., tools=[...])`,
-- added `--workspace <path>` CLI override support and surfaced the resolved workspace path in the TUI,
-- expanded tests to cover tool registration, file listing/reading, and path escape rejection.
+- added structured `RuntimeEvent` objects to the runtime response contract,
+- updated the TUI layout to render conversation and event timeline side by side,
+- taught the fake runtime to emit deterministic prompt, tool-start, tool-finish, and response-complete events,
+- surfaced runtime failures in the event pane instead of only in transcript text,
+- expanded tests to cover event rendering and deterministic fake tool activity.
 
 Why this matters now:
-- It is the first real Step 2 move from generic chat shell toward coding-agent platform.
-- It makes Strands tool exposure concrete instead of hypothetical.
-- It gives us a safe place to learn how much product value comes from workspace awareness before we add mutation or shell power.
+- It turns Strands behavior into something visible instead of implied.
+- It gives us a concrete seam for learning what a coding-agent timeline should expose.
+- It sets up the next Phase 2 steps, like search and edit tools, without burying agent behavior in plain chat output.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior and config merging,
+- unit tests verify runtime behavior, config merging, and deterministic fake-event emission,
 - tool tests verify bounded workspace reads and path confinement,
-- app tests verify prompt submission, status rendering, and workspace banner rendering,
-- runtime errors are surfaced visibly in the UI,
-- `pytest` currently passes for the expanded Phase 1 plus early Phase 2 scaffold,
-- the CLI help renders correctly for the new launch controls.
+- app tests verify prompt submission, status rendering, workspace banner rendering, and event timeline updates,
+- runtime errors are surfaced visibly in both the transcript and event pane,
+- `pytest` currently passes for the expanded Phase 1 plus early Phase 2 observability scaffold,
+- the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `16 passed`
+- automated tests: `17 passed`
 - CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
-- live runtime seam: read-only Strands tool registration now exists for the active workspace root
+- UI verification by test: event timeline renders deterministic tool events in fake mode
 
 ## First five phases
 
@@ -166,7 +168,9 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - read-only `read_file` tool with bounded excerpts,
 - workspace-root confinement checks,
 - workspace root banner in the TUI,
-- launch-time workspace override via `--workspace`.
+- launch-time workspace override via `--workspace`,
+- side-by-side event timeline pane for runtime and tool events,
+- deterministic fake-runtime tool events for UI and regression tests.
 
 **Why this matters**
 This is the point where the app stops being a generic chat shell and starts becoming a coding-agent platform.
@@ -371,11 +375,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. surface tool activity in a small event/timeline pane instead of burying everything in chat history
-2. teach the fake runtime test seam how to emit deterministic tool events
-3. add a conservative workspace search tool and a tightly scoped edit/write path
-4. keep the fake runtime path green while introducing richer Strands tool registration seams
-5. grow observability and steering on top of the tested runtime seam
+1. add a conservative workspace search tool and a tightly scoped edit/write path
+2. keep the fake runtime path green while introducing richer Strands tool registration seams
+3. enrich the live runtime event model so real Strands tool activity can populate the timeline pane
+4. grow observability and steering on top of the tested runtime seam
+5. persist timeline artifacts so event inspection survives across sessions
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -403,8 +407,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- introduce a dedicated event pane so tool activity can be inspected separately from assistant prose
-- add a deterministic event model so fake mode can simulate tool start/end for UI tests
 - add a conservative search tool for repo-wide code inspection before introducing mutation
-- experiment with a tightly bounded write/edit flow after the event pane exists
+- experiment with a tightly bounded write/edit flow now that the event pane exists
+- enrich live-mode event capture so real Strands tool calls appear in the timeline, not just fake-mode simulations
+- persist timeline artifacts to disk for later replay and debugging
 - keep live runtime support optional so fake-mode regression tests stay fast and deterministic
