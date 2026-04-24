@@ -32,6 +32,24 @@ def test_fake_runtime_emits_deterministic_workspace_tool_events() -> None:
     assert result.events[1].title == "list_files"
 
 
+def test_fake_runtime_emits_search_and_write_events() -> None:
+    runtime = FakeStrandsRuntime()
+    result = runtime.run("search the repo and create a notes file")
+
+    titles = [event.title for event in result.events]
+
+    assert titles == [
+        "Prompt accepted",
+        "list_files",
+        "list_files",
+        "search_files",
+        "search_files",
+        "write_file",
+        "write_file",
+        "Assistant response ready",
+    ]
+
+
 def test_build_runtime_defaults_to_fake() -> None:
     runtime = build_runtime()
     assert isinstance(runtime, FakeStrandsRuntime)

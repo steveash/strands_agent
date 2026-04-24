@@ -75,6 +75,36 @@ class FakeStrandsRuntime:
                     ),
                 ]
             )
+        if any(keyword in lowered for keyword in ["search", "find", "grep", "match"]):
+            events.extend(
+                [
+                    RuntimeEvent(
+                        kind="tool_started",
+                        title="search_files",
+                        detail="Deterministic fake search event for repo-wide inspection.",
+                    ),
+                    RuntimeEvent(
+                        kind="tool_finished",
+                        title="search_files",
+                        detail="Returned simulated search hits from the fake workspace.",
+                    ),
+                ]
+            )
+        if any(keyword in lowered for keyword in ["write", "create", "save"]):
+            events.extend(
+                [
+                    RuntimeEvent(
+                        kind="tool_started",
+                        title="write_file",
+                        detail="Deterministic fake write event for a conservative mutation path.",
+                    ),
+                    RuntimeEvent(
+                        kind="tool_finished",
+                        title="write_file",
+                        detail="Simulated a bounded workspace write without changing disk.",
+                    ),
+                ]
+            )
 
         events.append(
             RuntimeEvent(
@@ -104,7 +134,29 @@ def build_workspace_tools(workspace_root: str | Path) -> list[object]:
         """Read a text file from the active workspace."""
         return workspace.read_file(relative_path=relative_path, start_line=start_line, max_lines=max_lines)
 
-    return [list_files, read_file]
+    @tool
+    def search_files(
+        query: str,
+        relative_path: str = ".",
+        glob_pattern: str = "*",
+        case_sensitive: bool = False,
+        max_results: int = 20,
+    ) -> str:
+        """Search text files in the active workspace for a query string."""
+        return workspace.search_files(
+            query=query,
+            relative_path=relative_path,
+            glob_pattern=glob_pattern,
+            case_sensitive=case_sensitive,
+            max_results=max_results,
+        )
+
+    @tool
+    def write_file(relative_path: str, content: str, overwrite: bool = False) -> str:
+        """Write a text file inside the active workspace, refusing overwrites unless explicitly allowed."""
+        return workspace.write_file(relative_path=relative_path, content=content, overwrite=overwrite)
+
+    return [list_files, read_file, search_files, write_file]
 
 
 class StrandsSDKRuntime:

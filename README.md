@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, and Phase 2 now includes the first real observability seam with an event timeline pane plus deterministic fake tool events.**
+**Phase 1 is complete, and Phase 2 now has bounded inspect + search + first-write tooling wired into the Strands runtime seam with observable fake events.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -84,37 +84,38 @@ What exists now:
 - a live **Strands + OpenAI** runtime path driven by environment variables,
 - explicit CLI overrides for runtime, model, and workspace selection,
 - status-line rendering plus a dedicated workspace banner in the TUI,
-- read-only workspace tools for `list_files` and `read_file`,
+- workspace tools for `list_files`, `read_file`, `search_files`, and a conservative `write_file`,
 - live runtime tool registration that binds those tools to the active workspace root,
 - a dedicated event timeline pane for runtime milestones, tool activity, and failures,
-- deterministic fake-runtime event emission so UI behavior is testable without live model calls,
-- tests that cover TUI state, config merging, tool safety, runtime selection, and event rendering,
+- deterministic fake-runtime event emission for inspect, search, and write activity so UI behavior is testable without live model calls,
+- tests that cover TUI state, config merging, tool safety, runtime selection, search/write behavior, and event rendering,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added structured `RuntimeEvent` objects to the runtime response contract,
-- updated the TUI layout to render conversation and event timeline side by side,
-- taught the fake runtime to emit deterministic prompt, tool-start, tool-finish, and response-complete events,
-- surfaced runtime failures in the event pane instead of only in transcript text,
-- expanded tests to cover event rendering and deterministic fake tool activity.
+- added a bounded `search_files` workspace tool with query, path, glob, and result limits,
+- added a conservative `write_file` tool that refuses overwrites unless `overwrite=True`,
+- registered both tools in the live Strands runtime so the coding-agent seam is broader than read-only inspection,
+- taught the fake runtime to emit deterministic search and write events in addition to listing events,
+- expanded tests to cover search hits, guarded writes, tool registration, and richer fake runtime event sequences.
 
 Why this matters now:
-- It turns Strands behavior into something visible instead of implied.
-- It gives us a concrete seam for learning what a coding-agent timeline should expose.
-- It sets up the next Phase 2 steps, like search and edit tools, without burying agent behavior in plain chat output.
+- It gives the prototype its first real mutation path while staying conservative enough to study safely.
+- It makes Strands tool design more tangible, because Steve can now compare inspect, search, and write behaviors through one runtime boundary.
+- It moves Phase 2 closer to a useful coding-agent loop without jumping straight to risky shell execution.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior, config merging, and deterministic fake-event emission,
-- tool tests verify bounded workspace reads and path confinement,
+- unit tests verify runtime behavior, config merging, deterministic fake-event emission, and live tool registration,
+- tool tests verify bounded reads, bounded search, guarded writes, and workspace confinement,
 - app tests verify prompt submission, status rendering, workspace banner rendering, and event timeline updates,
 - runtime errors are surfaced visibly in both the transcript and event pane,
-- `pytest` currently passes for the expanded Phase 1 plus early Phase 2 observability scaffold,
+- `pytest` currently passes for the expanded Phase 1 plus deeper Phase 2 tool scaffold,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `17 passed`
+- automated tests: `20 passed`
 - CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
-- UI verification by test: event timeline renders deterministic tool events in fake mode
+- tool verification by test: `search_files` returns bounded matches and `write_file` refuses implicit overwrite
+- UI verification by test: fake mode now renders deterministic `list_files`, `search_files`, and `write_file` events
 
 ## First five phases
 
@@ -164,13 +165,15 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - current working directory / repo context indicator in UI.
 
 **Implemented so far**
-- read-only `list_files` tool with optional recursive listing,
-- read-only `read_file` tool with bounded excerpts,
+- `list_files` tool with optional recursive listing,
+- `read_file` tool with bounded excerpts,
+- bounded `search_files` tool for repo-wide inspection,
+- conservative `write_file` tool that blocks overwrite unless explicitly enabled,
 - workspace-root confinement checks,
 - workspace root banner in the TUI,
 - launch-time workspace override via `--workspace`,
 - side-by-side event timeline pane for runtime and tool events,
-- deterministic fake-runtime tool events for UI and regression tests.
+- deterministic fake-runtime tool events for inspect, search, and write flows.
 
 **Why this matters**
 This is the point where the app stops being a generic chat shell and starts becoming a coding-agent platform.
@@ -355,8 +358,10 @@ pytest
 - `tests/test_tools.py`
   - workspace listing returns workspace-relative paths
   - file reads return bounded excerpts with line metadata
+  - repo search returns bounded text matches
+  - guarded writes create new files but reject implicit overwrite
   - path traversal outside the workspace is rejected
-  - live-runtime tool registration returns the expected Strands tool pair
+  - live-runtime tool registration returns the expected Strands tool set
 
 This is the current anti-regression contract for Phase 1.
 
@@ -375,9 +380,9 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add a conservative workspace search tool and a tightly scoped edit/write path
-2. keep the fake runtime path green while introducing richer Strands tool registration seams
-3. enrich the live runtime event model so real Strands tool activity can populate the timeline pane
+1. enrich the live runtime event model so real Strands tool activity can populate the timeline pane
+2. add a tightly scoped edit/replace flow now that conservative file creation exists
+3. keep the fake runtime path green while introducing richer Strands tool registration seams
 4. grow observability and steering on top of the tested runtime seam
 5. persist timeline artifacts so event inspection survives across sessions
 
@@ -407,8 +412,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add a conservative search tool for repo-wide code inspection before introducing mutation
-- experiment with a tightly bounded write/edit flow now that the event pane exists
+- add a tightly scoped edit/replace tool that follows the same conservative posture as `write_file`
 - enrich live-mode event capture so real Strands tool calls appear in the timeline, not just fake-mode simulations
 - persist timeline artifacts to disk for later replay and debugging
+- add higher-signal workspace summaries so the agent can explain repo shape before reaching for shell commands
 - keep live runtime support optional so fake-mode regression tests stay fast and deterministic
