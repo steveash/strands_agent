@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, and Phase 2 now has bounded inspect + search + first-write tooling wired into the Strands runtime seam with observable fake events.**
+**Phase 1 is complete, Phase 2 has bounded inspect + search + first-write tooling wired into the Strands runtime seam, and the prototype now persists per-session transcript and timeline artifacts for replay/debugging.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -87,35 +87,37 @@ What exists now:
 - workspace tools for `list_files`, `read_file`, `search_files`, and a conservative `write_file`,
 - live runtime tool registration that binds those tools to the active workspace root,
 - a dedicated event timeline pane for runtime milestones, tool activity, and failures,
+- per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
 - deterministic fake-runtime event emission for inspect, search, and write activity so UI behavior is testable without live model calls,
-- tests that cover TUI state, config merging, tool safety, runtime selection, search/write behavior, and event rendering,
+- tests that cover TUI state, config merging, tool safety, runtime selection, search/write behavior, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a bounded `search_files` workspace tool with query, path, glob, and result limits,
-- added a conservative `write_file` tool that refuses overwrites unless `overwrite=True`,
-- registered both tools in the live Strands runtime so the coding-agent seam is broader than read-only inspection,
-- taught the fake runtime to emit deterministic search and write events in addition to listing events,
-- expanded tests to cover search hits, guarded writes, tool registration, and richer fake runtime event sequences.
+- added `SessionArtifactStore` so every turn is persisted as structured JSONL plus a readable markdown transcript,
+- wired the TUI to save both successful turns and runtime failures into session artifacts automatically,
+- added config support for `STRANDS_AGENT_ARTIFACTS_ROOT` with a sensible default under the active workspace,
+- added tests that verify successful turns and runtime errors are both captured on disk,
+- fixed local test self-sufficiency by adding `tests/conftest.py` so the repo can run under `pytest` after venv setup without relying on prior editable installs.
 
 Why this matters now:
-- It gives the prototype its first real mutation path while staying conservative enough to study safely.
-- It makes Strands tool design more tangible, because Steve can now compare inspect, search, and write behaviors through one runtime boundary.
-- It moves Phase 2 closer to a useful coding-agent loop without jumping straight to risky shell execution.
+- It turns the event timeline into something durable instead of a fleeting TUI pane.
+- It gives Steve concrete artifacts to inspect when studying how prompts, runtime choices, tool events, and failures line up in a Strands-style loop.
+- It creates a clean seam for later session restore, replay, and deeper observability work.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior, config merging, deterministic fake-event emission, and live tool registration,
+- unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, and workspace confinement,
-- app tests verify prompt submission, status rendering, workspace banner rendering, and event timeline updates,
-- runtime errors are surfaced visibly in both the transcript and event pane,
-- `pytest` currently passes for the expanded Phase 1 plus deeper Phase 2 tool scaffold,
+- app tests verify prompt submission, status rendering, workspace banner rendering, event timeline updates, and on-disk artifact persistence for both success and failure cases,
+- runtime errors are surfaced visibly in both the transcript and event pane, and are now also written to session artifacts,
+- `pytest` currently passes for the expanded Phase 1 plus deeper Phase 2/3 observability seam,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `20 passed`
+- automated tests: `21 passed`
 - CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
 - tool verification by test: `search_files` returns bounded matches and `write_file` refuses implicit overwrite
-- UI verification by test: fake mode now renders deterministic `list_files`, `search_files`, and `write_file` events
+- UI verification by test: fake mode renders deterministic `list_files`, `search_files`, and `write_file` events, and each turn is persisted to session artifacts
+- unblock note: plain host `pytest` initially failed because the repo dependencies were not active in the shell; creating/using `.venv` and reinstalling `-e '.[dev]'` restored a green local test path
 
 ## First five phases
 
@@ -185,6 +187,8 @@ This is the point where the app stops being a generic chat shell and starts beco
 
 ### Phase 3, Agent event timeline + observability
 
+Status: **Started**
+
 **Objective**
 Make the Strands loop legible by exposing intermediate events, tool uses, failures, and timings in the TUI.
 
@@ -194,6 +198,12 @@ Make the Strands loop legible by exposing intermediate events, tool uses, failur
 - token/latency counters where feasible,
 - error surfacing,
 - saved run transcript/artifact output.
+
+**Implemented so far**
+- session-scoped `turns.jsonl` artifact output for structured replay/debugging,
+- session-scoped `transcript.md` output for quick human inspection,
+- artifact capture for both successful turns and runtime failures,
+- default artifact-root derivation under the active workspace.
 
 **Why this matters**
 If the goal is to understand Strands deeply, hidden orchestration is the enemy. This phase turns the loop into something inspectable.
@@ -334,7 +344,24 @@ Expected result is a short successful reply plus a provider/mode line.
 ### Run tests
 
 ```bash
+. .venv/bin/activate
 pytest
+```
+
+### Session artifacts
+
+Each app session now writes artifacts under the active workspace by default:
+
+```text
+artifacts/sessions/session-YYYYMMDDTHHMMSSZ/
+  turns.jsonl
+  transcript.md
+```
+
+You can override the root with:
+
+```bash
+export STRANDS_AGENT_ARTIFACTS_ROOT=/path/to/artifacts
 ```
 
 ### What the current tests prove
@@ -353,6 +380,8 @@ pytest
   - entering text and pressing Enter updates the transcript/history
   - status line reflects turn count, runtime mode, and selected model
   - runtime failures are rendered in the UI instead of crashing silently
+  - successful turns are persisted to `turns.jsonl` and `transcript.md`
+  - runtime failures are also persisted as session artifacts
   - CLI argument parsing overrides runtime/model/workspace selection correctly
 
 - `tests/test_tools.py`
@@ -414,6 +443,6 @@ Future daily iterations should:
 
 - add a tightly scoped edit/replace tool that follows the same conservative posture as `write_file`
 - enrich live-mode event capture so real Strands tool calls appear in the timeline, not just fake-mode simulations
-- persist timeline artifacts to disk for later replay and debugging
+- enrich persisted artifacts with timings, model metadata, and tool arguments once live event capture is richer
 - add higher-signal workspace summaries so the agent can explain repo shape before reaching for shell commands
 - keep live runtime support optional so fake-mode regression tests stay fast and deterministic

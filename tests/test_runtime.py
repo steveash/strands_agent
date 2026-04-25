@@ -85,3 +85,14 @@ def test_app_config_merge_ignores_empty_overrides() -> None:
     updated = config.merge(runtime_mode="   ", openai_model=None, workspace_root="   ")
 
     assert updated == config
+
+
+def test_app_config_defaults_artifacts_root_under_workspace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("STRANDS_AGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.delenv("STRANDS_AGENT_ARTIFACTS_ROOT", raising=False)
+
+    from strands_agent_tui.config import load_config
+
+    config = load_config()
+
+    assert config.artifacts_root == str(tmp_path.resolve() / "artifacts" / "sessions")

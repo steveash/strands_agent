@@ -1,4 +1,6 @@
+import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -6,6 +8,7 @@ from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.app import parse_args
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import FakeStrandsRuntime
+from strands_agent_tui.sessions import SessionArtifactStore
 
 
 class FailingRuntime:
@@ -31,10 +34,17 @@ async def test_app_renders_runtime_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_submit_prompt_updates_history_output_and_event_timeline() -> None:
+async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="test-session")
     app = StrandsAgentApp(
         runtime=FakeStrandsRuntime(),
-        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini", workspace_root="."),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
     )
     async with app.run_test() as pilot:
         await pilot.press("l", "i", "s", "t", " ", "f", "i", "l", "e", "s", "enter")
@@ -57,12 +67,26 @@ async def test_submit_prompt_updates_history_output_and_event_timeline() -> None
         assert len(app.history) == 1
         assert len(app.events) == 4
 
+        payload = json.loads((tmp_path / "test-session" / "turns.jsonl").read_text(encoding="utf-8").strip())
+        assert payload["prompt"] == "list files"
+        assert payload["provider"] == "fake-strands"
+        transcript = (tmp_path / "test-session" / "transcript.md").read_text(encoding="utf-8")
+        assert "# Session transcript: test-session" in transcript
+        assert "list_files" in transcript
+
 
 @pytest.mark.asyncio
-async def test_runtime_error_is_rendered_in_ui() -> None:
+async def test_runtime_error_is_rendered_in_ui(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="error-session")
     app = StrandsAgentApp(
         runtime=FailingRuntime(),
-        config=AppConfig(runtime_mode="fake", openai_model="gpt-4o-mini", workspace_root="."),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
     )
     async with app.run_test() as pilot:
         await pilot.press("x", "enter")
@@ -76,6 +100,10 @@ async def test_runtime_error_is_rendered_in_ui() -> None:
         assert "Agent: Error: boom" in output
         assert "Runtime error" in status
         assert "kind=runtime_error | Runtime error" in events
+
+        payload = json.loads((tmp_path / "error-session" / "turns.jsonl").read_text(encoding="utf-8").strip())
+        assert payload["error"] is True
+        assert payload["provider"] == "runtime-error"
 
 
 def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -11,6 +11,7 @@ class AppConfig:
     runtime_mode: str = "fake"
     openai_model: str = "gpt-4o-mini"
     workspace_root: str = "."
+    artifacts_root: str = "artifacts/sessions"
 
     @property
     def workspace_path(self) -> Path:
@@ -28,8 +29,13 @@ class AppConfig:
 
 
 def load_config() -> AppConfig:
+    workspace_root = os.getenv("STRANDS_AGENT_WORKSPACE_ROOT", os.getcwd()).strip() or os.getcwd()
+    artifacts_root = os.getenv("STRANDS_AGENT_ARTIFACTS_ROOT", "").strip()
+    if not artifacts_root:
+        artifacts_root = str(Path(workspace_root).expanduser().resolve() / "artifacts" / "sessions")
     return AppConfig(
         runtime_mode=os.getenv("STRANDS_AGENT_RUNTIME", "fake").strip().lower() or "fake",
         openai_model=os.getenv("STRANDS_AGENT_OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
-        workspace_root=os.getenv("STRANDS_AGENT_WORKSPACE_ROOT", os.getcwd()).strip() or os.getcwd(),
+        workspace_root=workspace_root,
+        artifacts_root=artifacts_root,
     )

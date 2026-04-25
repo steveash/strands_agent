@@ -8,6 +8,7 @@ from textual.widgets import Footer, Header, Input, Static
 
 from strands_agent_tui.config import AppConfig, load_config
 from strands_agent_tui.runtime import AgentRuntime, RuntimeEvent, build_runtime
+from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 
 
 class StrandsAgentApp(App):
@@ -61,6 +62,7 @@ class StrandsAgentApp(App):
         self,
         runtime: AgentRuntime | None = None,
         config: AppConfig | None = None,
+        artifact_store: SessionArtifactStore | None = None,
     ) -> None:
         super().__init__()
         config = config or load_config()
@@ -72,6 +74,7 @@ class StrandsAgentApp(App):
         )
         self.history: list[tuple[str, str]] = []
         self.events: list[RuntimeEvent] = []
+        self.artifact_store = artifact_store or SessionArtifactStore(config.artifacts_root)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -93,10 +96,31 @@ class StrandsAgentApp(App):
             response = self.runtime.run(prompt)
             self.history.append((prompt, response.text))
             self.events.extend(response.events)
+            self.artifact_store.append_turn(
+                TurnArtifact(
+                    prompt=prompt,
+                    response=response.text,
+                    provider=response.provider,
+                    mode=response.mode,
+                    events=response.events,
+                )
+            )
             self.query_one("#status", Static).update(self.render_status_summary(response.provider, response.mode))
         except Exception as exc:
-            self.history.append((prompt, f"Error: {exc}"))
-            self.events.append(RuntimeEvent(kind="runtime_error", title="Runtime error", detail=str(exc)))
+            error_text = f"Error: {exc}"
+            error_event = RuntimeEvent(kind="runtime_error", title="Runtime error", detail=str(exc))
+            self.history.append((prompt, error_text))
+            self.events.append(error_event)
+            self.artifact_store.append_turn(
+                TurnArtifact(
+                    prompt=prompt,
+                    response=error_text,
+                    provider="runtime-error",
+                    mode=self.config.runtime_mode,
+                    events=[error_event],
+                    error=True,
+                )
+            )
             self.query_one("#status", Static).update(
                 self.render_status_summary(runtime_label="Runtime error")
             )
