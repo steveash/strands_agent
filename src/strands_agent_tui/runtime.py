@@ -105,6 +105,21 @@ class FakeStrandsRuntime:
                     ),
                 ]
             )
+        if any(keyword in lowered for keyword in ["edit", "replace", "rewrite", "change"]):
+            events.extend(
+                [
+                    RuntimeEvent(
+                        kind="tool_started",
+                        title="replace_text",
+                        detail="Deterministic fake exact-match edit event for conservative code mutation.",
+                    ),
+                    RuntimeEvent(
+                        kind="tool_finished",
+                        title="replace_text",
+                        detail="Simulated an exact text replacement without touching disk.",
+                    ),
+                ]
+            )
 
         events.append(
             RuntimeEvent(
@@ -156,7 +171,22 @@ def build_workspace_tools(workspace_root: str | Path) -> list[object]:
         """Write a text file inside the active workspace, refusing overwrites unless explicitly allowed."""
         return workspace.write_file(relative_path=relative_path, content=content, overwrite=overwrite)
 
-    return [list_files, read_file, search_files, write_file]
+    @tool
+    def replace_text(
+        relative_path: str,
+        old_text: str,
+        new_text: str,
+        expected_occurrences: int = 1,
+    ) -> str:
+        """Replace exact text in a workspace file, failing if the match count is not what was expected."""
+        return workspace.replace_text(
+            relative_path=relative_path,
+            old_text=old_text,
+            new_text=new_text,
+            expected_occurrences=expected_occurrences,
+        )
+
+    return [list_files, read_file, search_files, write_file, replace_text]
 
 
 class StrandsSDKRuntime:
@@ -176,7 +206,8 @@ class StrandsSDKRuntime:
         self.workspace_root = Path(workspace_root).expanduser().resolve()
         self.system_prompt = system_prompt or (
             "You are a concise coding assistant inside a terminal UI prototype. "
-            f"You may inspect the workspace rooted at {self.workspace_root} using read-only tools."
+            f"You may inspect and conservatively edit the workspace rooted at {self.workspace_root} "
+            "using bounded local tools. Prefer exact-match edits over broad rewrites when possible."
         )
         self.openai_model = openai_model
 

@@ -10,6 +10,7 @@ MAX_READ_CHARS = 4000
 MAX_LIST_ENTRIES = 200
 MAX_SEARCH_RESULTS = 20
 MAX_WRITE_CHARS = 12000
+MAX_REPLACE_OCCURRENCES = 10
 
 
 @dataclass(slots=True)
@@ -164,6 +165,51 @@ class WorkspaceTools:
             f"Characters: {len(content)}"
         )
 
+    def replace_text(
+        self,
+        relative_path: str,
+        old_text: str,
+        new_text: str,
+        expected_occurrences: int = 1,
+    ) -> str:
+        """Replace exact text inside a workspace file with bounded, predictable behavior."""
+        if not old_text:
+            raise ValueError("old_text must not be empty")
+        if expected_occurrences < 1:
+            raise ValueError("expected_occurrences must be >= 1")
+
+        target = self.resolve_path(relative_path)
+        if not target.exists():
+            raise FileNotFoundError(f"Path does not exist: {relative_path}")
+        if not target.is_file():
+            raise IsADirectoryError(f"Path is not a file: {relative_path}")
+
+        original = target.read_text(encoding="utf-8")
+        occurrences = original.count(old_text)
+        if occurrences == 0:
+            raise ValueError(f"old_text was not found in file: {relative_path}")
+        if occurrences != expected_occurrences:
+            raise ValueError(
+                "old_text occurrence count mismatch: "
+                f"expected {expected_occurrences}, found {occurrences}"
+            )
+        if occurrences > MAX_REPLACE_OCCURRENCES:
+            raise ValueError(
+                f"refusing to replace more than {MAX_REPLACE_OCCURRENCES} occurrences in one call"
+            )
+
+        updated = original.replace(old_text, new_text)
+        if len(updated) > MAX_WRITE_CHARS and len(original) <= MAX_WRITE_CHARS:
+            raise ValueError(f"updated content exceeds max size of {MAX_WRITE_CHARS} characters")
+
+        target.write_text(updated, encoding="utf-8")
+        return (
+            f"Workspace root: {self.root}\n"
+            f"Action: replaced text\n"
+            f"File: {target.relative_to(self.root)}\n"
+            f"Occurrences: {occurrences}"
+        )
+
 
 _DEFAULT_TOOLS = WorkspaceTools(Path.cwd())
 
@@ -198,3 +244,18 @@ def search_files(
 @tool
 def write_file(relative_path: str, content: str, overwrite: bool = False) -> str:
     return _DEFAULT_TOOLS.write_file(relative_path=relative_path, content=content, overwrite=overwrite)
+
+
+@tool
+def replace_text(
+    relative_path: str,
+    old_text: str,
+    new_text: str,
+    expected_occurrences: int = 1,
+) -> str:
+    return _DEFAULT_TOOLS.replace_text(
+        relative_path=relative_path,
+        old_text=old_text,
+        new_text=new_text,
+        expected_occurrences=expected_occurrences,
+    )

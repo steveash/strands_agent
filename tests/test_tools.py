@@ -48,6 +48,27 @@ def test_write_file_creates_new_file_but_refuses_implicit_overwrite(workspace: W
         workspace.write_file("notes/todo.txt", "new text\n")
 
 
+def test_replace_text_updates_exact_match(workspace: WorkspaceTools) -> None:
+    rendered = workspace.replace_text(
+        "src/main.py",
+        "print('world')",
+        "print('strands')",
+    )
+
+    assert "Action: replaced text" in rendered
+    assert "Occurrences: 1" in rendered
+    assert "print('strands')" in workspace.read_file("src/main.py")
+
+
+def test_replace_text_rejects_missing_or_ambiguous_matches(workspace: WorkspaceTools) -> None:
+    with pytest.raises(ValueError, match="not found"):
+        workspace.replace_text("src/main.py", "print('missing')", "print('x')")
+
+    (workspace.root / "repeat.txt").write_text("alpha\nalpha\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="occurrence count mismatch"):
+        workspace.replace_text("repeat.txt", "alpha", "beta")
+
+
 def test_workspace_rejects_paths_outside_root(workspace: WorkspaceTools) -> None:
     with pytest.raises(ValueError, match="escapes workspace root"):
         workspace.read_file("../secrets.txt")
@@ -58,4 +79,4 @@ def test_build_workspace_tools_returns_workspace_tool_set(tmp_path: Path) -> Non
 
     names = [tool.tool_name for tool in tools]
 
-    assert names == ["list_files", "read_file", "search_files", "write_file"]
+    assert names == ["list_files", "read_file", "search_files", "write_file", "replace_text"]

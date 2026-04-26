@@ -32,9 +32,9 @@ def test_fake_runtime_emits_deterministic_workspace_tool_events() -> None:
     assert result.events[1].title == "list_files"
 
 
-def test_fake_runtime_emits_search_and_write_events() -> None:
+def test_fake_runtime_emits_search_write_and_edit_events() -> None:
     runtime = FakeStrandsRuntime()
-    result = runtime.run("search the repo and create a notes file")
+    result = runtime.run("search the repo, create a notes file, and replace stale text")
 
     titles = [event.title for event in result.events]
 
@@ -46,6 +46,8 @@ def test_fake_runtime_emits_search_and_write_events() -> None:
         "search_files",
         "write_file",
         "write_file",
+        "replace_text",
+        "replace_text",
         "Assistant response ready",
     ]
 

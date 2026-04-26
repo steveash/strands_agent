@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 has bounded inspect + search + first-write tooling wired into the Strands runtime seam, and the prototype now persists per-session transcript and timeline artifacts for replay/debugging.**
+**Phase 1 is complete, Phase 2 now includes conservative exact-match edits in addition to inspect/search/write tooling, and Phase 3 persists per-session transcript and timeline artifacts for replay/debugging.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -84,40 +84,40 @@ What exists now:
 - a live **Strands + OpenAI** runtime path driven by environment variables,
 - explicit CLI overrides for runtime, model, and workspace selection,
 - status-line rendering plus a dedicated workspace banner in the TUI,
-- workspace tools for `list_files`, `read_file`, `search_files`, and a conservative `write_file`,
+- workspace tools for `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
 - live runtime tool registration that binds those tools to the active workspace root,
 - a dedicated event timeline pane for runtime milestones, tool activity, and failures,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
-- deterministic fake-runtime event emission for inspect, search, and write activity so UI behavior is testable without live model calls,
-- tests that cover TUI state, config merging, tool safety, runtime selection, search/write behavior, event rendering, and artifact persistence,
+- deterministic fake-runtime event emission for inspect, search, write, and edit activity so UI behavior is testable without live model calls,
+- tests that cover TUI state, config merging, tool safety, runtime selection, edit/search/write behavior, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added `SessionArtifactStore` so every turn is persisted as structured JSONL plus a readable markdown transcript,
-- wired the TUI to save both successful turns and runtime failures into session artifacts automatically,
-- added config support for `STRANDS_AGENT_ARTIFACTS_ROOT` with a sensible default under the active workspace,
-- added tests that verify successful turns and runtime errors are both captured on disk,
-- fixed local test self-sufficiency by adding `tests/conftest.py` so the repo can run under `pytest` after venv setup without relying on prior editable installs.
+- added `replace_text`, a conservative exact-match edit tool that fails when the expected match count is wrong,
+- registered `replace_text` in the live Strands runtime so the coding-agent tool seam now covers inspect, search, create, and bounded edits,
+- taught the fake runtime to emit deterministic edit events for prompts that imply replacement/rewrite behavior,
+- expanded tests to verify successful exact-match edits, rejection of missing/ambiguous replacements, and runtime tool registration including `replace_text`,
+- tightened the live runtime system prompt so it nudges the model toward bounded local edits instead of broad rewrites.
 
 Why this matters now:
-- It turns the event timeline into something durable instead of a fleeting TUI pane.
-- It gives Steve concrete artifacts to inspect when studying how prompts, runtime choices, tool events, and failures line up in a Strands-style loop.
-- It creates a clean seam for later session restore, replay, and deeper observability work.
+- It gives the prototype a safer code-mutation primitive that is closer to how real coding agents actually make targeted changes.
+- It makes Strands tool design more legible, because Steve can compare file creation versus exact replacement across the same runtime boundary.
+- It sets up a clean next step for richer steering and live-event capture around edits, not just reads.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, and default artifact-root derivation,
-- tool tests verify bounded reads, bounded search, guarded writes, and workspace confinement,
+- tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, and workspace confinement,
 - app tests verify prompt submission, status rendering, workspace banner rendering, event timeline updates, and on-disk artifact persistence for both success and failure cases,
-- runtime errors are surfaced visibly in both the transcript and event pane, and are now also written to session artifacts,
-- `pytest` currently passes for the expanded Phase 1 plus deeper Phase 2/3 observability seam,
+- runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts,
+- `pytest` currently passes for the expanded Phase 2 edit seam plus Phase 3 observability seam,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `21 passed`
+- automated tests: `23 passed`
 - CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
-- tool verification by test: `search_files` returns bounded matches and `write_file` refuses implicit overwrite
-- UI verification by test: fake mode renders deterministic `list_files`, `search_files`, and `write_file` events, and each turn is persisted to session artifacts
-- unblock note: plain host `pytest` initially failed because the repo dependencies were not active in the shell; creating/using `.venv` and reinstalling `-e '.[dev]'` restored a green local test path
+- tool verification by test: `replace_text` succeeds on exact single matches and rejects missing or ambiguous replacements, while `write_file` still refuses implicit overwrite
+- UI verification by test: fake mode renders deterministic `list_files`, `search_files`, `write_file`, and `replace_text` events, and each turn is persisted to session artifacts
+- unblock note: no new environment repair was needed this run; the existing `.venv` path remained healthy
 
 ## First five phases
 
@@ -171,11 +171,12 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - `read_file` tool with bounded excerpts,
 - bounded `search_files` tool for repo-wide inspection,
 - conservative `write_file` tool that blocks overwrite unless explicitly enabled,
+- conservative `replace_text` tool that requires an exact expected match count,
 - workspace-root confinement checks,
 - workspace root banner in the TUI,
 - launch-time workspace override via `--workspace`,
 - side-by-side event timeline pane for runtime and tool events,
-- deterministic fake-runtime tool events for inspect, search, and write flows.
+- deterministic fake-runtime tool events for inspect, search, write, and edit flows.
 
 **Why this matters**
 This is the point where the app stops being a generic chat shell and starts becoming a coding-agent platform.
@@ -348,6 +349,18 @@ Expected result is a short successful reply plus a provider/mode line.
 pytest
 ```
 
+### Current coding-tool seam
+
+The prototype currently exposes these bounded workspace tools through the runtime:
+
+- `list_files`
+- `read_file`
+- `search_files`
+- `write_file`
+- `replace_text`
+
+`replace_text` is intentionally strict: it only succeeds when the old text appears exactly the expected number of times, which makes it a good fit for studying safer agent-driven edits.
+
 ### Session artifacts
 
 Each app session now writes artifacts under the active workspace by default:
@@ -410,10 +423,10 @@ Why this stack:
 ## Next highest-value implementation order
 
 1. enrich the live runtime event model so real Strands tool activity can populate the timeline pane
-2. add a tightly scoped edit/replace flow now that conservative file creation exists
-3. keep the fake runtime path green while introducing richer Strands tool registration seams
-4. grow observability and steering on top of the tested runtime seam
-5. persist timeline artifacts so event inspection survives across sessions
+2. keep the fake runtime path green while introducing richer Strands tool registration seams around edit flows
+3. grow observability artifacts with timings, tool inputs, and model metadata
+4. add steering hooks before broadening tool power further
+5. add a narrowly scoped shell command seam only after edit/write steering exists
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -441,8 +454,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add a tightly scoped edit/replace tool that follows the same conservative posture as `write_file`
 - enrich live-mode event capture so real Strands tool calls appear in the timeline, not just fake-mode simulations
 - enrich persisted artifacts with timings, model metadata, and tool arguments once live event capture is richer
 - add higher-signal workspace summaries so the agent can explain repo shape before reaching for shell commands
+- add steering hooks that can approve, deny, or explain risky edit/write attempts before execution
 - keep live runtime support optional so fake-mode regression tests stay fast and deterministic
