@@ -80,3 +80,17 @@ def test_build_workspace_tools_returns_workspace_tool_set(tmp_path: Path) -> Non
     names = [tool.tool_name for tool in tools]
 
     assert names == ["list_files", "read_file", "search_files", "write_file", "replace_text"]
+
+
+def test_build_workspace_tools_emits_events_via_sink(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("hello\n", encoding="utf-8")
+    events = []
+    tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
+
+    rendered = tools["read_file"](relative_path="notes.txt")
+
+    assert "hello" in rendered
+    assert [event.kind for event in events] == ["tool_started", "tool_finished"]
+    assert events[0].title == "read_file"
+    assert "notes.txt" in events[0].detail
+    assert "elapsed_ms=" in events[1].detail

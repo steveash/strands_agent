@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from os import getenv
 from pathlib import Path
-from typing import Protocol
+from time import perf_counter
+from typing import Callable, Protocol
 
 from strands import tool
 
@@ -28,6 +29,16 @@ class AgentResponse:
 class AgentRuntime(Protocol):
     def run(self, prompt: str) -> AgentResponse:
         ...
+
+
+RuntimeEventSink = Callable[[RuntimeEvent], None]
+
+
+def _summarize_tool_value(value: object, limit: int = 120) -> str:
+    text = repr(value)
+    if len(text) > limit:
+        return text[: limit - 3] + "..."
+    return text
 
 
 class FakeStrandsRuntime:
@@ -136,18 +147,62 @@ class FakeStrandsRuntime:
         )
 
 
-def build_workspace_tools(workspace_root: str | Path) -> list[object]:
+def build_workspace_tools(
+    workspace_root: str | Path,
+    event_sink: RuntimeEventSink | None = None,
+) -> list[object]:
     workspace = WorkspaceTools(Path(workspace_root))
+
+    def instrument(tool_name: str, action: Callable[..., str]) -> Callable[..., str]:
+        def wrapped(**kwargs: object) -> str:
+            started_at = perf_counter()
+            if event_sink is not None:
+                event_sink(
+                    RuntimeEvent(
+                        kind="tool_started",
+                        title=tool_name,
+                        detail=f"args={_summarize_tool_value(kwargs)}",
+                    )
+                )
+            try:
+                result = action(**kwargs)
+            except Exception as exc:
+                elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+                if event_sink is not None:
+                    event_sink(
+                        RuntimeEvent(
+                            kind="tool_failed",
+                            title=tool_name,
+                            detail=f"error={exc} | elapsed_ms={elapsed_ms}",
+                        )
+                    )
+                raise
+            elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+            if event_sink is not None:
+                event_sink(
+                    RuntimeEvent(
+                        kind="tool_finished",
+                        title=tool_name,
+                        detail=f"elapsed_ms={elapsed_ms} | result={_summarize_tool_value(result)}",
+                    )
+                )
+            return result
+
+        return wrapped
 
     @tool
     def list_files(relative_path: str = ".", recursive: bool = False) -> str:
         """List files and directories inside the active workspace."""
-        return workspace.list_files(relative_path=relative_path, recursive=recursive)
+        return instrument("list_files", workspace.list_files)(relative_path=relative_path, recursive=recursive)
 
     @tool
     def read_file(relative_path: str, start_line: int = 1, max_lines: int = 200) -> str:
         """Read a text file from the active workspace."""
-        return workspace.read_file(relative_path=relative_path, start_line=start_line, max_lines=max_lines)
+        return instrument("read_file", workspace.read_file)(
+            relative_path=relative_path,
+            start_line=start_line,
+            max_lines=max_lines,
+        )
 
     @tool
     def search_files(
@@ -158,7 +213,7 @@ def build_workspace_tools(workspace_root: str | Path) -> list[object]:
         max_results: int = 20,
     ) -> str:
         """Search text files in the active workspace for a query string."""
-        return workspace.search_files(
+        return instrument("search_files", workspace.search_files)(
             query=query,
             relative_path=relative_path,
             glob_pattern=glob_pattern,
@@ -169,7 +224,11 @@ def build_workspace_tools(workspace_root: str | Path) -> list[object]:
     @tool
     def write_file(relative_path: str, content: str, overwrite: bool = False) -> str:
         """Write a text file inside the active workspace, refusing overwrites unless explicitly allowed."""
-        return workspace.write_file(relative_path=relative_path, content=content, overwrite=overwrite)
+        return instrument("write_file", workspace.write_file)(
+            relative_path=relative_path,
+            content=content,
+            overwrite=overwrite,
+        )
 
     @tool
     def replace_text(
@@ -179,7 +238,7 @@ def build_workspace_tools(workspace_root: str | Path) -> list[object]:
         expected_occurrences: int = 1,
     ) -> str:
         """Replace exact text in a workspace file, failing if the match count is not what was expected."""
-        return workspace.replace_text(
+        return instrument("replace_text", workspace.replace_text)(
             relative_path=relative_path,
             old_text=old_text,
             new_text=new_text,
@@ -211,11 +270,7 @@ class StrandsSDKRuntime:
         )
         self.openai_model = openai_model
 
-    def run(self, prompt: str) -> AgentResponse:
-        api_key = getenv("OPENAI_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for live runtime mode")
-
+    def _build_agent(self, api_key: str, event_sink: RuntimeEventSink | None = None):
         from strands import Agent
         from strands.models.openai import OpenAIModel
 
@@ -224,26 +279,30 @@ class StrandsSDKRuntime:
             model_id=self.openai_model,
             params={"max_tokens": 300, "temperature": 0.2},
         )
-        agent = Agent(
-            model=model,
-            system_prompt=self.system_prompt,
-            tools=build_workspace_tools(self.workspace_root),
-        )
+        tools = build_workspace_tools(self.workspace_root, event_sink=event_sink)
+        return Agent(model=model, system_prompt=self.system_prompt, tools=tools), len(tools)
+
+    def run(self, prompt: str) -> AgentResponse:
+        api_key = getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is required for live runtime mode")
+
+        events = [RuntimeEvent(kind="prompt_received", title="Prompt accepted", detail=prompt.strip() or "<empty>")]
+        agent, tool_count = self._build_agent(api_key, event_sink=events.append)
+        started_at = perf_counter()
         result = agent(prompt)
+        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
         text = str(result)
-        return AgentResponse(
-            text=text,
-            provider=self.provider_name,
-            mode="live",
-            events=[
-                RuntimeEvent(kind="prompt_received", title="Prompt accepted", detail=prompt.strip() or "<empty>"),
-                RuntimeEvent(
-                    kind="response_completed",
-                    title="Assistant response ready",
-                    detail=f"Provider={self.provider_name}, mode=live, tools={len(build_workspace_tools(self.workspace_root))}",
+        events.append(
+            RuntimeEvent(
+                kind="response_completed",
+                title="Assistant response ready",
+                detail=(
+                    f"Provider={self.provider_name}, mode=live, tools={tool_count}, elapsed_ms={elapsed_ms}"
                 ),
-            ],
+            )
         )
+        return AgentResponse(text=text, provider=self.provider_name, mode="live", events=events)
 
 
 def build_runtime(

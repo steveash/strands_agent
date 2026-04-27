@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 
 from strands_agent_tui.config import AppConfig
-from strands_agent_tui.runtime import AgentResponse, FakeStrandsRuntime, StrandsSDKRuntime, build_runtime
+from strands_agent_tui.runtime import (
+    AgentResponse,
+    FakeStrandsRuntime,
+    StrandsSDKRuntime,
+    build_runtime,
+    build_workspace_tools,
+)
 
 
 def test_fake_runtime_echoes_prompt() -> None:
@@ -69,6 +75,35 @@ def test_live_runtime_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = StrandsSDKRuntime()
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
         runtime.run("hello")
+
+
+def test_live_runtime_collects_tool_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class StubRuntime(StrandsSDKRuntime):
+        def _build_agent(self, api_key: str, event_sink=None):
+            tools = build_workspace_tools(tmp_path, event_sink=event_sink)
+            tool_map = {tool.tool_name: tool for tool in tools}
+
+            def agent(prompt: str) -> str:
+                tool_map["read_file"](relative_path="notes.txt")
+                return f"handled: {prompt}"
+
+            return agent, len(tools)
+
+    (tmp_path / "notes.txt").write_text("instrument me\n", encoding="utf-8")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    runtime = StubRuntime(workspace_root=tmp_path)
+
+    result = runtime.run("read the notes file")
+
+    assert result.text == "handled: read the notes file"
+    assert [event.kind for event in result.events] == [
+        "prompt_received",
+        "tool_started",
+        "tool_finished",
+        "response_completed",
+    ]
+    assert result.events[1].title == "read_file"
+    assert "elapsed_ms=" in result.events[-1].detail
 
 
 def test_app_config_merge_applies_non_empty_overrides() -> None:
