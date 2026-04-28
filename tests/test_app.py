@@ -63,6 +63,7 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert "Turns: 1" in rendered_status
         assert "Events: 4" in rendered_status
         assert "kind=tool_started | list_files" in rendered_events
+        assert "data: source='fake_runtime', tool_name='list_files'" in rendered_events
         assert "kind=tool_finished | list_files" in rendered_events
         assert len(app.history) == 1
         assert len(app.events) == 4
@@ -70,8 +71,13 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         payload = json.loads((tmp_path / "test-session" / "turns.jsonl").read_text(encoding="utf-8").strip())
         assert payload["prompt"] == "list files"
         assert payload["provider"] == "fake-strands"
+        assert payload["schema_version"] == "strands-agent/v1"
+        assert payload["response_metadata"]["mode"] == "fake"
+        assert payload["events"][0]["timestamp"]
+        assert payload["events"][1]["data"]["tool_name"] == "list_files"
         transcript = (tmp_path / "test-session" / "transcript.md").read_text(encoding="utf-8")
         assert "# Session transcript: test-session" in transcript
+        assert "**Response metadata**" in transcript
         assert "list_files" in transcript
 
 
@@ -104,6 +110,7 @@ async def test_runtime_error_is_rendered_in_ui(tmp_path: Path) -> None:
         payload = json.loads((tmp_path / "error-session" / "turns.jsonl").read_text(encoding="utf-8").strip())
         assert payload["error"] is True
         assert payload["provider"] == "runtime-error"
+        assert payload["response_metadata"]["mode"] == "fake"
 
 
 def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from os import getenv
 from pathlib import Path
 from time import perf_counter
@@ -16,6 +17,17 @@ class RuntimeEvent:
     kind: str
     title: str
     detail: str
+    timestamp: str | None = None
+    data: dict[str, object] = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            "title": self.title,
+            "detail": self.detail,
+            "timestamp": self.timestamp or datetime.now(UTC).isoformat(),
+            "data": self.data,
+        }
 
 
 @dataclass(slots=True)
@@ -24,6 +36,7 @@ class AgentResponse:
     provider: str
     mode: str
     events: list[RuntimeEvent] = field(default_factory=list)
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 class AgentRuntime(Protocol):
@@ -32,6 +45,22 @@ class AgentRuntime(Protocol):
 
 
 RuntimeEventSink = Callable[[RuntimeEvent], None]
+
+
+def runtime_event(
+    kind: str,
+    title: str,
+    detail: str,
+    *,
+    data: dict[str, object] | None = None,
+) -> RuntimeEvent:
+    return RuntimeEvent(
+        kind=kind,
+        title=title,
+        detail=detail,
+        timestamp=datetime.now(UTC).isoformat(),
+        data=data or {},
+    )
 
 
 def _summarize_tool_value(value: object, limit: int = 120) -> str:
@@ -58,85 +87,101 @@ class FakeStrandsRuntime:
                 provider=self.provider_name,
                 mode="fake",
                 events=[
-                    RuntimeEvent(
+                    runtime_event(
                         kind="input_rejected",
                         title="Empty prompt",
                         detail="Prompt contained only whitespace, so the fake runtime returned guidance instead of running tools.",
+                        data={"prompt_empty": True},
                     )
                 ],
+                metadata={"provider": self.provider_name, "mode": "fake"},
             )
 
         events = [
-            RuntimeEvent(kind="prompt_received", title="Prompt accepted", detail=normalized),
+            runtime_event(
+                kind="prompt_received",
+                title="Prompt accepted",
+                detail=normalized,
+                data={"prompt_length": len(normalized)},
+            ),
         ]
 
         lowered = normalized.lower()
         if any(keyword in lowered for keyword in ["file", "workspace", "repo", "read", "list"]):
             events.extend(
                 [
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_started",
                         title="list_files",
                         detail="Deterministic fake tool event for workspace inspection.",
+                        data={"tool_name": "list_files", "source": "fake_runtime"},
                     ),
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_finished",
                         title="list_files",
                         detail="Returned a simulated workspace listing without touching disk.",
+                        data={"tool_name": "list_files", "source": "fake_runtime"},
                     ),
                 ]
             )
         if any(keyword in lowered for keyword in ["search", "find", "grep", "match"]):
             events.extend(
                 [
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_started",
                         title="search_files",
                         detail="Deterministic fake search event for repo-wide inspection.",
+                        data={"tool_name": "search_files", "source": "fake_runtime"},
                     ),
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_finished",
                         title="search_files",
                         detail="Returned simulated search hits from the fake workspace.",
+                        data={"tool_name": "search_files", "source": "fake_runtime"},
                     ),
                 ]
             )
         if any(keyword in lowered for keyword in ["write", "create", "save"]):
             events.extend(
                 [
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_started",
                         title="write_file",
                         detail="Deterministic fake write event for a conservative mutation path.",
+                        data={"tool_name": "write_file", "source": "fake_runtime"},
                     ),
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_finished",
                         title="write_file",
                         detail="Simulated a bounded workspace write without changing disk.",
+                        data={"tool_name": "write_file", "source": "fake_runtime"},
                     ),
                 ]
             )
         if any(keyword in lowered for keyword in ["edit", "replace", "rewrite", "change"]):
             events.extend(
                 [
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_started",
                         title="replace_text",
                         detail="Deterministic fake exact-match edit event for conservative code mutation.",
+                        data={"tool_name": "replace_text", "source": "fake_runtime"},
                     ),
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_finished",
                         title="replace_text",
                         detail="Simulated an exact text replacement without touching disk.",
+                        data={"tool_name": "replace_text", "source": "fake_runtime"},
                     ),
                 ]
             )
 
         events.append(
-            RuntimeEvent(
+            runtime_event(
                 kind="response_completed",
                 title="Assistant response ready",
                 detail=f"Provider={self.provider_name}, mode=fake",
+                data={"provider": self.provider_name, "mode": "fake"},
             )
         )
         return AgentResponse(
@@ -144,6 +189,7 @@ class FakeStrandsRuntime:
             provider=self.provider_name,
             mode="fake",
             events=events,
+            metadata={"provider": self.provider_name, "mode": "fake"},
         )
 
 
@@ -158,10 +204,11 @@ def build_workspace_tools(
             started_at = perf_counter()
             if event_sink is not None:
                 event_sink(
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_started",
                         title=tool_name,
                         detail=f"args={_summarize_tool_value(kwargs)}",
+                        data={"tool_name": tool_name, "args": kwargs},
                     )
                 )
             try:
@@ -170,20 +217,22 @@ def build_workspace_tools(
                 elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
                 if event_sink is not None:
                     event_sink(
-                        RuntimeEvent(
+                        runtime_event(
                             kind="tool_failed",
                             title=tool_name,
                             detail=f"error={exc} | elapsed_ms={elapsed_ms}",
+                            data={"tool_name": tool_name, "error": str(exc), "elapsed_ms": elapsed_ms},
                         )
                     )
                 raise
             elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
             if event_sink is not None:
                 event_sink(
-                    RuntimeEvent(
+                    runtime_event(
                         kind="tool_finished",
                         title=tool_name,
                         detail=f"elapsed_ms={elapsed_ms} | result={_summarize_tool_value(result)}",
+                        data={"tool_name": tool_name, "elapsed_ms": elapsed_ms},
                     )
                 )
             return result
@@ -287,22 +336,50 @@ class StrandsSDKRuntime:
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is required for live runtime mode")
 
-        events = [RuntimeEvent(kind="prompt_received", title="Prompt accepted", detail=prompt.strip() or "<empty>")]
+        events = [
+            runtime_event(
+                kind="prompt_received",
+                title="Prompt accepted",
+                detail=prompt.strip() or "<empty>",
+                data={"prompt_length": len(prompt.strip()), "workspace_root": str(self.workspace_root)},
+            )
+        ]
         agent, tool_count = self._build_agent(api_key, event_sink=events.append)
         started_at = perf_counter()
         result = agent(prompt)
         elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
         text = str(result)
         events.append(
-            RuntimeEvent(
+            runtime_event(
                 kind="response_completed",
                 title="Assistant response ready",
                 detail=(
                     f"Provider={self.provider_name}, mode=live, tools={tool_count}, elapsed_ms={elapsed_ms}"
                 ),
+                data={
+                    "provider": self.provider_name,
+                    "mode": "live",
+                    "model": self.openai_model,
+                    "tool_count": tool_count,
+                    "elapsed_ms": elapsed_ms,
+                    "workspace_root": str(self.workspace_root),
+                },
             )
         )
-        return AgentResponse(text=text, provider=self.provider_name, mode="live", events=events)
+        return AgentResponse(
+            text=text,
+            provider=self.provider_name,
+            mode="live",
+            events=events,
+            metadata={
+                "provider": self.provider_name,
+                "mode": "live",
+                "model": self.openai_model,
+                "tool_count": tool_count,
+                "workspace_root": str(self.workspace_root),
+                "elapsed_ms": elapsed_ms,
+            },
+        )
 
 
 def build_runtime(

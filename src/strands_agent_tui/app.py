@@ -7,7 +7,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input, Static
 
 from strands_agent_tui.config import AppConfig, load_config
-from strands_agent_tui.runtime import AgentRuntime, RuntimeEvent, build_runtime
+from strands_agent_tui.runtime import AgentRuntime, RuntimeEvent, build_runtime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 
 
@@ -103,12 +103,18 @@ class StrandsAgentApp(App):
                     provider=response.provider,
                     mode=response.mode,
                     events=response.events,
+                    response_metadata=response.metadata,
                 )
             )
             self.query_one("#status", Static).update(self.render_status_summary(response.provider, response.mode))
         except Exception as exc:
             error_text = f"Error: {exc}"
-            error_event = RuntimeEvent(kind="runtime_error", title="Runtime error", detail=str(exc))
+            error_event = runtime_event(
+                kind="runtime_error",
+                title="Runtime error",
+                detail=str(exc),
+                data={"provider": "runtime-error", "mode": self.config.runtime_mode},
+            )
             self.history.append((prompt, error_text))
             self.events.append(error_event)
             self.artifact_store.append_turn(
@@ -118,6 +124,7 @@ class StrandsAgentApp(App):
                     provider="runtime-error",
                     mode=self.config.runtime_mode,
                     events=[error_event],
+                    response_metadata={"provider": "runtime-error", "mode": self.config.runtime_mode},
                     error=True,
                 )
             )
@@ -164,8 +171,14 @@ class StrandsAgentApp(App):
 
         lines = ["Event Timeline", ""]
         for index, item in enumerate(self.events[-12:], start=max(len(self.events) - 11, 1)):
-            lines.append(f"{index}. kind={item.kind} | {item.title}")
-            lines.append(f"   {item.detail}")
+            timestamp = item.timestamp[11:19] if item.timestamp else "--:--:--"
+            lines.append(f"{index}. [{timestamp}] kind={item.kind} | {item.title}")
+            if item.data:
+                compact_data = ", ".join(f"{key}={value!r}" for key, value in sorted(item.data.items()))
+                lines.append(f"   {item.detail}")
+                lines.append(f"   data: {compact_data}")
+            else:
+                lines.append(f"   {item.detail}")
         return "\n".join(lines)
 
 

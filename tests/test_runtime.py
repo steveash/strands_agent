@@ -26,6 +26,7 @@ def test_fake_runtime_handles_empty_prompt() -> None:
     result = runtime.run("   ")
     assert result.text == "Please enter a prompt."
     assert result.events[0].kind == "input_rejected"
+    assert result.events[0].data["prompt_empty"] is True
 
 
 def test_fake_runtime_emits_deterministic_workspace_tool_events() -> None:
@@ -103,7 +104,10 @@ def test_live_runtime_collects_tool_events(monkeypatch: pytest.MonkeyPatch, tmp_
         "response_completed",
     ]
     assert result.events[1].title == "read_file"
+    assert result.events[1].data["tool_name"] == "read_file"
     assert "elapsed_ms=" in result.events[-1].detail
+    assert result.metadata["model"] == "gpt-4o-mini"
+    assert result.metadata["workspace_root"] == str(tmp_path.resolve())
 
 
 def test_app_config_merge_applies_non_empty_overrides() -> None:
