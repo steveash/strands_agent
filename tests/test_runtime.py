@@ -9,6 +9,7 @@ from strands_agent_tui.runtime import (
     StrandsSDKRuntime,
     build_runtime,
     build_workspace_tools,
+    categorize_event_kind,
 )
 
 
@@ -137,3 +138,11 @@ def test_app_config_defaults_artifacts_root_under_workspace(monkeypatch: pytest.
     config = load_config()
 
     assert config.artifacts_root == str(tmp_path.resolve() / "artifacts" / "sessions")
+
+
+def test_event_kind_categories_cover_runtime_tool_failure_and_persistence() -> None:
+    assert categorize_event_kind("prompt_received") == "runtime"
+    assert categorize_event_kind("tool_started") == "tool"
+    assert categorize_event_kind("tool_failed") == "failure"
+    assert categorize_event_kind("runtime_error") == "failure"
+    assert categorize_event_kind("artifact_saved") == "persistence"

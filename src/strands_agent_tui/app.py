@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input, Static
 
@@ -14,6 +15,13 @@ from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 class StrandsAgentApp(App):
     TITLE = "strands_agent"
     SUB_TITLE = "Strands-powered coding agent TUI prototype"
+    BINDINGS = [
+        Binding("f1", "set_event_filter('all')", "All events"),
+        Binding("f2", "set_event_filter('runtime')", "Runtime events"),
+        Binding("f3", "set_event_filter('tool')", "Tool events"),
+        Binding("f4", "set_event_filter('failure')", "Failure events"),
+        Binding("f5", "set_event_filter('persistence')", "Persistence events"),
+    ]
 
     CSS = """
     Screen {
@@ -74,6 +82,7 @@ class StrandsAgentApp(App):
         )
         self.history: list[tuple[str, str]] = []
         self.events: list[RuntimeEvent] = []
+        self.event_filter = "all"
         self.artifact_store = artifact_store or SessionArtifactStore(config.artifacts_root)
 
     def compose(self) -> ComposeResult:
@@ -106,6 +115,17 @@ class StrandsAgentApp(App):
                     response_metadata=response.metadata,
                 )
             )
+            self.events.append(
+                runtime_event(
+                    kind="artifact_saved",
+                    title="Session artifact saved",
+                    detail=f"Saved turn to {self.artifact_store.session_dir}",
+                    data={
+                        "session_id": self.artifact_store.session_id,
+                        "session_dir": str(self.artifact_store.session_dir),
+                    },
+                )
+            )
             self.query_one("#status", Static).update(self.render_status_summary(response.provider, response.mode))
         except Exception as exc:
             error_text = f"Error: {exc}"
@@ -126,6 +146,18 @@ class StrandsAgentApp(App):
                     events=[error_event],
                     response_metadata={"provider": "runtime-error", "mode": self.config.runtime_mode},
                     error=True,
+                )
+            )
+            self.events.append(
+                runtime_event(
+                    kind="artifact_saved",
+                    title="Session artifact saved",
+                    detail=f"Saved error turn to {self.artifact_store.session_dir}",
+                    data={
+                        "session_id": self.artifact_store.session_id,
+                        "session_dir": str(self.artifact_store.session_dir),
+                        "error": True,
+                    },
                 )
             )
             self.query_one("#status", Static).update(
@@ -162,6 +194,7 @@ class StrandsAgentApp(App):
         return "\n\n".join(parts)
 
     def render_events(self) -> str:
+        filtered_events = self.filtered_events()
         if not self.events:
             return (
                 "Event Timeline\n\n"
@@ -169,10 +202,15 @@ class StrandsAgentApp(App):
                 "Tool calls, runtime milestones, and failures will appear here."
             )
 
-        lines = ["Event Timeline", ""]
-        for index, item in enumerate(self.events[-12:], start=max(len(self.events) - 11, 1)):
+        lines = [
+            "Event Timeline",
+            f"Filter: {self.event_filter} ({len(filtered_events)}/{len(self.events)} events)",
+            "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence",
+            "",
+        ]
+        for index, item in enumerate(filtered_events[-12:], start=max(len(filtered_events) - 11, 1)):
             timestamp = item.timestamp[11:19] if item.timestamp else "--:--:--"
-            lines.append(f"{index}. [{timestamp}] kind={item.kind} | {item.title}")
+            lines.append(f"{index}. [{timestamp}] ({item.category}) kind={item.kind} | {item.title}")
             if item.data:
                 compact_data = ", ".join(f"{key}={value!r}" for key, value in sorted(item.data.items()))
                 lines.append(f"   {item.detail}")
@@ -180,6 +218,15 @@ class StrandsAgentApp(App):
             else:
                 lines.append(f"   {item.detail}")
         return "\n".join(lines)
+
+    def filtered_events(self) -> list[RuntimeEvent]:
+        if self.event_filter == "all":
+            return self.events
+        return [event for event in self.events if event.category == self.event_filter]
+
+    def action_set_event_filter(self, value: str) -> None:
+        self.event_filter = value
+        self.query_one("#events", Static).update(self.render_events())
 
 
 def parse_args() -> AppConfig:

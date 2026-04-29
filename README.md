@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes conservative exact-match edits plus real live-runtime tool instrumentation, and Phase 3 persists structured per-session artifacts with richer runtime metadata for replay/debugging.**
+**Phase 1 is complete, Phase 2 now includes conservative exact-match edits plus real live-runtime tool instrumentation, and Phase 3 now adds filterable event categories in the TUI so runtime, tool, failure, and persistence activity can be inspected separately.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -88,40 +88,42 @@ What exists now:
 - live runtime tool registration that binds those tools to the active workspace root,
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, and compact structured event data,
+- keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
 - structured event payloads with timestamps and metadata for both fake and live runtime paths,
+- explicit `artifact_saved` persistence events emitted by the app after each turn is written,
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity so UI behavior is testable without live model calls,
 - tests that cover TUI state, config merging, tool safety, runtime selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- extended `RuntimeEvent` with timestamps plus a structured `data` payload so fake and live runtime events share a clearer schema,
-- extended `AgentResponse` and persisted turn artifacts with response metadata for provider, mode, model, workspace root, tool count, and elapsed timing,
-- upgraded transcript rendering so saved artifacts include schema version, response metadata, and clearer per-event summaries instead of plain strings only,
-- updated the TUI event pane to show timestamps plus compact event data for easier visual inspection of the Strands loop,
-- added regression checks that verify structured event payloads and persisted metadata survive both successful and failing turns.
+- added a stable runtime event categorizer so timeline entries now fall into `runtime`, `tool`, `failure`, or `persistence`,
+- added TUI keyboard filters (`F1` through `F5`) so the event pane can focus on one category without losing the full event history,
+- appended explicit `artifact_saved` events after both successful and failing turns so persistence activity is visible in the same loop as Strands/tool events,
+- updated the timeline renderer to show the active filter, filtered counts, and category labels alongside compact event data,
+- added regression checks for event-category mapping and interactive event filtering in the TUI.
 
 Why this matters now:
-- It makes saved artifacts much more useful as a teaching surface for how Strands runtimes behave over time, not just in the live TUI moment.
-- It gives us a stable event shape before we add filtering, steering, or richer observability widgets.
-- It reduces the gap between “what the TUI showed” and “what was actually persisted for later debugging or replay.”
+- It turns the event pane from a raw stream into an actual observability surface, which is closer to how Steve will want to reason about agent loops in practice.
+- It makes Strands behavior easier to study by separating normal runtime milestones from tool churn, failures, and persistence side effects.
+- It sets up the next step cleanly, because steering interventions can now appear as their own high-signal events instead of getting buried in the main scroll.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, event timeline updates, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3 observability seam,
+- `pytest` currently passes for the expanded Phase 2/3 observability seam, including interactive event filtering,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `25 passed`
+- automated tests: `27 passed`
 - CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
 - live runtime verification by test: a stubbed live Strands runtime records real `read_file` tool activity plus structured metadata in the returned event timeline
 - artifact verification by test: persisted `turns.jsonl` entries now include schema version, timestamped events, and response metadata
-- UI verification by existing tests: fake mode still renders deterministic `list_files`, `search_files`, `write_file`, and `replace_text` events, now with compact structured event data in the timeline pane
-- unblock note: no environment repair was needed this run; the existing `.venv` path remained healthy
+- UI verification by existing tests: fake mode still renders deterministic `list_files`, `search_files`, `write_file`, and `replace_text` events, now with filterable categories and explicit persistence events in the timeline pane
+- unblock note: initial test collection failed outside the repo virtualenv because `textual` and `strands` were not importable from the system interpreter; recreated/validated `.venv` with `pip install -e '.[dev]'`, then re-ran checks successfully
 
 ## First five phases
 
@@ -181,7 +183,8 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - launch-time workspace override via `--workspace`,
 - side-by-side event timeline pane for runtime and tool events,
 - deterministic fake-runtime tool events for inspect, search, write, and edit flows,
-- live-runtime tool instrumentation that emits actual tool lifecycle events with args, elapsed time, and failures.
+- live-runtime tool instrumentation that emits actual tool lifecycle events with args, elapsed time, and failures,
+- stable event categories plus filter shortcuts so the timeline can isolate runtime, tool, failure, or persistence activity.
 
 **Why this matters**
 This is the point where the app stops being a generic chat shell and starts becoming a coding-agent platform.
@@ -211,7 +214,8 @@ Make the Strands loop legible by exposing intermediate events, tool uses, failur
 - artifact capture for both successful turns and runtime failures,
 - default artifact-root derivation under the active workspace,
 - persisted event payloads that now include timestamps, structured metadata, and real live-tool lifecycle entries when the Strands runtime uses workspace tools,
-- response metadata capture so replay artifacts retain model/runtime context without scraping prose.
+- response metadata capture so replay artifacts retain model/runtime context without scraping prose,
+- event-pane filtering and explicit persistence events so replay/debugging concepts are also visible in the live TUI.
 
 **Why this matters**
 If the goal is to understand Strands deeply, hidden orchestration is the enemy. This phase turns the loop into something inspectable.
@@ -384,6 +388,18 @@ You can override the root with:
 export STRANDS_AGENT_ARTIFACTS_ROOT=/path/to/artifacts
 ```
 
+### Event timeline filters
+
+Inside the TUI, use these shortcuts to focus the event pane:
+
+- `F1` all events
+- `F2` runtime events
+- `F3` tool events
+- `F4` failure events
+- `F5` persistence events
+
+This is intentionally simple, but it already makes it much easier to inspect Strands loop behavior without losing the complete turn transcript.
+
 ### What the current tests prove
 
 - `tests/test_runtime.py`
@@ -402,6 +418,7 @@ export STRANDS_AGENT_ARTIFACTS_ROOT=/path/to/artifacts
   - runtime failures are rendered in the UI instead of crashing silently
   - successful turns are persisted to `turns.jsonl` and `transcript.md`
   - runtime failures are also persisted as session artifacts
+  - timeline filter shortcuts isolate tool and persistence activity correctly
   - CLI argument parsing overrides runtime/model/workspace selection correctly
 
 - `tests/test_tools.py`
@@ -429,8 +446,8 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. keep the fake runtime path green while refining the live/fake event model into a filterable schema with stable event categories
-2. add steering hooks before broadening tool power further
+1. add steering hooks now that the timeline can already separate runtime, tool, failure, and persistence signals
+2. keep the fake runtime path green while refining the event schema around steering/intervention events
 3. add a higher-signal workspace summary seam before introducing shell execution
 4. add a narrowly scoped shell command seam only after edit/write steering exists
 5. add artifact replay or session-load UX so persisted observability data becomes interactive inside the TUI
@@ -461,8 +478,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- normalize fake and live timeline events into stable categories so the TUI can filter by runtime, tooling, failure, or persistence activity
+- add steering hooks that can approve, deny, or explain risky edit/write attempts before execution, ideally with first-class intervention events in the timeline
 - add artifact replay or session-load UX so saved observability data can be browsed inside the app instead of only on disk
 - add higher-signal workspace summaries so the agent can explain repo shape before reaching for shell commands
-- add steering hooks that can approve, deny, or explain risky edit/write attempts before execution
 - keep live runtime support optional so fake-mode regression tests stay fast and deterministic

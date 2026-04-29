@@ -61,12 +61,14 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert "User: list files" in rendered_output
         assert "Agent: (fake-strands) Echo: list files" in rendered_output
         assert "Turns: 1" in rendered_status
-        assert "Events: 4" in rendered_status
-        assert "kind=tool_started | list_files" in rendered_events
+        assert "Events: 5" in rendered_status
+        assert "Filter: all (5/5 events)" in rendered_events
+        assert "(tool) kind=tool_started | list_files" in rendered_events
         assert "data: source='fake_runtime', tool_name='list_files'" in rendered_events
-        assert "kind=tool_finished | list_files" in rendered_events
+        assert "(tool) kind=tool_finished | list_files" in rendered_events
+        assert "(persistence) kind=artifact_saved | Session artifact saved" in rendered_events
         assert len(app.history) == 1
-        assert len(app.events) == 4
+        assert len(app.events) == 5
 
         payload = json.loads((tmp_path / "test-session" / "turns.jsonl").read_text(encoding="utf-8").strip())
         assert payload["prompt"] == "list files"
@@ -105,7 +107,8 @@ async def test_runtime_error_is_rendered_in_ui(tmp_path: Path) -> None:
         assert "User: x" in output
         assert "Agent: Error: boom" in output
         assert "Runtime error" in status
-        assert "kind=runtime_error | Runtime error" in events
+        assert "(failure) kind=runtime_error | Runtime error" in events
+        assert "(persistence) kind=artifact_saved | Session artifact saved" in events
 
         payload = json.loads((tmp_path / "error-session" / "turns.jsonl").read_text(encoding="utf-8").strip())
         assert payload["error"] is True
@@ -125,3 +128,39 @@ def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.Mo
     assert config.runtime_mode == "live"
     assert config.openai_model == "gpt-4.1-mini"
     assert config.workspace_root == "/tmp/demo"
+
+
+@pytest.mark.asyncio
+async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="filter-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("l", "i", "s", "t", " ", "f", "i", "l", "e", "s", "enter")
+        await pilot.pause()
+
+        await pilot.press("f3")
+        await pilot.pause()
+        tool_events = str(app.query_one("#events").render())
+        assert "Filter: tool (2/5 events)" in tool_events
+        assert "kind=tool_started | list_files" in tool_events
+        assert "kind=artifact_saved" not in tool_events
+
+        await pilot.press("f5")
+        await pilot.pause()
+        persistence_events = str(app.query_one("#events").render())
+        assert "Filter: persistence (1/5 events)" in persistence_events
+        assert "kind=artifact_saved | Session artifact saved" in persistence_events
+
+        await pilot.press("f1")
+        await pilot.pause()
+        assert app.event_filter == "all"

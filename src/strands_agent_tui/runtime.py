@@ -29,6 +29,10 @@ class RuntimeEvent:
             "data": self.data,
         }
 
+    @property
+    def category(self) -> str:
+        return categorize_event_kind(self.kind)
+
 
 @dataclass(slots=True)
 class AgentResponse:
@@ -61,6 +65,18 @@ def runtime_event(
         timestamp=datetime.now(UTC).isoformat(),
         data=data or {},
     )
+
+
+def categorize_event_kind(kind: str) -> str:
+    if kind == "tool_failed":
+        return "failure"
+    if kind.startswith("tool_"):
+        return "tool"
+    if "error" in kind or "failed" in kind:
+        return "failure"
+    if kind.startswith("artifact_") or kind.startswith("session_"):
+        return "persistence"
+    return "runtime"
 
 
 def _summarize_tool_value(value: object, limit: int = 120) -> str:
