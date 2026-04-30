@@ -13,6 +13,7 @@ class AppConfig:
     workspace_root: str = "."
     artifacts_root: str = "artifacts/sessions"
     allow_overwrite: bool = False
+    session_id: str | None = None
 
     @property
     def workspace_path(self) -> Path:

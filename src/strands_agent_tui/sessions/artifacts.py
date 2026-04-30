@@ -28,6 +28,32 @@ class TurnArtifact:
         payload["events"] = [event.as_dict() for event in self.events]
         return payload
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "TurnArtifact":
+        events_payload = payload.get("events") or []
+        events = [
+            RuntimeEvent(
+                kind=str(event.get("kind", "unknown")),
+                title=str(event.get("title", "")),
+                detail=str(event.get("detail", "")),
+                timestamp=str(event.get("timestamp")) if event.get("timestamp") else None,
+                data=dict(event.get("data") or {}),
+            )
+            for event in events_payload
+            if isinstance(event, dict)
+        ]
+        return cls(
+            prompt=str(payload.get("prompt", "")),
+            response=str(payload.get("response", "")),
+            provider=str(payload.get("provider", "unknown")),
+            mode=str(payload.get("mode", "unknown")),
+            events=events,
+            response_metadata=dict(payload.get("response_metadata") or {}),
+            error=bool(payload.get("error", False)),
+            created_at=str(payload.get("created_at")) if payload.get("created_at") else None,
+            schema_version=str(payload.get("schema_version", "strands-agent/v1")),
+        )
+
 
 class SessionArtifactStore:
     def __init__(self, root: str | Path, session_id: str | None = None) -> None:
@@ -44,6 +70,26 @@ class SessionArtifactStore:
         with self.jsonl_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload) + "\n")
         self._append_markdown(payload)
+
+    def load_turns(self) -> list[TurnArtifact]:
+        if not self.jsonl_path.exists():
+            return []
+
+        turns: list[TurnArtifact] = []
+        with self.jsonl_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                turns.append(TurnArtifact.from_dict(json.loads(stripped)))
+        return turns
+
+    @classmethod
+    def from_session_dir(cls, session_dir: str | Path) -> "SessionArtifactStore":
+        resolved = Path(session_dir).expanduser().resolve()
+        if not resolved.exists() or not resolved.is_dir():
+            raise FileNotFoundError(f"Session directory does not exist: {resolved}")
+        return cls(resolved.parent, session_id=resolved.name)
 
     def _append_markdown(self, payload: dict[str, object]) -> None:
         event_lines: list[str] = []

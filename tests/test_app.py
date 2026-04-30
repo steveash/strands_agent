@@ -8,7 +8,7 @@ from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.app import parse_args
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import FakeStrandsRuntime
-from strands_agent_tui.sessions import SessionArtifactStore
+from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 
 
 class FailingRuntime:
@@ -132,6 +132,21 @@ def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.Mo
     assert config.workspace_root == "/tmp/demo"
 
 
+def test_parse_args_loads_existing_session_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    session_dir = tmp_path / "session-123"
+    session_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["strands-agent", "--session-dir", str(session_dir)],
+    )
+
+    config = parse_args()
+
+    assert config.artifacts_root == str(tmp_path.resolve())
+    assert config.session_id == "session-123"
+
+
 @pytest.mark.asyncio
 async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="filter-session")
@@ -166,3 +181,38 @@ async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -
         await pilot.press("f1")
         await pilot.pause()
         assert app.event_filter == "all"
+
+
+@pytest.mark.asyncio
+async def test_app_loads_existing_session_artifacts_on_start(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="existing-session")
+    artifact_store.append_turn(
+        TurnArtifact(
+            prompt="inspect repo",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="existing-session",
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        assert "User: inspect repo" in output
+        assert "Agent: done" in output
+        assert "Turns: 1" in status

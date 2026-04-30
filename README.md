@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 includes conservative exact-match edits plus real live-runtime tool instrumentation, Phase 3 includes filterable event categories in the TUI, and Phase 4 has now started with a real steering-policy seam for risky file mutations.**
+**Phase 1 is complete, Phase 2 includes conservative exact-match edits plus real live-runtime tool instrumentation, Phase 3 now includes resumable session-artifact replay in the TUI, and Phase 4 has started with a real steering-policy seam for risky file mutations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -100,17 +100,16 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a dedicated `steering/` policy module that evaluates `write_file` and `replace_text` calls before execution,
-- made overwrite attempts block by default at the steering layer, before the workspace tool runs, with a visible `steering_blocked` event explaining why,
-- added protected file-pattern checks for `.env*`, `*.pem`, and `*.key` so obviously sensitive files are denied by policy rather than only by prompt wording,
-- added an opt-in `STRANDS_AGENT_ALLOW_OVERWRITE=true` config seam and surfaced the current overwrite posture in the TUI status line,
-- extended fake and live runtime coverage so steering decisions appear in the same timeline as prompt, tool, failure, and persistence events,
-- added regression tests for denied overwrite, allowed overwrite-with-notice, steering-event emission, and config loading for the overwrite policy flag.
+- added session-artifact loading to `SessionArtifactStore`, so prior `turns.jsonl` history can be read back into the app instead of only written once,
+- added a `--session-dir` CLI flag that reopens an existing artifact directory and continues writing into the same session id,
+- taught the app to preload prior prompts, responses, and timeline events at startup when an existing session is selected,
+- kept artifact-root handling explicit in config so resumed sessions still preserve the broader artifacts root correctly,
+- added regression tests for CLI session loading and app startup from an existing saved session.
 
 Why this matters now:
-- It moves the prototype from passive observability toward active control, which is one of the most interesting Strands questions in a coding-agent platform.
-- It makes steering concrete instead of theoretical, because risky mutations now produce first-class intervention events in the same loop Steve is already inspecting.
-- It sets up shell access and stronger edit workflows more safely, because there is now an explicit seam where policy can allow, deny, or later require confirmation.
+- It turns saved artifacts into something interactive, not just forensic, which makes the observability work materially more useful.
+- It gives the prototype the first real session-resume seam, which is part of what makes an agent workstation feel like a workstation instead of a one-shot demo.
+- It keeps the replay path simple and local, which is a good fit for learning how much of session state Strands should own versus how much the host app should own.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -121,8 +120,8 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `30 passed`
-- CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
+- automated tests: `32 passed`
+- CLI verification: `strands-agent --help` shows `--runtime`, `--model`, `--workspace`, and `--session-dir`
 - live runtime verification by test: a stubbed live Strands runtime records real `read_file` tool activity plus structured metadata in the returned event timeline
 - artifact verification by test: persisted `turns.jsonl` entries now include schema version, timestamped events, and response metadata
 - UI verification by existing tests: fake mode still renders deterministic `list_files`, `search_files`, `write_file`, and `replace_text` events, now alongside visible steering decisions and explicit persistence events in the timeline pane
@@ -402,6 +401,14 @@ You can override the root with:
 export STRANDS_AGENT_ARTIFACTS_ROOT=/path/to/artifacts
 ```
 
+You can also resume a saved session directly:
+
+```bash
+strands-agent --session-dir artifacts/sessions/session-YYYYMMDDTHHMMSSZ
+```
+
+That reloads the saved prompt/response history plus timeline events from `turns.jsonl`, then continues appending new turns into the same session directory.
+
 ### Event timeline filters
 
 Inside the TUI, use these shortcuts to focus the event pane:
@@ -505,6 +512,6 @@ Future daily iterations should:
 ## Next iteration ideas
 
 - let steering decisions distinguish allow, deny, and confirm-needed states instead of only hard block vs allow
-- add artifact replay or session-load UX so saved observability data can be browsed inside the app instead of only on disk
+- add dedicated replay navigation inside the TUI so resumed sessions can browse older turns without dumping everything into the live transcript pane
 - add higher-signal workspace summaries so the agent can explain repo shape before reaching for shell commands
-- keep live runtime support optional so fake-mode regression tests stay fast and deterministic
+- let steering decisions distinguish allow, deny, and confirm-needed states instead of only hard block vs allow

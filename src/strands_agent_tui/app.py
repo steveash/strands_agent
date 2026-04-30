@@ -84,7 +84,11 @@ class StrandsAgentApp(App):
         self.history: list[tuple[str, str]] = []
         self.events: list[RuntimeEvent] = []
         self.event_filter = "all"
-        self.artifact_store = artifact_store or SessionArtifactStore(config.artifacts_root)
+        self.artifact_store = artifact_store or SessionArtifactStore(
+            config.artifacts_root,
+            session_id=config.session_id,
+        )
+        self._load_existing_session()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -166,6 +170,12 @@ class StrandsAgentApp(App):
             )
         self.query_one("#output", Static).update(self.render_history())
         self.query_one("#events", Static).update(self.render_events())
+
+    def _load_existing_session(self) -> None:
+        prior_turns = self.artifact_store.load_turns()
+        for turn in prior_turns:
+            self.history.append((turn.prompt, turn.response))
+            self.events.extend(turn.events)
 
     def render_status_summary(
         self,
@@ -250,12 +260,21 @@ def parse_args() -> AppConfig:
         "--workspace",
         help="Override the workspace root used by coding tools.",
     )
+    parser.add_argument(
+        "--session-dir",
+        help="Load and continue an existing session artifact directory.",
+    )
     args = parser.parse_args()
-    return load_config().merge(
+    config = load_config().merge(
         runtime_mode=args.runtime,
         openai_model=args.model,
         workspace_root=args.workspace,
     )
+    if args.session_dir:
+        artifact_store = SessionArtifactStore.from_session_dir(args.session_dir)
+        config = config.merge(artifacts_root=str(artifact_store.root))
+        config.session_id = artifact_store.session_id
+    return config
 
 
 def main() -> None:
