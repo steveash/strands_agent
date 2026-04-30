@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 includes conservative exact-match edits plus real live-runtime tool instrumentation, Phase 3 now includes resumable session-artifact replay in the TUI, and Phase 4 has started with a real steering-policy seam for risky file mutations.**
+**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay in the TUI, and Phase 4 has started with a real steering-policy seam for risky file mutations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -84,7 +84,7 @@ What exists now:
 - a live **Strands + OpenAI** runtime path driven by environment variables,
 - explicit CLI overrides for runtime, model, and workspace selection,
 - status-line rendering plus a dedicated workspace banner in the TUI,
-- workspace tools for `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
+- workspace tools for `summarize_workspace`, `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
 - live runtime tool registration that binds those tools to the active workspace root,
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
 - a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision` or `steering_blocked` events,
@@ -100,16 +100,15 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added session-artifact loading to `SessionArtifactStore`, so prior `turns.jsonl` history can be read back into the app instead of only written once,
-- added a `--session-dir` CLI flag that reopens an existing artifact directory and continues writing into the same session id,
-- taught the app to preload prior prompts, responses, and timeline events at startup when an existing session is selected,
-- kept artifact-root handling explicit in config so resumed sessions still preserve the broader artifacts root correctly,
-- added regression tests for CLI session loading and app startup from an existing saved session.
+- added a `summarize_workspace` tool that produces a bounded repo-shape briefing with top-level entries, notable directories/files, dominant file types, and representative files,
+- filtered workspace-summary scanning to skip noisy cache/environment directories like `.git`, `.venv`, and `node_modules` so the output stays higher signal,
+- registered the new summary tool with the live Strands runtime and updated the default system prompt to prefer it before broad searches when the agent needs orientation,
+- extended the deterministic fake runtime plus regression tests so workspace-summary behavior stays visible and stable in local development.
 
 Why this matters now:
-- It turns saved artifacts into something interactive, not just forensic, which makes the observability work materially more useful.
-- It gives the prototype the first real session-resume seam, which is part of what makes an agent workstation feel like a workstation instead of a one-shot demo.
-- It keeps the replay path simple and local, which is a good fit for learning how much of session state Strands should own versus how much the host app should own.
+- It gives the agent a better first move than raw recursive listing when it needs to explain repo shape.
+- It keeps the coding-tool seam local and bounded while materially improving practical workspace awareness.
+- It sharpens the learning loop around how much structure the host app should provide before handing control to the model.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -120,7 +119,8 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `32 passed`
+- automated tests: `34 passed`
+- runnable workspace-summary verification: `.venv/bin/python - <<'PY' ... WorkspaceTools(Path('.')).summarize_workspace() ... PY` returns a bounded repo-shape summary for this repo
 - CLI verification: `strands-agent --help` shows `--runtime`, `--model`, `--workspace`, and `--session-dir`
 - live runtime verification by test: a stubbed live Strands runtime records real `read_file` tool activity plus structured metadata in the returned event timeline
 - artifact verification by test: persisted `turns.jsonl` entries now include schema version, timestamped events, and response metadata
@@ -176,6 +176,7 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - current working directory / repo context indicator in UI.
 
 **Implemented so far**
+- `summarize_workspace` tool for a bounded repo-shape briefing before deeper inspection,
 - `list_files` tool with optional recursive listing,
 - `read_file` tool with bounded excerpts,
 - bounded `search_files` tool for repo-wide inspection,
@@ -377,6 +378,7 @@ pytest
 
 The prototype currently exposes these bounded workspace tools through the runtime:
 
+- `summarize_workspace`
 - `list_files`
 - `read_file`
 - `search_files`
@@ -455,6 +457,7 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - CLI argument parsing overrides runtime/model/workspace selection correctly
 
 - `tests/test_tools.py`
+  - workspace summary reports top-level structure, notable files/directories, and dominant file types
   - workspace listing returns workspace-relative paths
   - file reads return bounded excerpts with line metadata
   - repo search returns bounded text matches
@@ -479,11 +482,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add steering hooks now that the timeline can already separate runtime, tool, failure, and persistence signals
+1. refine steering so risky mutations can surface confirm-needed states instead of only allow vs deny
 2. keep the fake runtime path green while refining the event schema around steering/intervention events
-3. add a higher-signal workspace summary seam before introducing shell execution
-4. add a narrowly scoped shell command seam only after edit/write steering exists
-5. add artifact replay or session-load UX so persisted observability data becomes interactive inside the TUI
+3. add dedicated replay navigation so resumed sessions can browse history without flooding the live transcript
+4. add a narrowly scoped shell command seam only after confirm-needed mutation steering exists
+5. add a compact session picker for recent artifact directories so reopen flow becomes less manual
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -513,5 +516,5 @@ Future daily iterations should:
 
 - let steering decisions distinguish allow, deny, and confirm-needed states instead of only hard block vs allow
 - add dedicated replay navigation inside the TUI so resumed sessions can browse older turns without dumping everything into the live transcript pane
-- add higher-signal workspace summaries so the agent can explain repo shape before reaching for shell commands
-- let steering decisions distinguish allow, deny, and confirm-needed states instead of only hard block vs allow
+- add a compact session picker so users can reopen recent artifact directories without manually passing `--session-dir`
+- add a narrowly scoped shell command seam only after confirm-needed steering exists for risky mutations

@@ -63,6 +63,23 @@ def test_fake_runtime_emits_search_write_and_edit_events() -> None:
     ]
 
 
+def test_fake_runtime_emits_workspace_summary_events() -> None:
+    runtime = FakeStrandsRuntime()
+    result = runtime.run("summarize the repo structure")
+
+    titles = [event.title for event in result.events]
+
+    assert titles == [
+        "Prompt accepted",
+        "fake-policy",
+        "list_files",
+        "list_files",
+        "summarize_workspace",
+        "summarize_workspace",
+        "Assistant response ready",
+    ]
+
+
 def test_build_runtime_defaults_to_fake() -> None:
     runtime = build_runtime()
     assert isinstance(runtime, FakeStrandsRuntime)

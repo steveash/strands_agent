@@ -11,6 +11,53 @@ MAX_LIST_ENTRIES = 200
 MAX_SEARCH_RESULTS = 20
 MAX_WRITE_CHARS = 12000
 MAX_REPLACE_OCCURRENCES = 10
+MAX_SUMMARY_FILES = 400
+MAX_SUMMARY_TOP_LEVEL = 12
+MAX_SUMMARY_REPRESENTATIVE_FILES = 8
+MAX_SUMMARY_TYPE_BUCKETS = 6
+
+NOTABLE_FILES = (
+    "README.md",
+    "pyproject.toml",
+    "requirements.txt",
+    "package.json",
+    "Cargo.toml",
+    "go.mod",
+    "Makefile",
+    "Dockerfile",
+    "docker-compose.yml",
+)
+
+NOTABLE_DIRECTORIES = ("src", "app", "lib", "tests", "docs", "scripts", "artifacts")
+
+SUMMARY_IGNORED_NAMES = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "node_modules",
+}
+
+FILE_TYPE_LABELS = {
+    ".py": "Python",
+    ".md": "Markdown",
+    ".json": "JSON",
+    ".toml": "TOML",
+    ".yaml": "YAML",
+    ".yml": "YAML",
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript",
+    ".js": "JavaScript",
+    ".jsx": "JavaScript",
+    ".rs": "Rust",
+    ".go": "Go",
+    ".sh": "Shell",
+    ".txt": "Text",
+}
 
 
 @dataclass(slots=True)
@@ -59,6 +106,110 @@ class WorkspaceTools:
 
         location = str(target.relative_to(self.root)) if target != self.root else "."
         return f"Workspace root: {self.root}\nListing: {location}\n" + ("\n".join(rendered) if rendered else "<empty>")
+
+    def summarize_workspace(self, relative_path: str = ".", max_files: int = MAX_SUMMARY_FILES) -> str:
+        """Summarize workspace structure so the agent can orient before deeper inspection."""
+        if max_files < 1:
+            raise ValueError("max_files must be >= 1")
+
+        target = self.resolve_path(relative_path)
+        if not target.exists():
+            raise FileNotFoundError(f"Path does not exist: {relative_path}")
+        if not target.is_dir():
+            raise NotADirectoryError(f"Path is not a directory: {relative_path}")
+
+        location = str(target.relative_to(self.root)) if target != self.root else "."
+        top_level_entries = sorted(path for path in target.iterdir() if not self._should_ignore_summary_path(path))
+        top_level_rendered = [
+            f"- {path.relative_to(self.root)}{'/' if path.is_dir() else ''}"
+            for path in top_level_entries[:MAX_SUMMARY_TOP_LEVEL]
+        ]
+        if len(top_level_entries) > MAX_SUMMARY_TOP_LEVEL:
+            top_level_rendered.append(f"- ... truncated after {MAX_SUMMARY_TOP_LEVEL} entries")
+
+        all_files = sorted(
+            (path for path in target.rglob("*") if path.is_file() and not self._should_ignore_summary_path(path)),
+            key=self._summary_file_sort_key,
+        )
+        scanned_files = all_files[:max_files]
+        file_type_counts: dict[str, int] = {}
+        representative_files: list[str] = []
+        found_notable_files: list[str] = []
+        found_notable_directories: list[str] = []
+
+        seen_notable_files: set[str] = set()
+        seen_notable_directories: set[str] = set()
+        for path in scanned_files:
+            relative = path.relative_to(self.root)
+            relative_text = str(relative)
+            suffix = path.suffix.lower()
+            file_type = FILE_TYPE_LABELS.get(suffix, suffix or "<no extension>")
+            file_type_counts[file_type] = file_type_counts.get(file_type, 0) + 1
+
+            if len(representative_files) < MAX_SUMMARY_REPRESENTATIVE_FILES:
+                representative_files.append(relative_text)
+
+            if path.name in NOTABLE_FILES and relative_text not in seen_notable_files:
+                found_notable_files.append(relative_text)
+                seen_notable_files.add(relative_text)
+
+            top_component = relative.parts[0] if relative.parts else ""
+            if top_component in NOTABLE_DIRECTORIES and top_component not in seen_notable_directories:
+                found_notable_directories.append(top_component)
+                seen_notable_directories.add(top_component)
+
+        dominant_types = sorted(file_type_counts.items(), key=lambda item: (-item[1], item[0]))
+        dominant_rendered = [
+            f"- {label}: {count} file(s)"
+            for label, count in dominant_types[:MAX_SUMMARY_TYPE_BUCKETS]
+        ]
+        if len(dominant_types) > MAX_SUMMARY_TYPE_BUCKETS:
+            dominant_rendered.append(f"- ... {len(dominant_types) - MAX_SUMMARY_TYPE_BUCKETS} more type bucket(s)")
+
+        notable_directory_rendered = [f"- {name}/" for name in found_notable_directories] or ["- none"]
+        notable_file_rendered = [f"- {name}" for name in found_notable_files] or ["- none"]
+        representative_rendered = [f"- {name}" for name in representative_files] or ["- none"]
+
+        scan_note = f"Scanned files: {len(scanned_files)}"
+        if len(all_files) > len(scanned_files):
+            scan_note += f" of {len(all_files)} total (truncated after {max_files})"
+        else:
+            scan_note += f" of {len(all_files)} total"
+
+        return (
+            f"Workspace root: {self.root}\n"
+            f"Summary path: {location}\n"
+            f"{scan_note}\n\n"
+            f"Top-level entries:\n{chr(10).join(top_level_rendered) if top_level_rendered else '- <empty>'}\n\n"
+            f"Notable directories:\n{chr(10).join(notable_directory_rendered)}\n\n"
+            f"Notable files:\n{chr(10).join(notable_file_rendered)}\n\n"
+            f"Dominant file types:\n{chr(10).join(dominant_rendered) if dominant_rendered else '- none'}\n\n"
+            f"Representative files:\n{chr(10).join(representative_rendered)}\n\n"
+            "Use read_file for specific docs/code and search_files for targeted text lookup."
+        )
+
+    def _should_ignore_summary_path(self, path: Path) -> bool:
+        try:
+            relative = path.relative_to(self.root)
+        except ValueError:
+            relative = path
+        return any(part in SUMMARY_IGNORED_NAMES for part in relative.parts)
+
+    def _summary_file_sort_key(self, path: Path) -> tuple[int, int, str]:
+        relative = path.relative_to(self.root)
+        parts = relative.parts
+        top_component = parts[0] if parts else ""
+        if path.name in NOTABLE_FILES:
+            priority = 0
+        elif top_component in NOTABLE_DIRECTORIES:
+            priority = 1
+        elif len(parts) == 1 and not path.name.startswith("."):
+            priority = 2
+        elif len(parts) == 1:
+            priority = 3
+        else:
+            priority = 4
+        return (priority, len(parts), str(relative))
 
     def read_file(self, relative_path: str, start_line: int = 1, max_lines: int = 200) -> str:
         """Read a text file from the current workspace.
@@ -212,6 +363,11 @@ class WorkspaceTools:
 
 
 _DEFAULT_TOOLS = WorkspaceTools(Path.cwd())
+
+
+@tool
+def summarize_workspace(relative_path: str = ".", max_files: int = MAX_SUMMARY_FILES) -> str:
+    return _DEFAULT_TOOLS.summarize_workspace(relative_path=relative_path, max_files=max_files)
 
 
 @tool

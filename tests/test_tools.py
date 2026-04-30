@@ -22,6 +22,21 @@ def test_list_files_returns_workspace_relative_entries(workspace: WorkspaceTools
     assert "src/" in rendered
 
 
+def test_summarize_workspace_reports_repo_shape(workspace: WorkspaceTools) -> None:
+    rendered = workspace.summarize_workspace()
+
+    assert "Summary path: ." in rendered
+    assert "Top-level entries:" in rendered
+    assert "Notable directories:" in rendered
+    assert "- src/" in rendered
+    assert "Notable files:" in rendered
+    assert "- README.md" in rendered
+    assert "Dominant file types:" in rendered
+    assert "Python: 1 file(s)" in rendered
+    assert "Representative files:" in rendered
+    assert "src/main.py" in rendered
+
+
 def test_read_file_returns_excerpt_with_line_range(workspace: WorkspaceTools) -> None:
     rendered = workspace.read_file("src/main.py", start_line=2, max_lines=1)
 
@@ -79,7 +94,7 @@ def test_build_workspace_tools_returns_workspace_tool_set(tmp_path: Path) -> Non
 
     names = [tool.tool_name for tool in tools]
 
-    assert names == ["list_files", "read_file", "search_files", "write_file", "replace_text"]
+    assert names == ["summarize_workspace", "list_files", "read_file", "search_files", "write_file", "replace_text"]
 
 
 def test_build_workspace_tools_emits_events_via_sink(tmp_path: Path) -> None:

@@ -147,6 +147,23 @@ class FakeStrandsRuntime:
                     ),
                 ]
             )
+        if any(keyword in lowered for keyword in ["summarize", "summary", "overview", "shape", "structure"]):
+            events.extend(
+                [
+                    runtime_event(
+                        kind="tool_started",
+                        title="summarize_workspace",
+                        detail="Deterministic fake summary event for fast workspace orientation.",
+                        data={"tool_name": "summarize_workspace", "source": "fake_runtime"},
+                    ),
+                    runtime_event(
+                        kind="tool_finished",
+                        title="summarize_workspace",
+                        detail="Returned a simulated workspace summary without walking the real filesystem.",
+                        data={"tool_name": "summarize_workspace", "source": "fake_runtime"},
+                    ),
+                ]
+            )
         if any(keyword in lowered for keyword in ["search", "find", "grep", "match"]):
             events.extend(
                 [
@@ -283,6 +300,14 @@ def build_workspace_tools(
         return wrapped
 
     @tool
+    def summarize_workspace(relative_path: str = ".", max_files: int = 400) -> str:
+        """Summarize workspace shape, key files, and dominant file types before deeper inspection."""
+        return instrument("summarize_workspace", workspace.summarize_workspace)(
+            relative_path=relative_path,
+            max_files=max_files,
+        )
+
+    @tool
     def list_files(relative_path: str = ".", recursive: bool = False) -> str:
         """List files and directories inside the active workspace."""
         return instrument("list_files", workspace.list_files)(relative_path=relative_path, recursive=recursive)
@@ -337,7 +362,7 @@ def build_workspace_tools(
             expected_occurrences=expected_occurrences,
         )
 
-    return [list_files, read_file, search_files, write_file, replace_text]
+    return [summarize_workspace, list_files, read_file, search_files, write_file, replace_text]
 
 
 class StrandsSDKRuntime:
@@ -360,7 +385,8 @@ class StrandsSDKRuntime:
         self.system_prompt = system_prompt or (
             "You are a concise coding assistant inside a terminal UI prototype. "
             f"You may inspect and conservatively edit the workspace rooted at {self.workspace_root} "
-            "using bounded local tools. Prefer exact-match edits over broad rewrites when possible. "
+            "using bounded local tools. Prefer summarize_workspace before broad searches when you need repo shape, "
+            "and prefer exact-match edits over broad rewrites when possible. "
             "Overwrites are blocked unless the local steering policy explicitly allows them."
         )
         self.openai_model = openai_model
