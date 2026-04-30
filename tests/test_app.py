@@ -184,6 +184,46 @@ async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
+async def test_app_renders_confirmation_required_events_in_timeline(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="confirm-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press(
+            "o",
+            "v",
+            "e",
+            "r",
+            "w",
+            "r",
+            "i",
+            "t",
+            "e",
+            " ",
+            "f",
+            "i",
+            "l",
+            "e",
+            "enter",
+        )
+        await pilot.pause()
+
+        rendered_events = str(app.query_one("#events").render())
+
+        assert "kind=steering_confirmation_required | write_file" in rendered_events
+        assert "requires_confirmation=True" in rendered_events
+
+
+@pytest.mark.asyncio
 async def test_app_loads_existing_session_artifacts_on_start(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="existing-session")
     artifact_store.append_turn(

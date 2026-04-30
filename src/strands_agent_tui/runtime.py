@@ -9,7 +9,7 @@ from typing import Callable, Protocol
 
 from strands import tool
 
-from strands_agent_tui.steering import ToolSteeringPolicy, build_default_policy
+from strands_agent_tui.steering import SteeringDecision, ToolSteeringPolicy, build_default_policy
 from strands_agent_tui.tools.workspace import WorkspaceTools
 
 
@@ -80,6 +80,14 @@ def categorize_event_kind(kind: str) -> str:
     return "runtime"
 
 
+def _steering_event_kind(decision: SteeringDecision) -> str:
+    if decision.requires_confirmation:
+        return "steering_confirmation_required"
+    if not decision.allowed:
+        return "steering_blocked"
+    return "steering_decision"
+
+
 def _summarize_tool_value(value: object, limit: int = 120) -> str:
     text = repr(value)
     if len(text) > limit:
@@ -130,6 +138,11 @@ class FakeStrandsRuntime:
         ]
 
         lowered = normalized.lower()
+        overwrite_requested = any(keyword in lowered for keyword in ["overwrite", "replace existing", "overwrite existing"])
+        broad_edit_requested = any(
+            keyword in lowered
+            for keyword in ["replace all", "all occurrences", "every occurrence", "bulk edit", "rewrite all"]
+        )
         if any(keyword in lowered for keyword in ["file", "workspace", "repo", "read", "list"]):
             events.extend(
                 [
@@ -182,39 +195,69 @@ class FakeStrandsRuntime:
                 ]
             )
         if any(keyword in lowered for keyword in ["write", "create", "save"]):
-            events.extend(
-                [
+            if overwrite_requested:
+                events.append(
                     runtime_event(
-                        kind="tool_started",
+                        kind="steering_confirmation_required",
                         title="write_file",
-                        detail="Deterministic fake write event for a conservative mutation path.",
-                        data={"tool_name": "write_file", "source": "fake_runtime"},
-                    ),
-                    runtime_event(
-                        kind="tool_finished",
-                        title="write_file",
-                        detail="Simulated a bounded workspace write without changing disk.",
-                        data={"tool_name": "write_file", "source": "fake_runtime"},
-                    ),
-                ]
-            )
+                        detail="Fake runtime flagged an overwrite request that would require confirmation before execution.",
+                        data={
+                            "tool_name": "write_file",
+                            "source": "fake_runtime",
+                            "disposition": "confirm",
+                            "requires_confirmation": True,
+                        },
+                    )
+                )
+            else:
+                events.extend(
+                    [
+                        runtime_event(
+                            kind="tool_started",
+                            title="write_file",
+                            detail="Deterministic fake write event for a conservative mutation path.",
+                            data={"tool_name": "write_file", "source": "fake_runtime"},
+                        ),
+                        runtime_event(
+                            kind="tool_finished",
+                            title="write_file",
+                            detail="Simulated a bounded workspace write without changing disk.",
+                            data={"tool_name": "write_file", "source": "fake_runtime"},
+                        ),
+                    ]
+                )
         if any(keyword in lowered for keyword in ["edit", "replace", "rewrite", "change"]):
-            events.extend(
-                [
+            if broad_edit_requested:
+                events.append(
                     runtime_event(
-                        kind="tool_started",
+                        kind="steering_confirmation_required",
                         title="replace_text",
-                        detail="Deterministic fake exact-match edit event for conservative code mutation.",
-                        data={"tool_name": "replace_text", "source": "fake_runtime"},
-                    ),
-                    runtime_event(
-                        kind="tool_finished",
-                        title="replace_text",
-                        detail="Simulated an exact text replacement without touching disk.",
-                        data={"tool_name": "replace_text", "source": "fake_runtime"},
-                    ),
-                ]
-            )
+                        detail="Fake runtime flagged a broad edit request that would require confirmation before execution.",
+                        data={
+                            "tool_name": "replace_text",
+                            "source": "fake_runtime",
+                            "disposition": "confirm",
+                            "requires_confirmation": True,
+                        },
+                    )
+                )
+            else:
+                events.extend(
+                    [
+                        runtime_event(
+                            kind="tool_started",
+                            title="replace_text",
+                            detail="Deterministic fake exact-match edit event for conservative code mutation.",
+                            data={"tool_name": "replace_text", "source": "fake_runtime"},
+                        ),
+                        runtime_event(
+                            kind="tool_finished",
+                            title="replace_text",
+                            detail="Simulated an exact text replacement without touching disk.",
+                            data={"tool_name": "replace_text", "source": "fake_runtime"},
+                        ),
+                    ]
+                )
 
         events.append(
             runtime_event(
@@ -248,12 +291,14 @@ def build_workspace_tools(
             if event_sink is not None:
                 event_sink(
                     runtime_event(
-                        kind="steering_decision" if decision.allowed else "steering_blocked",
+                        kind=_steering_event_kind(decision),
                         title=tool_name,
                         detail=decision.reason,
                         data={
                             "tool_name": tool_name,
                             "allowed": decision.allowed,
+                            "requires_confirmation": decision.requires_confirmation,
+                            "disposition": decision.disposition,
                             "severity": decision.severity,
                             "category": decision.category,
                             **decision.details,
@@ -261,6 +306,8 @@ def build_workspace_tools(
                     )
                 )
             if not decision.allowed:
+                if decision.requires_confirmation:
+                    raise PermissionError(f"Confirmation required: {decision.reason}")
                 raise PermissionError(decision.reason)
             if event_sink is not None:
                 event_sink(

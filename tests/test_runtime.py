@@ -80,6 +80,24 @@ def test_fake_runtime_emits_workspace_summary_events() -> None:
     ]
 
 
+def test_fake_runtime_emits_confirmation_event_for_risky_mutation_prompt() -> None:
+    runtime = FakeStrandsRuntime()
+    result = runtime.run("overwrite the notes file and replace all stale values")
+
+    assert [event.kind for event in result.events] == [
+        "prompt_received",
+        "steering_decision",
+        "tool_started",
+        "tool_finished",
+        "steering_confirmation_required",
+        "steering_confirmation_required",
+        "response_completed",
+    ]
+    assert result.events[4].title == "write_file"
+    assert result.events[4].data["requires_confirmation"] is True
+    assert result.events[5].title == "replace_text"
+
+
 def test_build_runtime_defaults_to_fake() -> None:
     runtime = build_runtime()
     assert isinstance(runtime, FakeStrandsRuntime)
@@ -181,19 +199,22 @@ def test_event_kind_categories_cover_runtime_tool_failure_and_persistence() -> N
     assert categorize_event_kind("runtime_error") == "failure"
     assert categorize_event_kind("artifact_saved") == "persistence"
     assert categorize_event_kind("steering_blocked") == "runtime"
+    assert categorize_event_kind("steering_confirmation_required") == "runtime"
 
 
-def test_build_workspace_tools_blocks_overwrite_by_default_and_emits_steering_event(tmp_path: Path) -> None:
+def test_build_workspace_tools_requires_confirmation_for_overwrite_by_default(tmp_path: Path) -> None:
     (tmp_path / "notes.txt").write_text("old\n", encoding="utf-8")
     events = []
     tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
 
-    with pytest.raises(PermissionError, match="Blocked overwrite request"):
+    with pytest.raises(PermissionError, match="Confirmation required"):
         tools["write_file"](relative_path="notes.txt", content="new\n", overwrite=True)
 
-    assert [event.kind for event in events] == ["steering_blocked"]
+    assert [event.kind for event in events] == ["steering_confirmation_required"]
     assert events[0].title == "write_file"
     assert events[0].data["allowed"] is False
+    assert events[0].data["requires_confirmation"] is True
+    assert events[0].data["disposition"] == "confirm"
 
 
 def test_build_workspace_tools_allows_overwrite_when_policy_opted_in(tmp_path: Path) -> None:
@@ -213,3 +234,22 @@ def test_build_workspace_tools_allows_overwrite_when_policy_opted_in(tmp_path: P
     assert "Action: overwrote" in rendered
     assert [event.kind for event in events] == ["steering_decision", "tool_started", "tool_finished"]
     assert events[0].data["category"] == "allow_with_notice"
+
+
+def test_build_workspace_tools_requires_confirmation_for_multi_occurrence_edit(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("alpha\nalpha\n", encoding="utf-8")
+    events = []
+    tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
+
+    with pytest.raises(PermissionError, match="Confirmation required"):
+        tools["replace_text"](
+            relative_path="notes.txt",
+            old_text="alpha",
+            new_text="beta",
+            expected_occurrences=2,
+        )
+
+    assert [event.kind for event in events] == ["steering_confirmation_required"]
+    assert events[0].title == "replace_text"
+    assert events[0].data["expected_occurrences"] == 2
+    assert events[0].data["requires_confirmation"] is True

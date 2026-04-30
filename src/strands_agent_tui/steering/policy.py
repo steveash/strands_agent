@@ -13,6 +13,11 @@ class SteeringDecision:
     severity: str = "info"
     category: str = "allow"
     details: dict[str, object] = field(default_factory=dict)
+    disposition: str = "allow"
+
+    @property
+    def requires_confirmation(self) -> bool:
+        return self.disposition == "confirm"
 
 
 @dataclass(slots=True)
@@ -37,14 +42,16 @@ class ToolSteeringPolicy:
                 severity="error",
                 category="deny",
                 details={"relative_path": relative_path, "protected": True},
+                disposition="deny",
             )
         if overwrite and not self.allow_overwrite:
             return SteeringDecision(
                 allowed=False,
-                reason="Blocked overwrite request by default steering policy.",
+                reason="Overwrite request requires confirmation under the default steering policy.",
                 severity="warn",
-                category="deny",
+                category="confirm_needed",
                 details={"relative_path": relative_path, "overwrite": True},
+                disposition="confirm",
             )
         if overwrite:
             return SteeringDecision(
@@ -70,14 +77,16 @@ class ToolSteeringPolicy:
                 severity="error",
                 category="deny",
                 details={"relative_path": relative_path, "protected": True},
+                disposition="deny",
             )
         if expected_occurrences > 1:
             return SteeringDecision(
-                allowed=True,
-                reason="Allowed multi-occurrence edit, review carefully.",
+                allowed=False,
+                reason="Multi-occurrence edit requires confirmation before execution.",
                 severity="warn",
-                category="allow_with_notice",
+                category="confirm_needed",
                 details={"relative_path": relative_path, "expected_occurrences": expected_occurrences},
+                disposition="confirm",
             )
         return SteeringDecision(
             allowed=True,

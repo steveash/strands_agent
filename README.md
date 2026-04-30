@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay in the TUI, and Phase 4 has started with a real steering-policy seam for risky file mutations.**
+**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay in the TUI, and Phase 4 now distinguishes allow, deny, and confirm-needed steering outcomes for risky file mutations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -87,28 +87,28 @@ What exists now:
 - workspace tools for `summarize_workspace`, `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
 - live runtime tool registration that binds those tools to the active workspace root,
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
-- a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision` or `steering_blocked` events,
-- default conservative steering that blocks overwrite requests unless explicitly enabled and protects sensitive file patterns like `.env*`, `*.pem`, and `*.key`,
+- a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision`, `steering_confirmation_required`, or `steering_blocked` events,
+- default conservative steering that requires confirmation for overwrite requests and multi-occurrence edits unless explicitly enabled, and still protects sensitive file patterns like `.env*`, `*.pem`, and `*.key`,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, and compact structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
 - structured event payloads with timestamps and metadata for both fake and live runtime paths,
 - explicit `artifact_saved` persistence events emitted by the app after each turn is written,
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
-- deterministic fake-runtime event emission for inspect, search, write, and edit activity so UI behavior is testable without live model calls,
+- deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
 - tests that cover TUI state, config merging, tool safety, runtime selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a `summarize_workspace` tool that produces a bounded repo-shape briefing with top-level entries, notable directories/files, dominant file types, and representative files,
-- filtered workspace-summary scanning to skip noisy cache/environment directories like `.git`, `.venv`, and `node_modules` so the output stays higher signal,
-- registered the new summary tool with the live Strands runtime and updated the default system prompt to prefer it before broad searches when the agent needs orientation,
-- extended the deterministic fake runtime plus regression tests so workspace-summary behavior stays visible and stable in local development.
+- refined steering decisions to carry an explicit disposition so the runtime can distinguish allow, deny, and confirm-needed outcomes instead of flattening everything to allow vs block,
+- changed default overwrite requests and multi-occurrence `replace_text` edits to emit `steering_confirmation_required` events before execution, while protected-file mutations remain hard denies,
+- extended fake-runtime event generation so risky mutation prompts surface confirmation-required events in the timeline without needing a live model,
+- expanded regression coverage for the new steering event schema, tool gating behavior, and TUI rendering of confirmation-required events.
 
 Why this matters now:
-- It gives the agent a better first move than raw recursive listing when it needs to explain repo shape.
-- It keeps the coding-tool seam local and bounded while materially improving practical workspace awareness.
-- It sharpens the learning loop around how much structure the host app should provide before handing control to the model.
+- It makes the risky-action seam more honest: “needs confirmation” is different from both “safe to run” and “absolutely denied.”
+- It gives the event timeline a better intervention vocabulary before we add a full approval UX.
+- It sharpens the learning loop around how Strands-style steering can express policy intent even before a tool executes.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -119,13 +119,13 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `34 passed`
-- runnable workspace-summary verification: `.venv/bin/python - <<'PY' ... WorkspaceTools(Path('.')).summarize_workspace() ... PY` returns a bounded repo-shape summary for this repo
-- CLI verification: `strands-agent --help` shows `--runtime`, `--model`, `--workspace`, and `--session-dir`
-- live runtime verification by test: a stubbed live Strands runtime records real `read_file` tool activity plus structured metadata in the returned event timeline
-- artifact verification by test: persisted `turns.jsonl` entries now include schema version, timestamped events, and response metadata
-- UI verification by existing tests: fake mode still renders deterministic `list_files`, `search_files`, `write_file`, and `replace_text` events, now alongside visible steering decisions and explicit persistence events in the timeline pane
-- steering verification by test: default policy blocks overwrite requests before tool execution, opt-in overwrite mode emits an allow-with-notice steering event, and config loading honors `STRANDS_AGENT_ALLOW_OVERWRITE=true`
+- automated tests: `37 passed`
+- runnable confirmation verification: `.venv/bin/python - <<'PY' ... build_workspace_tools(...) ... overwrite=True ... PY` raises `Confirmation required: ...` and emits `['steering_confirmation_required']` with `disposition='confirm'`
+- CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, and `--session-dir`
+- live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline
+- artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata
+- UI verification by test: fake mode renders `steering_confirmation_required` events in the timeline for risky mutation prompts, alongside persistence events
+- steering verification by test: default policy now requires confirmation for overwrite and multi-occurrence edit requests, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied
 - unblock note: no new environment unblock was needed this run beyond reusing the validated repo `.venv`
 
 ## First five phases
@@ -482,11 +482,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. refine steering so risky mutations can surface confirm-needed states instead of only allow vs deny
-2. keep the fake runtime path green while refining the event schema around steering/intervention events
-3. add dedicated replay navigation so resumed sessions can browse history without flooding the live transcript
-4. add a narrowly scoped shell command seam only after confirm-needed mutation steering exists
-5. add a compact session picker for recent artifact directories so reopen flow becomes less manual
+1. add dedicated replay navigation so resumed sessions can browse history without flooding the live transcript
+2. add a compact session picker for recent artifact directories so reopen flow becomes less manual
+3. add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
+4. add a narrowly scoped shell command seam only after confirm-needed mutation steering can be approved in-app
+5. keep the fake runtime path green while refining the event schema around steering/intervention events
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -514,7 +514,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- let steering decisions distinguish allow, deny, and confirm-needed states instead of only hard block vs allow
 - add dedicated replay navigation inside the TUI so resumed sessions can browse older turns without dumping everything into the live transcript pane
 - add a compact session picker so users can reopen recent artifact directories without manually passing `--session-dir`
-- add a narrowly scoped shell command seam only after confirm-needed steering exists for risky mutations
+- add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
+- add a narrowly scoped shell command seam only after confirm-needed mutation approval exists for risky mutations
