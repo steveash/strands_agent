@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay in the TUI, and Phase 4 now distinguishes allow, deny, and confirm-needed steering outcomes for risky file mutations.**
+**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus dedicated replay navigation in the TUI, and Phase 4 now distinguishes allow, deny, and confirm-needed steering outcomes for risky file mutations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -96,19 +96,20 @@ What exists now:
 - explicit `artifact_saved` persistence events emitted by the app after each turn is written,
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
+- compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
 - tests that cover TUI state, config merging, tool safety, runtime selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- refined steering decisions to carry an explicit disposition so the runtime can distinguish allow, deny, and confirm-needed outcomes instead of flattening everything to allow vs block,
-- changed default overwrite requests and multi-occurrence `replace_text` edits to emit `steering_confirmation_required` events before execution, while protected-file mutations remain hard denies,
-- extended fake-runtime event generation so risky mutation prompts surface confirmation-required events in the timeline without needing a live model,
-- expanded regression coverage for the new steering event schema, tool gating behavior, and TUI rendering of confirmation-required events.
+- added dedicated replay navigation bindings in the TUI (`F6` older, `F7` newer, `F8` live/latest) for resumed session history,
+- changed the conversation pane to keep a compact live window of the latest turns instead of dumping every loaded turn into the transcript view,
+- added replay-aware status text so users can tell whether they are browsing history or looking at the live/latest slice,
+- expanded TUI regression coverage for compact session replay rendering and keyboard-driven history browsing.
 
 Why this matters now:
-- It makes the risky-action seam more honest: “needs confirmation” is different from both “safe to run” and “absolutely denied.”
-- It gives the event timeline a better intervention vocabulary before we add a full approval UX.
-- It sharpens the learning loop around how Strands-style steering can express policy intent even before a tool executes.
+- It makes resumed sessions usable once artifacts get longer than a couple of turns.
+- It keeps the live transcript focused on current work while still making prior history easy to inspect.
+- It creates a practical UI seam for the next session-management step, like a picker or approval resume flow.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -119,13 +120,13 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `37 passed`
-- runnable confirmation verification: `.venv/bin/python - <<'PY' ... build_workspace_tools(...) ... overwrite=True ... PY` raises `Confirmation required: ...` and emits `['steering_confirmation_required']` with `disposition='confirm'`
+- automated tests: `39 passed`
+- runnable replay verification: `.venv/bin/python scripts/replay_smoke.py` renders a compact live view (`live latest 2-4`) plus a focused replay view (`replay 3/4`) for the same saved session
 - CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, and `--session-dir`
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata
-- UI verification by test: fake mode renders `steering_confirmation_required` events in the timeline for risky mutation prompts, alongside persistence events
-- steering verification by test: default policy now requires confirmation for overwrite and multi-occurrence edit requests, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied
+- UI verification by test: fake mode still renders `steering_confirmation_required` events in the timeline for risky mutation prompts, and resumed sessions now support compact live rendering plus keyboard replay navigation
+- steering verification by test: default policy still requires confirmation for overwrite and multi-occurrence edit requests, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied
 - unblock note: no new environment unblock was needed this run beyond reusing the validated repo `.venv`
 
 ## First five phases
@@ -367,6 +368,16 @@ python scripts/live_smoke.py
 
 Expected result is a short successful reply plus a provider/mode line.
 
+### Replay smoke check
+
+To verify the compact live-view + replay-navigation rendering without launching the full TUI:
+
+```bash
+.venv/bin/python scripts/replay_smoke.py
+```
+
+Expected result includes both a `live latest 2-4` view and a `replay 3/4` view for the same saved session fixture.
+
 ### Run tests
 
 ```bash
@@ -411,6 +422,8 @@ strands-agent --session-dir artifacts/sessions/session-YYYYMMDDTHHMMSSZ
 
 That reloads the saved prompt/response history plus timeline events from `turns.jsonl`, then continues appending new turns into the same session directory.
 
+When a resumed session has multiple turns, the conversation pane stays in a compact live view showing only the latest 3 turns. Use `F6` for older turns, `F7` for newer turns, and `F8` to jump back to the live/latest view.
+
 ### Event timeline filters
 
 Inside the TUI, use these shortcuts to focus the event pane:
@@ -429,7 +442,7 @@ The runtime now evaluates risky mutation tools before execution:
 
 - `write_file(overwrite=True)` is blocked by default unless `STRANDS_AGENT_ALLOW_OVERWRITE=true`
 - writes or edits targeting `.env*`, `*.pem`, or `*.key` are denied by policy
-- multi-occurrence `replace_text` calls are allowed, but emit a warning-style steering event so they stand out in the timeline
+- multi-occurrence `replace_text` calls require confirmation before execution, so risky broad edits are visible before they run
 
 This is deliberately narrow, but it creates the exact seam we will need for richer Strands guardrails and approvals later.
 
@@ -442,7 +455,7 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - live runtime selection works
   - live runtime fails safely when `OPENAI_API_KEY` is missing
   - config merge logic applies CLI-style overrides safely
-  - steering blocks overwrite by default and can be opted into explicitly
+  - steering requires confirmation for overwrite and broad-edit requests by default, and can opt into overwrites explicitly
   - steering events are emitted before workspace tools run
 
 - `tests/test_app.py`
@@ -454,6 +467,8 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - successful turns are persisted to `turns.jsonl` and `transcript.md`
   - runtime failures are also persisted as session artifacts
   - timeline filter shortcuts isolate tool and persistence activity correctly
+  - resumed sessions render a compact live history window instead of dumping the full backlog
+  - replay shortcuts browse older/newer turns and can return to live/latest view
   - CLI argument parsing overrides runtime/model/workspace selection correctly
 
 - `tests/test_tools.py`
@@ -482,11 +497,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add dedicated replay navigation so resumed sessions can browse history without flooding the live transcript
-2. add a compact session picker for recent artifact directories so reopen flow becomes less manual
-3. add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
-4. add a narrowly scoped shell command seam only after confirm-needed mutation steering can be approved in-app
-5. keep the fake runtime path green while refining the event schema around steering/intervention events
+1. add a compact session picker for recent artifact directories so reopen flow becomes less manual
+2. add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
+3. add a narrowly scoped shell command seam only after confirm-needed mutation steering can be approved in-app
+4. keep the fake runtime path green while refining the event schema around steering/intervention events
+5. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -514,7 +529,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add dedicated replay navigation inside the TUI so resumed sessions can browse older turns without dumping everything into the live transcript pane
 - add a compact session picker so users can reopen recent artifact directories without manually passing `--session-dir`
 - add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
 - add a narrowly scoped shell command seam only after confirm-needed mutation approval exists for risky mutations
+- reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection

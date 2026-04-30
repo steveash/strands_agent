@@ -256,3 +256,98 @@ async def test_app_loads_existing_session_artifacts_on_start(tmp_path: Path) -> 
         assert "User: inspect repo" in output
         assert "Agent: done" in output
         assert "Turns: 1" in status
+
+
+@pytest.mark.asyncio
+async def test_app_compacts_loaded_history_into_live_view(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="history-session")
+    for index in range(1, 5):
+        artifact_store.append_turn(
+            TurnArtifact(
+                prompt=f"prompt {index}",
+                response=f"response {index}",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="history-session",
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+
+        assert "Showing turns 2-4 of 4" in output
+        assert "Turn 1\nUser: prompt 1" not in output
+        assert "Turn 4\nUser: prompt 4\nAgent: response 4" in output
+        assert "View: live latest 2-4" in status
+
+
+@pytest.mark.asyncio
+async def test_history_navigation_shortcuts_browse_loaded_turns(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="browse-session")
+    for index in range(1, 5):
+        artifact_store.append_turn(
+            TurnArtifact(
+                prompt=f"prompt {index}",
+                response=f"response {index}",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="browse-session",
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await pilot.press("f6")
+        await pilot.pause()
+        replay_output = str(app.query_one("#output").render())
+        replay_status = str(app.query_one("#status").render())
+        assert "Viewing turn 3 of 4" in replay_output
+        assert "Turn 3\nUser: prompt 3\nAgent: response 3" in replay_output
+        assert "View: replay 3/4" in replay_status
+
+        await pilot.press("f6")
+        await pilot.pause()
+        older_output = str(app.query_one("#output").render())
+        assert "Viewing turn 2 of 4" in older_output
+        assert "Turn 2\nUser: prompt 2\nAgent: response 2" in older_output
+
+        await pilot.press("f7")
+        await pilot.pause()
+        newer_output = str(app.query_one("#output").render())
+        assert "Viewing turn 3 of 4" in newer_output
+
+        await pilot.press("f8")
+        await pilot.pause()
+        live_output = str(app.query_one("#output").render())
+        live_status = str(app.query_one("#status").render())
+        assert "Showing turns 2-4 of 4" in live_output
+        assert "View: live latest 2-4" in live_status

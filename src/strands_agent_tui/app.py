@@ -15,12 +15,16 @@ from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 class StrandsAgentApp(App):
     TITLE = "strands_agent"
     SUB_TITLE = "Strands-powered coding agent TUI prototype"
+    LIVE_HISTORY_WINDOW = 3
     BINDINGS = [
         Binding("f1", "set_event_filter('all')", "All events"),
         Binding("f2", "set_event_filter('runtime')", "Runtime events"),
         Binding("f3", "set_event_filter('tool')", "Tool events"),
         Binding("f4", "set_event_filter('failure')", "Failure events"),
         Binding("f5", "set_event_filter('persistence')", "Persistence events"),
+        Binding("f6", "history_older", "Older turn"),
+        Binding("f7", "history_newer", "Newer turn"),
+        Binding("f8", "history_live", "Live view"),
     ]
 
     CSS = """
@@ -84,6 +88,7 @@ class StrandsAgentApp(App):
         self.history: list[tuple[str, str]] = []
         self.events: list[RuntimeEvent] = []
         self.event_filter = "all"
+        self.history_focus_index: int | None = None
         self.artifact_store = artifact_store or SessionArtifactStore(
             config.artifacts_root,
             session_id=config.session_id,
@@ -110,6 +115,7 @@ class StrandsAgentApp(App):
             response = self.runtime.run(prompt)
             self.history.append((prompt, response.text))
             self.events.extend(response.events)
+            self.history_focus_index = None
             self.artifact_store.append_turn(
                 TurnArtifact(
                     prompt=prompt,
@@ -142,6 +148,7 @@ class StrandsAgentApp(App):
             )
             self.history.append((prompt, error_text))
             self.events.append(error_event)
+            self.history_focus_index = None
             self.artifact_store.append_turn(
                 TurnArtifact(
                     prompt=prompt,
@@ -189,6 +196,7 @@ class StrandsAgentApp(App):
         return (
             f"Runtime: {runtime_value} | Mode: {mode_value} | "
             f"Model: {self.config.openai_model} | Overwrite: {overwrite_policy} | "
+            f"View: {self.history_view_label()} | "
             f"Turns: {len(self.history)} | Events: {len(self.events)}"
         )
 
@@ -201,10 +209,46 @@ class StrandsAgentApp(App):
                 "Submit a prompt below to exercise the runtime boundary."
             )
 
-        parts: list[str] = []
-        for index, (prompt, response) in enumerate(self.history, start=1):
-            parts.append(f"Turn {index}\nUser: {prompt}\nAgent: {response}")
-        return "\n\n".join(parts)
+        total_turns = len(self.history)
+        lines = [
+            "Conversation",
+            self.history_view_label(),
+            "Keys: F6 older turn, F7 newer turn, F8 live/latest",
+            "",
+        ]
+
+        if self.history_focus_index is None:
+            start_index = max(0, total_turns - self.LIVE_HISTORY_WINDOW)
+            lines.append(f"Showing turns {start_index + 1}-{total_turns} of {total_turns}")
+            lines.append("")
+            visible_turns = self.history[start_index:]
+            lines.extend(
+                self._render_turn(index, prompt, response)
+                for index, (prompt, response) in enumerate(visible_turns, start=start_index + 1)
+            )
+            return "\n\n".join(lines)
+
+        focus = self.history_focus_index
+        prompt, response = self.history[focus]
+        lines.append(f"Viewing turn {focus + 1} of {total_turns}")
+        if focus > 0:
+            lines.append(f"Older turns available: 1-{focus}")
+        if focus < total_turns - 1:
+            lines.append(f"Newer turns available: {focus + 2}-{total_turns}")
+        lines.append("")
+        lines.append(self._render_turn(focus + 1, prompt, response))
+        return "\n\n".join(lines)
+
+    def _render_turn(self, index: int, prompt: str, response: str) -> str:
+        return f"Turn {index}\nUser: {prompt}\nAgent: {response}"
+
+    def history_view_label(self) -> str:
+        if not self.history:
+            return "live"
+        if self.history_focus_index is None:
+            start_index = max(0, len(self.history) - self.LIVE_HISTORY_WINDOW)
+            return f"live latest {start_index + 1}-{len(self.history)}"
+        return f"replay {self.history_focus_index + 1}/{len(self.history)}"
 
     def render_events(self) -> str:
         filtered_events = self.filtered_events()
@@ -240,6 +284,31 @@ class StrandsAgentApp(App):
     def action_set_event_filter(self, value: str) -> None:
         self.event_filter = value
         self.query_one("#events", Static).update(self.render_events())
+
+    def action_history_older(self) -> None:
+        if not self.history:
+            return
+        if self.history_focus_index is None:
+            self.history_focus_index = max(len(self.history) - 2, 0)
+        else:
+            self.history_focus_index = max(self.history_focus_index - 1, 0)
+        self._refresh_history_widgets()
+
+    def action_history_newer(self) -> None:
+        if not self.history or self.history_focus_index is None:
+            return
+        self.history_focus_index = min(self.history_focus_index + 1, len(self.history) - 1)
+        self._refresh_history_widgets()
+
+    def action_history_live(self) -> None:
+        if not self.history:
+            return
+        self.history_focus_index = None
+        self._refresh_history_widgets()
+
+    def _refresh_history_widgets(self) -> None:
+        self.query_one("#output", Static).update(self.render_history())
+        self.query_one("#status", Static).update(self.render_status_summary())
 
 
 def parse_args() -> AppConfig:
