@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes conservative exact-match edits plus real live-runtime tool instrumentation, and Phase 3 now adds filterable event categories in the TUI so runtime, tool, failure, and persistence activity can be inspected separately.**
+**Phase 1 is complete, Phase 2 includes conservative exact-match edits plus real live-runtime tool instrumentation, Phase 3 includes filterable event categories in the TUI, and Phase 4 has now started with a real steering-policy seam for risky file mutations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -87,6 +87,8 @@ What exists now:
 - workspace tools for `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
 - live runtime tool registration that binds those tools to the active workspace root,
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
+- a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision` or `steering_blocked` events,
+- default conservative steering that blocks overwrite requests unless explicitly enabled and protects sensitive file patterns like `.env*`, `*.pem`, and `*.key`,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, and compact structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
@@ -98,16 +100,17 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a stable runtime event categorizer so timeline entries now fall into `runtime`, `tool`, `failure`, or `persistence`,
-- added TUI keyboard filters (`F1` through `F5`) so the event pane can focus on one category without losing the full event history,
-- appended explicit `artifact_saved` events after both successful and failing turns so persistence activity is visible in the same loop as Strands/tool events,
-- updated the timeline renderer to show the active filter, filtered counts, and category labels alongside compact event data,
-- added regression checks for event-category mapping and interactive event filtering in the TUI.
+- added a dedicated `steering/` policy module that evaluates `write_file` and `replace_text` calls before execution,
+- made overwrite attempts block by default at the steering layer, before the workspace tool runs, with a visible `steering_blocked` event explaining why,
+- added protected file-pattern checks for `.env*`, `*.pem`, and `*.key` so obviously sensitive files are denied by policy rather than only by prompt wording,
+- added an opt-in `STRANDS_AGENT_ALLOW_OVERWRITE=true` config seam and surfaced the current overwrite posture in the TUI status line,
+- extended fake and live runtime coverage so steering decisions appear in the same timeline as prompt, tool, failure, and persistence events,
+- added regression tests for denied overwrite, allowed overwrite-with-notice, steering-event emission, and config loading for the overwrite policy flag.
 
 Why this matters now:
-- It turns the event pane from a raw stream into an actual observability surface, which is closer to how Steve will want to reason about agent loops in practice.
-- It makes Strands behavior easier to study by separating normal runtime milestones from tool churn, failures, and persistence side effects.
-- It sets up the next step cleanly, because steering interventions can now appear as their own high-signal events instead of getting buried in the main scroll.
+- It moves the prototype from passive observability toward active control, which is one of the most interesting Strands questions in a coding-agent platform.
+- It makes steering concrete instead of theoretical, because risky mutations now produce first-class intervention events in the same loop Steve is already inspecting.
+- It sets up shell access and stronger edit workflows more safely, because there is now an explicit seam where policy can allow, deny, or later require confirmation.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -118,12 +121,13 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `27 passed`
+- automated tests: `30 passed`
 - CLI verification: `strands-agent --help` shows `--runtime`, `--model`, and `--workspace`
 - live runtime verification by test: a stubbed live Strands runtime records real `read_file` tool activity plus structured metadata in the returned event timeline
 - artifact verification by test: persisted `turns.jsonl` entries now include schema version, timestamped events, and response metadata
-- UI verification by existing tests: fake mode still renders deterministic `list_files`, `search_files`, `write_file`, and `replace_text` events, now with filterable categories and explicit persistence events in the timeline pane
-- unblock note: initial test collection failed outside the repo virtualenv because `textual` and `strands` were not importable from the system interpreter; recreated/validated `.venv` with `pip install -e '.[dev]'`, then re-ran checks successfully
+- UI verification by existing tests: fake mode still renders deterministic `list_files`, `search_files`, `write_file`, and `replace_text` events, now alongside visible steering decisions and explicit persistence events in the timeline pane
+- steering verification by test: default policy blocks overwrite requests before tool execution, opt-in overwrite mode emits an allow-with-notice steering event, and config loading honors `STRANDS_AGENT_ALLOW_OVERWRITE=true`
+- unblock note: no new environment unblock was needed this run beyond reusing the validated repo `.venv`
 
 ## First five phases
 
@@ -184,7 +188,8 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - side-by-side event timeline pane for runtime and tool events,
 - deterministic fake-runtime tool events for inspect, search, write, and edit flows,
 - live-runtime tool instrumentation that emits actual tool lifecycle events with args, elapsed time, and failures,
-- stable event categories plus filter shortcuts so the timeline can isolate runtime, tool, failure, or persistence activity.
+- stable event categories plus filter shortcuts so the timeline can isolate runtime, tool, failure, or persistence activity,
+- a first-pass steering seam for pre-tool allow/deny decisions on risky file mutations.
 
 **Why this matters**
 This is the point where the app stops being a generic chat shell and starts becoming a coding-agent platform.
@@ -215,7 +220,8 @@ Make the Strands loop legible by exposing intermediate events, tool uses, failur
 - default artifact-root derivation under the active workspace,
 - persisted event payloads that now include timestamps, structured metadata, and real live-tool lifecycle entries when the Strands runtime uses workspace tools,
 - response metadata capture so replay artifacts retain model/runtime context without scraping prose,
-- event-pane filtering and explicit persistence events so replay/debugging concepts are also visible in the live TUI.
+- event-pane filtering and explicit persistence events so replay/debugging concepts are also visible in the live TUI,
+- steering decision events in the same timeline so policy behavior is inspectable without reading code.
 
 **Why this matters**
 If the goal is to understand Strands deeply, hidden orchestration is the enemy. This phase turns the loop into something inspectable.
@@ -341,6 +347,14 @@ strands-agent
 
 The app will then use the Strands SDK with the OpenAI model provider.
 
+If you want to explicitly allow overwriting existing files for an experiment, opt in locally:
+
+```bash
+export STRANDS_AGENT_ALLOW_OVERWRITE=true
+```
+
+The TUI status line will show `Overwrite: on` so the posture is visible while you test.
+
 ### Live smoke check
 
 To verify the live runtime outside the TUI:
@@ -400,6 +414,16 @@ Inside the TUI, use these shortcuts to focus the event pane:
 
 This is intentionally simple, but it already makes it much easier to inspect Strands loop behavior without losing the complete turn transcript.
 
+### Current steering policy seam
+
+The runtime now evaluates risky mutation tools before execution:
+
+- `write_file(overwrite=True)` is blocked by default unless `STRANDS_AGENT_ALLOW_OVERWRITE=true`
+- writes or edits targeting `.env*`, `*.pem`, or `*.key` are denied by policy
+- multi-occurrence `replace_text` calls are allowed, but emit a warning-style steering event so they stand out in the timeline
+
+This is deliberately narrow, but it creates the exact seam we will need for richer Strands guardrails and approvals later.
+
 ### What the current tests prove
 
 - `tests/test_runtime.py`
@@ -409,6 +433,8 @@ This is intentionally simple, but it already makes it much easier to inspect Str
   - live runtime selection works
   - live runtime fails safely when `OPENAI_API_KEY` is missing
   - config merge logic applies CLI-style overrides safely
+  - steering blocks overwrite by default and can be opted into explicitly
+  - steering events are emitted before workspace tools run
 
 - `tests/test_app.py`
   - app renders runtime status
@@ -478,7 +504,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add steering hooks that can approve, deny, or explain risky edit/write attempts before execution, ideally with first-class intervention events in the timeline
+- let steering decisions distinguish allow, deny, and confirm-needed states instead of only hard block vs allow
 - add artifact replay or session-load UX so saved observability data can be browsed inside the app instead of only on disk
 - add higher-signal workspace summaries so the agent can explain repo shape before reaching for shell commands
 - keep live runtime support optional so fake-mode regression tests stay fast and deterministic

@@ -9,6 +9,7 @@ from typing import Callable, Protocol
 
 from strands import tool
 
+from strands_agent_tui.steering import ToolSteeringPolicy, build_default_policy
 from strands_agent_tui.tools.workspace import WorkspaceTools
 
 
@@ -120,6 +121,12 @@ class FakeStrandsRuntime:
                 detail=normalized,
                 data={"prompt_length": len(normalized)},
             ),
+            runtime_event(
+                kind="steering_decision",
+                title="fake-policy",
+                detail="Fake runtime is using the default conservative steering posture.",
+                data={"allow_overwrite": False, "source": "fake_runtime"},
+            ),
         ]
 
         lowered = normalized.lower()
@@ -212,12 +219,32 @@ class FakeStrandsRuntime:
 def build_workspace_tools(
     workspace_root: str | Path,
     event_sink: RuntimeEventSink | None = None,
+    steering_policy: ToolSteeringPolicy | None = None,
 ) -> list[object]:
     workspace = WorkspaceTools(Path(workspace_root))
+    policy = steering_policy or build_default_policy()
 
     def instrument(tool_name: str, action: Callable[..., str]) -> Callable[..., str]:
         def wrapped(**kwargs: object) -> str:
             started_at = perf_counter()
+            decision = policy.evaluate(tool_name, kwargs)
+            if event_sink is not None:
+                event_sink(
+                    runtime_event(
+                        kind="steering_decision" if decision.allowed else "steering_blocked",
+                        title=tool_name,
+                        detail=decision.reason,
+                        data={
+                            "tool_name": tool_name,
+                            "allowed": decision.allowed,
+                            "severity": decision.severity,
+                            "category": decision.category,
+                            **decision.details,
+                        },
+                    )
+                )
+            if not decision.allowed:
+                raise PermissionError(decision.reason)
             if event_sink is not None:
                 event_sink(
                     runtime_event(
@@ -326,12 +353,15 @@ class StrandsSDKRuntime:
         system_prompt: str | None = None,
         openai_model: str = "gpt-4o-mini",
         workspace_root: str | Path = ".",
+        allow_overwrite: bool = False,
     ) -> None:
         self.workspace_root = Path(workspace_root).expanduser().resolve()
+        self.allow_overwrite = allow_overwrite
         self.system_prompt = system_prompt or (
             "You are a concise coding assistant inside a terminal UI prototype. "
             f"You may inspect and conservatively edit the workspace rooted at {self.workspace_root} "
-            "using bounded local tools. Prefer exact-match edits over broad rewrites when possible."
+            "using bounded local tools. Prefer exact-match edits over broad rewrites when possible. "
+            "Overwrites are blocked unless the local steering policy explicitly allows them."
         )
         self.openai_model = openai_model
 
@@ -344,7 +374,11 @@ class StrandsSDKRuntime:
             model_id=self.openai_model,
             params={"max_tokens": 300, "temperature": 0.2},
         )
-        tools = build_workspace_tools(self.workspace_root, event_sink=event_sink)
+        tools = build_workspace_tools(
+            self.workspace_root,
+            event_sink=event_sink,
+            steering_policy=build_default_policy(allow_overwrite=self.allow_overwrite),
+        )
         return Agent(model=model, system_prompt=self.system_prompt, tools=tools), len(tools)
 
     def run(self, prompt: str) -> AgentResponse:
@@ -402,7 +436,12 @@ def build_runtime(
     mode: str = "fake",
     openai_model: str = "gpt-4o-mini",
     workspace_root: str | Path = ".",
+    allow_overwrite: bool = False,
 ) -> AgentRuntime:
     if mode == "live":
-        return StrandsSDKRuntime(openai_model=openai_model, workspace_root=workspace_root)
+        return StrandsSDKRuntime(
+            openai_model=openai_model,
+            workspace_root=workspace_root,
+            allow_overwrite=allow_overwrite,
+        )
     return FakeStrandsRuntime()

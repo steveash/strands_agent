@@ -90,10 +90,12 @@ def test_build_workspace_tools_emits_events_via_sink(tmp_path: Path) -> None:
     rendered = tools["read_file"](relative_path="notes.txt")
 
     assert "hello" in rendered
-    assert [event.kind for event in events] == ["tool_started", "tool_finished"]
+    assert [event.kind for event in events] == ["steering_decision", "tool_started", "tool_finished"]
     assert events[0].title == "read_file"
-    assert "notes.txt" in events[0].detail
     assert events[0].data["tool_name"] == "read_file"
-    assert events[0].data["args"]["relative_path"] == "notes.txt"
-    assert "elapsed_ms=" in events[1].detail
-    assert "elapsed_ms" in events[1].data
+    assert events[0].data["allowed"] is True
+    assert "notes.txt" in events[1].detail
+    assert events[1].data["tool_name"] == "read_file"
+    assert events[1].data["args"]["relative_path"] == "notes.txt"
+    assert "elapsed_ms=" in events[2].detail
+    assert "elapsed_ms" in events[2].data

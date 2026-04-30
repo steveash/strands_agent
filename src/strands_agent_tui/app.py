@@ -79,6 +79,7 @@ class StrandsAgentApp(App):
             mode=config.runtime_mode,
             openai_model=config.openai_model,
             workspace_root=config.workspace_root,
+            allow_overwrite=config.allow_overwrite,
         )
         self.history: list[tuple[str, str]] = []
         self.events: list[RuntimeEvent] = []
@@ -174,9 +175,11 @@ class StrandsAgentApp(App):
     ) -> str:
         runtime_value = runtime_label or provider or self.runtime.__class__.__name__
         mode_value = mode or self.config.runtime_mode
+        overwrite_policy = "on" if self.config.allow_overwrite else "off"
         return (
             f"Runtime: {runtime_value} | Mode: {mode_value} | "
-            f"Model: {self.config.openai_model} | Turns: {len(self.history)} | Events: {len(self.events)}"
+            f"Model: {self.config.openai_model} | Overwrite: {overwrite_policy} | "
+            f"Turns: {len(self.history)} | Events: {len(self.events)}"
         )
 
     def render_history(self) -> str:

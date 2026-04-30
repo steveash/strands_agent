@@ -11,6 +11,7 @@ from strands_agent_tui.runtime import (
     build_workspace_tools,
     categorize_event_kind,
 )
+from strands_agent_tui.steering import build_default_policy
 
 
 def test_fake_runtime_echoes_prompt() -> None:
@@ -36,8 +37,9 @@ def test_fake_runtime_emits_deterministic_workspace_tool_events() -> None:
 
     event_kinds = [event.kind for event in result.events]
 
-    assert event_kinds == ["prompt_received", "tool_started", "tool_finished", "response_completed"]
-    assert result.events[1].title == "list_files"
+    assert event_kinds == ["prompt_received", "steering_decision", "tool_started", "tool_finished", "response_completed"]
+    assert result.events[1].title == "fake-policy"
+    assert result.events[2].title == "list_files"
 
 
 def test_fake_runtime_emits_search_write_and_edit_events() -> None:
@@ -48,6 +50,7 @@ def test_fake_runtime_emits_search_write_and_edit_events() -> None:
 
     assert titles == [
         "Prompt accepted",
+        "fake-policy",
         "list_files",
         "list_files",
         "search_files",
@@ -70,6 +73,7 @@ def test_build_runtime_live_selects_strands_sdk_runtime(tmp_path: Path) -> None:
     assert isinstance(runtime, StrandsSDKRuntime)
     assert runtime.openai_model == "gpt-4o-mini"
     assert runtime.workspace_root == tmp_path.resolve()
+    assert runtime.allow_overwrite is False
 
 
 def test_live_runtime_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,12 +104,14 @@ def test_live_runtime_collects_tool_events(monkeypatch: pytest.MonkeyPatch, tmp_
     assert result.text == "handled: read the notes file"
     assert [event.kind for event in result.events] == [
         "prompt_received",
+        "steering_decision",
         "tool_started",
         "tool_finished",
         "response_completed",
     ]
     assert result.events[1].title == "read_file"
     assert result.events[1].data["tool_name"] == "read_file"
+    assert result.events[1].data["allowed"] is True
     assert "elapsed_ms=" in result.events[-1].detail
     assert result.metadata["model"] == "gpt-4o-mini"
     assert result.metadata["workspace_root"] == str(tmp_path.resolve())
@@ -140,9 +146,53 @@ def test_app_config_defaults_artifacts_root_under_workspace(monkeypatch: pytest.
     assert config.artifacts_root == str(tmp_path.resolve() / "artifacts" / "sessions")
 
 
+def test_app_config_loads_overwrite_policy_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("STRANDS_AGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setenv("STRANDS_AGENT_ALLOW_OVERWRITE", "true")
+
+    from strands_agent_tui.config import load_config
+
+    config = load_config()
+
+    assert config.allow_overwrite is True
+
+
 def test_event_kind_categories_cover_runtime_tool_failure_and_persistence() -> None:
     assert categorize_event_kind("prompt_received") == "runtime"
     assert categorize_event_kind("tool_started") == "tool"
     assert categorize_event_kind("tool_failed") == "failure"
     assert categorize_event_kind("runtime_error") == "failure"
     assert categorize_event_kind("artifact_saved") == "persistence"
+    assert categorize_event_kind("steering_blocked") == "runtime"
+
+
+def test_build_workspace_tools_blocks_overwrite_by_default_and_emits_steering_event(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("old\n", encoding="utf-8")
+    events = []
+    tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
+
+    with pytest.raises(PermissionError, match="Blocked overwrite request"):
+        tools["write_file"](relative_path="notes.txt", content="new\n", overwrite=True)
+
+    assert [event.kind for event in events] == ["steering_blocked"]
+    assert events[0].title == "write_file"
+    assert events[0].data["allowed"] is False
+
+
+def test_build_workspace_tools_allows_overwrite_when_policy_opted_in(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("old\n", encoding="utf-8")
+    events = []
+    tools = {
+        tool.tool_name: tool
+        for tool in build_workspace_tools(
+            tmp_path,
+            event_sink=events.append,
+            steering_policy=build_default_policy(allow_overwrite=True),
+        )
+    }
+
+    rendered = tools["write_file"](relative_path="notes.txt", content="new\n", overwrite=True)
+
+    assert "Action: overwrote" in rendered
+    assert [event.kind for event in events] == ["steering_decision", "tool_started", "tool_finished"]
+    assert events[0].data["category"] == "allow_with_notice"

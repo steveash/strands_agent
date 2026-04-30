@@ -29,6 +29,7 @@ async def test_app_renders_runtime_status() -> None:
         events = app.query_one("#events").render()
         assert "FakeStrandsRuntime" in str(status)
         assert "Model: gpt-4o-mini" in str(status)
+        assert "Overwrite: off" in str(status)
         assert "Workspace:" in str(workspace)
         assert "Event Timeline" in str(events)
 
@@ -61,14 +62,15 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert "User: list files" in rendered_output
         assert "Agent: (fake-strands) Echo: list files" in rendered_output
         assert "Turns: 1" in rendered_status
-        assert "Events: 5" in rendered_status
-        assert "Filter: all (5/5 events)" in rendered_events
+        assert "Events: 6" in rendered_status
+        assert "Filter: all (6/6 events)" in rendered_events
+        assert "(runtime) kind=steering_decision | fake-policy" in rendered_events
         assert "(tool) kind=tool_started | list_files" in rendered_events
         assert "data: source='fake_runtime', tool_name='list_files'" in rendered_events
         assert "(tool) kind=tool_finished | list_files" in rendered_events
         assert "(persistence) kind=artifact_saved | Session artifact saved" in rendered_events
         assert len(app.history) == 1
-        assert len(app.events) == 5
+        assert len(app.events) == 6
 
         payload = json.loads((tmp_path / "test-session" / "turns.jsonl").read_text(encoding="utf-8").strip())
         assert payload["prompt"] == "list files"
@@ -76,7 +78,7 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert payload["schema_version"] == "strands-agent/v1"
         assert payload["response_metadata"]["mode"] == "fake"
         assert payload["events"][0]["timestamp"]
-        assert payload["events"][1]["data"]["tool_name"] == "list_files"
+        assert payload["events"][2]["data"]["tool_name"] == "list_files"
         transcript = (tmp_path / "test-session" / "transcript.md").read_text(encoding="utf-8")
         assert "# Session transcript: test-session" in transcript
         assert "**Response metadata**" in transcript
@@ -151,14 +153,14 @@ async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -
         await pilot.press("f3")
         await pilot.pause()
         tool_events = str(app.query_one("#events").render())
-        assert "Filter: tool (2/5 events)" in tool_events
+        assert "Filter: tool (2/6 events)" in tool_events
         assert "kind=tool_started | list_files" in tool_events
         assert "kind=artifact_saved" not in tool_events
 
         await pilot.press("f5")
         await pilot.pause()
         persistence_events = str(app.query_one("#events").render())
-        assert "Filter: persistence (1/5 events)" in persistence_events
+        assert "Filter: persistence (1/6 events)" in persistence_events
         assert "kind=artifact_saved | Session artifact saved" in persistence_events
 
         await pilot.press("f1")

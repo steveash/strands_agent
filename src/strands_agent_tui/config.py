@@ -12,6 +12,7 @@ class AppConfig:
     openai_model: str = "gpt-4o-mini"
     workspace_root: str = "."
     artifacts_root: str = "artifacts/sessions"
+    allow_overwrite: bool = False
 
     @property
     def workspace_path(self) -> Path:
@@ -38,4 +39,5 @@ def load_config() -> AppConfig:
         openai_model=os.getenv("STRANDS_AGENT_OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
         workspace_root=workspace_root,
         artifacts_root=artifacts_root,
+        allow_overwrite=os.getenv("STRANDS_AGENT_ALLOW_OVERWRITE", "").strip().lower() in {"1", "true", "yes", "on"},
     )
