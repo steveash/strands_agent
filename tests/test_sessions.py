@@ -1,0 +1,89 @@
+from pathlib import Path
+
+from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact, latest_session, list_recent_sessions, pick_session, render_session_picker
+
+
+def _append_turn(store: SessionArtifactStore, prompt: str) -> None:
+    store.append_turn(
+        TurnArtifact(
+            prompt=prompt,
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+
+def test_list_recent_sessions_orders_by_latest_activity_and_includes_prompt_preview(tmp_path: Path) -> None:
+    older_store = SessionArtifactStore(tmp_path, session_id="session-older")
+    _append_turn(older_store, "inspect older repo state")
+
+    newer_store = SessionArtifactStore(tmp_path, session_id="session-newer")
+    _append_turn(newer_store, "inspect newer repo state with a long prompt preview that should truncate cleanly")
+
+    sessions = list_recent_sessions(tmp_path)
+
+    assert [session.session_id for session in sessions[:2]] == ["session-newer", "session-older"]
+    assert sessions[0].turn_count == 1
+    assert sessions[0].last_prompt_preview.endswith("...")
+    assert "turn(s)" in sessions[0].render_line(1)
+
+
+def test_latest_session_returns_newest_summary(tmp_path: Path) -> None:
+    first_store = SessionArtifactStore(tmp_path, session_id="session-a")
+    _append_turn(first_store, "first")
+
+    second_store = SessionArtifactStore(tmp_path, session_id="session-b")
+    _append_turn(second_store, "second")
+
+    summary = latest_session(tmp_path)
+
+    assert summary is not None
+    assert summary.session_id == "session-b"
+    assert summary.session_dir == second_store.session_dir
+
+
+def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-demo")
+    _append_turn(store, "review demo")
+
+    rendered = render_session_picker(tmp_path)
+
+    assert "Recent sessions under" in rendered
+    assert "1. session-demo" in rendered
+    assert "Press Enter to start a new session." in rendered
+
+
+def test_pick_session_returns_selected_summary(tmp_path: Path) -> None:
+    first_store = SessionArtifactStore(tmp_path, session_id="session-first")
+    _append_turn(first_store, "first")
+
+    second_store = SessionArtifactStore(tmp_path, session_id="session-second")
+    _append_turn(second_store, "second")
+
+    captured: list[str] = []
+    summary = pick_session(
+        tmp_path,
+        input_fn=lambda _prompt: "1",
+        output_fn=captured.append,
+    )
+
+    assert summary is not None
+    assert summary.session_id == "session-second"
+    assert any("Recent sessions under" in line for line in captured)
+
+
+def test_pick_session_handles_empty_artifact_root(tmp_path: Path) -> None:
+    captured: list[str] = []
+
+    summary = pick_session(
+        tmp_path,
+        input_fn=lambda _prompt: "",
+        output_fn=captured.append,
+    )
+
+    assert summary is None
+    assert captured[0].startswith("No saved sessions found under")
+    assert captured[1] == "Starting a new session instead."

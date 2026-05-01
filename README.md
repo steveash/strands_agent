@@ -75,15 +75,15 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus dedicated replay navigation in the TUI, and Phase 4 now distinguishes allow, deny, and confirm-needed steering outcomes for risky file mutations.**
+**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now distinguishes allow, deny, and confirm-needed steering outcomes for risky file mutations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
 - a thin runtime boundary separate from the UI,
 - a deterministic **fake Strands runtime** for reliable local verification,
 - a live **Strands + OpenAI** runtime path driven by environment variables,
-- explicit CLI overrides for runtime, model, and workspace selection,
-- status-line rendering plus a dedicated workspace banner in the TUI,
+- explicit CLI overrides for runtime, model, workspace, and saved-session selection,
+- status-line rendering plus a dedicated workspace/session banner in the TUI,
 - workspace tools for `summarize_workspace`, `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
 - live runtime tool registration that binds those tools to the active workspace root,
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
@@ -97,32 +97,33 @@ What exists now:
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
-- tests that cover TUI state, config merging, tool safety, runtime selection, live-tool event capture, event rendering, and artifact persistence,
+- a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
+- tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added dedicated replay navigation bindings in the TUI (`F6` older, `F7` newer, `F8` live/latest) for resumed session history,
-- changed the conversation pane to keep a compact live window of the latest turns instead of dumping every loaded turn into the transcript view,
-- added replay-aware status text so users can tell whether they are browsing history or looking at the live/latest slice,
-- expanded TUI regression coverage for compact session replay rendering and keyboard-driven history browsing.
+- added recent-session discovery helpers that summarize saved artifact directories by recency, turn count, and last prompt preview,
+- added `--pick-session` for an interactive compact session picker plus `--resume-last` for the fastest reopen path,
+- updated the TUI workspace banner to show the active session id alongside the workspace root,
+- added regression coverage plus a dedicated `scripts/session_picker_smoke.py` check for recent-session selection behavior.
 
 Why this matters now:
-- It makes resumed sessions usable once artifacts get longer than a couple of turns.
-- It keeps the live transcript focused on current work while still making prior history easy to inspect.
-- It creates a practical UI seam for the next session-management step, like a picker or approval resume flow.
+- It removes the most manual part of session replay by letting users reopen recent saved work without hunting for artifact paths.
+- It keeps the replay/navigation work from the last iteration practical enough for everyday use.
+- It creates a cleaner handoff point for the next safety step, where confirm-needed mutations need an approval/resume flow inside the app.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, event timeline updates, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3 observability seam, including interactive event filtering,
+- `pytest` currently passes for the expanded Phase 2/3 observability seam, including recent-session selection flows,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `39 passed`
-- runnable replay verification: `.venv/bin/python scripts/replay_smoke.py` renders a compact live view (`live latest 2-4`) plus a focused replay view (`replay 3/4`) for the same saved session
-- CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, and `--session-dir`
+- automated tests: `46 passed`
+- runnable session-picker verification: `.venv/bin/python scripts/session_picker_smoke.py` prints a compact recent-session menu plus `latest=session-newer`
+- CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata
 - UI verification by test: fake mode still renders `steering_confirmation_required` events in the timeline for risky mutation prompts, and resumed sessions now support compact live rendering plus keyboard replay navigation
@@ -414,13 +415,20 @@ You can override the root with:
 export STRANDS_AGENT_ARTIFACTS_ROOT=/path/to/artifacts
 ```
 
-You can also resume a saved session directly:
+You can resume a saved session directly:
 
 ```bash
 strands-agent --session-dir artifacts/sessions/session-YYYYMMDDTHHMMSSZ
 ```
 
-That reloads the saved prompt/response history plus timeline events from `turns.jsonl`, then continues appending new turns into the same session directory.
+Or use the new recent-session shortcuts so you do not need to type a full artifact path:
+
+```bash
+strands-agent --pick-session
+strands-agent --resume-last
+```
+
+Those flows reload the saved prompt/response history plus timeline events from `turns.jsonl`, then continue appending new turns into the selected session directory.
 
 When a resumed session has multiple turns, the conversation pane stays in a compact live view showing only the latest 3 turns. Use `F6` for older turns, `F7` for newer turns, and `F8` to jump back to the live/latest view.
 
@@ -470,6 +478,7 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - resumed sessions render a compact live history window instead of dumping the full backlog
   - replay shortcuts browse older/newer turns and can return to live/latest view
   - CLI argument parsing overrides runtime/model/workspace selection correctly
+  - CLI session selection can load an explicit session dir, reopen the latest session, or pick from recent sessions interactively
 
 - `tests/test_tools.py`
   - workspace summary reports top-level structure, notable files/directories, and dominant file types
@@ -479,6 +488,12 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - guarded writes create new files but reject implicit overwrite
   - path traversal outside the workspace is rejected
   - live-runtime tool registration returns the expected Strands tool set
+
+- `tests/test_sessions.py`
+  - recent sessions are ordered by latest artifact activity
+  - session summaries include bounded last-prompt previews
+  - the compact picker renders usable recent-session labels
+  - the picker returns the selected session and handles an empty artifact root safely
 
 This is the current anti-regression contract for Phase 1.
 
@@ -497,9 +512,9 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add a compact session picker for recent artifact directories so reopen flow becomes less manual
-2. add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
-3. add a narrowly scoped shell command seam only after confirm-needed mutation steering can be approved in-app
+1. add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
+2. add a narrowly scoped shell command seam only after confirm-needed mutation steering can be approved in-app
+3. add an in-app session switcher that reuses the new recent-session summaries instead of limiting reopen flow to startup
 4. keep the fake runtime path green while refining the event schema around steering/intervention events
 5. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 
@@ -529,7 +544,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add a compact session picker so users can reopen recent artifact directories without manually passing `--session-dir`
 - add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
 - add a narrowly scoped shell command seam only after confirm-needed mutation approval exists for risky mutations
+- add an in-app session switcher that reuses the new recent-session summaries after startup
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection

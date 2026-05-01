@@ -9,7 +9,7 @@ from textual.widgets import Footer, Header, Input, Static
 
 from strands_agent_tui.config import AppConfig, load_config
 from strands_agent_tui.runtime import AgentRuntime, RuntimeEvent, build_runtime, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
+from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact, latest_session, pick_session
 
 
 class StrandsAgentApp(App):
@@ -104,7 +104,7 @@ class StrandsAgentApp(App):
                 with Vertical(id="event-pane"):
                     yield Static(self.render_events(), id="events")
             yield Static(self.render_status_summary(), id="status")
-            yield Static(f"Workspace: {self.config.workspace_path}", id="workspace")
+            yield Static(self.render_context_banner(), id="workspace")
         yield Input(placeholder="Ask the coding agent something...", id="prompt")
         yield Footer()
 
@@ -183,6 +183,9 @@ class StrandsAgentApp(App):
         for turn in prior_turns:
             self.history.append((turn.prompt, turn.response))
             self.events.extend(turn.events)
+
+    def render_context_banner(self) -> str:
+        return f"Workspace: {self.config.workspace_path} | Session: {self.artifact_store.session_id}"
 
     def render_status_summary(
         self,
@@ -333,14 +336,43 @@ def parse_args() -> AppConfig:
         "--session-dir",
         help="Load and continue an existing session artifact directory.",
     )
+    parser.add_argument(
+        "--pick-session",
+        action="store_true",
+        help="Interactively choose a recent saved session from the configured artifacts root.",
+    )
+    parser.add_argument(
+        "--resume-last",
+        action="store_true",
+        help="Resume the most recent saved session from the configured artifacts root.",
+    )
     args = parser.parse_args()
+
+    session_flags = [bool(args.session_dir), bool(args.pick_session), bool(args.resume_last)]
+    if sum(session_flags) > 1:
+        parser.error("Choose only one of --session-dir, --pick-session, or --resume-last.")
+
     config = load_config().merge(
         runtime_mode=args.runtime,
         openai_model=args.model,
         workspace_root=args.workspace,
     )
+
+    selected_session_dir = None
     if args.session_dir:
-        artifact_store = SessionArtifactStore.from_session_dir(args.session_dir)
+        selected_session_dir = args.session_dir
+    elif args.resume_last:
+        summary = latest_session(config.artifacts_root)
+        if summary is None:
+            parser.error(f"No saved sessions found under {config.artifacts_root}")
+        selected_session_dir = summary.session_dir
+    elif args.pick_session:
+        summary = pick_session(config.artifacts_root)
+        if summary is not None:
+            selected_session_dir = summary.session_dir
+
+    if selected_session_dir:
+        artifact_store = SessionArtifactStore.from_session_dir(selected_session_dir)
         config = config.merge(artifacts_root=str(artifact_store.root))
         config.session_id = artifact_store.session_id
     return config

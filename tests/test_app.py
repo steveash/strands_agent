@@ -147,6 +147,77 @@ def test_parse_args_loads_existing_session_dir(monkeypatch: pytest.MonkeyPatch, 
     assert config.session_id == "session-123"
 
 
+def test_parse_args_resume_last_loads_most_recent_session(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    older_store = SessionArtifactStore(tmp_path, session_id="session-older")
+    older_store.append_turn(
+        TurnArtifact(
+            prompt="older",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    newer_store = SessionArtifactStore(tmp_path, session_id="session-newer")
+    newer_store.append_turn(
+        TurnArtifact(
+            prompt="newer",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    monkeypatch.setattr(sys, "argv", ["strands-agent", "--resume-last"])
+    monkeypatch.setenv("STRANDS_AGENT_ARTIFACTS_ROOT", str(tmp_path))
+
+    config = parse_args()
+
+    assert config.artifacts_root == str(tmp_path.resolve())
+    assert config.session_id == "session-newer"
+
+
+def test_parse_args_pick_session_loads_selected_recent_session(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    first_store = SessionArtifactStore(tmp_path, session_id="session-first")
+    first_store.append_turn(
+        TurnArtifact(
+            prompt="first prompt",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    second_store = SessionArtifactStore(tmp_path, session_id="session-second")
+    second_store.append_turn(
+        TurnArtifact(
+            prompt="second prompt",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    monkeypatch.setattr(sys, "argv", ["strands-agent", "--pick-session"])
+    monkeypatch.setenv("STRANDS_AGENT_ARTIFACTS_ROOT", str(tmp_path))
+    monkeypatch.setattr("builtins.input", lambda _prompt: "2")
+
+    config = parse_args()
+
+    assert config.artifacts_root == str(tmp_path.resolve())
+    assert config.session_id == "session-first"
+
+
 @pytest.mark.asyncio
 async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="filter-session")
