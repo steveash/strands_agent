@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 
+from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -9,7 +10,14 @@ from textual.widgets import Footer, Header, Input, Static
 
 from strands_agent_tui.config import AppConfig, load_config
 from strands_agent_tui.runtime import AgentRuntime, ApprovalRequest, RuntimeEvent, build_runtime, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact, latest_session, pick_session
+from strands_agent_tui.sessions import (
+    SessionArtifactStore,
+    SessionSummary,
+    TurnArtifact,
+    latest_session,
+    list_recent_sessions,
+    pick_session,
+)
 
 
 class StrandsAgentApp(App):
@@ -27,6 +35,7 @@ class StrandsAgentApp(App):
         Binding("f8", "history_live", "Live view"),
         Binding("f9", "approve_pending", "Approve pending"),
         Binding("f10", "deny_pending", "Deny pending"),
+        Binding("f11", "toggle_session_switcher", "Switch session"),
     ]
 
     CSS = """
@@ -95,6 +104,8 @@ class StrandsAgentApp(App):
         self.events: list[RuntimeEvent] = []
         self.event_filter = "all"
         self.history_focus_index: int | None = None
+        self.session_switcher_active = False
+        self.session_switcher_summaries: list[SessionSummary] = []
         self.pending_approval: ApprovalRequest | None = None
         self.runtime_status_override: str | None = None
         self.artifact_store = artifact_store or SessionArtifactStore(
@@ -143,7 +154,59 @@ class StrandsAgentApp(App):
             self._record_runtime_error(prompt, exc)
         self._refresh_widgets()
 
+    async def on_key(self, event: events.Key) -> None:
+        if not self.session_switcher_active:
+            return
+
+        key = event.key.lower()
+        if key == "escape":
+            self.session_switcher_active = False
+            self.session_switcher_summaries = []
+            self._refresh_widgets()
+            event.stop()
+            return
+
+        if key == "n":
+            self._start_new_session()
+            event.stop()
+            return
+
+        if len(key) == 1 and key.isdigit():
+            selected_index = int(key)
+            if 1 <= selected_index <= len(self.session_switcher_summaries):
+                self._switch_to_session(self.session_switcher_summaries[selected_index - 1])
+            else:
+                self.events.append(
+                    runtime_event(
+                        kind="session_switch_invalid",
+                        title="Invalid session selection",
+                        detail=f"Selection {selected_index} is outside the visible recent-session list.",
+                        data={
+                            "selected_index": selected_index,
+                            "visible_sessions": len(self.session_switcher_summaries),
+                            "session_id": self.artifact_store.session_id,
+                        },
+                    )
+                )
+                self._refresh_widgets()
+            event.stop()
+
     def _load_existing_session(self) -> None:
+        self._load_session(self.artifact_store)
+
+    def _load_session(self, artifact_store: SessionArtifactStore) -> None:
+        self.artifact_store = artifact_store
+        self.config.session_id = artifact_store.session_id
+        self.history = []
+        self.events = []
+        self.history_focus_index = None
+        self.pending_approval = None
+        self.runtime_status_override = None
+        self.session_switcher_active = False
+        self.session_switcher_summaries = []
+        if hasattr(self.runtime, "restore_pending_approvals"):
+            self.runtime.restore_pending_approvals([])
+
         prior_turns = self.artifact_store.load_turns()
         for turn in prior_turns:
             self.history.append((turn.prompt, turn.response))
@@ -198,6 +261,9 @@ class StrandsAgentApp(App):
         )
 
     def render_history(self) -> str:
+        if self.session_switcher_active:
+            return self.render_session_switcher()
+
         if not self.history:
             return (
                 "Conversation\n\n"
@@ -240,12 +306,32 @@ class StrandsAgentApp(App):
         return f"Turn {index}\nUser: {prompt}\nAgent: {response}"
 
     def history_view_label(self) -> str:
+        if self.session_switcher_active:
+            return "session switcher"
         if not self.history:
             return "live"
         if self.history_focus_index is None:
             start_index = max(0, len(self.history) - self.LIVE_HISTORY_WINDOW)
             return f"live latest {start_index + 1}-{len(self.history)}"
         return f"replay {self.history_focus_index + 1}/{len(self.history)}"
+
+    def render_session_switcher(self) -> str:
+        lines = [
+            "Session Switcher",
+            f"Current session: {self.artifact_store.session_id}",
+            f"Artifacts root: {self.artifact_store.root}",
+            "Keys: 1-8 switch session, N new session, Esc/F11 cancel",
+            "",
+        ]
+
+        if not self.session_switcher_summaries:
+            lines.append("No saved sessions found.")
+            return "\n".join(lines)
+
+        for index, summary in enumerate(self.session_switcher_summaries, start=1):
+            current_suffix = " (current)" if summary.session_id == self.artifact_store.session_id else ""
+            lines.append(summary.render_line(index) + current_suffix)
+        return "\n".join(lines)
 
     def render_events(self) -> str:
         filtered_events = self.filtered_events()
@@ -308,6 +394,33 @@ class StrandsAgentApp(App):
 
     def action_deny_pending(self) -> None:
         self._resolve_pending_approval(approve=False)
+
+    def action_toggle_session_switcher(self) -> None:
+        if self.session_switcher_active:
+            self.session_switcher_active = False
+            self.session_switcher_summaries = []
+            self._refresh_widgets()
+            return
+
+        if self.pending_approval is not None:
+            self.events.append(
+                runtime_event(
+                    kind="session_switch_blocked",
+                    title="Session switch blocked",
+                    detail="Resolve or deny the pending approval before switching sessions.",
+                    data={
+                        "session_id": self.artifact_store.session_id,
+                        "approval_id": self.pending_approval.request_id,
+                        "tool_name": self.pending_approval.tool_name,
+                    },
+                )
+            )
+            self._refresh_widgets()
+            return
+
+        self.session_switcher_summaries = list_recent_sessions(self.config.artifacts_root)
+        self.session_switcher_active = True
+        self._refresh_widgets()
 
     def _resolve_pending_approval(self, approve: bool) -> None:
         if self.pending_approval is None:
@@ -397,6 +510,40 @@ class StrandsAgentApp(App):
         )
         self._sync_pending_approval_state()
 
+    def _switch_to_session(self, summary: SessionSummary) -> None:
+        previous_session_id = self.artifact_store.session_id
+        self._load_session(SessionArtifactStore.from_session_dir(summary.session_dir))
+        self.events.append(
+            runtime_event(
+                kind="session_switched",
+                title="Session switched",
+                detail=f"Switched from {previous_session_id} to {summary.session_id}.",
+                data={
+                    "previous_session_id": previous_session_id,
+                    "session_id": summary.session_id,
+                    "turn_count": summary.turn_count,
+                },
+            )
+        )
+        self._refresh_widgets()
+
+    def _start_new_session(self) -> None:
+        previous_session_id = self.artifact_store.session_id
+        new_store = SessionArtifactStore(self.config.artifacts_root)
+        self._load_session(new_store)
+        self.events.append(
+            runtime_event(
+                kind="session_started",
+                title="New session started",
+                detail=f"Started a fresh session after leaving {previous_session_id}.",
+                data={
+                    "previous_session_id": previous_session_id,
+                    "session_id": new_store.session_id,
+                },
+            )
+        )
+        self._refresh_widgets()
+
     def _sync_pending_approval_state(self) -> None:
         if not hasattr(self.runtime, "pending_approvals"):
             return
@@ -437,6 +584,7 @@ class StrandsAgentApp(App):
         self.query_one("#status", Static).update(self.render_status_summary())
         self.query_one("#workspace", Static).update(self.render_context_banner())
         self.query_one("#approval", Static).update(self.render_approval_banner())
+        self.query_one("#prompt", Input).disabled = self.session_switcher_active
 
 
 def parse_args() -> AppConfig:

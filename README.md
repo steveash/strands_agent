@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now adds restart-safe pending-approval persistence so confirm-needed mutations can survive a TUI restart and still be resumed or denied.**
+**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, and Phase 4 now adds restart-safe pending-approval persistence so confirm-needed mutations can survive a TUI restart and still be resumed or denied.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -103,31 +103,33 @@ What exists now:
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
+- an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a narrowly scoped `run_shell_command` workspace tool with output/time limits and a small allowlist for `pwd`, `ls`, read-only `git` inspection, and `pytest`,
-- routed the shell seam through the existing confirm-needed approval flow so fake and live runtimes can queue, restore, approve, and execute it safely,
-- added regression coverage for shell-command validation, steering, fake-runtime approval behavior, and live-runtime restored approval execution,
-- added `scripts/shell_tool_smoke.py` for a quick runnable seam check.
+- added an in-app `F11` session switcher that reuses the existing recent-session summaries inside the live TUI instead of requiring restart-time session selection,
+- made session switching restart-safe by reloading saved history/events, restoring persisted pending approvals for the selected session, and blocking session switches while the current session still has an unresolved approval,
+- added regression coverage for rendering the switcher, selecting another session, starting a fresh session inline, restoring approval state after a switch, and blocking unsafe mid-approval switching,
+- added `scripts/session_switcher_smoke.py` for a quick runnable session-handoff check.
 
 Why this matters now:
-- It turns the Phase 2 shell-command bullet from roadmap text into a working seam the agent can actually use for repo inspection and test execution.
-- It keeps shell execution intentionally narrow and approval-gated, which matches the prototype's learning goal without opening a broad arbitrary-command surface.
-- It reuses the restart-safe approval path from the last iteration, proving that later intervention seams can build on the same persistence and resume contract.
+- It removes another restart-only workflow: once the TUI is open, Steve can jump between saved sessions without dropping out to the shell.
+- It proves that the recent-session summary seam is reusable beyond startup and can drive in-app navigation, not just CLI selection.
+- It keeps session handoff conservative by restoring persisted approval state for the target session and refusing to switch away from unresolved approvals in the current one.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection, in-app approval flows, restart-safe approval recovery, and the new shell-command seam,
+- `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection, in-app session switching, in-app approval flows, restart-safe approval recovery, and the new shell-command seam,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `61 passed`
+- automated tests: `66 passed`
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` switches from `session-older` to `session-newer` inside the app harness and prints `latest_event= session_switched`,
 - runnable shell seam verification: `.venv/bin/python scripts/shell_tool_smoke.py` successfully executes approved-in-principle `pwd` and read-only `git status --short` through the new bounded workspace tool,
 - runnable approval verification: `.venv/bin/python scripts/approval_smoke.py` now shows a queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` now saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
@@ -451,6 +453,8 @@ strands-agent --resume-last
 ```
 
 Those flows reload the saved prompt/response history plus timeline events from `turns.jsonl`, then continue appending new turns into the selected session directory.
+
+After startup, `F11` opens the same recent-session summaries inside the TUI so you can switch to another saved session or start a fresh one without restarting. If the target session has persisted approvals, they are restored automatically; if the current session still has an unresolved approval, switching is blocked until you approve or deny it.
 
 When a resumed session has multiple turns, the conversation pane stays in a compact live view showing only the latest 3 turns. Use `F6` for older turns, `F7` for newer turns, and `F8` to jump back to the live/latest view.
 

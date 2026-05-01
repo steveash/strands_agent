@@ -3,11 +3,12 @@ import sys
 from pathlib import Path
 
 import pytest
+from textual.widgets import Input
 
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.app import parse_args
 from strands_agent_tui.config import AppConfig
-from strands_agent_tui.runtime import FakeStrandsRuntime
+from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime
 from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 
 
@@ -629,3 +630,253 @@ async def test_history_navigation_shortcuts_browse_loaded_turns(tmp_path: Path) 
         live_status = str(app.query_one("#status").render())
         assert "Showing turns 2-4 of 4" in live_output
         assert "View: live latest 2-4" in live_status
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> None:
+    older_store = SessionArtifactStore(tmp_path, session_id="session-older")
+    older_store.append_turn(
+        TurnArtifact(
+            prompt="older prompt",
+            response="older response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    newer_store = SessionArtifactStore(tmp_path, session_id="session-newer")
+    newer_store.append_turn(
+        TurnArtifact(
+            prompt="newer prompt",
+            response="newer response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-older",
+        ),
+        artifact_store=older_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        prompt = app.query_one("#prompt", Input)
+
+        assert "Session Switcher" in output
+        assert "1. session-newer" in output
+        assert "2. session-older" in output
+        assert "Keys: 1-8 switch session, N new session, Esc/F11 cancel" in output
+        assert "View: session switcher" in status
+        assert prompt.disabled is True
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_can_switch_to_selected_recent_session(tmp_path: Path) -> None:
+    older_store = SessionArtifactStore(tmp_path, session_id="session-older")
+    older_store.append_turn(
+        TurnArtifact(
+            prompt="inspect older session",
+            response="older response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    newer_store = SessionArtifactStore(tmp_path, session_id="session-newer")
+    newer_store.append_turn(
+        TurnArtifact(
+            prompt="inspect newer session",
+            response="newer response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-older",
+        ),
+        artifact_store=older_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11", "1")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        workspace = str(app.query_one("#workspace").render())
+        events = str(app.query_one("#events").render())
+        prompt = app.query_one("#prompt", Input)
+
+        assert "inspect newer session" in output
+        assert "newer response" in output
+        assert "inspect older session" not in output
+        assert "Turns: 1" in status
+        assert "Session: session-newer" in workspace
+        assert "kind=session_switched | Session switched" in events
+        assert prompt.disabled is False
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_can_start_new_session(tmp_path: Path) -> None:
+    existing_store = SessionArtifactStore(tmp_path, session_id="session-existing")
+    existing_store.append_turn(
+        TurnArtifact(
+            prompt="existing prompt",
+            response="existing response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-existing",
+        ),
+        artifact_store=existing_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11", "n")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        workspace = str(app.query_one("#workspace").render())
+        events = str(app.query_one("#events").render())
+
+        assert "Phase 1 proves the basic TUI-to-agent loop." in output
+        assert "Turns: 0" in status
+        assert "Session: session-existing" not in workspace
+        assert "kind=session_started | New session started" in events
+        assert app.artifact_store.session_id != "session-existing"
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_restores_pending_approval_from_selected_session(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    pending_store.append_turn(
+        TurnArtifact(
+            prompt="pending prompt",
+            response="pending response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0007",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pwd", "relative_path": ".", "timeout_seconds": 5},
+                source="fake_runtime",
+                prompt="run pwd",
+            )
+        ]
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11", "1")
+        await pilot.pause()
+
+        approval = str(app.query_one("#approval").render())
+        status = str(app.query_one("#status").render())
+        events = str(app.query_one("#events").render())
+
+        assert "Approval pending: run_shell_command (approval-0007)" in approval
+        assert "Approval: pending:run_shell_command" in status
+        assert "kind=session_state_restored | Pending approvals restored" in events
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_is_blocked_while_approval_is_pending(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="blocked-switch-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="blocked-switch-session",
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("o", "v", "e", "r", "w", "r", "i", "t", "e", " ", "f", "i", "l", "e", "enter")
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        events = str(app.query_one("#events").render())
+        prompt = app.query_one("#prompt", Input)
+
+        assert "Session Switcher" not in output
+        assert "kind=session_switch_blocked | Session switch blocked" in events
+        assert prompt.disabled is False
