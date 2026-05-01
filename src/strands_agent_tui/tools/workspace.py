@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
+import shlex
+import subprocess
 
 from strands import tool
 
@@ -11,10 +13,17 @@ MAX_LIST_ENTRIES = 200
 MAX_SEARCH_RESULTS = 20
 MAX_WRITE_CHARS = 12000
 MAX_REPLACE_OCCURRENCES = 10
+MAX_SHELL_OUTPUT_CHARS = 4000
+MAX_SHELL_TIMEOUT_SECONDS = 20
 MAX_SUMMARY_FILES = 400
 MAX_SUMMARY_TOP_LEVEL = 12
 MAX_SUMMARY_REPRESENTATIVE_FILES = 8
 MAX_SUMMARY_TYPE_BUCKETS = 6
+
+ALLOWED_LS_FLAGS = {"-1", "-a", "-l", "-la"}
+ALLOWED_GIT_STATUS_FLAGS = {"--short", "--branch"}
+ALLOWED_GIT_DIFF_FLAGS = {"--stat", "--cached"}
+ALLOWED_PYTEST_FLAGS = {"-q", "-x", "-vv"}
 
 NOTABLE_FILES = (
     "README.md",
@@ -293,6 +302,65 @@ class WorkspaceTools:
             f"{body}"
         )
 
+    def run_shell_command(
+        self,
+        command: str,
+        relative_path: str = ".",
+        timeout_seconds: int = 5,
+    ) -> str:
+        """Run a narrowly scoped read/test shell command inside the workspace."""
+        normalized_command = command.strip()
+        if not normalized_command:
+            raise ValueError("command must not be empty")
+        if timeout_seconds < 1 or timeout_seconds > MAX_SHELL_TIMEOUT_SECONDS:
+            raise ValueError(
+                f"timeout_seconds must be between 1 and {MAX_SHELL_TIMEOUT_SECONDS}"
+            )
+
+        cwd = self.resolve_path(relative_path)
+        if not cwd.exists():
+            raise FileNotFoundError(f"Path does not exist: {relative_path}")
+        if not cwd.is_dir():
+            raise NotADirectoryError(f"Path is not a directory: {relative_path}")
+
+        argv = shlex.split(normalized_command)
+        if not argv:
+            raise ValueError("command must not be empty")
+        argv = self._validate_shell_command(argv)
+
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutError(
+                f"shell command timed out after {timeout_seconds}s: {normalized_command}"
+            ) from exc
+
+        location = str(cwd.relative_to(self.root)) if cwd != self.root else "."
+        rendered_output = self._format_shell_output(completed.stdout, completed.stderr)
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"Shell command failed with exit code {completed.returncode}.\n"
+                f"CWD: {location}\n"
+                f"Command: {normalized_command}\n"
+                f"Output:\n{rendered_output}"
+            )
+
+        return (
+            f"Workspace root: {self.root}\n"
+            f"Action: shell command\n"
+            f"CWD: {location}\n"
+            f"Command: {normalized_command}\n"
+            f"Exit code: {completed.returncode}\n"
+            f"Output:\n{rendered_output}"
+        )
+
     def write_file(self, relative_path: str, content: str, overwrite: bool = False) -> str:
         """Write a text file inside the workspace with conservative overwrite behavior."""
         if len(content) > MAX_WRITE_CHARS:
@@ -361,6 +429,61 @@ class WorkspaceTools:
             f"Occurrences: {occurrences}"
         )
 
+    def _validate_shell_command(self, argv: list[str]) -> list[str]:
+        command = argv[0]
+        args = argv[1:]
+
+        if command == "pwd":
+            if args:
+                raise ValueError("pwd does not accept additional arguments in this prototype")
+            return argv
+
+        if command == "ls":
+            if len(args) > 1 or any(arg not in ALLOWED_LS_FLAGS for arg in args):
+                raise ValueError("ls only supports an optional -1, -a, -l, or -la flag in this prototype")
+            return argv
+
+        if command == "git":
+            if not args:
+                raise ValueError("git requires a supported read-only subcommand")
+            subcommand = args[0]
+            sub_args = args[1:]
+            if subcommand == "status" and all(arg in ALLOWED_GIT_STATUS_FLAGS for arg in sub_args):
+                return argv
+            if subcommand == "diff" and all(arg in ALLOWED_GIT_DIFF_FLAGS for arg in sub_args):
+                return argv
+            raise ValueError(
+                "git only supports `status [--short] [--branch]` and `diff [--stat] [--cached]` in this prototype"
+            )
+
+        if command == "pytest":
+            if any(arg not in ALLOWED_PYTEST_FLAGS for arg in args):
+                raise ValueError("pytest only supports -q, -x, and -vv flags in this prototype")
+            return argv
+
+        if command == "python" and len(args) >= 2 and args[0] == "-m" and args[1] == "pytest":
+            pytest_args = args[2:]
+            if any(arg not in ALLOWED_PYTEST_FLAGS for arg in pytest_args):
+                raise ValueError("python -m pytest only supports -q, -x, and -vv flags in this prototype")
+            return argv
+
+        raise ValueError(
+            "shell command is outside the narrow allowlist: pwd, ls, git status/diff, pytest, python -m pytest"
+        )
+
+    def _format_shell_output(self, stdout: str, stderr: str) -> str:
+        sections: list[str] = []
+        stripped_stdout = stdout.strip()
+        stripped_stderr = stderr.strip()
+        if stripped_stdout:
+            sections.append(f"stdout:\n{stripped_stdout}")
+        if stripped_stderr:
+            sections.append(f"stderr:\n{stripped_stderr}")
+        rendered = "\n\n".join(sections) if sections else "<no output>"
+        if len(rendered) > MAX_SHELL_OUTPUT_CHARS:
+            return rendered[:MAX_SHELL_OUTPUT_CHARS] + "\n... truncated by output limit"
+        return rendered
+
 
 _DEFAULT_TOOLS = WorkspaceTools(Path.cwd())
 
@@ -394,6 +517,15 @@ def search_files(
         glob_pattern=glob_pattern,
         case_sensitive=case_sensitive,
         max_results=max_results,
+    )
+
+
+@tool
+def run_shell_command(command: str, relative_path: str = ".", timeout_seconds: int = 5) -> str:
+    return _DEFAULT_TOOLS.run_shell_command(
+        command=command,
+        relative_path=relative_path,
+        timeout_seconds=timeout_seconds,
     )
 
 

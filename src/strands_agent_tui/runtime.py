@@ -224,6 +224,7 @@ def _build_workspace_actions(workspace_root: str | Path) -> dict[str, Callable[.
         "list_files": workspace.list_files,
         "read_file": workspace.read_file,
         "search_files": workspace.search_files,
+        "run_shell_command": workspace.run_shell_command,
         "write_file": workspace.write_file,
         "replace_text": workspace.replace_text,
     }
@@ -622,12 +623,63 @@ class FakeStrandsRuntime:
                     },
                 }
             )
+        if "pytest" in lowered or "run tests" in lowered:
+            requests.append(
+                {
+                    "tool_name": "run_shell_command",
+                    "reason": "Fake runtime routed the requested shell test command through explicit confirmation.",
+                    "args": {
+                        "command": "pytest -q",
+                        "relative_path": ".",
+                        "timeout_seconds": 5,
+                    },
+                }
+            )
+        elif "git status" in lowered:
+            requests.append(
+                {
+                    "tool_name": "run_shell_command",
+                    "reason": "Fake runtime routed the requested shell inspection command through explicit confirmation.",
+                    "args": {
+                        "command": "git status --short",
+                        "relative_path": ".",
+                        "timeout_seconds": 5,
+                    },
+                }
+            )
+        elif "git diff" in lowered:
+            requests.append(
+                {
+                    "tool_name": "run_shell_command",
+                    "reason": "Fake runtime routed the requested shell inspection command through explicit confirmation.",
+                    "args": {
+                        "command": "git diff --stat",
+                        "relative_path": ".",
+                        "timeout_seconds": 5,
+                    },
+                }
+            )
+        elif "shell" in lowered or "terminal" in lowered:
+            requests.append(
+                {
+                    "tool_name": "run_shell_command",
+                    "reason": "Fake runtime routed the requested shell command through explicit confirmation.",
+                    "args": {
+                        "command": "pwd",
+                        "relative_path": ".",
+                        "timeout_seconds": 5,
+                    },
+                }
+            )
         return requests
 
     def _execute_fake_pending_tool(self, spec: dict[str, object]) -> str:
         tool_name = str(spec["tool_name"])
         args = dict(spec["args"])
         relative_path = str(args.get("relative_path", "notes.txt"))
+        if tool_name == "run_shell_command":
+            command = str(args.get("command", "pwd"))
+            return f"Simulated shell command `{command}` in {relative_path}."
         if tool_name == "write_file":
             return f"Simulated overwrite of {relative_path}."
         if tool_name == "replace_text":
@@ -747,6 +799,15 @@ def build_workspace_tools(
         )
 
     @tool
+    def run_shell_command(command: str, relative_path: str = ".", timeout_seconds: int = 5) -> str:
+        """Run a narrowly scoped shell command for read-only repo inspection or tests."""
+        return instrument("run_shell_command", actions["run_shell_command"])(
+            command=command,
+            relative_path=relative_path,
+            timeout_seconds=timeout_seconds,
+        )
+
+    @tool
     def write_file(relative_path: str, content: str, overwrite: bool = False) -> str:
         """Write a text file inside the active workspace, refusing overwrites unless explicitly allowed."""
         return instrument("write_file", actions["write_file"])(
@@ -770,7 +831,7 @@ def build_workspace_tools(
             expected_occurrences=expected_occurrences,
         )
 
-    return [summarize_workspace, list_files, read_file, search_files, write_file, replace_text]
+    return [summarize_workspace, list_files, read_file, search_files, run_shell_command, write_file, replace_text]
 
 
 class StrandsSDKRuntime:
@@ -794,9 +855,9 @@ class StrandsSDKRuntime:
             "You are a concise coding assistant inside a terminal UI prototype. "
             f"You may inspect and conservatively edit the workspace rooted at {self.workspace_root} "
             "using bounded local tools. Prefer summarize_workspace before broad searches when you need repo shape, "
-            "and prefer exact-match edits over broad rewrites when possible. "
-            "Overwrites are blocked unless the local steering policy explicitly allows them. "
-            "If a tool result says approval is required, stop asking that tool to mutate files, explain why approval is needed, "
+            "prefer exact-match edits over broad rewrites when possible, and only use run_shell_command when the built-in file tools are insufficient. "
+            "Overwrites are blocked unless the local steering policy explicitly allows them, and shell commands require explicit approval. "
+            "If a tool result says approval is required, stop asking that tool to mutate files or run commands, explain why approval is needed, "
             "and wait for the TUI to approve or deny the request."
         )
         self.openai_model = openai_model

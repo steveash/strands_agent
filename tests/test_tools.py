@@ -52,6 +52,19 @@ def test_search_files_returns_line_matches(workspace: WorkspaceTools) -> None:
     assert "src/main.py:2: print('world')" in rendered
 
 
+def test_run_shell_command_executes_allowed_pwd(workspace: WorkspaceTools) -> None:
+    rendered = workspace.run_shell_command("pwd")
+
+    assert "Action: shell command" in rendered
+    assert "Command: pwd" in rendered
+    assert str(workspace.root) in rendered
+
+
+def test_run_shell_command_rejects_disallowed_command(workspace: WorkspaceTools) -> None:
+    with pytest.raises(ValueError, match="outside the narrow allowlist"):
+        workspace.run_shell_command("rm -rf .")
+
+
 def test_write_file_creates_new_file_but_refuses_implicit_overwrite(workspace: WorkspaceTools) -> None:
     rendered = workspace.write_file("notes/todo.txt", "ship it\n")
 
@@ -94,7 +107,15 @@ def test_build_workspace_tools_returns_workspace_tool_set(tmp_path: Path) -> Non
 
     names = [tool.tool_name for tool in tools]
 
-    assert names == ["summarize_workspace", "list_files", "read_file", "search_files", "write_file", "replace_text"]
+    assert names == [
+        "summarize_workspace",
+        "list_files",
+        "read_file",
+        "search_files",
+        "run_shell_command",
+        "write_file",
+        "replace_text",
+    ]
 
 
 def test_build_workspace_tools_emits_events_via_sink(tmp_path: Path) -> None:

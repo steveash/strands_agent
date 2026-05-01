@@ -30,6 +30,8 @@ class ToolSteeringPolicy:
             return self._evaluate_write(args)
         if tool_name == "replace_text":
             return self._evaluate_replace(args)
+        if tool_name == "run_shell_command":
+            return self._evaluate_shell_command(args)
         return SteeringDecision(allowed=True, reason="Tool call allowed.")
 
     def _evaluate_write(self, args: dict[str, object]) -> SteeringDecision:
@@ -92,6 +94,18 @@ class ToolSteeringPolicy:
             allowed=True,
             reason="Allowed exact-match edit.",
             details={"relative_path": relative_path, "expected_occurrences": expected_occurrences},
+        )
+
+    def _evaluate_shell_command(self, args: dict[str, object]) -> SteeringDecision:
+        command = str(args.get("command", "")).strip()
+        relative_path = str(args.get("relative_path", "."))
+        return SteeringDecision(
+            allowed=False,
+            reason="Shell command execution requires explicit confirmation in this prototype.",
+            severity="warn",
+            category="confirm_needed",
+            details={"command": command, "relative_path": relative_path},
+            disposition="confirm",
         )
 
     def _matches_protected_path(self, relative_path: str) -> bool:

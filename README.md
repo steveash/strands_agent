@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now adds restart-safe pending-approval persistence so confirm-needed mutations can survive a TUI restart and still be resumed or denied.**
+**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now adds restart-safe pending-approval persistence so confirm-needed mutations can survive a TUI restart and still be resumed or denied.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -85,6 +85,7 @@ What exists now:
 - explicit CLI overrides for runtime, model, workspace, and saved-session selection,
 - status-line rendering plus a dedicated workspace/session banner in the TUI,
 - workspace tools for `summarize_workspace`, `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
+- a narrowly scoped `run_shell_command` tool for `pwd`, `ls`, read-only `git status`/`git diff`, and `pytest`/`python -m pytest`, always routed through explicit approval before execution,
 - live runtime tool registration that binds those tools to the active workspace root,
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
 - a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision`, `steering_confirmation_required`, or `steering_blocked` events,
@@ -107,26 +108,27 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added session-level `pending_approvals.json` persistence so queued confirmations are saved alongside turns/transcripts,
-- taught fake and live runtimes to snapshot and restore pending approval queues without regenerating new approval ids,
-- restored pending approval state on TUI startup so `F9`/`F10` can continue working after a restart,
-- added restart-focused regression coverage plus a dedicated `scripts/approval_restart_smoke.py` check.
+- added a narrowly scoped `run_shell_command` workspace tool with output/time limits and a small allowlist for `pwd`, `ls`, read-only `git` inspection, and `pytest`,
+- routed the shell seam through the existing confirm-needed approval flow so fake and live runtimes can queue, restore, approve, and execute it safely,
+- added regression coverage for shell-command validation, steering, fake-runtime approval behavior, and live-runtime restored approval execution,
+- added `scripts/shell_tool_smoke.py` for a quick runnable seam check.
 
 Why this matters now:
-- It closes the biggest usability gap in the approval UX: restarts no longer silently discard queued confirmations.
-- It makes approval pauses replayable and operationally safer, because artifact state now reflects whether the session is waiting on a human decision.
-- It keeps the shell-command seam unblocked, because risky actions now have both in-app approvals and restart-safe recovery.
+- It turns the Phase 2 shell-command bullet from roadmap text into a working seam the agent can actually use for repo inspection and test execution.
+- It keeps shell execution intentionally narrow and approval-gated, which matches the prototype's learning goal without opening a broad arbitrary-command surface.
+- It reuses the restart-safe approval path from the last iteration, proving that later intervention seams can build on the same persistence and resume contract.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection, in-app approval flows, and restart-safe approval recovery,
+- `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection, in-app approval flows, restart-safe approval recovery, and the new shell-command seam,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `55 passed`
+- automated tests: `61 passed`
+- runnable shell seam verification: `.venv/bin/python scripts/shell_tool_smoke.py` successfully executes approved-in-principle `pwd` and read-only `git status --short` through the new bounded workspace tool,
 - runnable approval verification: `.venv/bin/python scripts/approval_smoke.py` now shows a queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` now saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`
@@ -189,6 +191,7 @@ Add a compact local toolbelt so the agent can act like a coding assistant in a w
 - `list_files` tool with optional recursive listing,
 - `read_file` tool with bounded excerpts,
 - bounded `search_files` tool for repo-wide inspection,
+- approval-gated `run_shell_command` for a small `pwd`/`ls`/`git status`/`git diff`/`pytest` seam,
 - conservative `write_file` tool that blocks overwrite unless explicitly enabled,
 - conservative `replace_text` tool that requires an exact expected match count,
 - workspace-root confinement checks,
@@ -410,10 +413,13 @@ The prototype currently exposes these bounded workspace tools through the runtim
 - `list_files`
 - `read_file`
 - `search_files`
+- `run_shell_command`
 - `write_file`
 - `replace_text`
 
 `replace_text` is intentionally strict: it only succeeds when the old text appears exactly the expected number of times, which makes it a good fit for studying safer agent-driven edits.
+
+`run_shell_command` is intentionally narrow: it supports only `pwd`, `ls`, read-only `git status`/`git diff`, and `pytest`/`python -m pytest`, and the steering layer currently requires explicit approval before any shell command is executed.
 
 ### Session artifacts
 
@@ -487,7 +493,7 @@ The runtime now evaluates risky mutation tools before execution:
 
 When confirmation is required, the runtime now exposes a resumable approval request to the TUI. In fake mode that request is deterministic and queueable for testing; in live mode it gives the agent a visible pause point before the approved tool is executed and the conversation continues.
 
-This is still deliberately narrow, but it now creates the exact seam we will need for richer Strands guardrails, shell approvals, and later MCP-style interventions.
+This is still deliberately narrow, but it now creates the exact seam we will need for richer Strands guardrails, later in-app shell approvals, and eventual MCP-style interventions.
 
 ### What the current tests prove
 
@@ -498,6 +504,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - live runtime selection works
   - live runtime fails safely when `OPENAI_API_KEY` is missing
   - config merge logic applies CLI-style overrides safely
+  - shell-command approvals can be queued in fake mode and restored/executed in live mode
   - steering requires confirmation for overwrite and broad-edit requests by default, and can opt into overwrites explicitly
   - steering events are emitted before workspace tools run
   - approval requests can be queued and resumed deterministically
@@ -524,6 +531,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - workspace listing returns workspace-relative paths
   - file reads return bounded excerpts with line metadata
   - repo search returns bounded text matches
+  - shell commands stay inside the narrow allowlist
   - guarded writes create new files but reject implicit overwrite
   - path traversal outside the workspace is rejected
   - live-runtime tool registration returns the expected Strands tool set
@@ -551,11 +559,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add a narrowly scoped shell command seam now that risky mutations have an in-app approval path
-2. add an in-app session switcher that reuses the new recent-session summaries instead of limiting reopen flow to startup
-3. keep the fake runtime path green while refining the event schema around steering/intervention events
-4. broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
-5. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+1. add an in-app session switcher that reuses the new recent-session summaries instead of limiting reopen flow to startup
+2. keep the fake runtime path green while refining the event schema around steering/intervention events
+3. broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
+4. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+5. consider a tiny allow/deny split inside the shell seam so read-only inspection commands can eventually avoid full approval friction
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -583,7 +591,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add a narrowly scoped shell command seam now that confirm-needed mutation approval exists in-app
 - add an in-app session switcher that reuses the new recent-session summaries after startup
 - broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
+- refine the shell seam so read-only inspection commands and test commands can expose distinct policy levels
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection

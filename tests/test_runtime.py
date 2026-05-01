@@ -101,6 +101,21 @@ def test_fake_runtime_returns_pending_approval_for_risky_mutation_prompt() -> No
     assert "Approval required before continuing" in result.text
 
 
+def test_fake_runtime_returns_pending_approval_for_shell_command_prompt() -> None:
+    runtime = FakeStrandsRuntime()
+    result = runtime.run("run pytest in the terminal")
+
+    assert [event.kind for event in result.events] == [
+        "prompt_received",
+        "steering_decision",
+        "steering_confirmation_required",
+        "response_completed",
+    ]
+    assert result.pending_approval is not None
+    assert result.pending_approval.tool_name == "run_shell_command"
+    assert result.pending_approval.args["command"] == "pytest -q"
+
+
 def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_next() -> None:
     runtime = FakeStrandsRuntime()
     first_response = runtime.run("overwrite the notes file and replace all stale values")
@@ -191,6 +206,46 @@ def test_live_runtime_can_restore_pending_approvals_without_requeuing(monkeypatc
     assert "continued:" in result.text
 
 
+def test_live_runtime_can_restore_shell_pending_approval(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class StubRuntime(StrandsSDKRuntime):
+        def _build_agent(self, api_key: str, event_sink=None):
+            tools = build_workspace_tools(tmp_path, event_sink=event_sink, approval_queue=self._approval_queue)
+
+            def agent(prompt: str) -> str:
+                return f"continued: {prompt}"
+
+            self._restored_tools = {tool.tool_name: tool for tool in tools}
+            return agent, len(tools)
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    runtime = StubRuntime(workspace_root=tmp_path)
+    runtime.restore_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0003",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pwd", "relative_path": ".", "timeout_seconds": 5},
+                source="live_runtime",
+                prompt="run pwd",
+            )
+        ]
+    )
+
+    result = runtime.resolve_pending_approval("approval-0003", approve=True)
+
+    assert [event.kind for event in result.events] == [
+        "steering_approved",
+        "tool_started",
+        "tool_finished",
+        "response_completed",
+    ]
+    assert result.pending_approval is None
+    assert "continued:" in result.text
+    assert result.events[1].data["args"]["command"] == "pwd"
+    assert result.events[2].title == "run_shell_command"
+
+
 def test_build_runtime_defaults_to_fake() -> None:
     runtime = build_runtime()
     assert isinstance(runtime, FakeStrandsRuntime)
@@ -266,6 +321,28 @@ def test_build_workspace_tools_can_queue_confirmation_instead_of_raising(tmp_pat
     assert approvals.current().tool_name == "write_file"
     assert [event.kind for event in events] == ["steering_confirmation_required"]
     assert events[0].data["approval_id"] == approvals.current().request_id
+
+
+def test_build_workspace_tools_queues_shell_command_confirmation(tmp_path: Path) -> None:
+    events = []
+    approvals = _ApprovalQueue()
+    tools = {
+        tool.tool_name: tool
+        for tool in build_workspace_tools(
+            tmp_path,
+            event_sink=events.append,
+            approval_queue=approvals,
+            prompt_provider=lambda: "run pwd",
+        )
+    }
+
+    rendered = tools["run_shell_command"](command="pwd")
+
+    assert rendered.startswith("Approval required for run_shell_command.")
+    assert approvals.current() is not None
+    assert approvals.current().tool_name == "run_shell_command"
+    assert [event.kind for event in events] == ["steering_confirmation_required"]
+    assert events[0].data["command"] == "pwd"
 
 
 def test_app_config_merge_applies_non_empty_overrides() -> None:
@@ -368,4 +445,17 @@ def test_build_workspace_tools_requires_confirmation_for_multi_occurrence_edit(t
     assert [event.kind for event in events] == ["steering_confirmation_required"]
     assert events[0].title == "replace_text"
     assert events[0].data["expected_occurrences"] == 2
+    assert events[0].data["requires_confirmation"] is True
+
+
+def test_build_workspace_tools_requires_confirmation_for_shell_command(tmp_path: Path) -> None:
+    events = []
+    tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
+
+    with pytest.raises(PermissionError, match="Confirmation required"):
+        tools["run_shell_command"](command="pwd")
+
+    assert [event.kind for event in events] == ["steering_confirmation_required"]
+    assert events[0].title == "run_shell_command"
+    assert events[0].data["command"] == "pwd"
     assert events[0].data["requires_confirmation"] is True
