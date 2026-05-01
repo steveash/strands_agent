@@ -26,11 +26,14 @@ async def test_app_renders_runtime_status() -> None:
         await pilot.pause()
         status = app.query_one("#status").render()
         workspace = app.query_one("#workspace").render()
+        approval = app.query_one("#approval").render()
         events = app.query_one("#events").render()
         assert "FakeStrandsRuntime" in str(status)
         assert "Model: gpt-4o-mini" in str(status)
         assert "Overwrite: off" in str(status)
+        assert "Approval: none" in str(status)
         assert "Workspace:" in str(workspace)
+        assert "Approval: none pending" in str(approval)
         assert "Event Timeline" in str(events)
 
 
@@ -63,6 +66,7 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert "Agent: (fake-strands) Echo: list files" in rendered_output
         assert "Turns: 1" in rendered_status
         assert "Events: 6" in rendered_status
+        assert "Approval: none" in rendered_status
         assert "Filter: all (6/6 events)" in rendered_events
         assert "(runtime) kind=steering_decision | fake-policy" in rendered_events
         assert "(tool) kind=tool_started | list_files" in rendered_events
@@ -255,7 +259,7 @@ async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_app_renders_confirmation_required_events_in_timeline(tmp_path: Path) -> None:
+async def test_app_renders_pending_approval_banner_for_risky_mutation(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="confirm-session")
     app = StrandsAgentApp(
         runtime=FakeStrandsRuntime(),
@@ -288,10 +292,86 @@ async def test_app_renders_confirmation_required_events_in_timeline(tmp_path: Pa
         )
         await pilot.pause()
 
+        rendered_output = str(app.query_one("#output").render())
+        rendered_status = str(app.query_one("#status").render())
+        rendered_approval = str(app.query_one("#approval").render())
         rendered_events = str(app.query_one("#events").render())
 
+        assert "Approval required before continuing: write_file" in rendered_output
+        assert "Approval: pending:write_file" in rendered_status
+        assert "Approval pending: write_file" in rendered_approval
         assert "kind=steering_confirmation_required | write_file" in rendered_events
-        assert "requires_confirmation=True" in rendered_events
+        assert "approval_id='approval-0001'" in rendered_events
+        assert app.pending_approval is not None
+        assert app.pending_approval.tool_name == "write_file"
+
+
+@pytest.mark.asyncio
+async def test_pending_approval_blocks_new_prompt_until_resolved(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="blocked-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("o", "v", "e", "r", "w", "r", "i", "t", "e", " ", "f", "i", "l", "e", "enter")
+        await pilot.pause()
+        await pilot.press("h", "e", "l", "l", "o", "enter")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        events = str(app.query_one("#events").render())
+
+        assert len(app.history) == 1
+        assert "User: hello" not in output
+        assert "kind=approval_input_blocked | Resolve pending approval first" in events
+
+
+@pytest.mark.asyncio
+async def test_pending_approval_can_be_approved_from_tui_and_persisted(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="approve-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("o", "v", "e", "r", "w", "r", "i", "t", "e", " ", "f", "i", "l", "e", "enter")
+        await pilot.pause()
+        await pilot.press("f9")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        approval = str(app.query_one("#approval").render())
+        events = str(app.query_one("#events").render())
+
+        assert "User: Approve pending write_file (approval-0001)" in output
+        assert "Agent: (fake-strands) Approved write_file." in output
+        assert "Approval: none" in status
+        assert "Approval: none pending" in approval
+        assert "kind=steering_approved | write_file" in events
+        assert "kind=tool_finished | write_file" in events
+        assert app.pending_approval is None
+        assert len(app.history) == 2
+
+        jsonl_lines = [json.loads(line) for line in (tmp_path / "approve-session" / "turns.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+        assert len(jsonl_lines) == 2
+        assert jsonl_lines[1]["prompt"] == "Approve pending write_file (approval-0001)"
+        assert jsonl_lines[1]["response_metadata"]["approval_action"] == "approved"
 
 
 @pytest.mark.asyncio

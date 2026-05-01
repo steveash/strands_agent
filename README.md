@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now distinguishes allow, deny, and confirm-needed steering outcomes for risky file mutations.**
+**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now adds a lightweight in-app approval queue so confirm-needed mutations can be resumed or denied inside the TUI.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -89,6 +89,9 @@ What exists now:
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
 - a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision`, `steering_confirmation_required`, or `steering_blocked` events,
 - default conservative steering that requires confirmation for overwrite requests and multi-occurrence edits unless explicitly enabled, and still protects sensitive file patterns like `.env*`, `*.pem`, and `*.key`,
+- a lightweight approval queue plus `F9` approve / `F10` deny controls so confirm-needed mutation requests can resume from inside the TUI instead of stopping at an event-only warning,
+- approval-aware fake runtime flows that can demonstrate multiple queued approvals in sequence without needing live credentials,
+- live-runtime tool wiring that can queue confirm-needed mutations, wait for explicit approval, execute the approved tool, and then continue the Strands conversation with a follow-up prompt,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, and compact structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
@@ -98,37 +101,41 @@ What exists now:
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
+- deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added recent-session discovery helpers that summarize saved artifact directories by recency, turn count, and last prompt preview,
-- added `--pick-session` for an interactive compact session picker plus `--resume-last` for the fastest reopen path,
-- updated the TUI workspace banner to show the active session id alongside the workspace root,
-- added regression coverage plus a dedicated `scripts/session_picker_smoke.py` check for recent-session selection behavior.
+- added a lightweight approval banner plus `F9` approve / `F10` deny controls in the TUI,
+- added runtime-level pending approval objects so fake and live paths can surface confirm-needed mutations as resumable actions instead of terminal errors,
+- taught the fake runtime to queue multiple approvals deterministically so the approval flow is easy to inspect and test,
+- updated live workspace tool registration so confirm-needed writes/edits can pause, wait for explicit approval, execute, and then continue the Strands conversation,
+- fixed recent-session newest-first ordering to use artifact timestamps as a deterministic tie-break instead of raw directory mtime alone,
+- added regression coverage plus a dedicated `scripts/approval_smoke.py` check for the approval queue.
 
 Why this matters now:
-- It removes the most manual part of session replay by letting users reopen recent saved work without hunting for artifact paths.
-- It keeps the replay/navigation work from the last iteration practical enough for everyday use.
-- It creates a cleaner handoff point for the next safety step, where confirm-needed mutations need an approval/resume flow inside the app.
+- It turns confirm-needed steering from a passive warning into an interactive control surface, which is much closer to how a real coding-agent workstation needs to behave.
+- It makes Strands tool interception more legible by separating “model asked for a risky action” from “operator explicitly allowed that action.”
+- It clears the prerequisite for adding a conservative shell-command seam next, because risky mutations now have an in-app approval path instead of a dead end.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior, config merging, deterministic fake-event emission, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
+- unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
-- app tests verify prompt submission, status rendering, workspace banner rendering, event timeline updates, and on-disk artifact persistence for both success and failure cases,
+- app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3 observability seam, including recent-session selection flows,
+- `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection and in-app approval flows,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `46 passed`
-- runnable session-picker verification: `.venv/bin/python scripts/session_picker_smoke.py` prints a compact recent-session menu plus `latest=session-newer`
-- CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`
+- automated tests: `51 passed`
+- runnable approval verification: `.venv/bin/python scripts/approval_smoke.py` now shows a queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied,
+- CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`
+- recent-session verification by test: `latest_session(...)` now returns the newest artifact turn even when filesystem mtimes tie,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata
-- UI verification by test: fake mode still renders `steering_confirmation_required` events in the timeline for risky mutation prompts, and resumed sessions now support compact live rendering plus keyboard replay navigation
-- steering verification by test: default policy still requires confirmation for overwrite and multi-occurrence edit requests, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied
-- unblock note: no new environment unblock was needed this run beyond reusing the validated repo `.venv`
+- UI verification by test: fake mode now renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, and persists the approval resolution turn to session artifacts
+- steering verification by test: default policy still requires confirmation for overwrite and multi-occurrence edit requests, opt-in overwrite mode still emits an allow-with-notice steering event, approval-aware tool registration can queue confirm-needed calls instead of throwing, and protected-file mutations remain denied
+- unblock note: the baseline repo had a flaky/failing newest-session selection test caused by mtime ties; this run fixed it non-destructively by sorting recent sessions with artifact turn timestamps.
 
 ## First five phases
 
@@ -236,6 +243,8 @@ If the goal is to understand Strands deeply, hidden orchestration is the enemy. 
 
 ### Phase 4, Steering hooks + safety rails
 
+Status: **In progress**
+
 **Objective**
 Use Strands steering/middleware style hooks to constrain or guide risky tool behavior.
 
@@ -248,6 +257,13 @@ Use Strands steering/middleware style hooks to constrain or guide risky tool beh
 
 **Why this matters**
 This is one of the most interesting parts of Strands. A coding agent without steering becomes a demo; a coding agent with steering becomes a platform.
+
+**Implemented so far**
+- default allow / deny / confirm-needed steering decisions for workspace mutations,
+- protected-path blocking for `.env*`, `*.pem`, and `*.key`,
+- visible steering decision events in the timeline pane,
+- in-app `F9` approve / `F10` deny controls for confirm-needed requests,
+- approval-aware fake runtime and live runtime seams that can continue after explicit operator approval.
 
 **Success test for Phase 4**
 - dangerous commands or writes can be intercepted,
@@ -444,6 +460,23 @@ Inside the TUI, use these shortcuts to focus the event pane:
 
 This is intentionally simple, but it already makes it much easier to inspect Strands loop behavior without losing the complete turn transcript.
 
+### Approval UX
+
+When a mutation needs explicit approval, the app now keeps the request live inside the TUI instead of leaving it as a passive event:
+
+- the approval banner shows the pending tool, approval id, reason, and key args
+- `F9` approves the current request
+- `F10` denies the current request
+- while approval is pending, new prompt submission is blocked so the session state stays legible
+
+For a deterministic walkthrough without launching the full TUI:
+
+```bash
+.venv/bin/python scripts/approval_smoke.py
+```
+
+Expected result shows an initial queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied.
+
 ### Current steering policy seam
 
 The runtime now evaluates risky mutation tools before execution:
@@ -452,7 +485,9 @@ The runtime now evaluates risky mutation tools before execution:
 - writes or edits targeting `.env*`, `*.pem`, or `*.key` are denied by policy
 - multi-occurrence `replace_text` calls require confirmation before execution, so risky broad edits are visible before they run
 
-This is deliberately narrow, but it creates the exact seam we will need for richer Strands guardrails and approvals later.
+When confirmation is required, the runtime now exposes a resumable approval request to the TUI. In fake mode that request is deterministic and queueable for testing; in live mode it gives the agent a visible pause point before the approved tool is executed and the conversation continues.
+
+This is still deliberately narrow, but it now creates the exact seam we will need for richer Strands guardrails, shell approvals, and later MCP-style interventions.
 
 ### What the current tests prove
 
@@ -465,6 +500,7 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - config merge logic applies CLI-style overrides safely
   - steering requires confirmation for overwrite and broad-edit requests by default, and can opt into overwrites explicitly
   - steering events are emitted before workspace tools run
+  - approval requests can be queued and resumed deterministically
 
 - `tests/test_app.py`
   - app renders runtime status
@@ -474,6 +510,9 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - runtime failures are rendered in the UI instead of crashing silently
   - successful turns are persisted to `turns.jsonl` and `transcript.md`
   - runtime failures are also persisted as session artifacts
+  - approval state is rendered in a dedicated banner
+  - pending approvals block new prompts until resolved
+  - approval resolutions persist as normal session turns
   - timeline filter shortcuts isolate tool and persistence activity correctly
   - resumed sessions render a compact live history window instead of dumping the full backlog
   - replay shortcuts browse older/newer turns and can return to live/latest view
@@ -495,7 +534,7 @@ This is deliberately narrow, but it creates the exact seam we will need for rich
   - the compact picker renders usable recent-session labels
   - the picker returns the selected session and handles an empty artifact root safely
 
-This is the current anti-regression contract for Phase 1.
+This is the current anti-regression contract for the active Phase 2/3/4 slice.
 
 ## Suggested near-term technical choices
 
@@ -512,10 +551,10 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
-2. add a narrowly scoped shell command seam only after confirm-needed mutation steering can be approved in-app
-3. add an in-app session switcher that reuses the new recent-session summaries instead of limiting reopen flow to startup
-4. keep the fake runtime path green while refining the event schema around steering/intervention events
+1. add a narrowly scoped shell command seam now that risky mutations have an in-app approval path
+2. add an in-app session switcher that reuses the new recent-session summaries instead of limiting reopen flow to startup
+3. keep the fake runtime path green while refining the event schema around steering/intervention events
+4. persist pending approval state explicitly in artifacts so approval pauses are reconstructible after restart
 5. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 
 1. scaffold Python project + TUI entrypoint
@@ -544,7 +583,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add a lightweight approval UX so confirm-needed mutation requests can be explicitly resumed inside the TUI
-- add a narrowly scoped shell command seam only after confirm-needed mutation approval exists for risky mutations
+- add a narrowly scoped shell command seam now that confirm-needed mutation approval exists in-app
 - add an in-app session switcher that reuses the new recent-session summaries after startup
+- persist pending approval state in artifacts so interrupted approval pauses are replayable after restart
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection

@@ -36,20 +36,93 @@ class RuntimeEvent:
 
 
 @dataclass(slots=True)
+class ApprovalRequest:
+    request_id: str
+    tool_name: str
+    reason: str
+    args: dict[str, object] = field(default_factory=dict)
+    source: str = "runtime"
+    prompt: str = ""
+
+    def summary(self) -> str:
+        args_preview = ", ".join(f"{key}={value!r}" for key, value in sorted(self.args.items())) or "no args"
+        return f"{self.tool_name} [{self.request_id}] | {self.reason} | {args_preview}"
+
+
+@dataclass(slots=True)
 class AgentResponse:
     text: str
     provider: str
     mode: str
     events: list[RuntimeEvent] = field(default_factory=list)
     metadata: dict[str, object] = field(default_factory=dict)
+    pending_approval: ApprovalRequest | None = None
 
 
 class AgentRuntime(Protocol):
     def run(self, prompt: str) -> AgentResponse:
         ...
 
+    def resolve_pending_approval(self, approval_id: str, approve: bool) -> AgentResponse:
+        ...
+
 
 RuntimeEventSink = Callable[[RuntimeEvent], None]
+
+
+@dataclass(slots=True)
+class _PendingApproval:
+    request: ApprovalRequest
+    execute: Callable[[], str]
+
+
+class _ApprovalQueue:
+    def __init__(self) -> None:
+        self._pending: list[_PendingApproval] = []
+        self._counter = 0
+
+    def reset(self) -> None:
+        self._pending.clear()
+
+    def enqueue(
+        self,
+        *,
+        tool_name: str,
+        reason: str,
+        args: dict[str, object],
+        source: str,
+        prompt: str,
+        execute: Callable[[], str],
+    ) -> ApprovalRequest:
+        self._counter += 1
+        request = ApprovalRequest(
+            request_id=f"approval-{self._counter:04d}",
+            tool_name=tool_name,
+            reason=reason,
+            args=dict(args),
+            source=source,
+            prompt=prompt,
+        )
+        self._pending.append(_PendingApproval(request=request, execute=execute))
+        return request
+
+    def current(self) -> ApprovalRequest | None:
+        if not self._pending:
+            return None
+        return self._pending[0].request
+
+    def pending_count(self) -> int:
+        return len(self._pending)
+
+    def pop(self, approval_id: str) -> _PendingApproval:
+        current = self.current()
+        if current is None:
+            raise ValueError("No pending approval request is available.")
+        if current.request_id != approval_id:
+            raise ValueError(
+                f"Approval request {approval_id!r} is no longer current. Current request is {current.request_id!r}."
+            )
+        return self._pending.pop(0)
 
 
 def runtime_event(
@@ -104,6 +177,9 @@ class FakeStrandsRuntime:
 
     provider_name = "fake-strands"
 
+    def __init__(self) -> None:
+        self._approval_queue = _ApprovalQueue()
+
     def run(self, prompt: str) -> AgentResponse:
         normalized = prompt.strip()
         if not normalized:
@@ -121,6 +197,9 @@ class FakeStrandsRuntime:
                 ],
                 metadata={"provider": self.provider_name, "mode": "fake"},
             )
+
+        if self._approval_queue.pending_count() == 0:
+            self._approval_queue.reset()
 
         events = [
             runtime_event(
@@ -194,100 +273,337 @@ class FakeStrandsRuntime:
                     ),
                 ]
             )
-        if any(keyword in lowered for keyword in ["write", "create", "save"]):
-            if overwrite_requested:
-                events.append(
+        if any(keyword in lowered for keyword in ["write", "create", "save"]) and not overwrite_requested:
+            events.extend(
+                [
                     runtime_event(
-                        kind="steering_confirmation_required",
+                        kind="tool_started",
                         title="write_file",
-                        detail="Fake runtime flagged an overwrite request that would require confirmation before execution.",
-                        data={
-                            "tool_name": "write_file",
-                            "source": "fake_runtime",
-                            "disposition": "confirm",
-                            "requires_confirmation": True,
-                        },
-                    )
-                )
-            else:
-                events.extend(
-                    [
-                        runtime_event(
-                            kind="tool_started",
-                            title="write_file",
-                            detail="Deterministic fake write event for a conservative mutation path.",
-                            data={"tool_name": "write_file", "source": "fake_runtime"},
-                        ),
-                        runtime_event(
-                            kind="tool_finished",
-                            title="write_file",
-                            detail="Simulated a bounded workspace write without changing disk.",
-                            data={"tool_name": "write_file", "source": "fake_runtime"},
-                        ),
-                    ]
-                )
-        if any(keyword in lowered for keyword in ["edit", "replace", "rewrite", "change"]):
-            if broad_edit_requested:
-                events.append(
+                        detail="Deterministic fake write event for a conservative mutation path.",
+                        data={"tool_name": "write_file", "source": "fake_runtime"},
+                    ),
                     runtime_event(
-                        kind="steering_confirmation_required",
+                        kind="tool_finished",
+                        title="write_file",
+                        detail="Simulated a bounded workspace write without changing disk.",
+                        data={"tool_name": "write_file", "source": "fake_runtime"},
+                    ),
+                ]
+            )
+        if any(keyword in lowered for keyword in ["edit", "replace", "rewrite", "change"]) and not broad_edit_requested:
+            events.extend(
+                [
+                    runtime_event(
+                        kind="tool_started",
                         title="replace_text",
-                        detail="Fake runtime flagged a broad edit request that would require confirmation before execution.",
-                        data={
-                            "tool_name": "replace_text",
-                            "source": "fake_runtime",
-                            "disposition": "confirm",
-                            "requires_confirmation": True,
-                        },
-                    )
+                        detail="Deterministic fake exact-match edit event for conservative code mutation.",
+                        data={"tool_name": "replace_text", "source": "fake_runtime"},
+                    ),
+                    runtime_event(
+                        kind="tool_finished",
+                        title="replace_text",
+                        detail="Simulated an exact text replacement without touching disk.",
+                        data={"tool_name": "replace_text", "source": "fake_runtime"},
+                    ),
+                ]
+            )
+
+        self._approval_queue.reset()
+        for spec in self._build_fake_pending_requests(normalized):
+            self._approval_queue.enqueue(
+                tool_name=spec["tool_name"],
+                reason=spec["reason"],
+                args=spec["args"],
+                source="fake_runtime",
+                prompt=normalized,
+                execute=lambda spec=spec: self._execute_fake_pending_tool(spec),
+            )
+
+        pending_approval = self._approval_queue.current()
+        if pending_approval is not None:
+            events.append(
+                runtime_event(
+                    kind="steering_confirmation_required",
+                    title=pending_approval.tool_name,
+                    detail=pending_approval.reason,
+                    data={
+                        "tool_name": pending_approval.tool_name,
+                        "source": pending_approval.source,
+                        "disposition": "confirm",
+                        "requires_confirmation": True,
+                        "approval_id": pending_approval.request_id,
+                        "pending_count": self._approval_queue.pending_count(),
+                        **pending_approval.args,
+                    },
                 )
-            else:
-                events.extend(
-                    [
-                        runtime_event(
-                            kind="tool_started",
-                            title="replace_text",
-                            detail="Deterministic fake exact-match edit event for conservative code mutation.",
-                            data={"tool_name": "replace_text", "source": "fake_runtime"},
-                        ),
-                        runtime_event(
-                            kind="tool_finished",
-                            title="replace_text",
-                            detail="Simulated an exact text replacement without touching disk.",
-                            data={"tool_name": "replace_text", "source": "fake_runtime"},
-                        ),
-                    ]
-                )
+            )
 
         events.append(
             runtime_event(
                 kind="response_completed",
                 title="Assistant response ready",
                 detail=f"Provider={self.provider_name}, mode=fake",
-                data={"provider": self.provider_name, "mode": "fake"},
+                data={
+                    "provider": self.provider_name,
+                    "mode": "fake",
+                    "pending_approval": pending_approval is not None,
+                    "pending_count": self._approval_queue.pending_count(),
+                },
             )
         )
+        text = f"(fake-strands) Echo: {normalized}"
+        if pending_approval is not None:
+            text = (
+                f"(fake-strands) Approval required before continuing: {pending_approval.tool_name}. "
+                f"Use F9 to approve or F10 to deny in the TUI."
+            )
         return AgentResponse(
-            text=f"(fake-strands) Echo: {normalized}",
+            text=text,
             provider=self.provider_name,
             mode="fake",
             events=events,
-            metadata={"provider": self.provider_name, "mode": "fake"},
+            metadata={
+                "provider": self.provider_name,
+                "mode": "fake",
+                "pending_approval": pending_approval is not None,
+                "pending_count": self._approval_queue.pending_count(),
+            },
+            pending_approval=pending_approval,
         )
+
+    def resolve_pending_approval(self, approval_id: str, approve: bool) -> AgentResponse:
+        pending = self._approval_queue.pop(approval_id)
+        events: list[RuntimeEvent] = []
+
+        if approve:
+            events.append(
+                runtime_event(
+                    kind="steering_approved",
+                    title=pending.request.tool_name,
+                    detail="User approved the pending mutation request in the TUI.",
+                    data={
+                        "tool_name": pending.request.tool_name,
+                        "approval_id": pending.request.request_id,
+                        **pending.request.args,
+                    },
+                )
+            )
+            events.append(
+                runtime_event(
+                    kind="tool_started",
+                    title=pending.request.tool_name,
+                    detail="Executing previously approved fake mutation request.",
+                    data={
+                        "tool_name": pending.request.tool_name,
+                        "approval_id": pending.request.request_id,
+                        "source": "fake_runtime",
+                        **pending.request.args,
+                    },
+                )
+            )
+            tool_result = pending.execute()
+            events.append(
+                runtime_event(
+                    kind="tool_finished",
+                    title=pending.request.tool_name,
+                    detail=tool_result,
+                    data={
+                        "tool_name": pending.request.tool_name,
+                        "approval_id": pending.request.request_id,
+                        "source": "fake_runtime",
+                        **pending.request.args,
+                    },
+                )
+            )
+            text = f"(fake-strands) Approved {pending.request.tool_name}. {tool_result}"
+        else:
+            events.append(
+                runtime_event(
+                    kind="steering_denied",
+                    title=pending.request.tool_name,
+                    detail="User denied the pending mutation request in the TUI.",
+                    data={
+                        "tool_name": pending.request.tool_name,
+                        "approval_id": pending.request.request_id,
+                        **pending.request.args,
+                    },
+                )
+            )
+            text = f"(fake-strands) Skipped {pending.request.tool_name} at user request."
+
+        next_pending = self._approval_queue.current()
+        if next_pending is not None:
+            events.append(
+                runtime_event(
+                    kind="steering_confirmation_required",
+                    title=next_pending.tool_name,
+                    detail=next_pending.reason,
+                    data={
+                        "tool_name": next_pending.tool_name,
+                        "source": next_pending.source,
+                        "disposition": "confirm",
+                        "requires_confirmation": True,
+                        "approval_id": next_pending.request_id,
+                        "pending_count": self._approval_queue.pending_count(),
+                        **next_pending.args,
+                    },
+                )
+            )
+            text += f" Next approval required: {next_pending.tool_name}."
+
+        events.append(
+            runtime_event(
+                kind="response_completed",
+                title="Assistant response ready",
+                detail=f"Provider={self.provider_name}, mode=fake",
+                data={
+                    "provider": self.provider_name,
+                    "mode": "fake",
+                    "pending_approval": next_pending is not None,
+                    "pending_count": self._approval_queue.pending_count(),
+                },
+            )
+        )
+        return AgentResponse(
+            text=text,
+            provider=self.provider_name,
+            mode="fake",
+            events=events,
+            metadata={
+                "provider": self.provider_name,
+                "mode": "fake",
+                "approval_action": "approved" if approve else "denied",
+                "pending_approval": next_pending is not None,
+                "pending_count": self._approval_queue.pending_count(),
+            },
+            pending_approval=next_pending,
+        )
+
+    def _build_fake_pending_requests(self, prompt: str) -> list[dict[str, object]]:
+        lowered = prompt.lower()
+        requests: list[dict[str, object]] = []
+        if any(keyword in lowered for keyword in ["overwrite", "replace existing", "overwrite existing"]):
+            requests.append(
+                {
+                    "tool_name": "write_file",
+                    "reason": "Fake runtime flagged an overwrite request that requires confirmation before execution.",
+                    "args": {
+                        "relative_path": "notes.txt",
+                        "overwrite": True,
+                    },
+                }
+            )
+        if any(
+            keyword in lowered
+            for keyword in ["replace all", "all occurrences", "every occurrence", "bulk edit", "rewrite all"]
+        ):
+            requests.append(
+                {
+                    "tool_name": "replace_text",
+                    "reason": "Fake runtime flagged a broad edit request that requires confirmation before execution.",
+                    "args": {
+                        "relative_path": "notes.txt",
+                        "expected_occurrences": 2,
+                    },
+                }
+            )
+        return requests
+
+    def _execute_fake_pending_tool(self, spec: dict[str, object]) -> str:
+        tool_name = str(spec["tool_name"])
+        args = dict(spec["args"])
+        relative_path = str(args.get("relative_path", "notes.txt"))
+        if tool_name == "write_file":
+            return f"Simulated overwrite of {relative_path}."
+        if tool_name == "replace_text":
+            occurrences = int(args.get("expected_occurrences", 1))
+            return f"Simulated exact text replacement across {occurrences} occurrence(s) in {relative_path}."
+        return f"Simulated execution of {tool_name}."
 
 
 def build_workspace_tools(
     workspace_root: str | Path,
     event_sink: RuntimeEventSink | None = None,
     steering_policy: ToolSteeringPolicy | None = None,
+    approval_queue: _ApprovalQueue | None = None,
+    approval_source: str = "live_runtime",
+    prompt_provider: Callable[[], str] | None = None,
 ) -> list[object]:
     workspace = WorkspaceTools(Path(workspace_root))
     policy = steering_policy or build_default_policy()
 
+    def execute_with_events(tool_name: str, action: Callable[..., str], kwargs: dict[str, object]) -> str:
+        started_at = perf_counter()
+        if event_sink is not None:
+            event_sink(
+                runtime_event(
+                    kind="tool_started",
+                    title=tool_name,
+                    detail=f"args={_summarize_tool_value(kwargs)}",
+                    data={"tool_name": tool_name, "args": kwargs},
+                )
+            )
+        try:
+            result = action(**kwargs)
+        except Exception as exc:
+            elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+            if event_sink is not None:
+                event_sink(
+                    runtime_event(
+                        kind="tool_failed",
+                        title=tool_name,
+                        detail=f"error={exc} | elapsed_ms={elapsed_ms}",
+                        data={"tool_name": tool_name, "error": str(exc), "elapsed_ms": elapsed_ms},
+                    )
+                )
+            raise
+        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+        if event_sink is not None:
+            event_sink(
+                runtime_event(
+                    kind="tool_finished",
+                    title=tool_name,
+                    detail=f"elapsed_ms={elapsed_ms} | result={_summarize_tool_value(result)}",
+                    data={"tool_name": tool_name, "elapsed_ms": elapsed_ms},
+                )
+            )
+        return result
+
     def instrument(tool_name: str, action: Callable[..., str]) -> Callable[..., str]:
         def wrapped(**kwargs: object) -> str:
-            started_at = perf_counter()
             decision = policy.evaluate(tool_name, kwargs)
+            if decision.requires_confirmation and approval_queue is not None:
+                request = approval_queue.enqueue(
+                    tool_name=tool_name,
+                    reason=decision.reason,
+                    args=dict(kwargs),
+                    source=approval_source,
+                    prompt=prompt_provider() if prompt_provider is not None else "",
+                    execute=lambda: execute_with_events(tool_name, action, dict(kwargs)),
+                )
+                if event_sink is not None:
+                    event_sink(
+                        runtime_event(
+                            kind=_steering_event_kind(decision),
+                            title=tool_name,
+                            detail=decision.reason,
+                            data={
+                                "tool_name": tool_name,
+                                "allowed": decision.allowed,
+                                "requires_confirmation": decision.requires_confirmation,
+                                "disposition": decision.disposition,
+                                "severity": decision.severity,
+                                "category": decision.category,
+                                "approval_id": request.request_id,
+                                **decision.details,
+                            },
+                        )
+                    )
+                return (
+                    f"Approval required for {tool_name}. "
+                    f"Request id: {request.request_id}. Reason: {decision.reason}"
+                )
+
             if event_sink is not None:
                 event_sink(
                     runtime_event(
@@ -309,40 +625,7 @@ def build_workspace_tools(
                 if decision.requires_confirmation:
                     raise PermissionError(f"Confirmation required: {decision.reason}")
                 raise PermissionError(decision.reason)
-            if event_sink is not None:
-                event_sink(
-                    runtime_event(
-                        kind="tool_started",
-                        title=tool_name,
-                        detail=f"args={_summarize_tool_value(kwargs)}",
-                        data={"tool_name": tool_name, "args": kwargs},
-                    )
-                )
-            try:
-                result = action(**kwargs)
-            except Exception as exc:
-                elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
-                if event_sink is not None:
-                    event_sink(
-                        runtime_event(
-                            kind="tool_failed",
-                            title=tool_name,
-                            detail=f"error={exc} | elapsed_ms={elapsed_ms}",
-                            data={"tool_name": tool_name, "error": str(exc), "elapsed_ms": elapsed_ms},
-                        )
-                    )
-                raise
-            elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
-            if event_sink is not None:
-                event_sink(
-                    runtime_event(
-                        kind="tool_finished",
-                        title=tool_name,
-                        detail=f"elapsed_ms={elapsed_ms} | result={_summarize_tool_value(result)}",
-                        data={"tool_name": tool_name, "elapsed_ms": elapsed_ms},
-                    )
-                )
-            return result
+            return execute_with_events(tool_name, action, dict(kwargs))
 
         return wrapped
 
@@ -434,9 +717,16 @@ class StrandsSDKRuntime:
             f"You may inspect and conservatively edit the workspace rooted at {self.workspace_root} "
             "using bounded local tools. Prefer summarize_workspace before broad searches when you need repo shape, "
             "and prefer exact-match edits over broad rewrites when possible. "
-            "Overwrites are blocked unless the local steering policy explicitly allows them."
+            "Overwrites are blocked unless the local steering policy explicitly allows them. "
+            "If a tool result says approval is required, stop asking that tool to mutate files, explain why approval is needed, "
+            "and wait for the TUI to approve or deny the request."
         )
         self.openai_model = openai_model
+        self._agent = None
+        self._tool_count = 0
+        self._event_sink: RuntimeEventSink | None = None
+        self._approval_queue = _ApprovalQueue()
+        self._active_prompt = ""
 
     def _build_agent(self, api_key: str, event_sink: RuntimeEventSink | None = None):
         from strands import Agent
@@ -451,13 +741,28 @@ class StrandsSDKRuntime:
             self.workspace_root,
             event_sink=event_sink,
             steering_policy=build_default_policy(allow_overwrite=self.allow_overwrite),
+            approval_queue=self._approval_queue,
+            approval_source="live_runtime",
+            prompt_provider=lambda: self._active_prompt,
         )
         return Agent(model=model, system_prompt=self.system_prompt, tools=tools), len(tools)
+
+    def _ensure_agent(self, api_key: str):
+        if self._agent is None:
+            self._agent, self._tool_count = self._build_agent(api_key, event_sink=self._emit_event)
+        return self._agent, self._tool_count
+
+    def _emit_event(self, event: RuntimeEvent) -> None:
+        if self._event_sink is not None:
+            self._event_sink(event)
 
     def run(self, prompt: str) -> AgentResponse:
         api_key = getenv("OPENAI_API_KEY", "").strip()
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is required for live runtime mode")
+
+        if self._approval_queue.pending_count() == 0:
+            self._approval_queue.reset()
 
         events = [
             runtime_event(
@@ -467,10 +772,16 @@ class StrandsSDKRuntime:
                 data={"prompt_length": len(prompt.strip()), "workspace_root": str(self.workspace_root)},
             )
         ]
-        agent, tool_count = self._build_agent(api_key, event_sink=events.append)
+        self._event_sink = events.append
+        self._active_prompt = prompt
+        agent, tool_count = self._ensure_agent(api_key)
         started_at = perf_counter()
-        result = agent(prompt)
+        try:
+            result = agent(prompt)
+        finally:
+            self._event_sink = None
         elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+        pending_approval = self._approval_queue.current()
         text = str(result)
         events.append(
             runtime_event(
@@ -486,6 +797,8 @@ class StrandsSDKRuntime:
                     "tool_count": tool_count,
                     "elapsed_ms": elapsed_ms,
                     "workspace_root": str(self.workspace_root),
+                    "pending_approval": pending_approval is not None,
+                    "pending_count": self._approval_queue.pending_count(),
                 },
             )
         )
@@ -501,7 +814,106 @@ class StrandsSDKRuntime:
                 "tool_count": tool_count,
                 "workspace_root": str(self.workspace_root),
                 "elapsed_ms": elapsed_ms,
+                "pending_approval": pending_approval is not None,
+                "pending_count": self._approval_queue.pending_count(),
             },
+            pending_approval=pending_approval,
+        )
+
+    def resolve_pending_approval(self, approval_id: str, approve: bool) -> AgentResponse:
+        api_key = getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is required for live runtime mode")
+
+        agent, tool_count = self._ensure_agent(api_key)
+        pending = self._approval_queue.pop(approval_id)
+        events: list[RuntimeEvent] = []
+        self._event_sink = events.append
+        started_at = perf_counter()
+
+        try:
+            if approve:
+                events.append(
+                    runtime_event(
+                        kind="steering_approved",
+                        title=pending.request.tool_name,
+                        detail="User approved the pending mutation request in the TUI.",
+                        data={
+                            "tool_name": pending.request.tool_name,
+                            "approval_id": pending.request.request_id,
+                            **pending.request.args,
+                        },
+                    )
+                )
+                tool_result = pending.execute()
+                follow_up_prompt = (
+                    f"User approved pending tool `{pending.request.tool_name}` in the TUI. "
+                    f"The tool executed with args {pending.request.args!r} and returned:\n{tool_result}\n"
+                    "Continue the original task from there and summarize the change concisely."
+                )
+            else:
+                events.append(
+                    runtime_event(
+                        kind="steering_denied",
+                        title=pending.request.tool_name,
+                        detail="User denied the pending mutation request in the TUI.",
+                        data={
+                            "tool_name": pending.request.tool_name,
+                            "approval_id": pending.request.request_id,
+                            **pending.request.args,
+                        },
+                    )
+                )
+                follow_up_prompt = (
+                    f"User denied pending tool `{pending.request.tool_name}` in the TUI. "
+                    "Do not execute that mutation. Continue with the safest useful next step."
+                )
+
+            self._active_prompt = follow_up_prompt
+            result = agent(follow_up_prompt)
+            text = str(result)
+        finally:
+            self._event_sink = None
+
+        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+        next_pending = self._approval_queue.current()
+        events.append(
+            runtime_event(
+                kind="response_completed",
+                title="Assistant response ready",
+                detail=(
+                    f"Provider={self.provider_name}, mode=live, tools={tool_count}, elapsed_ms={elapsed_ms}"
+                ),
+                data={
+                    "provider": self.provider_name,
+                    "mode": "live",
+                    "model": self.openai_model,
+                    "tool_count": tool_count,
+                    "elapsed_ms": elapsed_ms,
+                    "workspace_root": str(self.workspace_root),
+                    "pending_approval": next_pending is not None,
+                    "pending_count": self._approval_queue.pending_count(),
+                    "approval_action": "approved" if approve else "denied",
+                },
+            )
+        )
+        return AgentResponse(
+            text=text,
+            provider=self.provider_name,
+            mode="live",
+            events=events,
+            metadata={
+                "provider": self.provider_name,
+                "mode": "live",
+                "model": self.openai_model,
+                "tool_count": tool_count,
+                "workspace_root": str(self.workspace_root),
+                "elapsed_ms": elapsed_ms,
+                "approval_action": "approved" if approve else "denied",
+                "pending_approval": next_pending is not None,
+                "pending_count": self._approval_queue.pending_count(),
+            },
+            pending_approval=next_pending,
         )
 
 

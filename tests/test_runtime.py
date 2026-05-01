@@ -7,6 +7,7 @@ from strands_agent_tui.runtime import (
     AgentResponse,
     FakeStrandsRuntime,
     StrandsSDKRuntime,
+    _ApprovalQueue,
     build_runtime,
     build_workspace_tools,
     categorize_event_kind,
@@ -21,6 +22,7 @@ def test_fake_runtime_echoes_prompt() -> None:
     assert result.provider == "fake-strands"
     assert result.mode == "fake"
     assert result.text == "(fake-strands) Echo: hello world"
+    assert result.pending_approval is None
 
 
 def test_fake_runtime_handles_empty_prompt() -> None:
@@ -80,7 +82,7 @@ def test_fake_runtime_emits_workspace_summary_events() -> None:
     ]
 
 
-def test_fake_runtime_emits_confirmation_event_for_risky_mutation_prompt() -> None:
+def test_fake_runtime_returns_pending_approval_for_risky_mutation_prompt() -> None:
     runtime = FakeStrandsRuntime()
     result = runtime.run("overwrite the notes file and replace all stale values")
 
@@ -90,12 +92,47 @@ def test_fake_runtime_emits_confirmation_event_for_risky_mutation_prompt() -> No
         "tool_started",
         "tool_finished",
         "steering_confirmation_required",
+        "response_completed",
+    ]
+    assert result.pending_approval is not None
+    assert result.pending_approval.tool_name == "write_file"
+    assert result.events[4].data["pending_count"] == 2
+    assert "Approval required before continuing" in result.text
+
+
+def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_next() -> None:
+    runtime = FakeStrandsRuntime()
+    first_response = runtime.run("overwrite the notes file and replace all stale values")
+
+    assert first_response.pending_approval is not None
+    approval = first_response.pending_approval
+
+    approved = runtime.resolve_pending_approval(approval.request_id, approve=True)
+
+    assert [event.kind for event in approved.events] == [
+        "steering_approved",
+        "tool_started",
+        "tool_finished",
         "steering_confirmation_required",
         "response_completed",
     ]
-    assert result.events[4].title == "write_file"
-    assert result.events[4].data["requires_confirmation"] is True
-    assert result.events[5].title == "replace_text"
+    assert approved.pending_approval is not None
+    assert approved.pending_approval.tool_name == "replace_text"
+    assert approved.events[3].data["approval_id"] == approved.pending_approval.request_id
+    assert "Approved write_file" in approved.text
+
+
+def test_fake_runtime_denial_resolution_clears_last_pending_request() -> None:
+    runtime = FakeStrandsRuntime()
+    first_response = runtime.run("overwrite the notes file")
+
+    assert first_response.pending_approval is not None
+
+    denied = runtime.resolve_pending_approval(first_response.pending_approval.request_id, approve=False)
+
+    assert [event.kind for event in denied.events] == ["steering_denied", "response_completed"]
+    assert denied.pending_approval is None
+    assert "Skipped write_file" in denied.text
 
 
 def test_build_runtime_defaults_to_fake() -> None:
@@ -150,6 +187,29 @@ def test_live_runtime_collects_tool_events(monkeypatch: pytest.MonkeyPatch, tmp_
     assert "elapsed_ms=" in result.events[-1].detail
     assert result.metadata["model"] == "gpt-4o-mini"
     assert result.metadata["workspace_root"] == str(tmp_path.resolve())
+
+
+def test_build_workspace_tools_can_queue_confirmation_instead_of_raising(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("old\n", encoding="utf-8")
+    events = []
+    approvals = _ApprovalQueue()
+    tools = {
+        tool.tool_name: tool
+        for tool in build_workspace_tools(
+            tmp_path,
+            event_sink=events.append,
+            approval_queue=approvals,
+            prompt_provider=lambda: "overwrite notes",
+        )
+    }
+
+    rendered = tools["write_file"](relative_path="notes.txt", content="new\n", overwrite=True)
+
+    assert rendered.startswith("Approval required for write_file.")
+    assert approvals.current() is not None
+    assert approvals.current().tool_name == "write_file"
+    assert [event.kind for event in events] == ["steering_confirmation_required"]
+    assert events[0].data["approval_id"] == approvals.current().request_id
 
 
 def test_app_config_merge_applies_non_empty_overrides() -> None:

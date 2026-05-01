@@ -8,7 +8,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input, Static
 
 from strands_agent_tui.config import AppConfig, load_config
-from strands_agent_tui.runtime import AgentRuntime, RuntimeEvent, build_runtime, runtime_event
+from strands_agent_tui.runtime import AgentRuntime, ApprovalRequest, RuntimeEvent, build_runtime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact, latest_session, pick_session
 
 
@@ -25,6 +25,8 @@ class StrandsAgentApp(App):
         Binding("f6", "history_older", "Older turn"),
         Binding("f7", "history_newer", "Newer turn"),
         Binding("f8", "history_live", "Live view"),
+        Binding("f9", "approve_pending", "Approve pending"),
+        Binding("f10", "deny_pending", "Deny pending"),
     ]
 
     CSS = """
@@ -52,7 +54,7 @@ class StrandsAgentApp(App):
         border: solid green;
     }
 
-    #status, #workspace {
+    #status, #workspace, #approval {
         height: auto;
         padding: 0 2;
     }
@@ -63,6 +65,10 @@ class StrandsAgentApp(App):
 
     #workspace {
         color: yellow;
+    }
+
+    #approval {
+        color: magenta;
     }
 
     #prompt {
@@ -89,6 +95,8 @@ class StrandsAgentApp(App):
         self.events: list[RuntimeEvent] = []
         self.event_filter = "all"
         self.history_focus_index: int | None = None
+        self.pending_approval: ApprovalRequest | None = None
+        self.runtime_status_override: str | None = None
         self.artifact_store = artifact_store or SessionArtifactStore(
             config.artifacts_root,
             session_id=config.session_id,
@@ -105,78 +113,35 @@ class StrandsAgentApp(App):
                     yield Static(self.render_events(), id="events")
             yield Static(self.render_status_summary(), id="status")
             yield Static(self.render_context_banner(), id="workspace")
+            yield Static(self.render_approval_banner(), id="approval")
         yield Input(placeholder="Ask the coding agent something...", id="prompt")
         yield Footer()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         prompt = event.value
         event.input.value = ""
+
+        if self.pending_approval is not None:
+            self.events.append(
+                runtime_event(
+                    kind="approval_input_blocked",
+                    title="Resolve pending approval first",
+                    detail="Use F9 to approve or F10 to deny the current mutation request before sending another prompt.",
+                    data={
+                        "approval_id": self.pending_approval.request_id,
+                        "tool_name": self.pending_approval.tool_name,
+                    },
+                )
+            )
+            self._refresh_widgets()
+            return
+
         try:
             response = self.runtime.run(prompt)
-            self.history.append((prompt, response.text))
-            self.events.extend(response.events)
-            self.history_focus_index = None
-            self.artifact_store.append_turn(
-                TurnArtifact(
-                    prompt=prompt,
-                    response=response.text,
-                    provider=response.provider,
-                    mode=response.mode,
-                    events=response.events,
-                    response_metadata=response.metadata,
-                )
-            )
-            self.events.append(
-                runtime_event(
-                    kind="artifact_saved",
-                    title="Session artifact saved",
-                    detail=f"Saved turn to {self.artifact_store.session_dir}",
-                    data={
-                        "session_id": self.artifact_store.session_id,
-                        "session_dir": str(self.artifact_store.session_dir),
-                    },
-                )
-            )
-            self.query_one("#status", Static).update(self.render_status_summary(response.provider, response.mode))
+            self._record_response(prompt, response)
         except Exception as exc:
-            error_text = f"Error: {exc}"
-            error_event = runtime_event(
-                kind="runtime_error",
-                title="Runtime error",
-                detail=str(exc),
-                data={"provider": "runtime-error", "mode": self.config.runtime_mode},
-            )
-            self.history.append((prompt, error_text))
-            self.events.append(error_event)
-            self.history_focus_index = None
-            self.artifact_store.append_turn(
-                TurnArtifact(
-                    prompt=prompt,
-                    response=error_text,
-                    provider="runtime-error",
-                    mode=self.config.runtime_mode,
-                    events=[error_event],
-                    response_metadata={"provider": "runtime-error", "mode": self.config.runtime_mode},
-                    error=True,
-                )
-            )
-            self.events.append(
-                runtime_event(
-                    kind="artifact_saved",
-                    title="Session artifact saved",
-                    detail=f"Saved error turn to {self.artifact_store.session_dir}",
-                    data={
-                        "session_id": self.artifact_store.session_id,
-                        "session_dir": str(self.artifact_store.session_dir),
-                        "error": True,
-                    },
-                )
-            )
-            self.query_one("#status", Static).update(
-                self.render_status_summary(runtime_label="Runtime error")
-            )
-        self.query_one("#output", Static).update(self.render_history())
-        self.query_one("#events", Static).update(self.render_events())
+            self._record_runtime_error(prompt, exc)
+        self._refresh_widgets()
 
     def _load_existing_session(self) -> None:
         prior_turns = self.artifact_store.load_turns()
@@ -187,19 +152,31 @@ class StrandsAgentApp(App):
     def render_context_banner(self) -> str:
         return f"Workspace: {self.config.workspace_path} | Session: {self.artifact_store.session_id}"
 
+    def render_approval_banner(self) -> str:
+        if self.pending_approval is None:
+            return "Approval: none pending | F9 approve current request | F10 deny current request"
+        args_preview = ", ".join(
+            f"{key}={value!r}" for key, value in sorted(self.pending_approval.args.items())
+        ) or "no args"
+        return (
+            f"Approval pending: {self.pending_approval.tool_name} ({self.pending_approval.request_id}) | "
+            f"{self.pending_approval.reason} | args: {args_preview} | F9 approve | F10 deny"
+        )
+
     def render_status_summary(
         self,
         provider: str | None = None,
         mode: str | None = None,
         runtime_label: str | None = None,
     ) -> str:
-        runtime_value = runtime_label or provider or self.runtime.__class__.__name__
+        runtime_value = runtime_label or self.runtime_status_override or provider or self.runtime.__class__.__name__
         mode_value = mode or self.config.runtime_mode
         overwrite_policy = "on" if self.config.allow_overwrite else "off"
+        approval_state = f"pending:{self.pending_approval.tool_name}" if self.pending_approval else "none"
         return (
             f"Runtime: {runtime_value} | Mode: {mode_value} | "
             f"Model: {self.config.openai_model} | Overwrite: {overwrite_policy} | "
-            f"View: {self.history_view_label()} | "
+            f"Approval: {approval_state} | View: {self.history_view_label()} | "
             f"Turns: {len(self.history)} | Events: {len(self.events)}"
         )
 
@@ -309,9 +286,108 @@ class StrandsAgentApp(App):
         self.history_focus_index = None
         self._refresh_history_widgets()
 
+    def action_approve_pending(self) -> None:
+        self._resolve_pending_approval(approve=True)
+
+    def action_deny_pending(self) -> None:
+        self._resolve_pending_approval(approve=False)
+
+    def _resolve_pending_approval(self, approve: bool) -> None:
+        if self.pending_approval is None:
+            return
+        request = self.pending_approval
+        prompt = (
+            f"Approve pending {request.tool_name} ({request.request_id})"
+            if approve
+            else f"Deny pending {request.tool_name} ({request.request_id})"
+        )
+        try:
+            response = self.runtime.resolve_pending_approval(request.request_id, approve=approve)
+            self._record_response(prompt, response)
+        except Exception as exc:
+            self._record_runtime_error(prompt, exc)
+        self._refresh_widgets()
+
+    def _record_response(self, prompt: str, response) -> None:
+        response_metadata = dict(response.metadata)
+        if response.pending_approval is not None:
+            response_metadata["pending_approval_id"] = response.pending_approval.request_id
+            response_metadata["pending_approval_tool"] = response.pending_approval.tool_name
+        self.history.append((prompt, response.text))
+        self.events.extend(response.events)
+        self.pending_approval = response.pending_approval
+        self.runtime_status_override = None
+        self.history_focus_index = None
+        self.artifact_store.append_turn(
+            TurnArtifact(
+                prompt=prompt,
+                response=response.text,
+                provider=response.provider,
+                mode=response.mode,
+                events=response.events,
+                response_metadata=response_metadata,
+            )
+        )
+        self.events.append(
+            runtime_event(
+                kind="artifact_saved",
+                title="Session artifact saved",
+                detail=f"Saved turn to {self.artifact_store.session_dir}",
+                data={
+                    "session_id": self.artifact_store.session_id,
+                    "session_dir": str(self.artifact_store.session_dir),
+                    "pending_approval": self.pending_approval is not None,
+                },
+            )
+        )
+
+    def _record_runtime_error(self, prompt: str, exc: Exception) -> None:
+        error_text = f"Error: {exc}"
+        error_event = runtime_event(
+            kind="runtime_error",
+            title="Runtime error",
+            detail=str(exc),
+            data={"provider": "runtime-error", "mode": self.config.runtime_mode},
+        )
+        self.history.append((prompt, error_text))
+        self.events.append(error_event)
+        self.pending_approval = None
+        self.runtime_status_override = "Runtime error"
+        self.history_focus_index = None
+        self.artifact_store.append_turn(
+            TurnArtifact(
+                prompt=prompt,
+                response=error_text,
+                provider="runtime-error",
+                mode=self.config.runtime_mode,
+                events=[error_event],
+                response_metadata={"provider": "runtime-error", "mode": self.config.runtime_mode},
+                error=True,
+            )
+        )
+        self.events.append(
+            runtime_event(
+                kind="artifact_saved",
+                title="Session artifact saved",
+                detail=f"Saved error turn to {self.artifact_store.session_dir}",
+                data={
+                    "session_id": self.artifact_store.session_id,
+                    "session_dir": str(self.artifact_store.session_dir),
+                    "error": True,
+                },
+            )
+        )
+
     def _refresh_history_widgets(self) -> None:
         self.query_one("#output", Static).update(self.render_history())
         self.query_one("#status", Static).update(self.render_status_summary())
+
+    def _refresh_widgets(self) -> None:
+        self.query_one("#output", Static).update(self.render_history())
+        self.query_one("#events", Static).update(self.render_events())
+        self.query_one("#status", Static).update(self.render_status_summary())
+        self.query_one("#workspace", Static).update(self.render_context_banner())
+        self.query_one("#approval", Static).update(self.render_approval_banner())
 
 
 def parse_args() -> AppConfig:

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
-from .artifacts import SessionArtifactStore
+from .artifacts import SessionArtifactStore, TurnArtifact
 
 MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
@@ -35,25 +35,31 @@ def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> 
         return []
 
     session_dirs = [path for path in resolved_root.iterdir() if path.is_dir()]
-    ordered_dirs = sorted(session_dirs, key=_session_activity_timestamp, reverse=True)[:limit]
 
-    summaries: list[SessionSummary] = []
-    for session_dir in ordered_dirs:
+    summaries_with_sort: list[tuple[float, str, SessionSummary]] = []
+    for session_dir in session_dirs:
         store = SessionArtifactStore.from_session_dir(session_dir)
         turns = store.load_turns()
         last_prompt_preview = ""
         if turns:
             last_prompt_preview = _truncate(turns[-1].prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
-        summaries.append(
-            SessionSummary(
-                session_id=store.session_id,
-                session_dir=store.session_dir,
-                turn_count=len(turns),
-                updated_at=_format_timestamp(_session_activity_timestamp(session_dir)),
-                last_prompt_preview=last_prompt_preview,
+        activity_timestamp = _session_activity_timestamp(session_dir, turns)
+        summaries_with_sort.append(
+            (
+                activity_timestamp,
+                store.session_id,
+                SessionSummary(
+                    session_id=store.session_id,
+                    session_dir=store.session_dir,
+                    turn_count=len(turns),
+                    updated_at=_format_timestamp(activity_timestamp),
+                    last_prompt_preview=last_prompt_preview,
+                ),
             )
         )
-    return summaries
+
+    ordered = sorted(summaries_with_sort, key=lambda item: (item[0], item[1]), reverse=True)[:limit]
+    return [summary for _, _, summary in ordered]
 
 
 def latest_session(root: str | Path) -> SessionSummary | None:
@@ -100,14 +106,24 @@ def pick_session(
         output_fn(f"Invalid selection: {selection!r}. Choose 1-{len(summaries)} or press Enter.")
 
 
-def _session_activity_timestamp(session_dir: Path) -> float:
+def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:
     timestamps = [session_dir.stat().st_mtime]
     for path in session_dir.iterdir():
         try:
             timestamps.append(path.stat().st_mtime)
         except FileNotFoundError:
             continue
+    if turns:
+        last_turn_timestamp = _turn_timestamp(turns[-1])
+        if last_turn_timestamp is not None:
+            timestamps.append(last_turn_timestamp)
     return max(timestamps)
+
+
+def _turn_timestamp(turn: TurnArtifact) -> float | None:
+    if not turn.created_at:
+        return None
+    return datetime.fromisoformat(turn.created_at).timestamp()
 
 
 def _format_timestamp(timestamp: float) -> str:
