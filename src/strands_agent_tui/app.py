@@ -12,6 +12,7 @@ from strands_agent_tui.config import AppConfig, load_config
 from strands_agent_tui.runtime import AgentRuntime, ApprovalRequest, RuntimeEvent, build_runtime, runtime_event
 from strands_agent_tui.sessions import (
     SessionArtifactStore,
+    SessionState,
     SessionSummary,
     TurnArtifact,
     latest_session,
@@ -211,7 +212,12 @@ class StrandsAgentApp(App):
         for turn in prior_turns:
             self.history.append((turn.prompt, turn.response))
             self.events.extend(turn.events)
-        pending_approvals = self.artifact_store.load_pending_approvals()
+
+        session_state = self.artifact_store.load_session_state() or SessionState()
+        self.event_filter = self._sanitize_event_filter(session_state.event_filter)
+        self.history_focus_index = self._normalize_history_focus_index(session_state.history_focus_index)
+
+        pending_approvals = session_state.pending_approvals
         if pending_approvals and hasattr(self.runtime, "restore_pending_approvals"):
             self.runtime.restore_pending_approvals(pending_approvals)
             self.pending_approval = pending_approvals[0]
@@ -225,6 +231,23 @@ class StrandsAgentApp(App):
                         "pending_count": len(pending_approvals),
                         "approval_id": pending_approvals[0].request_id,
                         "tool_name": pending_approvals[0].tool_name,
+                    },
+                )
+            )
+        if session_state.event_filter != "all" or session_state.history_focus_index is not None:
+            restored_view = self.history_view_label()
+            self.events.append(
+                runtime_event(
+                    kind="session_view_restored",
+                    title="Session view restored",
+                    detail=(
+                        f"Restored event filter `{self.event_filter}` and view `{restored_view}` from session state."
+                    ),
+                    data={
+                        "session_id": self.artifact_store.session_id,
+                        "event_filter": self.event_filter,
+                        "history_focus_index": self.history_focus_index,
+                        "view": restored_view,
                     },
                 )
             )
@@ -365,7 +388,8 @@ class StrandsAgentApp(App):
         return [event for event in self.events if event.category == self.event_filter]
 
     def action_set_event_filter(self, value: str) -> None:
-        self.event_filter = value
+        self.event_filter = self._sanitize_event_filter(value)
+        self._persist_session_view_state()
         self.query_one("#events", Static).update(self.render_events())
 
     def action_history_older(self) -> None:
@@ -375,18 +399,21 @@ class StrandsAgentApp(App):
             self.history_focus_index = max(len(self.history) - 2, 0)
         else:
             self.history_focus_index = max(self.history_focus_index - 1, 0)
+        self._persist_session_view_state()
         self._refresh_history_widgets()
 
     def action_history_newer(self) -> None:
         if not self.history or self.history_focus_index is None:
             return
         self.history_focus_index = min(self.history_focus_index + 1, len(self.history) - 1)
+        self._persist_session_view_state()
         self._refresh_history_widgets()
 
     def action_history_live(self) -> None:
         if not self.history:
             return
         self.history_focus_index = None
+        self._persist_session_view_state()
         self._refresh_history_widgets()
 
     def action_approve_pending(self) -> None:
@@ -470,7 +497,7 @@ class StrandsAgentApp(App):
                 },
             )
         )
-        self._sync_pending_approval_state()
+        self._sync_session_state(emit_pending_events=True)
 
     def _record_runtime_error(self, prompt: str, exc: Exception) -> None:
         error_text = f"Error: {exc}"
@@ -508,7 +535,7 @@ class StrandsAgentApp(App):
                 },
             )
         )
-        self._sync_pending_approval_state()
+        self._sync_session_state(emit_pending_events=True)
 
     def _switch_to_session(self, summary: SessionSummary) -> None:
         previous_session_id = self.artifact_store.session_id
@@ -544,35 +571,62 @@ class StrandsAgentApp(App):
         )
         self._refresh_widgets()
 
-    def _sync_pending_approval_state(self) -> None:
+    def _sync_session_state(self, *, emit_pending_events: bool) -> None:
         if not hasattr(self.runtime, "pending_approvals"):
             return
+        previous_state = self.artifact_store.load_session_state() or SessionState()
         pending_approvals = self.runtime.pending_approvals()
-        if pending_approvals:
-            self.artifact_store.save_pending_approvals(pending_approvals)
+        state = SessionState(
+            pending_approvals=pending_approvals,
+            event_filter=self.event_filter,
+            history_focus_index=self.history_focus_index,
+        )
+
+        if state.is_default():
+            cleared = self.artifact_store.clear_session_state()
+            if emit_pending_events and cleared and previous_state.pending_approvals:
+                self.events.append(
+                    runtime_event(
+                        kind="session_state_cleared",
+                        title="Pending approvals cleared",
+                        detail="Removed persisted pending approval state because no confirmation requests remain.",
+                        data={"session_id": self.artifact_store.session_id},
+                    )
+                )
+            return
+
+        self.artifact_store.save_session_state(state)
+        if emit_pending_events and pending_approvals:
             self.events.append(
                 runtime_event(
                     kind="session_state_saved",
                     title="Pending approvals saved",
-                    detail=f"Persisted {len(pending_approvals)} pending approval request(s) for restart-safe resume.",
+                    detail=(
+                        f"Persisted {len(pending_approvals)} pending approval request(s) plus restart-safe view state."
+                    ),
                     data={
                         "session_id": self.artifact_store.session_id,
                         "pending_count": len(pending_approvals),
                         "approval_id": pending_approvals[0].request_id,
                         "tool_name": pending_approvals[0].tool_name,
+                        "event_filter": self.event_filter,
+                        "history_focus_index": self.history_focus_index,
                     },
                 )
             )
-            return
-        if self.artifact_store.clear_pending_approvals():
-            self.events.append(
-                runtime_event(
-                    kind="session_state_cleared",
-                    title="Pending approvals cleared",
-                    detail="Removed persisted pending approval state because no confirmation requests remain.",
-                    data={"session_id": self.artifact_store.session_id},
-                )
-            )
+
+    def _persist_session_view_state(self) -> None:
+        self._sync_session_state(emit_pending_events=False)
+
+    def _sanitize_event_filter(self, value: str) -> str:
+        return value if value in {"all", "runtime", "tool", "failure", "persistence"} else "all"
+
+    def _normalize_history_focus_index(self, value: int | None) -> int | None:
+        if value is None or not self.history:
+            return None if value is None else None
+        if 0 <= value < len(self.history):
+            return value
+        return None
 
     def _refresh_history_widgets(self) -> None:
         self.query_one("#output", Static).update(self.render_history())

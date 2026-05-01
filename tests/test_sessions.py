@@ -1,7 +1,15 @@
 from pathlib import Path
 
 from strands_agent_tui.runtime import ApprovalRequest, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact, latest_session, list_recent_sessions, pick_session, render_session_picker
+from strands_agent_tui.sessions import (
+    SessionArtifactStore,
+    SessionState,
+    TurnArtifact,
+    latest_session,
+    list_recent_sessions,
+    pick_session,
+    render_session_picker,
+)
 
 
 def _append_turn(store: SessionArtifactStore, prompt: str) -> None:
@@ -131,6 +139,42 @@ def test_session_artifact_store_persists_and_clears_pending_approvals(tmp_path: 
     assert loaded[1].args["expected_occurrences"] == 2
     assert store.clear_pending_approvals() is True
     assert store.load_pending_approvals() == []
+
+
+def test_session_artifact_store_persists_restart_safe_view_state_alongside_pending_approvals(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-state")
+    store.save_session_state(
+        SessionState(
+            pending_approvals=[
+                ApprovalRequest(
+                    request_id="approval-0009",
+                    tool_name="write_file",
+                    reason="Needs confirmation",
+                    args={"relative_path": "notes.txt", "overwrite": True},
+                    source="fake_runtime",
+                    prompt="overwrite notes",
+                )
+            ],
+            event_filter="tool",
+            history_focus_index=2,
+        )
+    )
+
+    restored = store.load_session_state()
+
+    assert restored is not None
+    assert restored.event_filter == "tool"
+    assert restored.history_focus_index == 2
+    assert restored.pending_approvals[0].request_id == "approval-0009"
+    assert store.pending_approvals_path.exists()
+
+    assert store.clear_pending_approvals() is True
+
+    preserved_view_state = store.load_session_state()
+    assert preserved_view_state is not None
+    assert preserved_view_state.pending_approvals == []
+    assert preserved_view_state.event_filter == "tool"
+    assert preserved_view_state.history_focus_index == 2
 
 
 def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path) -> None:

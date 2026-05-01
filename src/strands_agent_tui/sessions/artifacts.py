@@ -55,6 +55,43 @@ class TurnArtifact:
         )
 
 
+@dataclass(slots=True)
+class SessionState:
+    pending_approvals: list[ApprovalRequest] = field(default_factory=list)
+    event_filter: str = "all"
+    history_focus_index: int | None = None
+    updated_at: str | None = None
+    schema_version: str = "strands-agent/session-state-v1"
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "updated_at": self.updated_at or datetime.now(UTC).isoformat(),
+            "pending_approvals": [approval.as_dict() for approval in self.pending_approvals],
+            "event_filter": self.event_filter,
+            "history_focus_index": self.history_focus_index,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "SessionState":
+        pending_payload = payload.get("pending_approvals") or []
+        history_focus_index = payload.get("history_focus_index")
+        if not isinstance(history_focus_index, int):
+            history_focus_index = None
+        return cls(
+            pending_approvals=[
+                ApprovalRequest.from_dict(item) for item in pending_payload if isinstance(item, dict)
+            ],
+            event_filter=str(payload.get("event_filter", "all") or "all"),
+            history_focus_index=history_focus_index,
+            updated_at=str(payload.get("updated_at")) if payload.get("updated_at") else None,
+            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v1")),
+        )
+
+    def is_default(self) -> bool:
+        return not self.pending_approvals and self.event_filter == "all" and self.history_focus_index is None
+
+
 class SessionArtifactStore:
     def __init__(self, root: str | Path, session_id: str | None = None) -> None:
         self.root = Path(root).expanduser().resolve()
@@ -64,6 +101,7 @@ class SessionArtifactStore:
         self.session_dir.mkdir(parents=True, exist_ok=True)
         self.jsonl_path = self.session_dir / "turns.jsonl"
         self.markdown_path = self.session_dir / "transcript.md"
+        self.session_state_path = self.session_dir / "session_state.json"
         self.pending_approvals_path = self.session_dir / "pending_approvals.json"
 
     def append_turn(self, turn: TurnArtifact) -> None:
@@ -85,26 +123,65 @@ class SessionArtifactStore:
                 turns.append(TurnArtifact.from_dict(json.loads(stripped)))
         return turns
 
+    def save_session_state(self, state: SessionState) -> None:
+        self.session_state_path.write_text(
+            json.dumps(state.as_dict(), indent=2) + "\n",
+            encoding="utf-8",
+        )
+        if state.pending_approvals:
+            self._write_legacy_pending_approvals(state.pending_approvals)
+        elif self.pending_approvals_path.exists():
+            self.pending_approvals_path.unlink()
+
+    def load_session_state(self) -> SessionState | None:
+        if self.session_state_path.exists():
+            payload = json.loads(self.session_state_path.read_text(encoding="utf-8"))
+            return SessionState.from_dict(payload)
+
+        pending_approvals = self._load_legacy_pending_approvals()
+        if pending_approvals:
+            return SessionState(pending_approvals=pending_approvals)
+        return None
+
+    def clear_session_state(self) -> bool:
+        cleared = False
+        if self.session_state_path.exists():
+            self.session_state_path.unlink()
+            cleared = True
+        if self.pending_approvals_path.exists():
+            self.pending_approvals_path.unlink()
+            cleared = True
+        return cleared
+
     def save_pending_approvals(self, approvals: list[ApprovalRequest]) -> None:
-        payload = {
-            "schema_version": "strands-agent/pending-approvals-v1",
-            "updated_at": datetime.now(UTC).isoformat(),
-            "pending_approvals": [approval.as_dict() for approval in approvals],
-        }
-        self.pending_approvals_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        state = self.load_session_state() or SessionState()
+        state.pending_approvals = list(approvals)
+        if state.is_default():
+            self.clear_session_state()
+            return
+        self.save_session_state(state)
 
     def load_pending_approvals(self) -> list[ApprovalRequest]:
-        if not self.pending_approvals_path.exists():
-            return []
-        payload = json.loads(self.pending_approvals_path.read_text(encoding="utf-8"))
-        pending_payload = payload.get("pending_approvals") or []
-        return [ApprovalRequest.from_dict(item) for item in pending_payload if isinstance(item, dict)]
+        state = self.load_session_state()
+        if state is not None:
+            return state.pending_approvals
+        return []
 
     def clear_pending_approvals(self) -> bool:
-        if not self.pending_approvals_path.exists():
+        state = self.load_session_state()
+        if state is None:
+            if self.pending_approvals_path.exists():
+                self.pending_approvals_path.unlink()
+                return True
             return False
-        self.pending_approvals_path.unlink()
-        return True
+
+        had_pending = bool(state.pending_approvals)
+        state.pending_approvals = []
+        if state.is_default():
+            self.clear_session_state()
+        else:
+            self.save_session_state(state)
+        return had_pending
 
     @classmethod
     def from_session_dir(cls, session_dir: str | Path) -> "SessionArtifactStore":
@@ -143,3 +220,18 @@ class SessionArtifactStore:
         else:
             with self.markdown_path.open("a", encoding="utf-8") as handle:
                 handle.write(body)
+
+    def _write_legacy_pending_approvals(self, approvals: list[ApprovalRequest]) -> None:
+        payload = {
+            "schema_version": "strands-agent/pending-approvals-v1",
+            "updated_at": datetime.now(UTC).isoformat(),
+            "pending_approvals": [approval.as_dict() for approval in approvals],
+        }
+        self.pending_approvals_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    def _load_legacy_pending_approvals(self) -> list[ApprovalRequest]:
+        if not self.pending_approvals_path.exists():
+            return []
+        payload = json.loads(self.pending_approvals_path.read_text(encoding="utf-8"))
+        pending_payload = payload.get("pending_approvals") or []
+        return [ApprovalRequest.from_dict(item) for item in pending_payload if isinstance(item, dict)]

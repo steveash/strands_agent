@@ -633,6 +633,66 @@ async def test_history_navigation_shortcuts_browse_loaded_turns(tmp_path: Path) 
 
 
 @pytest.mark.asyncio
+async def test_app_restores_event_filter_and_replay_focus_from_session_state(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="view-state-session")
+    for index in range(1, 5):
+        artifact_store.append_turn(
+            TurnArtifact(
+                prompt=f"prompt {index}",
+                response=f"response {index}",
+                provider="fake-strands",
+                mode="fake",
+                events=[runtime_event("tool_finished", "list_files", f"listed files {index}")],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+    first_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="view-state-session",
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with first_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f3")
+        await pilot.pause()
+        await pilot.press("f6")
+        await pilot.pause()
+
+    second_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="view-state-session",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="view-state-session"),
+    )
+
+    async with second_app.run_test() as pilot:
+        await pilot.pause()
+
+        output = str(second_app.query_one("#output").render())
+        status = str(second_app.query_one("#status").render())
+        events = str(second_app.query_one("#events").render())
+
+        assert "Viewing turn 3 of 4" in output
+        assert "Turn 3\nUser: prompt 3\nAgent: response 3" in output
+        assert "View: replay 3/4" in status
+        assert "Filter: tool (4/5 events)" in events
+        assert any(event.kind == "session_view_restored" for event in second_app.events)
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> None:
     older_store = SessionArtifactStore(tmp_path, session_id="session-older")
     older_store.append_turn(
