@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.config import AppConfig
-from strands_agent_tui.runtime import FakeStrandsRuntime
+from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 
 
@@ -28,7 +28,28 @@ async def run_smoke() -> None:
         append_turn(older_store, "inspect older session", "older response")
 
         newer_store = SessionArtifactStore(temp_dir, session_id="session-newer")
-        append_turn(newer_store, "inspect newer session", "newer response")
+        newer_store.append_turn(
+            TurnArtifact(
+                prompt="inspect newer session",
+                response="newer response",
+                provider="fake-strands",
+                mode="fake",
+                events=[runtime_event("tool_finished", "list_files", "Finished listing files")],
+                response_metadata={"mode": "fake"},
+            )
+        )
+        newer_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-0004",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest"},
+                    source="fake_runtime",
+                    prompt="run pytest",
+                )
+            ]
+        )
 
         app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
@@ -44,7 +65,12 @@ async def run_smoke() -> None:
 
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("f11", "1")
+            await pilot.press("f11")
+            await pilot.pause()
+            switcher_output = app.query_one("#output").render()
+            print("switcher_has_pending_marker=", "pending: run_shell_command" in str(switcher_output))
+            print("switcher_has_event_preview=", "last event: tool_finished: list_files" in str(switcher_output))
+            await pilot.press("1")
             await pilot.pause()
             print("active_session=", app.artifact_store.session_id)
             print("history_latest=", app.history[-1] if app.history else None)

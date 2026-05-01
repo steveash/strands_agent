@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, and Phase 4 now adds restart-safe pending-approval persistence so confirm-needed mutations can survive a TUI restart and still be resumed or denied.**
+**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 adds restart-safe pending-approval persistence so confirm-needed mutations can survive a TUI restart, and Phase 5 now surfaces richer recent-session metadata so session switching shows pending-approval markers and last-event previews before selection.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -104,20 +104,20 @@ What exists now:
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
 - an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline,
+- richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers plus last-event previews before selection,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added an in-app `F11` session switcher that reuses the existing recent-session summaries inside the live TUI instead of requiring restart-time session selection,
-- made session switching restart-safe by reloading saved history/events, restoring persisted pending approvals for the selected session, and blocking session switches while the current session still has an unresolved approval,
-- added regression coverage for rendering the switcher, selecting another session, starting a fresh session inline, restoring approval state after a switch, and blocking unsafe mid-approval switching,
-- added `scripts/session_switcher_smoke.py` for a quick runnable session-handoff check.
+- enriched recent-session summaries with pending-approval metadata so saved sessions now advertise queued confirmations before selection,
+- added last-event previews derived from persisted turn artifacts so the CLI picker and in-app `F11` switcher show more context than just timestamps and last prompts,
+- added regression coverage plus a refreshed `scripts/session_switcher_smoke.py` check to prove the new metadata renders and the actual switch flow still works.
 
 Why this matters now:
-- It removes another restart-only workflow: once the TUI is open, Steve can jump between saved sessions without dropping out to the shell.
-- It proves that the recent-session summary seam is reusable beyond startup and can drive in-app navigation, not just CLI selection.
-- It keeps session handoff conservative by restoring persisted approval state for the target session and refusing to switch away from unresolved approvals in the current one.
+- It makes saved sessions easier to triage without opening them blindly.
+- It exposes restart-safe approval state directly in the switcher, which helps avoid surprise context switches into blocked sessions.
+- It proves the session-summary seam is now rich enough to support smarter future workflows without another persistence format change.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -128,8 +128,8 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `66 passed`
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` switches from `session-older` to `session-newer` inside the app harness and prints `latest_event= session_switched`,
+- automated tests: `67 passed`
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` reports `switcher_has_pending_marker= True`, `switcher_has_event_preview= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
 - runnable shell seam verification: `.venv/bin/python scripts/shell_tool_smoke.py` successfully executes approved-in-principle `pwd` and read-only `git status --short` through the new bounded workspace tool,
 - runnable approval verification: `.venv/bin/python scripts/approval_smoke.py` now shows a queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` now saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
@@ -563,11 +563,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. add an in-app session switcher that reuses the new recent-session summaries instead of limiting reopen flow to startup
+1. broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
 2. keep the fake runtime path green while refining the event schema around steering/intervention events
-3. broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
+3. consider a tiny allow/deny split inside the shell seam so read-only inspection commands can eventually avoid full approval friction
 4. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-5. consider a tiny allow/deny split inside the shell seam so read-only inspection commands can eventually avoid full approval friction
+5. add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -595,7 +595,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- add an in-app session switcher that reuses the new recent-session summaries after startup
 - broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
 - refine the shell seam so read-only inspection commands and test commands can expose distinct policy levels
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+- add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets

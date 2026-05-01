@@ -9,6 +9,7 @@ from .artifacts import SessionArtifactStore, TurnArtifact
 
 MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
+MAX_EVENT_PREVIEW = 50
 
 
 @dataclass(slots=True)
@@ -18,12 +19,22 @@ class SessionSummary:
     turn_count: int
     updated_at: str
     last_prompt_preview: str = ""
+    pending_approval_count: int = 0
+    pending_approval_tool: str = ""
+    last_event_preview: str = ""
 
     def render_line(self, index: int) -> str:
         prompt_suffix = f" | last prompt: {self.last_prompt_preview}" if self.last_prompt_preview else ""
+        pending_suffix = ""
+        if self.pending_approval_count == 1 and self.pending_approval_tool:
+            pending_suffix = f" | pending: {self.pending_approval_tool}"
+        elif self.pending_approval_count > 1:
+            tool_hint = f" ({self.pending_approval_tool} first)" if self.pending_approval_tool else ""
+            pending_suffix = f" | pending: {self.pending_approval_count} approvals{tool_hint}"
+        event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{prompt_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{prompt_suffix}{event_suffix}"
         )
 
 
@@ -40,6 +51,7 @@ def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> 
     for session_dir in session_dirs:
         store = SessionArtifactStore.from_session_dir(session_dir)
         turns = store.load_turns()
+        pending_approvals = store.load_pending_approvals()
         last_prompt_preview = ""
         if turns:
             last_prompt_preview = _truncate(turns[-1].prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
@@ -54,6 +66,9 @@ def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> 
                     turn_count=len(turns),
                     updated_at=_format_timestamp(activity_timestamp),
                     last_prompt_preview=last_prompt_preview,
+                    pending_approval_count=len(pending_approvals),
+                    pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
+                    last_event_preview=_latest_event_preview(turns),
                 ),
             )
         )
@@ -128,6 +143,14 @@ def _turn_timestamp(turn: TurnArtifact) -> float | None:
 
 def _format_timestamp(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _latest_event_preview(turns: list[TurnArtifact]) -> str:
+    for turn in reversed(turns):
+        for event in reversed(turn.events):
+            preview = f"{event.kind}: {event.title}" if event.title else event.kind
+            return _truncate(preview.replace("\n", " ").strip(), MAX_EVENT_PREVIEW)
+    return ""
 
 
 def _truncate(text: str, limit: int) -> str:

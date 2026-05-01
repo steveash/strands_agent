@@ -8,7 +8,7 @@ from textual.widgets import Input
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.app import parse_args
 from strands_agent_tui.config import AppConfig
-from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime
+from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
 
 
@@ -653,9 +653,21 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
             response="newer response",
             provider="fake-strands",
             mode="fake",
-            events=[],
+            events=[runtime_event("tool_finished", "list_files", "Finished listing files")],
             response_metadata={"mode": "fake"},
         )
+    )
+    newer_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0004",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest"},
+                source="fake_runtime",
+                prompt="run pytest",
+            )
+        ]
     )
 
     app = StrandsAgentApp(
@@ -681,6 +693,8 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
 
         assert "Session Switcher" in output
         assert "1. session-newer" in output
+        assert "pending: run_shell_command" in output
+        assert "last event: tool_finished: list_files" in output
         assert "2. session-older" in output
         assert "Keys: 1-8 switch session, N new session, Esc/F11 cancel" in output
         assert "View: session switcher" in status
