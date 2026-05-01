@@ -7,7 +7,7 @@ from dataclasses import field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from strands_agent_tui.runtime import RuntimeEvent
+from strands_agent_tui.runtime import ApprovalRequest, RuntimeEvent
 
 
 @dataclass(slots=True)
@@ -64,6 +64,7 @@ class SessionArtifactStore:
         self.session_dir.mkdir(parents=True, exist_ok=True)
         self.jsonl_path = self.session_dir / "turns.jsonl"
         self.markdown_path = self.session_dir / "transcript.md"
+        self.pending_approvals_path = self.session_dir / "pending_approvals.json"
 
     def append_turn(self, turn: TurnArtifact) -> None:
         payload = turn.as_dict()
@@ -83,6 +84,27 @@ class SessionArtifactStore:
                     continue
                 turns.append(TurnArtifact.from_dict(json.loads(stripped)))
         return turns
+
+    def save_pending_approvals(self, approvals: list[ApprovalRequest]) -> None:
+        payload = {
+            "schema_version": "strands-agent/pending-approvals-v1",
+            "updated_at": datetime.now(UTC).isoformat(),
+            "pending_approvals": [approval.as_dict() for approval in approvals],
+        }
+        self.pending_approvals_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    def load_pending_approvals(self) -> list[ApprovalRequest]:
+        if not self.pending_approvals_path.exists():
+            return []
+        payload = json.loads(self.pending_approvals_path.read_text(encoding="utf-8"))
+        pending_payload = payload.get("pending_approvals") or []
+        return [ApprovalRequest.from_dict(item) for item in pending_payload if isinstance(item, dict)]
+
+    def clear_pending_approvals(self) -> bool:
+        if not self.pending_approvals_path.exists():
+            return False
+        self.pending_approvals_path.unlink()
+        return True
 
     @classmethod
     def from_session_dir(cls, session_dir: str | Path) -> "SessionArtifactStore":

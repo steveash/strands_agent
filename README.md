@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now adds a lightweight in-app approval queue so confirm-needed mutations can be resumed or denied inside the TUI.**
+**Phase 1 is complete, Phase 2 now includes a higher-signal workspace summary tool alongside conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus compact recent-session reopen flows, and Phase 4 now adds restart-safe pending-approval persistence so confirm-needed mutations can survive a TUI restart and still be resumed or denied.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -90,6 +90,7 @@ What exists now:
 - a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision`, `steering_confirmation_required`, or `steering_blocked` events,
 - default conservative steering that requires confirmation for overwrite requests and multi-occurrence edits unless explicitly enabled, and still protects sensitive file patterns like `.env*`, `*.pem`, and `*.key`,
 - a lightweight approval queue plus `F9` approve / `F10` deny controls so confirm-needed mutation requests can resume from inside the TUI instead of stopping at an event-only warning,
+- persisted `pending_approvals.json` session state so queued confirmations can be restored after restart instead of disappearing with process memory,
 - approval-aware fake runtime flows that can demonstrate multiple queued approvals in sequence without needing live credentials,
 - live-runtime tool wiring that can queue confirm-needed mutations, wait for explicit approval, execute the approved tool, and then continue the Strands conversation with a follow-up prompt,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, and compact structured event data,
@@ -106,29 +107,28 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a lightweight approval banner plus `F9` approve / `F10` deny controls in the TUI,
-- added runtime-level pending approval objects so fake and live paths can surface confirm-needed mutations as resumable actions instead of terminal errors,
-- taught the fake runtime to queue multiple approvals deterministically so the approval flow is easy to inspect and test,
-- updated live workspace tool registration so confirm-needed writes/edits can pause, wait for explicit approval, execute, and then continue the Strands conversation,
-- fixed recent-session newest-first ordering to use artifact timestamps as a deterministic tie-break instead of raw directory mtime alone,
-- added regression coverage plus a dedicated `scripts/approval_smoke.py` check for the approval queue.
+- added session-level `pending_approvals.json` persistence so queued confirmations are saved alongside turns/transcripts,
+- taught fake and live runtimes to snapshot and restore pending approval queues without regenerating new approval ids,
+- restored pending approval state on TUI startup so `F9`/`F10` can continue working after a restart,
+- added restart-focused regression coverage plus a dedicated `scripts/approval_restart_smoke.py` check.
 
 Why this matters now:
-- It turns confirm-needed steering from a passive warning into an interactive control surface, which is much closer to how a real coding-agent workstation needs to behave.
-- It makes Strands tool interception more legible by separating “model asked for a risky action” from “operator explicitly allowed that action.”
-- It clears the prerequisite for adding a conservative shell-command seam next, because risky mutations now have an in-app approval path instead of a dead end.
+- It closes the biggest usability gap in the approval UX: restarts no longer silently discard queued confirmations.
+- It makes approval pauses replayable and operationally safer, because artifact state now reflects whether the session is waiting on a human decision.
+- It keeps the shell-command seam unblocked, because risky actions now have both in-app approvals and restart-safe recovery.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection and in-app approval flows,
+- `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection, in-app approval flows, and restart-safe approval recovery,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `51 passed`
+- automated tests: `55 passed`
 - runnable approval verification: `.venv/bin/python scripts/approval_smoke.py` now shows a queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied,
+- runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` now saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`
 - recent-session verification by test: `latest_session(...)` now returns the newest artifact turn even when filesystem mtimes tie,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline
@@ -554,7 +554,7 @@ Why this stack:
 1. add a narrowly scoped shell command seam now that risky mutations have an in-app approval path
 2. add an in-app session switcher that reuses the new recent-session summaries instead of limiting reopen flow to startup
 3. keep the fake runtime path green while refining the event schema around steering/intervention events
-4. persist pending approval state explicitly in artifacts so approval pauses are reconstructible after restart
+4. broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
 5. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 
 1. scaffold Python project + TUI entrypoint
@@ -585,5 +585,5 @@ Future daily iterations should:
 
 - add a narrowly scoped shell command seam now that confirm-needed mutation approval exists in-app
 - add an in-app session switcher that reuses the new recent-session summaries after startup
-- persist pending approval state in artifacts so interrupted approval pauses are replayable after restart
+- broaden restart-safe session state beyond approvals so later interruption points can reuse the same persistence seam
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection

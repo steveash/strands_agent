@@ -5,6 +5,7 @@ import pytest
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import (
     AgentResponse,
+    ApprovalRequest,
     FakeStrandsRuntime,
     StrandsSDKRuntime,
     _ApprovalQueue,
@@ -133,6 +134,61 @@ def test_fake_runtime_denial_resolution_clears_last_pending_request() -> None:
     assert [event.kind for event in denied.events] == ["steering_denied", "response_completed"]
     assert denied.pending_approval is None
     assert "Skipped write_file" in denied.text
+
+
+def test_fake_runtime_can_restore_pending_approvals_after_restart() -> None:
+    first_runtime = FakeStrandsRuntime()
+    first_response = first_runtime.run("overwrite the notes file and replace all stale values")
+
+    restored_runtime = FakeStrandsRuntime()
+    restored_runtime.restore_pending_approvals(first_runtime.pending_approvals())
+
+    restored = restored_runtime.resolve_pending_approval("approval-0001", approve=True)
+
+    assert restored.pending_approval is not None
+    assert restored.pending_approval.request_id == "approval-0002"
+    assert "Approved write_file" in restored.text
+
+
+def test_live_runtime_can_restore_pending_approvals_without_requeuing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class StubRuntime(StrandsSDKRuntime):
+        def _build_agent(self, api_key: str, event_sink=None):
+            tools = build_workspace_tools(tmp_path, event_sink=event_sink, approval_queue=self._approval_queue)
+            tool_map = {tool.tool_name: tool for tool in tools}
+
+            def agent(prompt: str) -> str:
+                return f"continued: {prompt}"
+
+            self._restored_tools = tool_map
+            return agent, len(tools)
+
+    (tmp_path / "notes.txt").write_text("old\n", encoding="utf-8")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    runtime = StubRuntime(workspace_root=tmp_path)
+    runtime.restore_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0007",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "content": "new\n", "overwrite": True},
+                source="live_runtime",
+                prompt="overwrite notes",
+            )
+        ]
+    )
+
+    result = runtime.resolve_pending_approval("approval-0007", approve=True)
+
+    assert (tmp_path / "notes.txt").read_text(encoding="utf-8") == "new\n"
+    assert [event.kind for event in result.events] == [
+        "steering_approved",
+        "tool_started",
+        "tool_finished",
+        "response_completed",
+    ]
+    assert result.pending_approval is None
+    assert "continued:" in result.text
 
 
 def test_build_runtime_defaults_to_fake() -> None:

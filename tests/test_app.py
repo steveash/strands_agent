@@ -375,6 +375,133 @@ async def test_pending_approval_can_be_approved_from_tui_and_persisted(tmp_path:
 
 
 @pytest.mark.asyncio
+async def test_app_restores_pending_approval_from_artifacts_after_restart(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="restart-approval-session")
+    first_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="restart-approval-session",
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with first_app.run_test() as pilot:
+        await pilot.press(
+            "o",
+            "v",
+            "e",
+            "r",
+            "w",
+            "r",
+            "i",
+            "t",
+            "e",
+            " ",
+            "t",
+            "h",
+            "e",
+            " ",
+            "n",
+            "o",
+            "t",
+            "e",
+            "s",
+            " ",
+            "f",
+            "i",
+            "l",
+            "e",
+            " ",
+            "a",
+            "n",
+            "d",
+            " ",
+            "r",
+            "e",
+            "p",
+            "l",
+            "a",
+            "c",
+            "e",
+            " ",
+            "a",
+            "l",
+            "l",
+            " ",
+            "s",
+            "t",
+            "a",
+            "l",
+            "e",
+            " ",
+            "v",
+            "a",
+            "l",
+            "u",
+            "e",
+            "s",
+            "enter",
+        )
+        await pilot.pause()
+
+    second_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="restart-approval-session",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="restart-approval-session"),
+    )
+
+    async with second_app.run_test() as pilot:
+        await pilot.pause()
+
+        restored_status = str(second_app.query_one("#status").render())
+        restored_approval = str(second_app.query_one("#approval").render())
+        restored_events = str(second_app.query_one("#events").render())
+
+        assert "Approval: pending:write_file" in restored_status
+        assert "Approval pending: write_file (approval-0001)" in restored_approval
+        assert "kind=session_state_restored | Pending approvals restored" in restored_events
+
+        await pilot.press("f9")
+        await pilot.pause()
+
+        resolved_output = str(second_app.query_one("#output").render())
+        resolved_status = str(second_app.query_one("#status").render())
+        resolved_approval = str(second_app.query_one("#approval").render())
+
+        assert "User: Approve pending write_file (approval-0001)" in resolved_output
+        assert "Next approval required: replace_text." in resolved_output
+        assert "Approval: pending:replace_text" in resolved_status
+        assert "Approval pending: replace_text (approval-0002)" in resolved_approval
+
+    third_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="restart-approval-session",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="restart-approval-session"),
+    )
+
+    async with third_app.run_test() as pilot:
+        await pilot.pause()
+        third_approval = str(third_app.query_one("#approval").render())
+        assert "Approval pending: replace_text (approval-0002)" in third_approval
+
+
+@pytest.mark.asyncio
 async def test_app_loads_existing_session_artifacts_on_start(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="existing-session")
     artifact_store.append_turn(

@@ -48,6 +48,27 @@ class ApprovalRequest:
         args_preview = ", ".join(f"{key}={value!r}" for key, value in sorted(self.args.items())) or "no args"
         return f"{self.tool_name} [{self.request_id}] | {self.reason} | {args_preview}"
 
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "request_id": self.request_id,
+            "tool_name": self.tool_name,
+            "reason": self.reason,
+            "args": dict(self.args),
+            "source": self.source,
+            "prompt": self.prompt,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "ApprovalRequest":
+        return cls(
+            request_id=str(payload.get("request_id", "approval-0000")),
+            tool_name=str(payload.get("tool_name", "unknown")),
+            reason=str(payload.get("reason", "")),
+            args=dict(payload.get("args") or {}),
+            source=str(payload.get("source", "runtime")),
+            prompt=str(payload.get("prompt", "")),
+        )
+
 
 @dataclass(slots=True)
 class AgentResponse:
@@ -64,6 +85,12 @@ class AgentRuntime(Protocol):
         ...
 
     def resolve_pending_approval(self, approval_id: str, approve: bool) -> AgentResponse:
+        ...
+
+    def pending_approvals(self) -> list[ApprovalRequest]:
+        ...
+
+    def restore_pending_approvals(self, requests: list[ApprovalRequest]) -> None:
         ...
 
 
@@ -113,6 +140,20 @@ class _ApprovalQueue:
 
     def pending_count(self) -> int:
         return len(self._pending)
+
+    def snapshot(self) -> list[ApprovalRequest]:
+        return [item.request for item in self._pending]
+
+    def restore(
+        self,
+        requests: list[ApprovalRequest],
+        execute_factory: Callable[[ApprovalRequest], Callable[[], str]],
+    ) -> None:
+        self._pending = [
+            _PendingApproval(request=request, execute=execute_factory(request))
+            for request in requests
+        ]
+        self._counter = max(self._counter, max((_approval_counter(request.request_id) for request in requests), default=0))
 
     def pop(self, approval_id: str) -> _PendingApproval:
         current = self.current()
@@ -168,6 +209,69 @@ def _summarize_tool_value(value: object, limit: int = 120) -> str:
     return text
 
 
+def _approval_counter(request_id: str) -> int:
+    prefix = "approval-"
+    if not request_id.startswith(prefix):
+        return 0
+    suffix = request_id[len(prefix) :]
+    return int(suffix) if suffix.isdigit() else 0
+
+
+def _build_workspace_actions(workspace_root: str | Path) -> dict[str, Callable[..., str]]:
+    workspace = WorkspaceTools(Path(workspace_root))
+    return {
+        "summarize_workspace": workspace.summarize_workspace,
+        "list_files": workspace.list_files,
+        "read_file": workspace.read_file,
+        "search_files": workspace.search_files,
+        "write_file": workspace.write_file,
+        "replace_text": workspace.replace_text,
+    }
+
+
+def _execute_action_with_events(
+    tool_name: str,
+    action: Callable[..., str],
+    kwargs: dict[str, object],
+    event_sink: RuntimeEventSink | None = None,
+) -> str:
+    started_at = perf_counter()
+    if event_sink is not None:
+        event_sink(
+            runtime_event(
+                kind="tool_started",
+                title=tool_name,
+                detail=f"args={_summarize_tool_value(kwargs)}",
+                data={"tool_name": tool_name, "args": kwargs},
+            )
+        )
+    try:
+        result = action(**kwargs)
+    except Exception as exc:
+        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+        if event_sink is not None:
+            event_sink(
+                runtime_event(
+                    kind="tool_failed",
+                    title=tool_name,
+                    detail=f"error={exc} | elapsed_ms={elapsed_ms}",
+                    data={"tool_name": tool_name, "error": str(exc), "elapsed_ms": elapsed_ms},
+                )
+            )
+        raise
+    elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+    if event_sink is not None:
+        event_sink(
+            runtime_event(
+                kind="tool_finished",
+                title=tool_name,
+                detail=f"elapsed_ms={elapsed_ms} | result={_summarize_tool_value(result)}",
+                data={"tool_name": tool_name, "elapsed_ms": elapsed_ms},
+            )
+        )
+    return result
+
+
 class FakeStrandsRuntime:
     """Deterministic runtime for local development and tests.
 
@@ -179,6 +283,17 @@ class FakeStrandsRuntime:
 
     def __init__(self) -> None:
         self._approval_queue = _ApprovalQueue()
+
+    def pending_approvals(self) -> list[ApprovalRequest]:
+        return self._approval_queue.snapshot()
+
+    def restore_pending_approvals(self, requests: list[ApprovalRequest]) -> None:
+        self._approval_queue.restore(
+            requests,
+            lambda request: lambda: self._execute_fake_pending_tool(
+                {"tool_name": request.tool_name, "args": dict(request.args)}
+            ),
+        )
 
     def run(self, prompt: str) -> AgentResponse:
         normalized = prompt.strip()
@@ -529,45 +644,8 @@ def build_workspace_tools(
     approval_source: str = "live_runtime",
     prompt_provider: Callable[[], str] | None = None,
 ) -> list[object]:
-    workspace = WorkspaceTools(Path(workspace_root))
+    actions = _build_workspace_actions(workspace_root)
     policy = steering_policy or build_default_policy()
-
-    def execute_with_events(tool_name: str, action: Callable[..., str], kwargs: dict[str, object]) -> str:
-        started_at = perf_counter()
-        if event_sink is not None:
-            event_sink(
-                runtime_event(
-                    kind="tool_started",
-                    title=tool_name,
-                    detail=f"args={_summarize_tool_value(kwargs)}",
-                    data={"tool_name": tool_name, "args": kwargs},
-                )
-            )
-        try:
-            result = action(**kwargs)
-        except Exception as exc:
-            elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
-            if event_sink is not None:
-                event_sink(
-                    runtime_event(
-                        kind="tool_failed",
-                        title=tool_name,
-                        detail=f"error={exc} | elapsed_ms={elapsed_ms}",
-                        data={"tool_name": tool_name, "error": str(exc), "elapsed_ms": elapsed_ms},
-                    )
-                )
-            raise
-        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
-        if event_sink is not None:
-            event_sink(
-                runtime_event(
-                    kind="tool_finished",
-                    title=tool_name,
-                    detail=f"elapsed_ms={elapsed_ms} | result={_summarize_tool_value(result)}",
-                    data={"tool_name": tool_name, "elapsed_ms": elapsed_ms},
-                )
-            )
-        return result
 
     def instrument(tool_name: str, action: Callable[..., str]) -> Callable[..., str]:
         def wrapped(**kwargs: object) -> str:
@@ -579,7 +657,7 @@ def build_workspace_tools(
                     args=dict(kwargs),
                     source=approval_source,
                     prompt=prompt_provider() if prompt_provider is not None else "",
-                    execute=lambda: execute_with_events(tool_name, action, dict(kwargs)),
+                    execute=lambda: _execute_action_with_events(tool_name, action, dict(kwargs), event_sink),
                 )
                 if event_sink is not None:
                     event_sink(
@@ -625,14 +703,14 @@ def build_workspace_tools(
                 if decision.requires_confirmation:
                     raise PermissionError(f"Confirmation required: {decision.reason}")
                 raise PermissionError(decision.reason)
-            return execute_with_events(tool_name, action, dict(kwargs))
+            return _execute_action_with_events(tool_name, action, dict(kwargs), event_sink)
 
         return wrapped
 
     @tool
     def summarize_workspace(relative_path: str = ".", max_files: int = 400) -> str:
         """Summarize workspace shape, key files, and dominant file types before deeper inspection."""
-        return instrument("summarize_workspace", workspace.summarize_workspace)(
+        return instrument("summarize_workspace", actions["summarize_workspace"])(
             relative_path=relative_path,
             max_files=max_files,
         )
@@ -640,12 +718,12 @@ def build_workspace_tools(
     @tool
     def list_files(relative_path: str = ".", recursive: bool = False) -> str:
         """List files and directories inside the active workspace."""
-        return instrument("list_files", workspace.list_files)(relative_path=relative_path, recursive=recursive)
+        return instrument("list_files", actions["list_files"])(relative_path=relative_path, recursive=recursive)
 
     @tool
     def read_file(relative_path: str, start_line: int = 1, max_lines: int = 200) -> str:
         """Read a text file from the active workspace."""
-        return instrument("read_file", workspace.read_file)(
+        return instrument("read_file", actions["read_file"])(
             relative_path=relative_path,
             start_line=start_line,
             max_lines=max_lines,
@@ -660,7 +738,7 @@ def build_workspace_tools(
         max_results: int = 20,
     ) -> str:
         """Search text files in the active workspace for a query string."""
-        return instrument("search_files", workspace.search_files)(
+        return instrument("search_files", actions["search_files"])(
             query=query,
             relative_path=relative_path,
             glob_pattern=glob_pattern,
@@ -671,7 +749,7 @@ def build_workspace_tools(
     @tool
     def write_file(relative_path: str, content: str, overwrite: bool = False) -> str:
         """Write a text file inside the active workspace, refusing overwrites unless explicitly allowed."""
-        return instrument("write_file", workspace.write_file)(
+        return instrument("write_file", actions["write_file"])(
             relative_path=relative_path,
             content=content,
             overwrite=overwrite,
@@ -685,7 +763,7 @@ def build_workspace_tools(
         expected_occurrences: int = 1,
     ) -> str:
         """Replace exact text in a workspace file, failing if the match count is not what was expected."""
-        return instrument("replace_text", workspace.replace_text)(
+        return instrument("replace_text", actions["replace_text"])(
             relative_path=relative_path,
             old_text=old_text,
             new_text=new_text,
@@ -755,6 +833,25 @@ class StrandsSDKRuntime:
     def _emit_event(self, event: RuntimeEvent) -> None:
         if self._event_sink is not None:
             self._event_sink(event)
+
+    def pending_approvals(self) -> list[ApprovalRequest]:
+        return self._approval_queue.snapshot()
+
+    def restore_pending_approvals(self, requests: list[ApprovalRequest]) -> None:
+        actions = _build_workspace_actions(self.workspace_root)
+
+        def execute_factory(request: ApprovalRequest) -> Callable[[], str]:
+            action = actions.get(request.tool_name)
+            if action is None:
+                raise ValueError(f"Unsupported pending tool for restore: {request.tool_name}")
+            return lambda: _execute_action_with_events(
+                request.tool_name,
+                action,
+                dict(request.args),
+                self._emit_event,
+            )
+
+        self._approval_queue.restore(requests, execute_factory)
 
     def run(self, prompt: str) -> AgentResponse:
         api_key = getenv("OPENAI_API_KEY", "").strip()

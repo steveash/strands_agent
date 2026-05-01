@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from strands_agent_tui.runtime import ApprovalRequest
 from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact, latest_session, list_recent_sessions, pick_session, render_session_picker
 
 
@@ -87,3 +88,35 @@ def test_pick_session_handles_empty_artifact_root(tmp_path: Path) -> None:
     assert summary is None
     assert captured[0].startswith("No saved sessions found under")
     assert captured[1] == "Starting a new session instead."
+
+
+def test_session_artifact_store_persists_and_clears_pending_approvals(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-approval")
+    approvals = [
+        ApprovalRequest(
+            request_id="approval-0001",
+            tool_name="write_file",
+            reason="Needs confirmation",
+            args={"relative_path": "notes.txt", "overwrite": True},
+            source="fake_runtime",
+            prompt="overwrite notes",
+        ),
+        ApprovalRequest(
+            request_id="approval-0002",
+            tool_name="replace_text",
+            reason="Broad edit needs confirmation",
+            args={"relative_path": "notes.txt", "expected_occurrences": 2},
+            source="fake_runtime",
+            prompt="replace all notes",
+        ),
+    ]
+
+    store.save_pending_approvals(approvals)
+
+    loaded = store.load_pending_approvals()
+
+    assert [approval.request_id for approval in loaded] == ["approval-0001", "approval-0002"]
+    assert loaded[0].tool_name == "write_file"
+    assert loaded[1].args["expected_occurrences"] == 2
+    assert store.clear_pending_approvals() is True
+    assert store.load_pending_approvals() == []

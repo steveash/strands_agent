@@ -148,6 +148,23 @@ class StrandsAgentApp(App):
         for turn in prior_turns:
             self.history.append((turn.prompt, turn.response))
             self.events.extend(turn.events)
+        pending_approvals = self.artifact_store.load_pending_approvals()
+        if pending_approvals and hasattr(self.runtime, "restore_pending_approvals"):
+            self.runtime.restore_pending_approvals(pending_approvals)
+            self.pending_approval = pending_approvals[0]
+            self.events.append(
+                runtime_event(
+                    kind="session_state_restored",
+                    title="Pending approvals restored",
+                    detail=f"Restored {len(pending_approvals)} pending approval request(s) from session artifacts.",
+                    data={
+                        "session_id": self.artifact_store.session_id,
+                        "pending_count": len(pending_approvals),
+                        "approval_id": pending_approvals[0].request_id,
+                        "tool_name": pending_approvals[0].tool_name,
+                    },
+                )
+            )
 
     def render_context_banner(self) -> str:
         return f"Workspace: {self.config.workspace_path} | Session: {self.artifact_store.session_id}"
@@ -340,6 +357,7 @@ class StrandsAgentApp(App):
                 },
             )
         )
+        self._sync_pending_approval_state()
 
     def _record_runtime_error(self, prompt: str, exc: Exception) -> None:
         error_text = f"Error: {exc}"
@@ -377,6 +395,37 @@ class StrandsAgentApp(App):
                 },
             )
         )
+        self._sync_pending_approval_state()
+
+    def _sync_pending_approval_state(self) -> None:
+        if not hasattr(self.runtime, "pending_approvals"):
+            return
+        pending_approvals = self.runtime.pending_approvals()
+        if pending_approvals:
+            self.artifact_store.save_pending_approvals(pending_approvals)
+            self.events.append(
+                runtime_event(
+                    kind="session_state_saved",
+                    title="Pending approvals saved",
+                    detail=f"Persisted {len(pending_approvals)} pending approval request(s) for restart-safe resume.",
+                    data={
+                        "session_id": self.artifact_store.session_id,
+                        "pending_count": len(pending_approvals),
+                        "approval_id": pending_approvals[0].request_id,
+                        "tool_name": pending_approvals[0].tool_name,
+                    },
+                )
+            )
+            return
+        if self.artifact_store.clear_pending_approvals():
+            self.events.append(
+                runtime_event(
+                    kind="session_state_cleared",
+                    title="Pending approvals cleared",
+                    detail="Removed persisted pending approval state because no confirmation requests remain.",
+                    data={"session_id": self.artifact_store.session_id},
+                )
+            )
 
     def _refresh_history_widgets(self) -> None:
         self.query_one("#output", Static).update(self.render_history())
