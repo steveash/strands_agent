@@ -36,7 +36,14 @@ def test_list_recent_sessions_orders_by_latest_activity_and_includes_prompt_prev
             response="done",
             provider="fake-strands",
             mode="fake",
-            events=[runtime_event("tool_finished", "list_files", "Finished listing files")],
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                )
+            ],
             response_metadata={"mode": "fake"},
         )
     )
@@ -47,7 +54,9 @@ def test_list_recent_sessions_orders_by_latest_activity_and_includes_prompt_prev
     assert sessions[0].turn_count == 1
     assert sessions[0].last_prompt_preview.endswith("...")
     assert sessions[0].last_event_preview == "tool_finished: list_files"
+    assert sessions[0].last_tool_preview == ".: README.md"
     assert "turn(s)" in sessions[0].render_line(1)
+    assert "last tool: .: README.md" in sessions[0].render_line(1)
     assert "last event: tool_finished: list_files" in sessions[0].render_line(1)
 
 
@@ -226,3 +235,36 @@ def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_pat
 
     assert summary.restore_badges == ["filter=tool", "replay 2/2", "draft 15c", "chooser"]
     assert "restore: filter=tool, replay 2/2, draft 15c, chooser" in summary.render_line(1)
+
+
+def test_list_recent_sessions_surfaces_shell_tool_preview_and_exit_badges(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-shell")
+    store.append_turn(
+        TurnArtifact(
+            prompt="check git status",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Simulated read-only shell inspection.",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+
+    assert summary.last_tool_preview == "git status --short -> M README.md"
+    assert summary.last_tool_badges == ["inspect", "e0"]
+    assert "last tool: inspect/e0 git status --short -> M README.md" in summary.render_line(1)

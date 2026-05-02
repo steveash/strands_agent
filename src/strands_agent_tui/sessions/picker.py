@@ -11,6 +11,7 @@ from .artifacts import SessionArtifactStore, SessionState, TurnArtifact
 MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
 MAX_EVENT_PREVIEW = 50
+MAX_TOOL_PREVIEW = 72
 
 
 @dataclass(slots=True)
@@ -23,6 +24,8 @@ class SessionSummary:
     pending_approval_count: int = 0
     pending_approval_tool: str = ""
     last_event_preview: str = ""
+    last_tool_preview: str = ""
+    last_tool_badges: list[str] = field(default_factory=list)
     restore_badges: list[str] = field(default_factory=list)
 
     def render_line(self, index: int) -> str:
@@ -33,11 +36,20 @@ class SessionSummary:
         elif self.pending_approval_count > 1:
             tool_hint = f" ({self.pending_approval_tool} first)" if self.pending_approval_tool else ""
             pending_suffix = f" | pending: {self.pending_approval_count} approvals{tool_hint}"
+        tool_hint = ""
+        if self.last_tool_preview or self.last_tool_badges:
+            badge_prefix = "/".join(self.last_tool_badges)
+            if badge_prefix and self.last_tool_preview:
+                tool_hint = f" | last tool: {badge_prefix} {self.last_tool_preview}"
+            elif badge_prefix:
+                tool_hint = f" | last tool: {badge_prefix}"
+            else:
+                tool_hint = f" | last tool: {self.last_tool_preview}"
         event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{restore_suffix}{prompt_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{event_suffix}"
         )
 
 
@@ -73,6 +85,8 @@ def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> 
                     pending_approval_count=len(pending_approvals),
                     pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
                     last_event_preview=_latest_event_preview(turns),
+                    last_tool_preview=_latest_tool_preview(turns),
+                    last_tool_badges=_latest_tool_badges(turns),
                     restore_badges=_restore_badges(session_state, len(turns)),
                 ),
             )
@@ -156,6 +170,47 @@ def _latest_event_preview(turns: list[TurnArtifact]) -> str:
             preview = f"{event.kind}: {event.title}" if event.title else event.kind
             return _truncate(preview.replace("\n", " ").strip(), MAX_EVENT_PREVIEW)
     return ""
+
+
+def _latest_tool_preview(turns: list[TurnArtifact]) -> str:
+    event = _latest_tool_event(turns)
+    if event is None:
+        return ""
+    preview = str(event.data.get("result_preview", "") or "").strip()
+    if preview:
+        return _truncate(preview, MAX_TOOL_PREVIEW)
+    command = str(event.data.get("command", "") or "").strip()
+    if event.title == "run_shell_command" and command:
+        return _truncate(command, MAX_TOOL_PREVIEW)
+    fallback = event.title or event.kind
+    return _truncate(fallback, MAX_TOOL_PREVIEW)
+
+
+def _latest_tool_badges(turns: list[TurnArtifact]) -> list[str]:
+    event = _latest_tool_event(turns)
+    if event is None:
+        return []
+
+    badges: list[str] = []
+    shell_policy = str(event.data.get("shell_policy", "") or "").strip()
+    if shell_policy:
+        badges.append(shell_policy)
+
+    exit_code = event.data.get("exit_code")
+    if isinstance(exit_code, int):
+        badges.append(f"e{exit_code}")
+    elif event.kind == "tool_failed":
+        badges.append("failed")
+
+    return badges
+
+
+def _latest_tool_event(turns: list[TurnArtifact]):
+    for turn in reversed(turns):
+        for event in reversed(turn.events):
+            if event.kind in {"tool_finished", "tool_failed"}:
+                return event
+    return None
 
 
 def _restore_badges(state: SessionState, turn_count: int) -> list[str]:

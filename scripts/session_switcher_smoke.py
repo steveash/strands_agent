@@ -34,7 +34,14 @@ async def run_smoke() -> None:
                 response="newer response",
                 provider="fake-strands",
                 mode="fake",
-                events=[runtime_event("tool_finished", "list_files", "Finished listing files")],
+                events=[
+                    runtime_event(
+                        "tool_finished",
+                        "list_files",
+                        "Finished listing files",
+                        data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                    )
+                ],
                 response_metadata={"mode": "fake"},
             )
         )
@@ -81,6 +88,7 @@ async def run_smoke() -> None:
                 "switcher_has_restore_badges=",
                 "restore: filter=tool, replay 1/1, draft 15c" in str(switcher_output),
             )
+            print("switcher_has_tool_preview=", "last tool: .: README.md" in str(switcher_output))
             print("switcher_has_event_preview=", "last event: tool_finished: list_files" in str(switcher_output))
             await pilot.press("up")
             await pilot.pause()

@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges to recent-session triage alongside keyboard-driven session switching.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges plus last-tool-result triage hints in recent-session switching.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -113,14 +113,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- split shell-command steering into distinct policy levels so read-only inspection commands are allowed immediately while `pytest`/`python -m pytest` still queue explicit approval,
-- added shared shell-command classification so steering can reject unsupported commands earlier and tag shell events with compact `inspect` vs `test` policy metadata,
-- refreshed fake-runtime coverage plus `scripts/shell_tool_smoke.py` so the direct-inspection path and approval-gated test path are both runnable without launching the full TUI.
+- enriched tool-finished/tool-failed events with compact `result_preview` metadata so recent-session triage can show the last meaningful tool outcome instead of only the last event name,
+- added shell-specific event metadata for command family, exit code, and output preview so session summaries can surface compact `inspect/e0`-style badges for direct shell inspection,
+- updated the CLI picker, in-app session switcher, fake-runtime events, and smoke coverage so the new last-tool hints stay visible and deterministic across saved sessions.
 
 Why this matters now:
-- It removes unnecessary approval friction from safe repo-inspection commands like `pwd` and `git status` while keeping mutation-adjacent test execution visibly gated.
-- It makes shell steering behavior more legible in the event timeline because inspection vs test intent is now explicit instead of hidden behind one blanket approval rule.
-- It tightens the shell seam into something closer to a real coding-agent workstation without broadening the command allowlist.
+- It makes recent-session reopen flow much faster because you can see what the agent most recently *did*, not just that some tool event happened.
+- It tightens the fake/live event schema around tool outcomes, which keeps session triage and restart/replay features from depending on brittle free-form strings.
+- It gives shell inspection a denser, operator-friendly summary path without broadening the command seam or relaxing approvals.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -131,10 +131,10 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `76 passed`
+- automated tests: `78 passed`
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` still reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_restored= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` now reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_has_tool_preview= True`, `switcher_has_event_preview= True`, `switcher_restored= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
 - CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`,
 - recent-session verification by test: recent session summaries still surface pending approvals, restore-state badges, and last-event previews while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
@@ -576,10 +576,10 @@ Why this stack:
 ## Next highest-value implementation order
 
 1. keep the fake runtime path green while refining the event schema around steering/intervention events
-2. add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
+2. decide whether session-switcher triage now needs per-session sort/filter affordances on top of the denser last-tool hints
 3. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-4. decide whether session-switcher restore should also preserve transient sort/filter modes once the chooser gets richer
-5. decide whether direct shell inspection should surface richer command-result summaries in recent-session triage
+4. decide whether chooser restore should also preserve transient sort/filter modes once the switcher gets richer
+5. decide whether recent-session triage should surface multi-tool streak summaries instead of only the latest tool outcome
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper

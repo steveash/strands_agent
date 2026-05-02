@@ -131,6 +131,9 @@ def test_fake_runtime_allows_read_only_shell_inspection_prompt() -> None:
     assert result.events[2].title == "run_shell_command"
     assert result.events[2].data["command"] == "git status --short"
     assert result.events[2].data["shell_policy"] == "inspect"
+    assert result.events[3].data["shell_command_family"] == "git_status"
+    assert result.events[3].data["exit_code"] == 0
+    assert result.events[3].data["result_preview"] == "git status --short -> simulated clean output"
 
 
 def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_next() -> None:
@@ -478,6 +481,10 @@ def test_build_workspace_tools_allows_read_only_shell_command_without_confirmati
     assert events[0].data["command"] == "pwd"
     assert events[0].data["requires_confirmation"] is False
     assert events[0].data["shell_policy"] == "inspect"
+    assert events[2].data["command"] == "pwd"
+    assert events[2].data["shell_policy"] == "inspect"
+    assert events[2].data["exit_code"] == 0
+    assert events[2].data["result_preview"].startswith("pwd ->")
 
 
 def test_build_workspace_tools_requires_confirmation_for_shell_test_command(tmp_path: Path) -> None:

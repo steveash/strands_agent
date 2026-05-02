@@ -4,13 +4,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from os import getenv
 from pathlib import Path
+import re
 from time import perf_counter
 from typing import Callable, Protocol
 
 from strands import tool
 
 from strands_agent_tui.steering import SteeringDecision, ToolSteeringPolicy, build_default_policy
-from strands_agent_tui.tools.workspace import WorkspaceTools
+from strands_agent_tui.tools.workspace import WorkspaceTools, resolve_shell_command
 
 
 @dataclass(slots=True)
@@ -209,6 +210,142 @@ def _summarize_tool_value(value: object, limit: int = 120) -> str:
     return text
 
 
+def _truncate_preview(text: str, limit: int = 80) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."
+
+
+def _extract_labeled_value(text: str, label: str) -> str | None:
+    for line in text.splitlines():
+        if line.startswith(label):
+            return line[len(label) :].strip()
+    return None
+
+
+def _first_nonempty_line_after_label(text: str, label: str) -> str | None:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith(label):
+            for candidate in lines[index + 1 :]:
+                stripped = candidate.strip()
+                if stripped:
+                    return stripped
+            return None
+    return None
+
+
+def _extract_shell_exit_code(text: str) -> int | None:
+    exit_code_text = _extract_labeled_value(text, "Exit code:")
+    if exit_code_text and exit_code_text.lstrip("-").isdigit():
+        return int(exit_code_text)
+    match = re.search(r"exit code (-?\d+)", text)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _extract_shell_output_preview(text: str) -> str | None:
+    output_line = _first_nonempty_line_after_label(text, "Output:")
+    if not output_line or output_line == "<no output>":
+        return None
+    return _truncate_preview(output_line)
+
+
+def _build_tool_result_preview(
+    tool_name: str,
+    text: str,
+    kwargs: dict[str, object],
+    *,
+    success: bool,
+) -> str | None:
+    if tool_name == "run_shell_command":
+        command = str(kwargs.get("command", "")).strip()
+        output_preview = _extract_shell_output_preview(text)
+        if command and output_preview:
+            return _truncate_preview(f"{command} -> {output_preview}")
+        if command:
+            exit_code = _extract_shell_exit_code(text)
+            if exit_code is not None:
+                return _truncate_preview(f"{command} -> exit {exit_code}")
+            return _truncate_preview(f"{command} -> {'ok' if success else 'failed'}")
+
+    if tool_name == "read_file":
+        file_name = _extract_labeled_value(text, "File:")
+        line_range = _extract_labeled_value(text, "Lines:")
+        if file_name and line_range:
+            return _truncate_preview(f"{file_name} lines {line_range}")
+
+    if tool_name == "list_files":
+        location = _extract_labeled_value(text, "Listing:")
+        first_entry = _first_nonempty_line_after_label(text, "Listing:")
+        if location and first_entry:
+            return _truncate_preview(f"{location}: {first_entry}")
+
+    if tool_name == "search_files":
+        first_match = _first_nonempty_line_after_label(text, "Search:")
+        if first_match:
+            return _truncate_preview(first_match)
+
+    if tool_name == "summarize_workspace":
+        scanned = next((line.strip() for line in text.splitlines() if line.startswith("Scanned files:")), "")
+        if scanned:
+            return _truncate_preview(scanned)
+
+    if tool_name in {"write_file", "replace_text"}:
+        action = _extract_labeled_value(text, "Action:")
+        file_name = _extract_labeled_value(text, "File:")
+        occurrences = _extract_labeled_value(text, "Occurrences:")
+        if file_name and occurrences:
+            return _truncate_preview(f"{action or tool_name}: {file_name} ({occurrences})")
+        if action and file_name:
+            return _truncate_preview(f"{action}: {file_name}")
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return _truncate_preview(stripped)
+    return None
+
+
+def _tool_event_data(
+    tool_name: str,
+    kwargs: dict[str, object],
+    *,
+    result_text: str | None = None,
+    error_text: str | None = None,
+    success: bool,
+) -> dict[str, object]:
+    data: dict[str, object] = {}
+
+    if tool_name == "run_shell_command":
+        command = str(kwargs.get("command", "")).strip()
+        if command:
+            data["command"] = command
+            try:
+                profile = resolve_shell_command(command)
+            except ValueError:
+                pass
+            else:
+                data["shell_policy"] = profile.policy_level
+                data["shell_command_family"] = profile.family
+        exit_code = _extract_shell_exit_code(result_text or error_text or "")
+        if exit_code is not None:
+            data["exit_code"] = exit_code
+        output_preview = _extract_shell_output_preview(result_text or error_text or "")
+        if output_preview:
+            data["output_preview"] = output_preview
+
+    preview_source = result_text if result_text is not None else error_text
+    if preview_source:
+        preview = _build_tool_result_preview(tool_name, preview_source, kwargs, success=success)
+        if preview:
+            data["result_preview"] = preview
+
+    return data
+
+
 def _approval_counter(request_id: str) -> int:
     prefix = "approval-"
     if not request_id.startswith(prefix):
@@ -251,23 +388,34 @@ def _execute_action_with_events(
     except Exception as exc:
         elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
         if event_sink is not None:
+            event_data = {
+                "tool_name": tool_name,
+                "error": str(exc),
+                "elapsed_ms": elapsed_ms,
+                **_tool_event_data(tool_name, kwargs, error_text=str(exc), success=False),
+            }
             event_sink(
                 runtime_event(
                     kind="tool_failed",
                     title=tool_name,
                     detail=f"error={exc} | elapsed_ms={elapsed_ms}",
-                    data={"tool_name": tool_name, "error": str(exc), "elapsed_ms": elapsed_ms},
+                    data=event_data,
                 )
             )
         raise
     elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
     if event_sink is not None:
+        event_data = {
+            "tool_name": tool_name,
+            "elapsed_ms": elapsed_ms,
+            **_tool_event_data(tool_name, kwargs, result_text=result, success=True),
+        }
         event_sink(
             runtime_event(
                 kind="tool_finished",
                 title=tool_name,
                 detail=f"elapsed_ms={elapsed_ms} | result={_summarize_tool_value(result)}",
-                data={"tool_name": tool_name, "elapsed_ms": elapsed_ms},
+                data=event_data,
             )
         )
     return result
@@ -351,7 +499,11 @@ class FakeStrandsRuntime:
                         kind="tool_finished",
                         title="list_files",
                         detail="Returned a simulated workspace listing without touching disk.",
-                        data={"tool_name": "list_files", "source": "fake_runtime"},
+                        data={
+                            "tool_name": "list_files",
+                            "source": "fake_runtime",
+                            "result_preview": ".: README.md",
+                        },
                     ),
                 ]
             )
@@ -368,7 +520,11 @@ class FakeStrandsRuntime:
                         kind="tool_finished",
                         title="summarize_workspace",
                         detail="Returned a simulated workspace summary without walking the real filesystem.",
-                        data={"tool_name": "summarize_workspace", "source": "fake_runtime"},
+                        data={
+                            "tool_name": "summarize_workspace",
+                            "source": "fake_runtime",
+                            "result_preview": "Scanned files: 12 of 12 total",
+                        },
                     ),
                 ]
             )
@@ -385,7 +541,11 @@ class FakeStrandsRuntime:
                         kind="tool_finished",
                         title="search_files",
                         detail="Returned simulated search hits from the fake workspace.",
-                        data={"tool_name": "search_files", "source": "fake_runtime"},
+                        data={
+                            "tool_name": "search_files",
+                            "source": "fake_runtime",
+                            "result_preview": "src/main.py:2: print('world')",
+                        },
                     ),
                 ]
             )
@@ -419,6 +579,10 @@ class FakeStrandsRuntime:
                             "source": "fake_runtime",
                             "command": command,
                             "shell_policy": "inspect",
+                            "shell_command_family": resolve_shell_command(command).family,
+                            "exit_code": 0,
+                            "output_preview": "simulated clean output",
+                            "result_preview": f"{command} -> simulated clean output",
                         },
                     ),
                 ]
@@ -436,7 +600,11 @@ class FakeStrandsRuntime:
                         kind="tool_finished",
                         title="write_file",
                         detail="Simulated a bounded workspace write without changing disk.",
-                        data={"tool_name": "write_file", "source": "fake_runtime"},
+                        data={
+                            "tool_name": "write_file",
+                            "source": "fake_runtime",
+                            "result_preview": "wrote: notes.txt",
+                        },
                     ),
                 ]
             )
@@ -453,7 +621,11 @@ class FakeStrandsRuntime:
                         kind="tool_finished",
                         title="replace_text",
                         detail="Simulated an exact text replacement without touching disk.",
-                        data={"tool_name": "replace_text", "source": "fake_runtime"},
+                        data={
+                            "tool_name": "replace_text",
+                            "source": "fake_runtime",
+                            "result_preview": "replaced text: notes.txt (1)",
+                        },
                     ),
                 ]
             )

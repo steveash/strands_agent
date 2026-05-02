@@ -136,3 +136,18 @@ def test_build_workspace_tools_emits_events_via_sink(tmp_path: Path) -> None:
     assert events[1].data["args"]["relative_path"] == "notes.txt"
     assert "elapsed_ms=" in events[2].detail
     assert "elapsed_ms" in events[2].data
+    assert events[2].data["result_preview"] == "notes.txt lines 1-1"
+
+
+def test_build_workspace_tools_surfaces_shell_failure_metadata(tmp_path: Path) -> None:
+    events = []
+    tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
+
+    with pytest.raises(RuntimeError, match="exit code 128"):
+        tools["run_shell_command"](command="git status --short")
+
+    assert [event.kind for event in events] == ["steering_decision", "tool_started", "tool_failed"]
+    assert events[2].data["command"] == "git status --short"
+    assert events[2].data["shell_policy"] == "inspect"
+    assert events[2].data["exit_code"] == 128
+    assert events[2].data["result_preview"].startswith("git status --short ->")

@@ -764,7 +764,14 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
             response="newer response",
             provider="fake-strands",
             mode="fake",
-            events=[runtime_event("tool_finished", "list_files", "Finished listing files")],
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                )
+            ],
             response_metadata={"mode": "fake"},
         )
     )
@@ -814,6 +821,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "> 2. session-older" in output
         assert "pending: run_shell_command" in output
         assert "restore: filter=tool, replay 1/1, draft 15c" in output
+        assert "last tool: .: README.md" in output
         assert "last event: tool_finished: list_files" in output
         assert "2. session-older" in output
         assert "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, N new session, Esc/F11 cancel" in output
