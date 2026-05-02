@@ -207,3 +207,22 @@ def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path)
     assert summary.pending_approval_count == 1
     assert summary.pending_approval_tool == "run_shell_command"
     assert "pending: run_shell_command" in summary.render_line(1)
+
+
+def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-restore")
+    _append_turn(store, "inspect repo")
+    _append_turn(store, "review latest diff")
+    store.save_session_state(
+        SessionState(
+            event_filter="tool",
+            history_focus_index=1,
+            draft_prompt="draft follow-up",
+            session_switcher_active=True,
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+
+    assert summary.restore_badges == ["filter=tool", "replay 2/2", "draft 15c", "chooser"]
+    assert "restore: filter=tool, replay 2/2, draft 15c, chooser" in summary.render_line(1)

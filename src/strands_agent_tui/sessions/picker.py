@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
-from .artifacts import SessionArtifactStore, TurnArtifact
+from .artifacts import SessionArtifactStore, SessionState, TurnArtifact
 
 MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
@@ -22,6 +23,7 @@ class SessionSummary:
     pending_approval_count: int = 0
     pending_approval_tool: str = ""
     last_event_preview: str = ""
+    restore_badges: list[str] = field(default_factory=list)
 
     def render_line(self, index: int) -> str:
         prompt_suffix = f" | last prompt: {self.last_prompt_preview}" if self.last_prompt_preview else ""
@@ -32,9 +34,10 @@ class SessionSummary:
             tool_hint = f" ({self.pending_approval_tool} first)" if self.pending_approval_tool else ""
             pending_suffix = f" | pending: {self.pending_approval_count} approvals{tool_hint}"
         event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
+        restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{prompt_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{restore_suffix}{prompt_suffix}{event_suffix}"
         )
 
 
@@ -51,6 +54,7 @@ def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> 
     for session_dir in session_dirs:
         store = SessionArtifactStore.from_session_dir(session_dir)
         turns = store.load_turns()
+        session_state = store.load_session_state() or SessionState()
         pending_approvals = store.load_pending_approvals()
         last_prompt_preview = ""
         if turns:
@@ -69,6 +73,7 @@ def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> 
                     pending_approval_count=len(pending_approvals),
                     pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
                     last_event_preview=_latest_event_preview(turns),
+                    restore_badges=_restore_badges(session_state, len(turns)),
                 ),
             )
         )
@@ -151,6 +156,27 @@ def _latest_event_preview(turns: list[TurnArtifact]) -> str:
             preview = f"{event.kind}: {event.title}" if event.title else event.kind
             return _truncate(preview.replace("\n", " ").strip(), MAX_EVENT_PREVIEW)
     return ""
+
+
+def _restore_badges(state: SessionState, turn_count: int) -> list[str]:
+    badges: list[str] = []
+
+    if state.event_filter != "all":
+        badges.append(f"filter={state.event_filter}")
+
+    if state.history_focus_index is not None:
+        if turn_count > 0 and 0 <= state.history_focus_index < turn_count:
+            badges.append(f"replay {state.history_focus_index + 1}/{turn_count}")
+        else:
+            badges.append("replay")
+
+    if state.draft_prompt:
+        badges.append(f"draft {len(state.draft_prompt)}c")
+
+    if state.session_switcher_active:
+        badges.append("chooser")
+
+    return badges
 
 
 def _truncate(text: str, limit: int) -> str:

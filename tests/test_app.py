@@ -10,6 +10,7 @@ from strands_agent_tui.app import parse_args
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
+from strands_agent_tui.sessions import SessionState
 
 
 class FailingRuntime:
@@ -767,6 +768,13 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
             response_metadata={"mode": "fake"},
         )
     )
+    newer_store.save_session_state(
+        SessionState(
+            event_filter="tool",
+            history_focus_index=0,
+            draft_prompt="draft next step",
+        )
+    )
     newer_store.save_pending_approvals(
         [
             ApprovalRequest(
@@ -805,6 +813,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "1. session-newer" in output
         assert "> 2. session-older" in output
         assert "pending: run_shell_command" in output
+        assert "restore: filter=tool, replay 1/1, draft 15c" in output
         assert "last event: tool_finished: list_files" in output
         assert "2. session-older" in output
         assert "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, N new session, Esc/F11 cancel" in output

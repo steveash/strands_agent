@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact
+from strands_agent_tui.sessions import SessionArtifactStore, SessionState, TurnArtifact
 
 
 def append_turn(store: SessionArtifactStore, prompt: str, response: str) -> None:
@@ -36,6 +36,13 @@ async def run_smoke() -> None:
                 mode="fake",
                 events=[runtime_event("tool_finished", "list_files", "Finished listing files")],
                 response_metadata={"mode": "fake"},
+            )
+        )
+        newer_store.save_session_state(
+            SessionState(
+                event_filter="tool",
+                history_focus_index=0,
+                draft_prompt="draft next step",
             )
         )
         newer_store.save_pending_approvals(
@@ -70,6 +77,10 @@ async def run_smoke() -> None:
             switcher_output = first_app.query_one("#output").render()
             print("switcher_default_selection_is_current=", "> 2. session-older" in str(switcher_output))
             print("switcher_has_pending_marker=", "pending: run_shell_command" in str(switcher_output))
+            print(
+                "switcher_has_restore_badges=",
+                "restore: filter=tool, replay 1/1, draft 15c" in str(switcher_output),
+            )
             print("switcher_has_event_preview=", "last event: tool_finished: list_files" in str(switcher_output))
             await pilot.press("up")
             await pilot.pause()
