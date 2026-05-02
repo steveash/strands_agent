@@ -63,8 +63,10 @@ class SessionState:
     draft_prompt: str = ""
     session_switcher_active: bool = False
     session_switcher_selected_session_id: str = ""
+    session_switcher_filter_mode: str = "all"
+    session_switcher_sort_mode: str = "recent"
     updated_at: str | None = None
-    schema_version: str = "strands-agent/session-state-v3"
+    schema_version: str = "strands-agent/session-state-v4"
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -76,6 +78,8 @@ class SessionState:
             "draft_prompt": self.draft_prompt,
             "session_switcher_active": self.session_switcher_active,
             "session_switcher_selected_session_id": self.session_switcher_selected_session_id,
+            "session_switcher_filter_mode": self.session_switcher_filter_mode,
+            "session_switcher_sort_mode": self.session_switcher_sort_mode,
         }
 
     @classmethod
@@ -93,8 +97,10 @@ class SessionState:
             draft_prompt=str(payload.get("draft_prompt", "") or ""),
             session_switcher_active=bool(payload.get("session_switcher_active", False)),
             session_switcher_selected_session_id=str(payload.get("session_switcher_selected_session_id", "") or ""),
+            session_switcher_filter_mode=str(payload.get("session_switcher_filter_mode", "all") or "all"),
+            session_switcher_sort_mode=str(payload.get("session_switcher_sort_mode", "recent") or "recent"),
             updated_at=str(payload.get("updated_at")) if payload.get("updated_at") else None,
-            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v3")),
+            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v4")),
         )
 
     def is_default(self) -> bool:
@@ -105,6 +111,8 @@ class SessionState:
             and not self.draft_prompt
             and not self.session_switcher_active
             and not self.session_switcher_selected_session_id
+            and self.session_switcher_filter_mode == "all"
+            and self.session_switcher_sort_mode == "recent"
         )
 
 

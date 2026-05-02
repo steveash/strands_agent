@@ -90,6 +90,21 @@ async def run_smoke() -> None:
             )
             print("switcher_has_tool_preview=", "last tool: .: README.md" in str(switcher_output))
             print("switcher_has_event_preview=", "last event: tool_finished: list_files" in str(switcher_output))
+            await pilot.press("p")
+            await pilot.pause()
+            pending_output = first_app.query_one("#output").render()
+            pending_text = str(pending_output)
+            print("switcher_pending_filter=", "Filter: pending | Sort: recent" in str(pending_output))
+            print(
+                "switcher_pending_filter_only_newer=",
+                "session-newer | 1 turn(s)" in pending_text and "session-older | 1 turn(s)" not in pending_text,
+            )
+            await pilot.press("s")
+            await pilot.pause()
+            attention_output = first_app.query_one("#output").render()
+            print("switcher_attention_sort=", "Filter: pending | Sort: attention" in str(attention_output))
+            await pilot.press("a")
+            await pilot.pause()
             await pilot.press("up")
             await pilot.pause()
 
@@ -113,6 +128,7 @@ async def run_smoke() -> None:
                 "",
             )
             print("switcher_restored=", "Session Switcher" in str(restored_output))
+            print("switcher_restored_sort=", "Filter: all | Sort: attention" in str(restored_output))
             print("restored_selected_line=", selected_line)
             print("restored_selection_is_newer=", "session-newer" in selected_line)
             print("restored_latest_event=", restored_app.events[-1].kind if restored_app.events else None)

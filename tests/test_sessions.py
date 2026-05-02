@@ -169,6 +169,8 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
             draft_prompt="summarize the failing test output",
             session_switcher_active=True,
             session_switcher_selected_session_id="session-target",
+            session_switcher_filter_mode="pending",
+            session_switcher_sort_mode="attention",
         )
     )
 
@@ -180,6 +182,8 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
     assert restored.draft_prompt == "summarize the failing test output"
     assert restored.session_switcher_active is True
     assert restored.session_switcher_selected_session_id == "session-target"
+    assert restored.session_switcher_filter_mode == "pending"
+    assert restored.session_switcher_sort_mode == "attention"
     assert restored.pending_approvals[0].request_id == "approval-0009"
     assert store.pending_approvals_path.exists()
 
@@ -193,6 +197,8 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
     assert preserved_view_state.draft_prompt == "summarize the failing test output"
     assert preserved_view_state.session_switcher_active is True
     assert preserved_view_state.session_switcher_selected_session_id == "session-target"
+    assert preserved_view_state.session_switcher_filter_mode == "pending"
+    assert preserved_view_state.session_switcher_sort_mode == "attention"
 
 
 def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path) -> None:
@@ -268,3 +274,86 @@ def test_list_recent_sessions_surfaces_shell_tool_preview_and_exit_badges(tmp_pa
     assert summary.last_tool_preview == "git status --short -> M README.md"
     assert summary.last_tool_badges == ["inspect", "e0"]
     assert "last tool: inspect/e0 git status --short -> M README.md" in summary.render_line(1)
+
+
+def test_list_recent_sessions_can_filter_to_pending_restore_or_tool_triage(tmp_path: Path) -> None:
+    plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
+    _append_turn(plain_store, "plain")
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    _append_turn(pending_store, "run pytest")
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0010",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
+    _append_turn(restore_store, "resume triage")
+    restore_store.save_session_state(SessionState(draft_prompt="queued follow-up"))
+
+    tool_store = SessionArtifactStore(tmp_path, session_id="session-tool")
+    tool_store.append_turn(
+        TurnArtifact(
+            prompt="inspect repo",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    pending_sessions = list_recent_sessions(tmp_path, filter_mode="pending")
+    restore_sessions = list_recent_sessions(tmp_path, filter_mode="restore")
+    tool_sessions = list_recent_sessions(tmp_path, filter_mode="tool")
+
+    assert [session.session_id for session in pending_sessions] == ["session-pending"]
+    assert [session.session_id for session in restore_sessions] == ["session-restore"]
+    assert [session.session_id for session in tool_sessions] == ["session-tool"]
+
+
+def test_list_recent_sessions_attention_sort_prioritizes_pending_and_restore_state(tmp_path: Path) -> None:
+    plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
+    _append_turn(plain_store, "plain")
+
+    restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
+    _append_turn(restore_store, "restore")
+    restore_store.save_session_state(SessionState(draft_prompt="draft"))
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    _append_turn(pending_store, "pending")
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0011",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    ordered = list_recent_sessions(tmp_path, sort_mode="attention")
+
+    assert [session.session_id for session in ordered[:3]] == [
+        "session-pending",
+        "session-restore",
+        "session-plain",
+    ]

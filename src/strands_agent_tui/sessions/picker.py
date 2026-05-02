@@ -12,6 +12,8 @@ MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
 MAX_EVENT_PREVIEW = 50
 MAX_TOOL_PREVIEW = 72
+SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "restore", "tool"}
+SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
 
 @dataclass(slots=True)
@@ -53,12 +55,21 @@ class SessionSummary:
         )
 
 
-def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> list[SessionSummary]:
+def list_recent_sessions(
+    root: str | Path,
+    limit: int = MAX_RECENT_SESSIONS,
+    *,
+    filter_mode: str = "all",
+    sort_mode: str = "recent",
+) -> list[SessionSummary]:
     resolved_root = Path(root).expanduser().resolve()
     if limit < 1:
         raise ValueError("limit must be >= 1")
     if not resolved_root.exists() or not resolved_root.is_dir():
         return []
+
+    filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
+    sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
 
     session_dirs = [path for path in resolved_root.iterdir() if path.is_dir()]
 
@@ -92,7 +103,8 @@ def list_recent_sessions(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> 
             )
         )
 
-    ordered = sorted(summaries_with_sort, key=lambda item: (item[0], item[1]), reverse=True)[:limit]
+    filtered = [item for item in summaries_with_sort if _matches_filter(item[2], filter_mode)]
+    ordered = sorted(filtered, key=lambda item: _sort_key(item, sort_mode), reverse=True)[:limit]
     return [summary for _, _, summary in ordered]
 
 
@@ -211,6 +223,38 @@ def _latest_tool_event(turns: list[TurnArtifact]):
             if event.kind in {"tool_finished", "tool_failed"}:
                 return event
     return None
+
+
+def sanitize_session_switcher_filter_mode(value: str) -> str:
+    return value if value in SESSION_SWITCHER_FILTER_MODES else "all"
+
+
+def sanitize_session_switcher_sort_mode(value: str) -> str:
+    return value if value in SESSION_SWITCHER_SORT_MODES else "recent"
+
+
+def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
+    if filter_mode == "pending":
+        return summary.pending_approval_count > 0
+    if filter_mode == "restore":
+        return bool(summary.restore_badges)
+    if filter_mode == "tool":
+        return bool(summary.last_tool_preview or summary.last_tool_badges)
+    return True
+
+
+def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[object, ...]:
+    activity_timestamp, session_id, summary = item
+    if sort_mode == "attention":
+        return (
+            summary.pending_approval_count > 0,
+            summary.pending_approval_count,
+            bool(summary.restore_badges),
+            bool(summary.last_tool_preview or summary.last_tool_badges),
+            activity_timestamp,
+            session_id,
+        )
+    return (activity_timestamp, session_id)
 
 
 def _restore_badges(state: SessionState, turn_count: int) -> list[str]:

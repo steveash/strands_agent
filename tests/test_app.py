@@ -824,9 +824,120 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "last tool: .: README.md" in output
         assert "last event: tool_finished: list_files" in output
         assert "2. session-older" in output
-        assert "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, N new session, Esc/F11 cancel" in output
+        assert "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, A all, P pending, R restore, T tool, S sort, N new session, Esc/F11 cancel" in output
+        assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
         assert prompt.disabled is True
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    pending_store.append_turn(
+        TurnArtifact(
+            prompt="pending prompt",
+            response="pending response",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0012",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
+    restore_store.append_turn(
+        TurnArtifact(
+            prompt="restore prompt",
+            response="restore response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    restore_store.save_session_state(SessionState(draft_prompt="draft restore"))
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+
+        await pilot.press("p")
+        await pilot.pause()
+        pending_output = str(app.query_one("#output").render())
+        assert "Filter: pending | Sort: recent" in pending_output
+        assert "session-pending" in pending_output
+        assert "session-current | 1 turn(s)" not in pending_output
+        assert "session-restore | 1 turn(s)" not in pending_output
+
+        await pilot.press("s")
+        await pilot.pause()
+        attention_output = str(app.query_one("#output").render())
+        assert "Filter: pending | Sort: attention" in attention_output
+
+        await pilot.press("r")
+        await pilot.pause()
+        restore_output = str(app.query_one("#output").render())
+        assert "Filter: restore | Sort: attention" in restore_output
+        assert "session-restore" in restore_output
+        assert "session-pending | 1 turn(s)" not in restore_output
+
+        await pilot.press("a")
+        await pilot.pause()
+        all_output = str(app.query_one("#output").render())
+        assert "Filter: all | Sort: attention" in all_output
+        assert "session-current" in all_output
+        assert "session-pending" in all_output
+        assert "session-restore" in all_output
 
 
 @pytest.mark.asyncio
@@ -1050,11 +1161,14 @@ async def test_session_switcher_is_restored_after_restart_with_selected_session(
         await pilot.pause()
         await pilot.press("up")
         await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause()
 
         stored_state = SessionArtifactStore(tmp_path, session_id="session-current").load_session_state()
         assert stored_state is not None
         assert stored_state.session_switcher_active is True
         assert stored_state.session_switcher_selected_session_id == "session-middle"
+        assert stored_state.session_switcher_sort_mode == "attention"
 
     second_app = StrandsAgentApp(
         runtime=FakeStrandsRuntime(),
@@ -1081,6 +1195,7 @@ async def test_session_switcher_is_restored_after_restart_with_selected_session(
             line.startswith("> ") and "session-middle" in line
             for line in output.splitlines()
         )
+        assert "Filter: all | Sort: attention" in output
         assert "View: session switcher" in status
         assert "kind=session_switcher_restored | Session switcher restored" in events
         assert prompt.disabled is True
