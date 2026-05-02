@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, and partially typed follow-up prompts can survive a TUI restart, and Phase 5 surfaces richer recent-session metadata so session switching shows pending-approval markers and last-event previews before selection.**
+**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 surfaces richer recent-session metadata plus keyboard-driven session switching.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -105,33 +105,37 @@ What exists now:
 - restart-safe restoration of event-filter, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
 - an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline,
+- keyboard-driven session-switcher navigation with ↑/↓ (or J/K), Enter-to-switch, and a highlighted selection row rather than number-only switching,
+- restart-safe session-switcher restoration so reopening a session can bring back the chooser with the prior target selection preserved where possible,
 - richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers plus last-event previews before selection,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- extended `session_state.json` so it also persists a partially typed prompt draft alongside pending approvals and view-state context,
-- restored saved draft prompt text into the TUI input on startup and session reload, while preserving it if the operator tries to submit a follow-up during a still-pending approval,
-- added regression coverage plus a refreshed `scripts/session_state_smoke.py` check that now proves draft-prompt recovery as well as replay/filter recovery.
+- extended `session_state.json` to a v3 schema that also persists whether the in-app session switcher was open and which recent session was highlighted,
+- added keyboard-driven session-switcher navigation with ↑/↓ (or J/K), Enter-to-switch, and a visible selection marker so session switching is more TUI-native than number-only shortcuts,
+- restored the session switcher on startup/session reload when it was left open, preserving the previously highlighted target session where possible,
+- decoupled restart-safe view-state persistence from runtimes that implement approvals so chooser/view context is not accidentally dropped behind that capability check,
+- added regression coverage plus a refreshed `scripts/session_switcher_smoke.py` walkthrough for chooser restore behavior.
 
 Why this matters now:
-- It turns restart recovery into something closer to real interrupted work recovery, not just approval/view restoration.
-- It removes a small but frustrating source of TUI state loss when Steve is mid-thought and needs to restart or reopen a session.
-- It further validates that the session-state seam can absorb additional interruption points without breaking approval compatibility.
+- It pushes resumability one step closer to a real interrupted-workstation workflow instead of only restoring approvals and transcript view state.
+- It makes the recent-session seam feel like a first-class TUI affordance, which is important for learning how session state and control flow interact around Strands.
+- It exercises the persistence boundary with another transient-but-user-visible UI mode, which is exactly the kind of seam that usually breaks once a prototype becomes interactive.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
-- app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, and on-disk artifact persistence for both success and failure cases,
+- app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
 - `pytest` currently passes for the expanded Phase 2/3/4 seam, including recent-session selection, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, and the shell-command seam,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `70 passed`
+- automated tests: `72 passed`
 - runnable session-state verification: `.venv/bin/python scripts/session_state_smoke.py` reports `restored_event_filter= tool`, `restored_view= replay 3/4`, `restored_draft= draft next step`, and `latest_visible_event= tool_finished`,
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` reports `switcher_has_pending_marker= True`, `switcher_has_event_preview= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` reports `switcher_default_selection_is_current= True`, `switcher_restored= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
 - runnable shell seam verification: `.venv/bin/python scripts/shell_tool_smoke.py` successfully executes approved-in-principle `pwd` and read-only `git status --short` through the new bounded workspace tool,
 - runnable approval verification: `.venv/bin/python scripts/approval_smoke.py` now shows a queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` now saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
@@ -458,7 +462,9 @@ Those flows reload the saved prompt/response history plus timeline events from `
 
 Partially typed prompt text is also persisted in `session_state.json`, so a restart or session reload can reopen with the draft still in the input instead of discarding it.
 
-After startup, `F11` opens the same recent-session summaries inside the TUI so you can switch to another saved session or start a fresh one without restarting. If the target session has persisted approvals, they are restored automatically; if the current session still has an unresolved approval, switching is blocked until you approve or deny it.
+After startup, `F11` opens the same recent-session summaries inside the TUI so you can switch to another saved session or start a fresh one without restarting. Use ↑/↓ (or `J`/`K`) to move the highlighted row, `Enter` to switch to the highlighted session, number keys for quick direct selection, and `N` for a fresh session. If the target session has persisted approvals, they are restored automatically; if the current session still has an unresolved approval, switching is blocked until you approve or deny it.
+
+If you restart while the switcher is open, the app now restores that chooser mode and preserves the previously highlighted target session where possible, so you can keep triaging recent work instead of manually reopening the same picker state.
 
 When a resumed session has multiple turns, the conversation pane stays in a compact live view showing only the latest 3 turns. Use `F6` for older turns, `F7` for newer turns, and `F8` to jump back to the live/latest view.
 
@@ -532,6 +538,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - resumed sessions render a compact live history window instead of dumping the full backlog
   - replay shortcuts browse older/newer turns and can return to live/latest view
   - restart-safe draft prompt state is restored into the input after restart
+  - the in-app session switcher supports highlighted keyboard navigation, direct number shortcuts, and restart-safe chooser restoration
   - CLI argument parsing overrides runtime/model/workspace selection correctly
   - CLI session selection can load an explicit session dir, reopen the latest session, or pick from recent sessions interactively
 
@@ -548,7 +555,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
 - `tests/test_sessions.py`
   - recent sessions are ordered by latest artifact activity
   - session summaries include bounded last-prompt previews
-  - restart-safe session state persists approvals, view focus, and draft prompt text together
+  - restart-safe session state persists approvals, view focus, draft prompt text, and session-switcher chooser context together
   - the compact picker renders usable recent-session labels
   - the picker returns the selected session and handles an empty artifact root safely
 
@@ -569,11 +576,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. persist another interruption point such as session-switcher selection or other transient chooser context on top of the now-working draft/view seam
-2. keep the fake runtime path green while refining the event schema around steering/intervention events
-3. consider a tiny allow/deny split inside the shell seam so read-only inspection commands can eventually avoid full approval friction
+1. keep the fake runtime path green while refining the event schema around steering/intervention events
+2. consider a tiny allow/deny split inside the shell seam so read-only inspection commands can eventually avoid full approval friction
+3. add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
 4. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-5. add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
+5. decide whether session-switcher restore should also preserve transient sort/filter modes once the chooser gets richer
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -601,7 +608,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- persist another interruption point such as session-switcher selection or other transient chooser context on top of the now-working draft/view seam
 - refine the shell seam so read-only inspection commands and test commands can expose distinct policy levels
-- reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+- keep tightening the fake/live event schema around steering and intervention milestones
 - add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
+- decide whether the session switcher needs its own richer sort/filter affordances now that chooser restoration exists
+- reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection

@@ -803,10 +803,11 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
 
         assert "Session Switcher" in output
         assert "1. session-newer" in output
+        assert "> 2. session-older" in output
         assert "pending: run_shell_command" in output
         assert "last event: tool_finished: list_files" in output
         assert "2. session-older" in output
-        assert "Keys: 1-8 switch session, N new session, Esc/F11 cancel" in output
+        assert "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, N new session, Esc/F11 cancel" in output
         assert "View: session switcher" in status
         assert prompt.disabled is True
 
@@ -870,6 +871,70 @@ async def test_session_switcher_can_switch_to_selected_recent_session(tmp_path: 
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_supports_arrow_navigation_and_enter_selection(tmp_path: Path) -> None:
+    older_store = SessionArtifactStore(tmp_path, session_id="session-older")
+    older_store.append_turn(
+        TurnArtifact(
+            prompt="inspect older session",
+            response="older response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    newer_store = SessionArtifactStore(tmp_path, session_id="session-newer")
+    newer_store.append_turn(
+        TurnArtifact(
+            prompt="inspect newer session",
+            response="newer response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-older",
+        ),
+        artifact_store=older_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+
+        switcher_output = str(app.query_one("#output").render())
+        assert "> 2. session-older" in switcher_output
+
+        await pilot.press("up")
+        await pilot.pause()
+        moved_output = str(app.query_one("#output").render())
+        assert "> 1. session-newer" in moved_output
+
+        await pilot.press("enter")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        prompt = app.query_one("#prompt", Input)
+
+        assert "inspect newer session" in output
+        assert "Turns: 1" in status
+        assert "View: live latest 1-1" in status
+        assert prompt.disabled is False
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_can_start_new_session(tmp_path: Path) -> None:
     existing_store = SessionArtifactStore(tmp_path, session_id="session-existing")
     existing_store.append_turn(
@@ -910,6 +975,98 @@ async def test_session_switcher_can_start_new_session(tmp_path: Path) -> None:
         assert "Session: session-existing" not in workspace
         assert "kind=session_started | New session started" in events
         assert app.artifact_store.session_id != "session-existing"
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_is_restored_after_restart_with_selected_session(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    middle_store = SessionArtifactStore(tmp_path, session_id="session-middle")
+    middle_store.append_turn(
+        TurnArtifact(
+            prompt="middle prompt",
+            response="middle response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    newest_store = SessionArtifactStore(tmp_path, session_id="session-newest")
+    newest_store.append_turn(
+        TurnArtifact(
+            prompt="newest prompt",
+            response="newest response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    first_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with first_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("up")
+        await pilot.pause()
+
+        stored_state = SessionArtifactStore(tmp_path, session_id="session-current").load_session_state()
+        assert stored_state is not None
+        assert stored_state.session_switcher_active is True
+        assert stored_state.session_switcher_selected_session_id == "session-middle"
+
+    second_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="session-current"),
+    )
+
+    async with second_app.run_test() as pilot:
+        await pilot.pause()
+
+        output = str(second_app.query_one("#output").render())
+        status = str(second_app.query_one("#status").render())
+        events = str(second_app.query_one("#events").render())
+        prompt = second_app.query_one("#prompt", Input)
+
+        assert "Session Switcher" in output
+        assert any(
+            line.startswith("> ") and "session-middle" in line
+            for line in output.splitlines()
+        )
+        assert "View: session switcher" in status
+        assert "kind=session_switcher_restored | Session switcher restored" in events
+        assert prompt.disabled is True
 
 
 @pytest.mark.asyncio

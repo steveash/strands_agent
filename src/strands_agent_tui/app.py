@@ -108,6 +108,7 @@ class StrandsAgentApp(App):
         self.draft_prompt = ""
         self.session_switcher_active = False
         self.session_switcher_summaries: list[SessionSummary] = []
+        self.session_switcher_selected_index = 0
         self.pending_approval: ApprovalRequest | None = None
         self.runtime_status_override: str | None = None
         self.artifact_store = artifact_store or SessionArtifactStore(
@@ -127,7 +128,9 @@ class StrandsAgentApp(App):
             yield Static(self.render_status_summary(), id="status")
             yield Static(self.render_context_banner(), id="workspace")
             yield Static(self.render_approval_banner(), id="approval")
-        yield Input(value=self.draft_prompt, placeholder="Ask the coding agent something...", id="prompt")
+        prompt = Input(value=self.draft_prompt, placeholder="Ask the coding agent something...", id="prompt")
+        prompt.disabled = self.session_switcher_active
+        yield prompt
         yield Footer()
 
     async def on_input_changed(self, event: Input.Changed) -> None:
@@ -170,14 +173,27 @@ class StrandsAgentApp(App):
 
         key = event.key.lower()
         if key == "escape":
-            self.session_switcher_active = False
-            self.session_switcher_summaries = []
-            self._refresh_widgets()
+            self._close_session_switcher()
             event.stop()
             return
 
         if key == "n":
             self._start_new_session()
+            event.stop()
+            return
+
+        if key in {"up", "k"}:
+            self._move_session_switcher_selection(-1)
+            event.stop()
+            return
+
+        if key in {"down", "j"}:
+            self._move_session_switcher_selection(1)
+            event.stop()
+            return
+
+        if key == "enter":
+            self._select_active_session_switcher_entry()
             event.stop()
             return
 
@@ -215,6 +231,7 @@ class StrandsAgentApp(App):
         self.runtime_status_override = None
         self.session_switcher_active = False
         self.session_switcher_summaries = []
+        self.session_switcher_selected_index = 0
         if hasattr(self.runtime, "restore_pending_approvals"):
             self.runtime.restore_pending_approvals([])
 
@@ -269,6 +286,13 @@ class StrandsAgentApp(App):
                         "draft_prompt_length": len(session_state.draft_prompt),
                     },
                 )
+            )
+
+        if session_state.session_switcher_active:
+            self._open_session_switcher(
+                selected_session_id=session_state.session_switcher_selected_session_id or None,
+                restored=True,
+                refresh_widgets=False,
             )
 
     def render_context_banner(self) -> str:
@@ -362,7 +386,7 @@ class StrandsAgentApp(App):
             "Session Switcher",
             f"Current session: {self.artifact_store.session_id}",
             f"Artifacts root: {self.artifact_store.root}",
-            "Keys: 1-8 switch session, N new session, Esc/F11 cancel",
+            "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, N new session, Esc/F11 cancel",
             "",
         ]
 
@@ -372,7 +396,8 @@ class StrandsAgentApp(App):
 
         for index, summary in enumerate(self.session_switcher_summaries, start=1):
             current_suffix = " (current)" if summary.session_id == self.artifact_store.session_id else ""
-            lines.append(summary.render_line(index) + current_suffix)
+            marker = ">" if index - 1 == self.session_switcher_selected_index else " "
+            lines.append(f"{marker} {summary.render_line(index)}{current_suffix}")
         return "\n".join(lines)
 
     def render_events(self) -> str:
@@ -443,9 +468,7 @@ class StrandsAgentApp(App):
 
     def action_toggle_session_switcher(self) -> None:
         if self.session_switcher_active:
-            self.session_switcher_active = False
-            self.session_switcher_summaries = []
-            self._refresh_widgets()
+            self._close_session_switcher()
             return
 
         if self.pending_approval is not None:
@@ -464,9 +487,7 @@ class StrandsAgentApp(App):
             self._refresh_widgets()
             return
 
-        self.session_switcher_summaries = list_recent_sessions(self.config.artifacts_root)
-        self.session_switcher_active = True
-        self._refresh_widgets()
+        self._open_session_switcher()
 
     def _resolve_pending_approval(self, approve: bool) -> None:
         if self.pending_approval is None:
@@ -590,15 +611,82 @@ class StrandsAgentApp(App):
         )
         self._refresh_widgets()
 
-    def _sync_session_state(self, *, emit_pending_events: bool) -> None:
-        if not hasattr(self.runtime, "pending_approvals"):
+    def _open_session_switcher(
+        self,
+        *,
+        selected_session_id: str | None = None,
+        restored: bool = False,
+        refresh_widgets: bool = True,
+    ) -> None:
+        self.session_switcher_summaries = list_recent_sessions(self.config.artifacts_root)
+        self.session_switcher_active = True
+        self.session_switcher_selected_index = self._default_session_switcher_index(selected_session_id)
+        self._persist_session_view_state()
+        if restored:
+            selected_summary = self._current_session_switcher_summary()
+            self.events.append(
+                runtime_event(
+                    kind="session_switcher_restored",
+                    title="Session switcher restored",
+                    detail="Reopened the recent-session chooser with its prior selection preserved where possible.",
+                    data={
+                        "session_id": self.artifact_store.session_id,
+                        "selected_session_id": selected_summary.session_id if selected_summary else None,
+                        "selected_index": self.session_switcher_selected_index,
+                        "visible_sessions": len(self.session_switcher_summaries),
+                    },
+                )
+            )
+        if refresh_widgets:
+            self._refresh_widgets()
+
+    def _close_session_switcher(self) -> None:
+        self.session_switcher_active = False
+        self.session_switcher_summaries = []
+        self.session_switcher_selected_index = 0
+        self._persist_session_view_state()
+        self._refresh_widgets()
+
+    def _default_session_switcher_index(self, selected_session_id: str | None) -> int:
+        if not self.session_switcher_summaries:
+            return 0
+        target_session_id = selected_session_id or self.artifact_store.session_id
+        for index, summary in enumerate(self.session_switcher_summaries):
+            if summary.session_id == target_session_id:
+                return index
+        return 0
+
+    def _move_session_switcher_selection(self, delta: int) -> None:
+        if not self.session_switcher_summaries:
             return
-        pending_approvals = self.runtime.pending_approvals()
+        last_index = len(self.session_switcher_summaries) - 1
+        self.session_switcher_selected_index = max(0, min(self.session_switcher_selected_index + delta, last_index))
+        self._persist_session_view_state()
+        self._refresh_widgets()
+
+    def _current_session_switcher_summary(self) -> SessionSummary | None:
+        if not self.session_switcher_summaries:
+            return None
+        if self.session_switcher_selected_index >= len(self.session_switcher_summaries):
+            self.session_switcher_selected_index = len(self.session_switcher_summaries) - 1
+        return self.session_switcher_summaries[self.session_switcher_selected_index]
+
+    def _select_active_session_switcher_entry(self) -> None:
+        summary = self._current_session_switcher_summary()
+        if summary is None:
+            return
+        self._switch_to_session(summary)
+
+    def _sync_session_state(self, *, emit_pending_events: bool) -> None:
+        pending_approvals = self.runtime.pending_approvals() if hasattr(self.runtime, "pending_approvals") else []
+        selected_summary = self._current_session_switcher_summary() if self.session_switcher_active else None
         state = SessionState(
             pending_approvals=pending_approvals,
             event_filter=self.event_filter,
             history_focus_index=self.history_focus_index,
             draft_prompt=self.draft_prompt,
+            session_switcher_active=self.session_switcher_active,
+            session_switcher_selected_session_id=selected_summary.session_id if selected_summary else "",
         )
 
         previous_state = self.artifact_store.load_session_state() if emit_pending_events else None

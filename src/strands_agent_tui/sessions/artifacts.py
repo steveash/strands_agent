@@ -61,8 +61,10 @@ class SessionState:
     event_filter: str = "all"
     history_focus_index: int | None = None
     draft_prompt: str = ""
+    session_switcher_active: bool = False
+    session_switcher_selected_session_id: str = ""
     updated_at: str | None = None
-    schema_version: str = "strands-agent/session-state-v2"
+    schema_version: str = "strands-agent/session-state-v3"
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -72,6 +74,8 @@ class SessionState:
             "event_filter": self.event_filter,
             "history_focus_index": self.history_focus_index,
             "draft_prompt": self.draft_prompt,
+            "session_switcher_active": self.session_switcher_active,
+            "session_switcher_selected_session_id": self.session_switcher_selected_session_id,
         }
 
     @classmethod
@@ -87,8 +91,10 @@ class SessionState:
             event_filter=str(payload.get("event_filter", "all") or "all"),
             history_focus_index=history_focus_index,
             draft_prompt=str(payload.get("draft_prompt", "") or ""),
+            session_switcher_active=bool(payload.get("session_switcher_active", False)),
+            session_switcher_selected_session_id=str(payload.get("session_switcher_selected_session_id", "") or ""),
             updated_at=str(payload.get("updated_at")) if payload.get("updated_at") else None,
-            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v2")),
+            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v3")),
         )
 
     def is_default(self) -> bool:
@@ -97,6 +103,8 @@ class SessionState:
             and self.event_filter == "all"
             and self.history_focus_index is None
             and not self.draft_prompt
+            and not self.session_switcher_active
+            and not self.session_switcher_selected_session_id
         )
 
 
