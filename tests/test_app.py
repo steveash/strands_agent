@@ -693,6 +693,56 @@ async def test_app_restores_event_filter_and_replay_focus_from_session_state(tmp
 
 
 @pytest.mark.asyncio
+async def test_app_restores_draft_prompt_from_session_state_after_restart(tmp_path: Path) -> None:
+    first_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="draft-session",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="draft-session"),
+    )
+
+    async with first_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("d", "r", "a", "f", "t", " ", "f", "o", "l", "l", "o", "w", "-", "u", "p")
+        await pilot.pause()
+
+        stored_state = SessionArtifactStore(tmp_path, session_id="draft-session").load_session_state()
+        assert stored_state is not None
+        assert stored_state.draft_prompt == "draft follow-up"
+
+    second_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="draft-session",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="draft-session"),
+    )
+
+    async with second_app.run_test() as pilot:
+        await pilot.pause()
+
+        prompt = second_app.query_one("#prompt", Input)
+        events = str(second_app.query_one("#events").render())
+
+        assert prompt.value == "draft follow-up"
+        assert second_app.draft_prompt == "draft follow-up"
+        assert "Draft prompt restored" in events
+        assert any(
+            event.kind == "session_view_restored" and event.data.get("draft_prompt_length") == len("draft follow-up")
+            for event in second_app.events
+        )
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> None:
     older_store = SessionArtifactStore(tmp_path, session_id="session-older")
     older_store.append_turn(

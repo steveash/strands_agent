@@ -105,6 +105,7 @@ class StrandsAgentApp(App):
         self.events: list[RuntimeEvent] = []
         self.event_filter = "all"
         self.history_focus_index: int | None = None
+        self.draft_prompt = ""
         self.session_switcher_active = False
         self.session_switcher_summaries: list[SessionSummary] = []
         self.pending_approval: ApprovalRequest | None = None
@@ -126,14 +127,19 @@ class StrandsAgentApp(App):
             yield Static(self.render_status_summary(), id="status")
             yield Static(self.render_context_banner(), id="workspace")
             yield Static(self.render_approval_banner(), id="approval")
-        yield Input(placeholder="Ask the coding agent something...", id="prompt")
+        yield Input(value=self.draft_prompt, placeholder="Ask the coding agent something...", id="prompt")
         yield Footer()
+
+    async def on_input_changed(self, event: Input.Changed) -> None:
+        self.draft_prompt = event.value
+        self._persist_session_view_state()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         prompt = event.value
-        event.input.value = ""
 
         if self.pending_approval is not None:
+            event.input.value = prompt
+            self.draft_prompt = prompt
             self.events.append(
                 runtime_event(
                     kind="approval_input_blocked",
@@ -147,6 +153,9 @@ class StrandsAgentApp(App):
             )
             self._refresh_widgets()
             return
+
+        event.input.value = ""
+        self.draft_prompt = ""
 
         try:
             response = self.runtime.run(prompt)
@@ -201,6 +210,7 @@ class StrandsAgentApp(App):
         self.history = []
         self.events = []
         self.history_focus_index = None
+        self.draft_prompt = ""
         self.pending_approval = None
         self.runtime_status_override = None
         self.session_switcher_active = False
@@ -216,6 +226,7 @@ class StrandsAgentApp(App):
         session_state = self.artifact_store.load_session_state() or SessionState()
         self.event_filter = self._sanitize_event_filter(session_state.event_filter)
         self.history_focus_index = self._normalize_history_focus_index(session_state.history_focus_index)
+        self.draft_prompt = session_state.draft_prompt
 
         pending_approvals = session_state.pending_approvals
         if pending_approvals and hasattr(self.runtime, "restore_pending_approvals"):
@@ -234,20 +245,28 @@ class StrandsAgentApp(App):
                     },
                 )
             )
-        if session_state.event_filter != "all" or session_state.history_focus_index is not None:
+        if (
+            session_state.event_filter != "all"
+            or session_state.history_focus_index is not None
+            or session_state.draft_prompt
+        ):
             restored_view = self.history_view_label()
+            restored_bits = [
+                f"Restored event filter `{self.event_filter}` and view `{restored_view}` from session state."
+            ]
+            if session_state.draft_prompt:
+                restored_bits.append(f"Draft prompt restored ({len(session_state.draft_prompt)} chars).")
             self.events.append(
                 runtime_event(
                     kind="session_view_restored",
                     title="Session view restored",
-                    detail=(
-                        f"Restored event filter `{self.event_filter}` and view `{restored_view}` from session state."
-                    ),
+                    detail=" ".join(restored_bits),
                     data={
                         "session_id": self.artifact_store.session_id,
                         "event_filter": self.event_filter,
                         "history_focus_index": self.history_focus_index,
                         "view": restored_view,
+                        "draft_prompt_length": len(session_state.draft_prompt),
                     },
                 )
             )
@@ -574,17 +593,18 @@ class StrandsAgentApp(App):
     def _sync_session_state(self, *, emit_pending_events: bool) -> None:
         if not hasattr(self.runtime, "pending_approvals"):
             return
-        previous_state = self.artifact_store.load_session_state() or SessionState()
         pending_approvals = self.runtime.pending_approvals()
         state = SessionState(
             pending_approvals=pending_approvals,
             event_filter=self.event_filter,
             history_focus_index=self.history_focus_index,
+            draft_prompt=self.draft_prompt,
         )
 
+        previous_state = self.artifact_store.load_session_state() if emit_pending_events else None
         if state.is_default():
             cleared = self.artifact_store.clear_session_state()
-            if emit_pending_events and cleared and previous_state.pending_approvals:
+            if emit_pending_events and cleared and previous_state and previous_state.pending_approvals:
                 self.events.append(
                     runtime_event(
                         kind="session_state_cleared",
@@ -611,6 +631,7 @@ class StrandsAgentApp(App):
                         "tool_name": pending_approvals[0].tool_name,
                         "event_filter": self.event_filter,
                         "history_focus_index": self.history_focus_index,
+                        "draft_prompt_length": len(self.draft_prompt),
                     },
                 )
             )
@@ -638,7 +659,10 @@ class StrandsAgentApp(App):
         self.query_one("#status", Static).update(self.render_status_summary())
         self.query_one("#workspace", Static).update(self.render_context_banner())
         self.query_one("#approval", Static).update(self.render_approval_banner())
-        self.query_one("#prompt", Input).disabled = self.session_switcher_active
+        prompt = self.query_one("#prompt", Input)
+        if prompt.value != self.draft_prompt:
+            prompt.value = self.draft_prompt
+        prompt.disabled = self.session_switcher_active
 
 
 def parse_args() -> AppConfig:

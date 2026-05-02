@@ -60,8 +60,9 @@ class SessionState:
     pending_approvals: list[ApprovalRequest] = field(default_factory=list)
     event_filter: str = "all"
     history_focus_index: int | None = None
+    draft_prompt: str = ""
     updated_at: str | None = None
-    schema_version: str = "strands-agent/session-state-v1"
+    schema_version: str = "strands-agent/session-state-v2"
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -70,6 +71,7 @@ class SessionState:
             "pending_approvals": [approval.as_dict() for approval in self.pending_approvals],
             "event_filter": self.event_filter,
             "history_focus_index": self.history_focus_index,
+            "draft_prompt": self.draft_prompt,
         }
 
     @classmethod
@@ -84,12 +86,18 @@ class SessionState:
             ],
             event_filter=str(payload.get("event_filter", "all") or "all"),
             history_focus_index=history_focus_index,
+            draft_prompt=str(payload.get("draft_prompt", "") or ""),
             updated_at=str(payload.get("updated_at")) if payload.get("updated_at") else None,
-            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v1")),
+            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v2")),
         )
 
     def is_default(self) -> bool:
-        return not self.pending_approvals and self.event_filter == "all" and self.history_focus_index is None
+        return (
+            not self.pending_approvals
+            and self.event_filter == "all"
+            and self.history_focus_index is None
+            and not self.draft_prompt
+        )
 
 
 class SessionArtifactStore:

@@ -42,6 +42,8 @@ async def run_smoke() -> None:
             await pilot.pause()
             await pilot.press("f6")
             await pilot.pause()
+            await pilot.press("d", "r", "a", "f", "t", " ", "n", "e", "x", "t", " ", "s", "t", "e", "p")
+            await pilot.pause()
 
         second_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
@@ -59,6 +61,7 @@ async def run_smoke() -> None:
             await pilot.pause()
             print("restored_event_filter=", second_app.event_filter)
             print("restored_view=", second_app.history_view_label())
+            print("restored_draft=", second_app.query_one("#prompt").value)
             print("latest_visible_event=", second_app.filtered_events()[-1].kind if second_app.filtered_events() else None)
 
 

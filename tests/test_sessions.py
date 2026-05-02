@@ -157,6 +157,7 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
             ],
             event_filter="tool",
             history_focus_index=2,
+            draft_prompt="summarize the failing test output",
         )
     )
 
@@ -165,6 +166,7 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
     assert restored is not None
     assert restored.event_filter == "tool"
     assert restored.history_focus_index == 2
+    assert restored.draft_prompt == "summarize the failing test output"
     assert restored.pending_approvals[0].request_id == "approval-0009"
     assert store.pending_approvals_path.exists()
 
@@ -175,6 +177,7 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
     assert preserved_view_state.pending_approvals == []
     assert preserved_view_state.event_filter == "tool"
     assert preserved_view_state.history_focus_index == 2
+    assert preserved_view_state.draft_prompt == "summarize the failing test output"
 
 
 def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path) -> None:
