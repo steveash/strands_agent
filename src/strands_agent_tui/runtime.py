@@ -389,6 +389,40 @@ class FakeStrandsRuntime:
                     ),
                 ]
             )
+        if "git status" in lowered or "git diff" in lowered or "pwd" in lowered or " ls" in lowered or lowered.startswith("ls"):
+            command = "git status --short"
+            if "git diff" in lowered:
+                command = "git diff --stat"
+            elif "pwd" in lowered:
+                command = "pwd"
+            elif " ls" in lowered or lowered.startswith("ls"):
+                command = "ls -1"
+            events.extend(
+                [
+                    runtime_event(
+                        kind="tool_started",
+                        title="run_shell_command",
+                        detail="Deterministic fake shell inspection event using the allowlisted read-only policy level.",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "source": "fake_runtime",
+                            "command": command,
+                            "shell_policy": "inspect",
+                        },
+                    ),
+                    runtime_event(
+                        kind="tool_finished",
+                        title="run_shell_command",
+                        detail=f"Simulated read-only shell inspection command `{command}`.",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "source": "fake_runtime",
+                            "command": command,
+                            "shell_policy": "inspect",
+                        },
+                    ),
+                ]
+            )
         if any(keyword in lowered for keyword in ["write", "create", "save"]) and not overwrite_requested:
             events.extend(
                 [
@@ -635,37 +669,20 @@ class FakeStrandsRuntime:
                     },
                 }
             )
-        elif "git status" in lowered:
+        elif (
+            ("shell" in lowered or "terminal" in lowered)
+            and "git status" not in lowered
+            and "git diff" not in lowered
+            and "pwd" not in lowered
+            and " ls" not in lowered
+            and not lowered.startswith("ls")
+        ):
             requests.append(
                 {
                     "tool_name": "run_shell_command",
-                    "reason": "Fake runtime routed the requested shell inspection command through explicit confirmation.",
+                    "reason": "Fake runtime routed the requested shell test command through explicit confirmation.",
                     "args": {
-                        "command": "git status --short",
-                        "relative_path": ".",
-                        "timeout_seconds": 5,
-                    },
-                }
-            )
-        elif "git diff" in lowered:
-            requests.append(
-                {
-                    "tool_name": "run_shell_command",
-                    "reason": "Fake runtime routed the requested shell inspection command through explicit confirmation.",
-                    "args": {
-                        "command": "git diff --stat",
-                        "relative_path": ".",
-                        "timeout_seconds": 5,
-                    },
-                }
-            )
-        elif "shell" in lowered or "terminal" in lowered:
-            requests.append(
-                {
-                    "tool_name": "run_shell_command",
-                    "reason": "Fake runtime routed the requested shell command through explicit confirmation.",
-                    "args": {
-                        "command": "pwd",
+                        "command": "pytest -q",
                         "relative_path": ".",
                         "timeout_seconds": 5,
                     },
@@ -856,7 +873,7 @@ class StrandsSDKRuntime:
             f"You may inspect and conservatively edit the workspace rooted at {self.workspace_root} "
             "using bounded local tools. Prefer summarize_workspace before broad searches when you need repo shape, "
             "prefer exact-match edits over broad rewrites when possible, and only use run_shell_command when the built-in file tools are insufficient. "
-            "Overwrites are blocked unless the local steering policy explicitly allows them, and shell commands require explicit approval. "
+            "Overwrites are blocked unless the local steering policy explicitly allows them; read-only shell inspection commands can run directly, while shell test commands still require explicit approval. "
             "If a tool result says approval is required, stop asking that tool to mutate files or run commands, explain why approval is needed, "
             "and wait for the TUI to approve or deny the request."
         )

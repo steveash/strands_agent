@@ -116,6 +116,23 @@ def test_fake_runtime_returns_pending_approval_for_shell_command_prompt() -> Non
     assert result.pending_approval.args["command"] == "pytest -q"
 
 
+def test_fake_runtime_allows_read_only_shell_inspection_prompt() -> None:
+    runtime = FakeStrandsRuntime()
+    result = runtime.run("check git status in the terminal")
+
+    assert [event.kind for event in result.events] == [
+        "prompt_received",
+        "steering_decision",
+        "tool_started",
+        "tool_finished",
+        "response_completed",
+    ]
+    assert result.pending_approval is None
+    assert result.events[2].title == "run_shell_command"
+    assert result.events[2].data["command"] == "git status --short"
+    assert result.events[2].data["shell_policy"] == "inspect"
+
+
 def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_next() -> None:
     runtime = FakeStrandsRuntime()
     first_response = runtime.run("overwrite the notes file and replace all stale values")
@@ -336,13 +353,14 @@ def test_build_workspace_tools_queues_shell_command_confirmation(tmp_path: Path)
         )
     }
 
-    rendered = tools["run_shell_command"](command="pwd")
+    rendered = tools["run_shell_command"](command="pytest -q")
 
     assert rendered.startswith("Approval required for run_shell_command.")
     assert approvals.current() is not None
     assert approvals.current().tool_name == "run_shell_command"
     assert [event.kind for event in events] == ["steering_confirmation_required"]
-    assert events[0].data["command"] == "pwd"
+    assert events[0].data["command"] == "pytest -q"
+    assert events[0].data["shell_policy"] == "test"
 
 
 def test_app_config_merge_applies_non_empty_overrides() -> None:
@@ -448,14 +466,40 @@ def test_build_workspace_tools_requires_confirmation_for_multi_occurrence_edit(t
     assert events[0].data["requires_confirmation"] is True
 
 
-def test_build_workspace_tools_requires_confirmation_for_shell_command(tmp_path: Path) -> None:
+def test_build_workspace_tools_allows_read_only_shell_command_without_confirmation(tmp_path: Path) -> None:
+    events = []
+    tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
+
+    rendered = tools["run_shell_command"](command="pwd")
+
+    assert "Policy level: inspect" in rendered
+    assert [event.kind for event in events] == ["steering_decision", "tool_started", "tool_finished"]
+    assert events[0].title == "run_shell_command"
+    assert events[0].data["command"] == "pwd"
+    assert events[0].data["requires_confirmation"] is False
+    assert events[0].data["shell_policy"] == "inspect"
+
+
+def test_build_workspace_tools_requires_confirmation_for_shell_test_command(tmp_path: Path) -> None:
     events = []
     tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
 
     with pytest.raises(PermissionError, match="Confirmation required"):
-        tools["run_shell_command"](command="pwd")
+        tools["run_shell_command"](command="pytest -q")
 
     assert [event.kind for event in events] == ["steering_confirmation_required"]
     assert events[0].title == "run_shell_command"
-    assert events[0].data["command"] == "pwd"
+    assert events[0].data["command"] == "pytest -q"
     assert events[0].data["requires_confirmation"] is True
+    assert events[0].data["shell_policy"] == "test"
+
+
+def test_build_workspace_tools_denies_unsupported_shell_command_before_execution(tmp_path: Path) -> None:
+    events = []
+    tools = {tool.tool_name: tool for tool in build_workspace_tools(tmp_path, event_sink=events.append)}
+
+    with pytest.raises(PermissionError, match="outside the narrow allowlist"):
+        tools["run_shell_command"](command="rm -rf .")
+
+    assert [event.kind for event in events] == ["steering_blocked"]
+    assert events[0].data["shell_policy"] == "unsupported"

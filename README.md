@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now includes a narrowly scoped shell-command seam alongside higher-signal workspace summary plus conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges to recent-session triage alongside keyboard-driven session switching.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges to recent-session triage alongside keyboard-driven session switching.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -85,7 +85,7 @@ What exists now:
 - explicit CLI overrides for runtime, model, workspace, and saved-session selection,
 - status-line rendering plus a dedicated workspace/session banner in the TUI,
 - workspace tools for `summarize_workspace`, `list_files`, `read_file`, `search_files`, a conservative `write_file`, and an exact-match `replace_text`,
-- a narrowly scoped `run_shell_command` tool for `pwd`, `ls`, read-only `git status`/`git diff`, and `pytest`/`python -m pytest`, always routed through explicit approval before execution,
+- a narrowly scoped `run_shell_command` tool for `pwd`, `ls`, read-only `git status`/`git diff`, and `pytest`/`python -m pytest`, where read-only inspection commands run directly but test commands still require explicit approval,
 - live runtime tool registration that binds those tools to the active workspace root,
 - runtime-side instrumentation that records real `tool_started`, `tool_finished`, and `tool_failed` events when live Strands tools execute,
 - a first-pass steering policy seam that evaluates workspace tool calls before execution and emits explicit `steering_decision`, `steering_confirmation_required`, or `steering_blocked` events,
@@ -113,14 +113,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- extended recent-session summaries so the CLI picker and in-app `F11` switcher show compact restore-state badges derived from `session_state.json`,
-- surfaced saved filter, replay-focus, draft-presence, and chooser-open context as terse badges like `filter=tool`, `replay 1/3`, `draft 15c`, and `chooser`,
-- added regression coverage plus a refreshed `scripts/session_switcher_smoke.py` walkthrough proving those badges coexist with pending-approval markers and last-event previews.
+- split shell-command steering into distinct policy levels so read-only inspection commands are allowed immediately while `pytest`/`python -m pytest` still queue explicit approval,
+- added shared shell-command classification so steering can reject unsupported commands earlier and tag shell events with compact `inspect` vs `test` policy metadata,
+- refreshed fake-runtime coverage plus `scripts/shell_tool_smoke.py` so the direct-inspection path and approval-gated test path are both runnable without launching the full TUI.
 
 Why this matters now:
-- It makes reopen triage more informative before Steve actually switches sessions, which is exactly when restore context is most valuable.
-- It reuses the restart-safe state work from the last iteration in a visible way instead of hiding that metadata only inside restored sessions.
-- It keeps the recent-session seam compact while making interrupted work easier to distinguish from plain historical transcripts.
+- It removes unnecessary approval friction from safe repo-inspection commands like `pwd` and `git status` while keeping mutation-adjacent test execution visibly gated.
+- It makes shell steering behavior more legible in the event timeline because inspection vs test intent is now explicit instead of hidden behind one blanket approval rule.
+- It tightens the shell seam into something closer to a real coding-agent workstation without broadening the command allowlist.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -131,16 +131,16 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `73 passed`
-- runnable session-state verification: `.venv/bin/python scripts/session_state_smoke.py` reports `restored_event_filter= tool`, `restored_view= replay 3/4`, `restored_draft= draft next step`, and `latest_visible_event= tool_finished`,
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_restored= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
-- runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
+- automated tests: `76 passed`
+- runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
+- runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` still reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_restored= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
 - CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`,
-- recent-session verification by test: recent session summaries now surface pending approvals, restore-state badges, and last-event previews while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
+- recent-session verification by test: recent session summaries still surface pending approvals, restore-state badges, and last-event previews while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
-- UI verification by test: fake mode now renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
-- steering verification by test: default policy still requires confirmation for overwrite and multi-occurrence edit requests, opt-in overwrite mode still emits an allow-with-notice steering event, approval-aware tool registration can queue confirm-needed calls instead of throwing, and protected-file mutations remain denied.
+- UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
+- steering verification by test: default policy now auto-allows read-only shell inspection, still requires confirmation for shell test runs plus overwrite and multi-occurrence edit requests, rejects unsupported shell commands earlier, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied.
 
 ## First five phases
 
@@ -422,7 +422,7 @@ The prototype currently exposes these bounded workspace tools through the runtim
 
 `replace_text` is intentionally strict: it only succeeds when the old text appears exactly the expected number of times, which makes it a good fit for studying safer agent-driven edits.
 
-`run_shell_command` is intentionally narrow: it supports only `pwd`, `ls`, read-only `git status`/`git diff`, and `pytest`/`python -m pytest`, and the steering layer currently requires explicit approval before any shell command is executed.
+`run_shell_command` is intentionally narrow: it supports only `pwd`, `ls`, read-only `git status`/`git diff`, and `pytest`/`python -m pytest`. The steering layer now auto-allows the read-only inspection subset while still requiring explicit approval before test commands execute.
 
 ### Session artifacts
 
@@ -498,6 +498,8 @@ The runtime now evaluates risky mutation tools before execution:
 
 - `write_file(overwrite=True)` is blocked by default unless `STRANDS_AGENT_ALLOW_OVERWRITE=true`
 - writes or edits targeting `.env*`, `*.pem`, or `*.key` are denied by policy
+- read-only shell inspection commands like `pwd`, `ls`, `git status`, and `git diff --stat` are allowed directly within the narrow allowlist
+- shell test commands like `pytest -q` and `python -m pytest -q` still require confirmation before execution
 - multi-occurrence `replace_text` calls require confirmation before execution, so risky broad edits are visible before they run
 
 When confirmation is required, the runtime now exposes a resumable approval request to the TUI. In fake mode that request is deterministic and queueable for testing; in live mode it gives the agent a visible pause point before the approved tool is executed and the conversation continues.
@@ -514,6 +516,8 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - live runtime fails safely when `OPENAI_API_KEY` is missing
   - config merge logic applies CLI-style overrides safely
   - shell-command approvals can be queued in fake mode and restored/executed in live mode
+  - read-only shell inspection commands now run without confirmation while shell test commands still queue approval
+  - unsupported shell commands are denied before execution instead of reaching subprocesses
   - steering requires confirmation for overwrite and broad-edit requests by default, and can opt into overwrites explicitly
   - steering events are emitted before workspace tools run
   - approval requests can be queued and resumed deterministically
@@ -572,10 +576,10 @@ Why this stack:
 ## Next highest-value implementation order
 
 1. keep the fake runtime path green while refining the event schema around steering/intervention events
-2. consider a tiny allow/deny split inside the shell seam so read-only inspection commands can eventually avoid full approval friction
-3. add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
-4. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-5. decide whether session-switcher restore should also preserve transient sort/filter modes once the chooser gets richer
+2. add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
+3. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+4. decide whether session-switcher restore should also preserve transient sort/filter modes once the chooser gets richer
+5. decide whether direct shell inspection should surface richer command-result summaries in recent-session triage
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -603,8 +607,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- refine the shell seam so read-only inspection commands and test commands can expose distinct policy levels
 - keep tightening the fake/live event schema around steering and intervention milestones
 - add even denser recent-session triage hints, such as compact multi-approval counts or last-tool-result snippets
 - decide whether the session switcher needs its own richer sort/filter affordances now that chooser restoration exists
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+- decide whether direct shell inspection should surface richer command-result summaries in recent-session triage

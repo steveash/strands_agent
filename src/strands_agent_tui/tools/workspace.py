@@ -69,6 +69,64 @@ FILE_TYPE_LABELS = {
 }
 
 
+@dataclass(slots=True, frozen=True)
+class ShellCommandProfile:
+    argv: tuple[str, ...]
+    policy_level: str
+    family: str
+
+
+def resolve_shell_command(command: str) -> ShellCommandProfile:
+    normalized_command = command.strip()
+    if not normalized_command:
+        raise ValueError("command must not be empty")
+
+    argv = shlex.split(normalized_command)
+    if not argv:
+        raise ValueError("command must not be empty")
+
+    executable = argv[0]
+    args = argv[1:]
+
+    if executable == "pwd":
+        if args:
+            raise ValueError("pwd does not accept additional arguments in this prototype")
+        return ShellCommandProfile(argv=tuple(argv), policy_level="inspect", family="pwd")
+
+    if executable == "ls":
+        if len(args) > 1 or any(arg not in ALLOWED_LS_FLAGS for arg in args):
+            raise ValueError("ls only supports an optional -1, -a, -l, or -la flag in this prototype")
+        return ShellCommandProfile(argv=tuple(argv), policy_level="inspect", family="ls")
+
+    if executable == "git":
+        if not args:
+            raise ValueError("git requires a supported read-only subcommand")
+        subcommand = args[0]
+        sub_args = args[1:]
+        if subcommand == "status" and all(arg in ALLOWED_GIT_STATUS_FLAGS for arg in sub_args):
+            return ShellCommandProfile(argv=tuple(argv), policy_level="inspect", family="git_status")
+        if subcommand == "diff" and all(arg in ALLOWED_GIT_DIFF_FLAGS for arg in sub_args):
+            return ShellCommandProfile(argv=tuple(argv), policy_level="inspect", family="git_diff")
+        raise ValueError(
+            "git only supports `status [--short] [--branch]` and `diff [--stat] [--cached]` in this prototype"
+        )
+
+    if executable == "pytest":
+        if any(arg not in ALLOWED_PYTEST_FLAGS for arg in args):
+            raise ValueError("pytest only supports -q, -x, and -vv flags in this prototype")
+        return ShellCommandProfile(argv=tuple(argv), policy_level="test", family="pytest")
+
+    if executable == "python" and len(args) >= 2 and args[0] == "-m" and args[1] == "pytest":
+        pytest_args = args[2:]
+        if any(arg not in ALLOWED_PYTEST_FLAGS for arg in pytest_args):
+            raise ValueError("python -m pytest only supports -q, -x, and -vv flags in this prototype")
+        return ShellCommandProfile(argv=tuple(argv), policy_level="test", family="pytest_module")
+
+    raise ValueError(
+        "shell command is outside the narrow allowlist: pwd, ls, git status/diff, pytest, python -m pytest"
+    )
+
+
 @dataclass(slots=True)
 class WorkspaceTools:
     root: Path
@@ -310,8 +368,6 @@ class WorkspaceTools:
     ) -> str:
         """Run a narrowly scoped read/test shell command inside the workspace."""
         normalized_command = command.strip()
-        if not normalized_command:
-            raise ValueError("command must not be empty")
         if timeout_seconds < 1 or timeout_seconds > MAX_SHELL_TIMEOUT_SECONDS:
             raise ValueError(
                 f"timeout_seconds must be between 1 and {MAX_SHELL_TIMEOUT_SECONDS}"
@@ -323,10 +379,8 @@ class WorkspaceTools:
         if not cwd.is_dir():
             raise NotADirectoryError(f"Path is not a directory: {relative_path}")
 
-        argv = shlex.split(normalized_command)
-        if not argv:
-            raise ValueError("command must not be empty")
-        argv = self._validate_shell_command(argv)
+        profile = resolve_shell_command(normalized_command)
+        argv = list(profile.argv)
 
         try:
             completed = subprocess.run(
@@ -355,6 +409,7 @@ class WorkspaceTools:
         return (
             f"Workspace root: {self.root}\n"
             f"Action: shell command\n"
+            f"Policy level: {profile.policy_level}\n"
             f"CWD: {location}\n"
             f"Command: {normalized_command}\n"
             f"Exit code: {completed.returncode}\n"
@@ -427,48 +482,6 @@ class WorkspaceTools:
             f"Action: replaced text\n"
             f"File: {target.relative_to(self.root)}\n"
             f"Occurrences: {occurrences}"
-        )
-
-    def _validate_shell_command(self, argv: list[str]) -> list[str]:
-        command = argv[0]
-        args = argv[1:]
-
-        if command == "pwd":
-            if args:
-                raise ValueError("pwd does not accept additional arguments in this prototype")
-            return argv
-
-        if command == "ls":
-            if len(args) > 1 or any(arg not in ALLOWED_LS_FLAGS for arg in args):
-                raise ValueError("ls only supports an optional -1, -a, -l, or -la flag in this prototype")
-            return argv
-
-        if command == "git":
-            if not args:
-                raise ValueError("git requires a supported read-only subcommand")
-            subcommand = args[0]
-            sub_args = args[1:]
-            if subcommand == "status" and all(arg in ALLOWED_GIT_STATUS_FLAGS for arg in sub_args):
-                return argv
-            if subcommand == "diff" and all(arg in ALLOWED_GIT_DIFF_FLAGS for arg in sub_args):
-                return argv
-            raise ValueError(
-                "git only supports `status [--short] [--branch]` and `diff [--stat] [--cached]` in this prototype"
-            )
-
-        if command == "pytest":
-            if any(arg not in ALLOWED_PYTEST_FLAGS for arg in args):
-                raise ValueError("pytest only supports -q, -x, and -vv flags in this prototype")
-            return argv
-
-        if command == "python" and len(args) >= 2 and args[0] == "-m" and args[1] == "pytest":
-            pytest_args = args[2:]
-            if any(arg not in ALLOWED_PYTEST_FLAGS for arg in pytest_args):
-                raise ValueError("python -m pytest only supports -q, -x, and -vv flags in this prototype")
-            return argv
-
-        raise ValueError(
-            "shell command is outside the narrow allowlist: pwd, ls, git status/diff, pytest, python -m pytest"
         )
 
     def _format_shell_output(self, stdout: str, stderr: str) -> str:

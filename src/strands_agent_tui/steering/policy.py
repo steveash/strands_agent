@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 
+from strands_agent_tui.tools.workspace import resolve_shell_command
+
 DEFAULT_PROTECTED_GLOBS = (".env", ".env.*", "*.pem", "*.key")
 
 
@@ -99,12 +101,47 @@ class ToolSteeringPolicy:
     def _evaluate_shell_command(self, args: dict[str, object]) -> SteeringDecision:
         command = str(args.get("command", "")).strip()
         relative_path = str(args.get("relative_path", "."))
+        try:
+            profile = resolve_shell_command(command)
+        except ValueError as exc:
+            return SteeringDecision(
+                allowed=False,
+                reason=str(exc),
+                severity="error",
+                category="deny",
+                details={
+                    "command": command,
+                    "relative_path": relative_path,
+                    "shell_policy": "unsupported",
+                },
+                disposition="deny",
+            )
+
+        if profile.policy_level == "inspect":
+            return SteeringDecision(
+                allowed=True,
+                reason="Allowed read-only shell inspection command within the narrow workspace allowlist.",
+                severity="info",
+                category="allow_with_notice",
+                details={
+                    "command": command,
+                    "relative_path": relative_path,
+                    "shell_policy": profile.policy_level,
+                    "shell_command_family": profile.family,
+                },
+            )
+
         return SteeringDecision(
             allowed=False,
-            reason="Shell command execution requires explicit confirmation in this prototype.",
+            reason="Shell test command requires explicit confirmation in this prototype.",
             severity="warn",
             category="confirm_needed",
-            details={"command": command, "relative_path": relative_path},
+            details={
+                "command": command,
+                "relative_path": relative_path,
+                "shell_policy": profile.policy_level,
+                "shell_command_family": profile.family,
+            },
             disposition="confirm",
         )
 

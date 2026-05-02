@@ -56,6 +56,7 @@ def test_run_shell_command_executes_allowed_pwd(workspace: WorkspaceTools) -> No
     rendered = workspace.run_shell_command("pwd")
 
     assert "Action: shell command" in rendered
+    assert "Policy level: inspect" in rendered
     assert "Command: pwd" in rendered
     assert str(workspace.root) in rendered
 
