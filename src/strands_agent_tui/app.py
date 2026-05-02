@@ -867,6 +867,16 @@ def parse_args() -> AppConfig:
         help="Interactively choose a recent saved session from the configured artifacts root.",
     )
     parser.add_argument(
+        "--pick-filter",
+        choices=["all", "pending", "restore", "tool"],
+        help="Set the initial recent-session picker filter when using --pick-session.",
+    )
+    parser.add_argument(
+        "--pick-sort",
+        choices=["recent", "attention"],
+        help="Set the initial recent-session picker sort mode when using --pick-session.",
+    )
+    parser.add_argument(
         "--resume-last",
         action="store_true",
         help="Resume the most recent saved session from the configured artifacts root.",
@@ -876,6 +886,8 @@ def parse_args() -> AppConfig:
     session_flags = [bool(args.session_dir), bool(args.pick_session), bool(args.resume_last)]
     if sum(session_flags) > 1:
         parser.error("Choose only one of --session-dir, --pick-session, or --resume-last.")
+    if (args.pick_filter or args.pick_sort) and not args.pick_session:
+        parser.error("Use --pick-filter/--pick-sort only with --pick-session.")
 
     config = load_config().merge(
         runtime_mode=args.runtime,
@@ -892,7 +904,11 @@ def parse_args() -> AppConfig:
             parser.error(f"No saved sessions found under {config.artifacts_root}")
         selected_session_dir = summary.session_dir
     elif args.pick_session:
-        summary = pick_session(config.artifacts_root)
+        summary = pick_session(
+            config.artifacts_root,
+            filter_mode=args.pick_filter or "all",
+            sort_mode=args.pick_sort or "recent",
+        )
         if summary is not None:
             selected_session_dir = summary.session_dir
 

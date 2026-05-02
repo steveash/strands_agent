@@ -113,15 +113,33 @@ def latest_session(root: str | Path) -> SessionSummary | None:
     return sessions[0] if sessions else None
 
 
-def render_session_picker(root: str | Path, limit: int = MAX_RECENT_SESSIONS) -> str:
-    summaries = list_recent_sessions(root, limit=limit)
+def render_session_picker(
+    root: str | Path,
+    limit: int = MAX_RECENT_SESSIONS,
+    *,
+    filter_mode: str = "all",
+    sort_mode: str = "recent",
+) -> str:
+    filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
+    sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
+    summaries = list_recent_sessions(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode)
+    available_summaries = list_recent_sessions(root, limit=limit)
     resolved_root = Path(root).expanduser().resolve()
-    if not summaries:
+    if not available_summaries:
         return f"No saved sessions found under {resolved_root}."
 
-    lines = [f"Recent sessions under {resolved_root}:", ""]
-    lines.extend(summary.render_line(index) for index, summary in enumerate(summaries, start=1))
-    lines.extend(["", "Press Enter to start a new session."])
+    lines = [f"Recent sessions under {resolved_root}:", f"Filter: {filter_mode} | Sort: {sort_mode}", ""]
+    if not summaries:
+        lines.append("No saved sessions match the active picker filter.")
+    else:
+        lines.extend(summary.render_line(index) for index, summary in enumerate(summaries, start=1))
+    lines.extend(
+        [
+            "",
+            "Picker controls: [A]ll [P]ending [R]estore [T]ool [S]ort",
+            "Press Enter to start a new session.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -129,27 +147,57 @@ def pick_session(
     root: str | Path,
     limit: int = MAX_RECENT_SESSIONS,
     *,
+    filter_mode: str = "all",
+    sort_mode: str = "recent",
     input_fn: Callable[[str], str] | None = None,
     output_fn: Callable[[str], None] | None = None,
 ) -> SessionSummary | None:
     input_fn = input_fn or input
     output_fn = output_fn or print
+    filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
+    sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
     summaries = list_recent_sessions(root, limit=limit)
     if not summaries:
-        output_fn(render_session_picker(root, limit=limit))
+        output_fn(render_session_picker(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode))
         output_fn("Starting a new session instead.")
         return None
 
-    output_fn(render_session_picker(root, limit=limit))
     while True:
-        selection = input_fn("Select session number to resume, or press Enter for a new session: ").strip()
+        current_summaries = list_recent_sessions(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode)
+        output_fn(render_session_picker(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode))
+        selection = input_fn(
+            "Select session number, or use A/P/R/T/S to triage, or press Enter for a new session: "
+        ).strip()
         if not selection:
             return None
+        normalized = selection.lower()
+        if normalized == "a":
+            filter_mode = "all"
+            continue
+        if normalized == "p":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "pending")
+            continue
+        if normalized == "r":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "restore")
+            continue
+        if normalized == "t":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "tool")
+            continue
+        if normalized == "s":
+            sort_mode = _cycle_picker_sort_mode(sort_mode)
+            continue
         if selection.isdigit():
             index = int(selection)
-            if 1 <= index <= len(summaries):
-                return summaries[index - 1]
-        output_fn(f"Invalid selection: {selection!r}. Choose 1-{len(summaries)} or press Enter.")
+            if 1 <= index <= len(current_summaries):
+                return current_summaries[index - 1]
+            if current_summaries:
+                output_fn(
+                    f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list or press Enter."
+                )
+            else:
+                output_fn("No sessions are visible with the active filter. Use A, P, R, T, S, or press Enter.")
+            continue
+        output_fn("Invalid selection. Use 1-9, A, P, R, T, S, or press Enter.")
 
 
 def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:
@@ -231,6 +279,18 @@ def sanitize_session_switcher_filter_mode(value: str) -> str:
 
 def sanitize_session_switcher_sort_mode(value: str) -> str:
     return value if value in SESSION_SWITCHER_SORT_MODES else "recent"
+
+
+def _toggle_picker_filter_mode(current_filter_mode: str, next_filter_mode: str) -> str:
+    if current_filter_mode == next_filter_mode:
+        return "all"
+    return sanitize_session_switcher_filter_mode(next_filter_mode)
+
+
+def _cycle_picker_sort_mode(current_sort_mode: str) -> str:
+    if current_sort_mode == "recent":
+        return "attention"
+    return "recent"
 
 
 def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:

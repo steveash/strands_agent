@@ -224,6 +224,68 @@ def test_parse_args_pick_session_loads_selected_recent_session(
     assert config.session_id == "session-first"
 
 
+def test_parse_args_pick_session_accepts_initial_filter_and_sort(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
+    plain_store.append_turn(
+        TurnArtifact(
+            prompt="plain prompt",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    pending_store.append_turn(
+        TurnArtifact(
+            prompt="pending prompt",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0013",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["strands-agent", "--pick-session", "--pick-filter", "pending", "--pick-sort", "attention"],
+    )
+    monkeypatch.setenv("STRANDS_AGENT_ARTIFACTS_ROOT", str(tmp_path))
+    monkeypatch.setattr("builtins.input", lambda _prompt: "1")
+
+    config = parse_args()
+
+    assert config.artifacts_root == str(tmp_path.resolve())
+    assert config.session_id == "session-pending"
+
+
+def test_parse_args_rejects_picker_filter_without_pick_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["strands-agent", "--pick-filter", "pending"])
+
+    with pytest.raises(SystemExit):
+        parse_args()
+
+
 @pytest.mark.asyncio
 async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="filter-session")

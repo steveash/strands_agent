@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, last-tool-result triage hints, plus in-app session-switcher sort/filter affordances for denser recent-session triage.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, last-tool-result triage hints, plus matching launch-time and in-app session-picker sort/filter affordances for denser recent-session triage.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -104,6 +104,7 @@ What exists now:
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
 - restart-safe restoration of event-filter, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
+- launch-time CLI picker triage controls for all/pending/restore/tool filters plus recent-vs-attention sorting, including `--pick-filter` / `--pick-sort` defaults and interactive `A` / `P` / `R` / `T` / `S` toggles,
 - an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline,
 - keyboard-driven session-switcher navigation with ↑/↓ (or J/K), Enter-to-switch, and a highlighted selection row rather than number-only switching,
 - in-app session-switcher triage controls for all/pending/restore/tool filters plus recent-vs-attention sorting so denser recent-session summaries stay skimmable as the list grows,
@@ -114,14 +115,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added in-app session-switcher filter shortcuts for all, pending approvals, restore-state badges, and last-tool activity so denser recent-session triage can be narrowed without leaving the TUI,
-- added a two-mode recent-vs-attention sorter that bubbles approval-bearing and restore-state sessions ahead of plain history when desired,
-- persisted the switcher filter/sort view state in `session_state.json`, refreshed the switcher smoke script, and expanded session/app test coverage around the new chooser controls.
+- extended the launch-time `--pick-session` flow with the same all/pending/restore/tool triage lens already available in-app,
+- added initial `--pick-filter` and `--pick-sort` CLI flags plus interactive `A` / `P` / `R` / `T` / `S` picker controls so recent-session selection can be narrowed before the TUI boots,
+- refreshed the picker smoke script and expanded session/app coverage around filtered picker rendering, interactive triage toggles, and CLI-argument validation.
 
 Why this matters now:
-- It makes recent-session reopen flow faster when the saved-session list gets noisy because you can instantly isolate approval-bearing, restorable, or tool-active sessions.
-- It keeps the richer triage row actionable instead of decorative by letting the operator re-rank toward “needs attention” without losing restart-safe chooser state.
-- It extends restart-safe session persistence from “which row was selected” to “what triage lens was I using,” which matters when you are bouncing between interrupted sessions.
+- It removes a mismatch between the launch-time picker and the in-app switcher, so the same triage model works before and after the TUI starts.
+- It makes noisy artifact roots easier to reopen from because approval-bearing, restore-state, or tool-active sessions can be isolated before loading one.
+- It gives automation and power users a deterministic way to bias reopen flow toward “needs attention” sessions without manually scanning the whole recent list.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -132,11 +133,12 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `81 passed`
+- automated tests: `85 passed`
+- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_default_banner= True`, `picker_pending_filter= True`, `picker_pending_only_pending= True`, `picker_attention_sort= True`, `picker_interactive_selected= session-pending`, `picker_interactive_toggled= True`, and `latest=session-tool`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` now reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_has_tool_preview= True`, `switcher_has_event_preview= True`, `switcher_pending_filter= True`, `switcher_pending_filter_only_newer= True`, `switcher_attention_sort= True`, `switcher_restored= True`, `switcher_restored_sort= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
-- CLI verification: `strands-agent --help` still shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, and `--resume-last`,
+- CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter`, `--pick-sort`, and `--resume-last`,
 - recent-session verification by test: recent session summaries still surface pending approvals, restore-state badges, and last-event previews while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
@@ -452,9 +454,12 @@ Or use the new recent-session shortcuts so you do not need to type a full artifa
 ```bash
 strands-agent --pick-session
 strands-agent --resume-last
+strands-agent --pick-session --pick-filter pending --pick-sort attention
 ```
 
 Those flows reload the saved prompt/response history plus timeline events from `turns.jsonl`, then continue appending new turns into the selected session directory.
+
+The launch-time picker now mirrors the in-app triage model: use `A` for all sessions, `P` for pending approvals, `R` for restore-state sessions, `T` for recent tool-active sessions, and `S` to toggle recent-vs-attention sorting before you choose a row.
 
 Partially typed prompt text is also persisted in `session_state.json`, so a restart or session reload can reopen with the draft still in the input instead of discarding it.
 

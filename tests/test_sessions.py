@@ -81,7 +81,9 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     rendered = render_session_picker(tmp_path)
 
     assert "Recent sessions under" in rendered
+    assert "Filter: all | Sort: recent" in rendered
     assert "1. session-demo" in rendered
+    assert "Picker controls: [A]ll [P]ending [R]estore [T]ool [S]ort" in rendered
     assert "Press Enter to start a new session." in rendered
 
 
@@ -116,6 +118,54 @@ def test_pick_session_handles_empty_artifact_root(tmp_path: Path) -> None:
     assert summary is None
     assert captured[0].startswith("No saved sessions found under")
     assert captured[1] == "Starting a new session instead."
+
+
+def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-demo")
+    _append_turn(store, "review demo")
+
+    rendered = render_session_picker(tmp_path, filter_mode="pending")
+
+    assert "Filter: pending | Sort: recent" in rendered
+    assert "No saved sessions match the active picker filter." in rendered
+    assert "1. session-demo" not in rendered
+
+
+def test_pick_session_supports_filter_and_sort_commands(tmp_path: Path) -> None:
+    plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
+    _append_turn(plain_store, "plain")
+
+    restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
+    _append_turn(restore_store, "restore")
+    restore_store.save_session_state(SessionState(draft_prompt="draft"))
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    _append_turn(pending_store, "pending")
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0012",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    captured: list[str] = []
+    inputs = iter(["p", "s", "1"])
+    summary = pick_session(
+        tmp_path,
+        input_fn=lambda _prompt: next(inputs),
+        output_fn=captured.append,
+    )
+
+    assert summary is not None
+    assert summary.session_id == "session-pending"
+    assert any("Filter: pending | Sort: recent" in line for line in captured)
+    assert any("Filter: pending | Sort: attention" in line for line in captured)
 
 
 def test_session_artifact_store_persists_and_clears_pending_approvals(tmp_path: Path) -> None:
