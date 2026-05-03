@@ -459,7 +459,7 @@ strands-agent --pick-session --pick-filter pending --pick-sort attention
 
 Those flows reload the saved prompt/response history plus timeline events from `turns.jsonl`, then continue appending new turns into the selected session directory.
 
-The launch-time picker now mirrors the in-app triage model: use `A` for all sessions, `P` for pending approvals, `R` for restore-state sessions, `T` for recent tool-active sessions, and `S` to toggle recent-vs-attention sorting before you choose a row.
+The launch-time picker now mirrors the in-app triage model: use `A` for all sessions, `P` for pending approvals, `R` for restore-state sessions, `T` for recent tool-active sessions, and `S` to toggle recent-vs-attention sorting before you choose a row. When there are more than 8 matches, use `[` and `]` to page backward/forward so older sessions are still reachable before the TUI boots.
 
 Partially typed prompt text is also persisted in `session_state.json`, so a restart or session reload can reopen with the draft still in the input instead of discarding it.
 
@@ -544,6 +544,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - replay shortcuts browse older/newer turns and can return to live/latest view
   - restart-safe draft prompt state is restored into the input after restart
   - the in-app session switcher supports highlighted keyboard navigation, direct number shortcuts, and restart-safe chooser restoration
+  - the launch-time recent-session picker can page past the first 8 visible sessions while preserving the same triage filters and sorts
   - CLI argument parsing overrides runtime/model/workspace selection correctly
   - CLI session selection can load an explicit session dir, reopen the latest session, or pick from recent sessions interactively
 
@@ -562,7 +563,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - session summaries include bounded last-prompt previews
   - restart-safe session state persists approvals, view focus, draft prompt text, and session-switcher chooser context together
   - the compact picker renders usable recent-session labels
-  - the picker returns the selected session and handles an empty artifact root safely
+  - the picker returns the selected session, supports paged navigation, and handles an empty artifact root safely
 
 This is the current anti-regression contract for the active Phase 2/3/4 slice.
 

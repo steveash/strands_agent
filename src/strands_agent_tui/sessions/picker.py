@@ -158,16 +158,34 @@ def render_session_picker(
     *,
     filter_mode: str = "all",
     sort_mode: str = "recent",
+    page_index: int = 0,
 ) -> str:
     filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
     sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
-    summaries = list_recent_sessions(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode)
-    available_summaries = list_recent_sessions(root, limit=limit)
     resolved_root = Path(root).expanduser().resolve()
-    if not available_summaries:
+    available_count = count_recent_sessions(resolved_root)
+    if not available_count:
         return f"No saved sessions found under {resolved_root}."
 
-    lines = [f"Recent sessions under {resolved_root}:", f"Filter: {filter_mode} | Sort: {sort_mode}", ""]
+    total_matches = count_recent_sessions(resolved_root, filter_mode=filter_mode, sort_mode=sort_mode)
+    page_index = _normalize_picker_page_index(total_matches, limit, page_index)
+    summaries = list_recent_sessions(
+        root,
+        limit=limit,
+        filter_mode=filter_mode,
+        sort_mode=sort_mode,
+        offset=page_index * limit,
+    )
+
+    lines = [
+        f"Recent sessions under {resolved_root}:",
+        (
+            f"Filter: {filter_mode} | Sort: {sort_mode} | "
+            f"Page: {_picker_page_label(total_matches, limit, page_index)} | "
+            f"Showing: {_picker_page_window_label(total_matches, limit, page_index, len(summaries))}"
+        ),
+        "",
+    ]
     if not summaries:
         lines.append("No saved sessions match the active picker filter.")
     else:
@@ -175,7 +193,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: [A]ll [P]ending [R]estore [T]ool [S]ort",
+            "Picker controls: A all, P pending, R restore, T tool, S sort, [ prev page, ] next page",
             "Press Enter to start a new session.",
         ]
     )
@@ -201,29 +219,63 @@ def pick_session(
         output_fn("Starting a new session instead.")
         return None
 
+    page_index = 0
     while True:
-        current_summaries = list_recent_sessions(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode)
-        output_fn(render_session_picker(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode))
+        total_matches = count_recent_sessions(root, filter_mode=filter_mode, sort_mode=sort_mode)
+        page_index = _normalize_picker_page_index(total_matches, limit, page_index)
+        current_summaries = list_recent_sessions(
+            root,
+            limit=limit,
+            filter_mode=filter_mode,
+            sort_mode=sort_mode,
+            offset=page_index * limit,
+        )
+        output_fn(
+            render_session_picker(
+                root,
+                limit=limit,
+                filter_mode=filter_mode,
+                sort_mode=sort_mode,
+                page_index=page_index,
+            )
+        )
         selection = input_fn(
-            "Select session number, or use A/P/R/T/S to triage, or press Enter for a new session: "
+            "Select visible session number, or use A/P/R/T/S/[ / ] to triage/page, or press Enter for a new session: "
         ).strip()
         if not selection:
             return None
         normalized = selection.lower()
         if normalized == "a":
             filter_mode = "all"
+            page_index = 0
             continue
         if normalized == "p":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "pending")
+            page_index = 0
             continue
         if normalized == "r":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "restore")
+            page_index = 0
             continue
         if normalized == "t":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "tool")
+            page_index = 0
             continue
         if normalized == "s":
             sort_mode = _cycle_picker_sort_mode(sort_mode)
+            page_index = 0
+            continue
+        if normalized == "[":
+            if page_index == 0:
+                output_fn("Already on the first picker page.")
+            else:
+                page_index -= 1
+            continue
+        if normalized == "]":
+            if (page_index + 1) * limit >= total_matches:
+                output_fn("Already on the last picker page.")
+            else:
+                page_index += 1
             continue
         if selection.isdigit():
             index = int(selection)
@@ -234,9 +286,9 @@ def pick_session(
                     f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list or press Enter."
                 )
             else:
-                output_fn("No sessions are visible with the active filter. Use A, P, R, T, S, or press Enter.")
+                output_fn("No sessions are visible with the active filter. Use A, P, R, T, S, [, ], or press Enter.")
             continue
-        output_fn("Invalid selection. Use 1-9, A, P, R, T, S, or press Enter.")
+        output_fn(f"Invalid selection. Use 1-{limit}, A, P, R, T, S, [, ], or press Enter.")
 
 
 def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:
@@ -330,6 +382,28 @@ def _cycle_picker_sort_mode(current_sort_mode: str) -> str:
     if current_sort_mode == "recent":
         return "attention"
     return "recent"
+
+
+def _normalize_picker_page_index(total_matches: int, limit: int, page_index: int) -> int:
+    if total_matches <= 0:
+        return 0
+    max_page_index = (total_matches - 1) // limit
+    return max(0, min(page_index, max_page_index))
+
+
+def _picker_page_label(total_matches: int, limit: int, page_index: int) -> str:
+    if total_matches <= 0:
+        return "0/0"
+    total_pages = ((total_matches - 1) // limit) + 1
+    return f"{page_index + 1}/{total_pages}"
+
+
+def _picker_page_window_label(total_matches: int, limit: int, page_index: int, visible_count: int) -> str:
+    if total_matches <= 0 or visible_count <= 0:
+        return "0 of 0"
+    start = page_index * limit + 1
+    end = start + visible_count - 1
+    return f"{start}-{end} of {total_matches}"
 
 
 def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:

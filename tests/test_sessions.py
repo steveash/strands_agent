@@ -83,10 +83,26 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     rendered = render_session_picker(tmp_path)
 
     assert "Recent sessions under" in rendered
-    assert "Filter: all | Sort: recent" in rendered
+    assert "Filter: all | Sort: recent | Page: 1/1 | Showing: 1-1 of 1" in rendered
     assert "1. session-demo" in rendered
-    assert "Picker controls: [A]ll [P]ending [R]estore [T]ool [S]ort" in rendered
+    assert "Picker controls: A all, P pending, R restore, T tool, S sort, [ prev page, ] next page" in rendered
     assert "Press Enter to start a new session." in rendered
+
+
+def test_render_session_picker_supports_paged_views(tmp_path: Path) -> None:
+    created_ids: list[str] = []
+    for index in range(MAX_RECENT_SESSIONS + 2):
+        session_id = f"session-{index:02d}"
+        store = SessionArtifactStore(tmp_path, session_id=session_id)
+        _append_turn(store, f"prompt {index}")
+        created_ids.append(session_id)
+
+    second_page = render_session_picker(tmp_path, page_index=1)
+
+    assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
+    assert "1. session-01" in second_page
+    assert "2. session-00" in second_page
+    assert "session-09" not in second_page
 
 
 def test_pick_session_returns_selected_summary(tmp_path: Path) -> None:
@@ -168,6 +184,24 @@ def test_pick_session_supports_filter_and_sort_commands(tmp_path: Path) -> None:
     assert summary.session_id == "session-pending"
     assert any("Filter: pending | Sort: recent" in line for line in captured)
     assert any("Filter: pending | Sort: attention" in line for line in captured)
+
+
+def test_pick_session_supports_paged_navigation_to_older_sessions(tmp_path: Path) -> None:
+    for index in range(MAX_RECENT_SESSIONS + 3):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-{index:02d}")
+        _append_turn(store, f"prompt {index}")
+
+    captured: list[str] = []
+    inputs = iter(["]", "3"])
+    summary = pick_session(
+        tmp_path,
+        input_fn=lambda _prompt: next(inputs),
+        output_fn=captured.append,
+    )
+
+    assert summary is not None
+    assert summary.session_id == "session-00"
+    assert any("Page: 2/2 | Showing: 9-11 of 11" in line for line in captured)
 
 
 def test_session_artifact_store_persists_and_clears_pending_approvals(tmp_path: Path) -> None:
