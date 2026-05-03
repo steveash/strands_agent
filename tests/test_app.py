@@ -886,7 +886,10 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "last tool: .: README.md" in output
         assert "last event: tool_finished: list_files" in output
         assert "2. session-older" in output
-        assert "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, A all, P pending, R restore, T tool, S sort, N new session, Esc/F11 cancel" in output
+        assert (
+            "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
+            "A all, P pending, R restore, T tool, S sort, N new session, Esc/F11 cancel"
+        ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
         assert prompt.disabled is True
@@ -1261,6 +1264,92 @@ async def test_session_switcher_is_restored_after_restart_with_selected_session(
         assert "View: session switcher" in status
         assert "kind=session_switcher_restored | Session switcher restored" in events
         assert prompt.disabled is True
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_restores_deeper_paged_selection_after_restart(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    for index in range(9):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-{index:02d}")
+        store.append_turn(
+            TurnArtifact(
+                prompt=f"prompt {index}",
+                response=f"response {index}",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+    first_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with first_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("]")
+        await pilot.pause()
+        await pilot.press("down")
+        await pilot.pause()
+
+        stored_state = SessionArtifactStore(tmp_path, session_id="session-current").load_session_state()
+        assert stored_state is not None
+        assert stored_state.session_switcher_active is True
+        assert stored_state.session_switcher_page_index == 1
+        assert stored_state.session_switcher_selected_session_id
+
+        output = str(first_app.query_one("#output").render())
+        assert "Page: 2/2" in output
+
+    restored_selected_session_id = stored_state.session_switcher_selected_session_id
+
+    second_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="session-current"),
+    )
+
+    async with second_app.run_test() as pilot:
+        await pilot.pause()
+
+        output = str(second_app.query_one("#output").render())
+        events = str(second_app.query_one("#events").render())
+
+        assert "Session Switcher" in output
+        assert "Page: 2/2" in output
+        assert any(
+            line.startswith("> ") and restored_selected_session_id in line
+            for line in output.splitlines()
+        )
+        assert "kind=session_switcher_restored | Session switcher restored" in events
 
 
 @pytest.mark.asyncio

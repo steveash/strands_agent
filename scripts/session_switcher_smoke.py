@@ -138,6 +138,70 @@ async def run_smoke() -> None:
             print("history_latest=", restored_app.history[-1] if restored_app.history else None)
             print("latest_event=", restored_app.events[-1].kind if restored_app.events else None)
 
+        paged_current_store = SessionArtifactStore(temp_dir, session_id="session-page-current")
+        append_turn(paged_current_store, "paged current prompt", "paged current response")
+        for index in range(9):
+            store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index:02d}")
+            append_turn(store, f"paged prompt {index}", f"paged response {index}")
+
+        paged_app = StrandsAgentApp(
+            runtime=FakeStrandsRuntime(),
+            config=AppConfig(
+                runtime_mode="fake",
+                openai_model="gpt-4o-mini",
+                workspace_root=".",
+                artifacts_root=temp_dir,
+                session_id="session-page-current",
+            ),
+            artifact_store=paged_current_store,
+        )
+
+        async with paged_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("f11")
+            await pilot.pause()
+            await pilot.press("]")
+            await pilot.pause()
+            await pilot.press("down")
+            await pilot.pause()
+            paged_output = str(paged_app.query_one("#output").render())
+            stored_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
+            print("switcher_paged=", "Page: 2/2" in paged_output)
+            print("switcher_paged_window=", "Showing: 9-12 of 12" in paged_output)
+            print(
+                "switcher_paged_state=",
+                stored_state is not None
+                and stored_state.session_switcher_page_index == 1
+                and bool(stored_state.session_switcher_selected_session_id),
+            )
+
+        restored_paged_app = StrandsAgentApp(
+            runtime=FakeStrandsRuntime(),
+            config=AppConfig(
+                runtime_mode="fake",
+                openai_model="gpt-4o-mini",
+                workspace_root=".",
+                artifacts_root=temp_dir,
+                session_id="session-page-current",
+            ),
+            artifact_store=SessionArtifactStore(temp_dir, session_id="session-page-current"),
+        )
+
+        async with restored_paged_app.run_test() as pilot:
+            await pilot.pause()
+            restored_paged_output = str(restored_paged_app.query_one("#output").render())
+            restored_paged_selected_line = next(
+                (line for line in restored_paged_output.splitlines() if line.startswith("> ")),
+                "",
+            )
+            restored_page_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
+            print("switcher_restored_page=", "Page: 2/2" in restored_paged_output)
+            print(
+                "switcher_restored_paged_selection=",
+                restored_page_state is not None
+                and restored_page_state.session_switcher_selected_session_id in restored_paged_selected_line,
+            )
+
 
 def main() -> None:
     asyncio.run(run_smoke())

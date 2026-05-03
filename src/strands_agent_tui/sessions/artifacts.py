@@ -65,8 +65,9 @@ class SessionState:
     session_switcher_selected_session_id: str = ""
     session_switcher_filter_mode: str = "all"
     session_switcher_sort_mode: str = "recent"
+    session_switcher_page_index: int = 0
     updated_at: str | None = None
-    schema_version: str = "strands-agent/session-state-v4"
+    schema_version: str = "strands-agent/session-state-v5"
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -80,6 +81,7 @@ class SessionState:
             "session_switcher_selected_session_id": self.session_switcher_selected_session_id,
             "session_switcher_filter_mode": self.session_switcher_filter_mode,
             "session_switcher_sort_mode": self.session_switcher_sort_mode,
+            "session_switcher_page_index": self.session_switcher_page_index,
         }
 
     @classmethod
@@ -88,6 +90,9 @@ class SessionState:
         history_focus_index = payload.get("history_focus_index")
         if not isinstance(history_focus_index, int):
             history_focus_index = None
+        page_index = payload.get("session_switcher_page_index")
+        if not isinstance(page_index, int) or page_index < 0:
+            page_index = 0
         return cls(
             pending_approvals=[
                 ApprovalRequest.from_dict(item) for item in pending_payload if isinstance(item, dict)
@@ -99,8 +104,9 @@ class SessionState:
             session_switcher_selected_session_id=str(payload.get("session_switcher_selected_session_id", "") or ""),
             session_switcher_filter_mode=str(payload.get("session_switcher_filter_mode", "all") or "all"),
             session_switcher_sort_mode=str(payload.get("session_switcher_sort_mode", "recent") or "recent"),
+            session_switcher_page_index=page_index,
             updated_at=str(payload.get("updated_at")) if payload.get("updated_at") else None,
-            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v4")),
+            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v5")),
         )
 
     def is_default(self) -> bool:
@@ -113,6 +119,7 @@ class SessionState:
             and not self.session_switcher_selected_session_id
             and self.session_switcher_filter_mode == "all"
             and self.session_switcher_sort_mode == "recent"
+            and self.session_switcher_page_index == 0
         )
 
 

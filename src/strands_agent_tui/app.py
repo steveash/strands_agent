@@ -11,9 +11,11 @@ from textual.widgets import Footer, Header, Input, Static
 from strands_agent_tui.config import AppConfig, load_config
 from strands_agent_tui.runtime import AgentRuntime, ApprovalRequest, RuntimeEvent, build_runtime, runtime_event
 from strands_agent_tui.sessions import (
+    MAX_RECENT_SESSIONS,
     SessionArtifactStore,
     SessionState,
     SessionSummary,
+    count_recent_sessions,
     TurnArtifact,
     latest_session,
     list_recent_sessions,
@@ -113,6 +115,8 @@ class StrandsAgentApp(App):
         self.session_switcher_selected_index = 0
         self.session_switcher_filter_mode = "all"
         self.session_switcher_sort_mode = "recent"
+        self.session_switcher_page_index = 0
+        self.session_switcher_total_matches = 0
         self.pending_approval: ApprovalRequest | None = None
         self.runtime_status_override: str | None = None
         self.artifact_store = artifact_store or SessionArtifactStore(
@@ -211,6 +215,16 @@ class StrandsAgentApp(App):
             event.stop()
             return
 
+        if key in {"pageup", "[", "left_square_bracket"}:
+            self._page_session_switcher(-1)
+            event.stop()
+            return
+
+        if key in {"pagedown", "]", "right_square_bracket"}:
+            self._page_session_switcher(1)
+            event.stop()
+            return
+
         if key in {"up", "k"}:
             self._move_session_switcher_selection(-1)
             event.stop()
@@ -263,6 +277,8 @@ class StrandsAgentApp(App):
         self.session_switcher_selected_index = 0
         self.session_switcher_filter_mode = "all"
         self.session_switcher_sort_mode = "recent"
+        self.session_switcher_page_index = 0
+        self.session_switcher_total_matches = 0
         if hasattr(self.runtime, "restore_pending_approvals"):
             self.runtime.restore_pending_approvals([])
 
@@ -324,6 +340,7 @@ class StrandsAgentApp(App):
                 selected_session_id=session_state.session_switcher_selected_session_id or None,
                 filter_mode=session_state.session_switcher_filter_mode,
                 sort_mode=session_state.session_switcher_sort_mode,
+                page_index=session_state.session_switcher_page_index,
                 restored=True,
                 refresh_widgets=False,
             )
@@ -420,10 +437,14 @@ class StrandsAgentApp(App):
             f"Current session: {self.artifact_store.session_id}",
             f"Artifacts root: {self.artifact_store.root}",
             (
-                "Keys: ↑/↓ or J/K move, Enter switch, 1-8 quick switch, "
+                "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
                 "A all, P pending, R restore, T tool, S sort, N new session, Esc/F11 cancel"
             ),
-            f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode}",
+            (
+                f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode} | "
+                f"Page: {self.session_switcher_page_label()} | "
+                f"Showing: {self.session_switcher_page_window_label()}"
+            ),
             "",
         ]
 
@@ -657,6 +678,7 @@ class StrandsAgentApp(App):
         selected_session_id: str | None = None,
         filter_mode: str | None = None,
         sort_mode: str | None = None,
+        page_index: int | None = None,
         restored: bool = False,
         refresh_widgets: bool = True,
     ) -> None:
@@ -665,6 +687,8 @@ class StrandsAgentApp(App):
             filter_mode or self.session_switcher_filter_mode
         )
         self.session_switcher_sort_mode = sanitize_session_switcher_sort_mode(sort_mode or self.session_switcher_sort_mode)
+        if page_index is not None:
+            self.session_switcher_page_index = max(page_index, 0)
         self._refresh_session_switcher_summaries(selected_session_id=selected_session_id)
         self._persist_session_view_state()
         if restored:
@@ -681,6 +705,8 @@ class StrandsAgentApp(App):
                         "visible_sessions": len(self.session_switcher_summaries),
                         "filter_mode": self.session_switcher_filter_mode,
                         "sort_mode": self.session_switcher_sort_mode,
+                        "page_index": self.session_switcher_page_index,
+                        "total_matches": self.session_switcher_total_matches,
                     },
                 )
             )
@@ -693,6 +719,8 @@ class StrandsAgentApp(App):
         self.session_switcher_selected_index = 0
         self.session_switcher_filter_mode = "all"
         self.session_switcher_sort_mode = "recent"
+        self.session_switcher_page_index = 0
+        self.session_switcher_total_matches = 0
         self._persist_session_view_state()
         self._refresh_widgets()
 
@@ -709,15 +737,62 @@ class StrandsAgentApp(App):
         if not self.session_switcher_summaries:
             return
         last_index = len(self.session_switcher_summaries) - 1
+        if delta < 0 and self.session_switcher_selected_index == 0 and self.session_switcher_page_index > 0:
+            self.session_switcher_page_index -= 1
+            self._refresh_session_switcher_summaries()
+            self.session_switcher_selected_index = len(self.session_switcher_summaries) - 1
+            self._persist_session_view_state()
+            self._refresh_widgets()
+            return
+        if (
+            delta > 0
+            and self.session_switcher_selected_index == last_index
+            and self._session_switcher_has_next_page()
+        ):
+            self.session_switcher_page_index += 1
+            self._refresh_session_switcher_summaries()
+            self.session_switcher_selected_index = 0
+            self._persist_session_view_state()
+            self._refresh_widgets()
+            return
         self.session_switcher_selected_index = max(0, min(self.session_switcher_selected_index + delta, last_index))
         self._persist_session_view_state()
         self._refresh_widgets()
 
     def _refresh_session_switcher_summaries(self, *, selected_session_id: str | None = None) -> None:
+        self.session_switcher_total_matches = count_recent_sessions(
+            self.config.artifacts_root,
+            filter_mode=self.session_switcher_filter_mode,
+            sort_mode=self.session_switcher_sort_mode,
+        )
+        if self.session_switcher_total_matches == 0:
+            self.session_switcher_page_index = 0
+            self.session_switcher_summaries = []
+            self.session_switcher_selected_index = 0
+            return
+
+        max_page_index = (self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS
+        if selected_session_id:
+            all_summaries = list_recent_sessions(
+                self.config.artifacts_root,
+                limit=self.session_switcher_total_matches,
+                filter_mode=self.session_switcher_filter_mode,
+                sort_mode=self.session_switcher_sort_mode,
+            )
+            for index, summary in enumerate(all_summaries):
+                if summary.session_id == selected_session_id:
+                    self.session_switcher_page_index = index // MAX_RECENT_SESSIONS
+                    break
+            else:
+                self.session_switcher_page_index = min(self.session_switcher_page_index, max_page_index)
+        else:
+            self.session_switcher_page_index = min(self.session_switcher_page_index, max_page_index)
+
         self.session_switcher_summaries = list_recent_sessions(
             self.config.artifacts_root,
             filter_mode=self.session_switcher_filter_mode,
             sort_mode=self.session_switcher_sort_mode,
+            offset=self.session_switcher_page_index * MAX_RECENT_SESSIONS,
         )
         self.session_switcher_selected_index = self._default_session_switcher_index(selected_session_id)
 
@@ -748,6 +823,42 @@ class StrandsAgentApp(App):
         self._persist_session_view_state()
         self._refresh_widgets()
 
+    def _page_session_switcher(self, delta: int) -> None:
+        if self.session_switcher_total_matches <= MAX_RECENT_SESSIONS:
+            return
+
+        max_page_index = (self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS
+        next_page_index = max(0, min(self.session_switcher_page_index + delta, max_page_index))
+        if next_page_index == self.session_switcher_page_index:
+            return
+
+        self.session_switcher_page_index = next_page_index
+        self._refresh_session_switcher_summaries()
+        if delta > 0:
+            self.session_switcher_selected_index = 0
+        elif self.session_switcher_summaries:
+            self.session_switcher_selected_index = len(self.session_switcher_summaries) - 1
+        self._persist_session_view_state()
+        self._refresh_widgets()
+
+    def _session_switcher_has_next_page(self) -> bool:
+        if self.session_switcher_total_matches <= 0:
+            return False
+        return (self.session_switcher_page_index + 1) * MAX_RECENT_SESSIONS < self.session_switcher_total_matches
+
+    def session_switcher_page_label(self) -> str:
+        if self.session_switcher_total_matches <= 0:
+            return "0/0"
+        total_pages = ((self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS) + 1
+        return f"{self.session_switcher_page_index + 1}/{total_pages}"
+
+    def session_switcher_page_window_label(self) -> str:
+        if self.session_switcher_total_matches <= 0 or not self.session_switcher_summaries:
+            return "0 of 0"
+        start = self.session_switcher_page_index * MAX_RECENT_SESSIONS + 1
+        end = start + len(self.session_switcher_summaries) - 1
+        return f"{start}-{end} of {self.session_switcher_total_matches}"
+
     def _current_session_switcher_summary(self) -> SessionSummary | None:
         if not self.session_switcher_summaries:
             return None
@@ -773,6 +884,7 @@ class StrandsAgentApp(App):
             session_switcher_selected_session_id=selected_summary.session_id if selected_summary else "",
             session_switcher_filter_mode=self.session_switcher_filter_mode,
             session_switcher_sort_mode=self.session_switcher_sort_mode,
+            session_switcher_page_index=self.session_switcher_page_index,
         )
 
         previous_state = self.artifact_store.load_session_state() if emit_pending_events else None
@@ -806,6 +918,8 @@ class StrandsAgentApp(App):
                         "event_filter": self.event_filter,
                         "history_focus_index": self.history_focus_index,
                         "draft_prompt_length": len(self.draft_prompt),
+                        "session_switcher_page_index": self.session_switcher_page_index,
+                        "session_switcher_selected_session_id": selected_summary.session_id if selected_summary else None,
                     },
                 )
             )

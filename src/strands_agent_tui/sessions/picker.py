@@ -61,16 +61,51 @@ def list_recent_sessions(
     *,
     filter_mode: str = "all",
     sort_mode: str = "recent",
+    offset: int = 0,
 ) -> list[SessionSummary]:
     resolved_root = Path(root).expanduser().resolve()
     if limit < 1:
         raise ValueError("limit must be >= 1")
+    if offset < 0:
+        raise ValueError("offset must be >= 0")
     if not resolved_root.exists() or not resolved_root.is_dir():
         return []
 
     filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
     sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
 
+    return _ordered_recent_sessions(
+        resolved_root,
+        limit=limit,
+        filter_mode=filter_mode,
+        sort_mode=sort_mode,
+        offset=offset,
+    )
+
+
+def count_recent_sessions(
+    root: str | Path,
+    *,
+    filter_mode: str = "all",
+    sort_mode: str = "recent",
+) -> int:
+    resolved_root = Path(root).expanduser().resolve()
+    if not resolved_root.exists() or not resolved_root.is_dir():
+        return 0
+
+    filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
+    sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
+    return len(_ordered_recent_sessions(resolved_root, limit=None, filter_mode=filter_mode, sort_mode=sort_mode))
+
+
+def _ordered_recent_sessions(
+    resolved_root: Path,
+    *,
+    limit: int | None,
+    filter_mode: str,
+    sort_mode: str,
+    offset: int = 0,
+) -> list[SessionSummary]:
     session_dirs = [path for path in resolved_root.iterdir() if path.is_dir()]
 
     summaries_with_sort: list[tuple[float, str, SessionSummary]] = []
@@ -104,7 +139,11 @@ def list_recent_sessions(
         )
 
     filtered = [item for item in summaries_with_sort if _matches_filter(item[2], filter_mode)]
-    ordered = sorted(filtered, key=lambda item: _sort_key(item, sort_mode), reverse=True)[:limit]
+    ordered = sorted(filtered, key=lambda item: _sort_key(item, sort_mode), reverse=True)
+    if offset:
+        ordered = ordered[offset:]
+    if limit is not None:
+        ordered = ordered[:limit]
     return [summary for _, _, summary in ordered]
 
 
@@ -333,7 +372,10 @@ def _restore_badges(state: SessionState, turn_count: int) -> list[str]:
         badges.append(f"draft {len(state.draft_prompt)}c")
 
     if state.session_switcher_active:
-        badges.append("chooser")
+        chooser_badge = "chooser"
+        if state.session_switcher_page_index > 0:
+            chooser_badge = f"chooser p{state.session_switcher_page_index + 1}"
+        badges.append(chooser_badge)
 
     return badges
 

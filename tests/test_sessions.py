@@ -2,9 +2,11 @@ from pathlib import Path
 
 from strands_agent_tui.runtime import ApprovalRequest, runtime_event
 from strands_agent_tui.sessions import (
+    MAX_RECENT_SESSIONS,
     SessionArtifactStore,
     SessionState,
     TurnArtifact,
+    count_recent_sessions,
     latest_session,
     list_recent_sessions,
     pick_session,
@@ -221,6 +223,7 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
             session_switcher_selected_session_id="session-target",
             session_switcher_filter_mode="pending",
             session_switcher_sort_mode="attention",
+            session_switcher_page_index=1,
         )
     )
 
@@ -234,6 +237,7 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
     assert restored.session_switcher_selected_session_id == "session-target"
     assert restored.session_switcher_filter_mode == "pending"
     assert restored.session_switcher_sort_mode == "attention"
+    assert restored.session_switcher_page_index == 1
     assert restored.pending_approvals[0].request_id == "approval-0009"
     assert store.pending_approvals_path.exists()
 
@@ -249,6 +253,7 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
     assert preserved_view_state.session_switcher_selected_session_id == "session-target"
     assert preserved_view_state.session_switcher_filter_mode == "pending"
     assert preserved_view_state.session_switcher_sort_mode == "attention"
+    assert preserved_view_state.session_switcher_page_index == 1
 
 
 def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path) -> None:
@@ -284,13 +289,34 @@ def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_pat
             history_focus_index=1,
             draft_prompt="draft follow-up",
             session_switcher_active=True,
+            session_switcher_page_index=1,
         )
     )
 
     summary = list_recent_sessions(tmp_path)[0]
 
-    assert summary.restore_badges == ["filter=tool", "replay 2/2", "draft 15c", "chooser"]
-    assert "restore: filter=tool, replay 2/2, draft 15c, chooser" in summary.render_line(1)
+    assert summary.restore_badges == ["filter=tool", "replay 2/2", "draft 15c", "chooser p2"]
+    assert "restore: filter=tool, replay 2/2, draft 15c, chooser p2" in summary.render_line(1)
+
+
+def test_list_recent_sessions_supports_offset_for_paged_switcher_views(tmp_path: Path) -> None:
+    created_ids: list[str] = []
+    for index in range(MAX_RECENT_SESSIONS + 2):
+        session_id = f"session-{index:02d}"
+        store = SessionArtifactStore(tmp_path, session_id=session_id)
+        _append_turn(store, f"prompt {index}")
+        created_ids.append(session_id)
+
+    ordered_ids = list(reversed(created_ids))
+    all_sessions = list_recent_sessions(tmp_path, limit=count_recent_sessions(tmp_path))
+    first_page = list_recent_sessions(tmp_path, limit=MAX_RECENT_SESSIONS)
+    second_page = list_recent_sessions(tmp_path, limit=MAX_RECENT_SESSIONS, offset=MAX_RECENT_SESSIONS)
+
+    assert len(first_page) == MAX_RECENT_SESSIONS
+    assert len(second_page) == 2
+    assert [session.session_id for session in all_sessions] == ordered_ids
+    assert [session.session_id for session in first_page] == ordered_ids[:MAX_RECENT_SESSIONS]
+    assert [session.session_id for session in second_page] == ordered_ids[MAX_RECENT_SESSIONS:]
 
 
 def test_list_recent_sessions_surfaces_shell_tool_preview_and_exit_badges(tmp_path: Path) -> None:
