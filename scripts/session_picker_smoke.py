@@ -98,7 +98,7 @@ def main() -> None:
         )
 
         captured: list[str] = []
-        inputs = iter(["p", "s", "j", "k", "1"])
+        inputs = iter(["p", "s", "j", "k", ""])
         summary = pick_session(
             temp_dir,
             input_fn=lambda _prompt: next(inputs),
@@ -133,7 +133,7 @@ def main() -> None:
             any("Page: 2/2 | Showing: 9-12 of 12" in line for line in paged_captured),
         )
 
-        aborted_inputs = iter(["]", "j", ""])
+        aborted_inputs = iter(["]", "j", "n"])
         aborted_summary = pick_session(
             temp_dir,
             filter_mode="all",
@@ -145,7 +145,7 @@ def main() -> None:
             raise RuntimeError("expected the aborted picker run to start a new session")
 
         restored_captured: list[str] = []
-        restored_inputs = iter(["2"])
+        restored_inputs = iter([""])
         restored_summary = pick_session(
             temp_dir,
             input_fn=lambda _prompt: next(restored_inputs),

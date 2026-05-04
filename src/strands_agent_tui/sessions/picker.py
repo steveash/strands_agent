@@ -262,8 +262,8 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page",
-            "Press Enter to start a new session.",
+            "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page, N new session",
+            "Press Enter to reopen the highlighted session.",
         ]
     )
     return "\n".join(lines)
@@ -319,9 +319,21 @@ def pick_session(
             )
         )
         selection = input_fn(
-            "Select visible session number, or use J/K to preview, A/P/R/T/S/[ / ] to triage/page, or press Enter for a new session: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/R/T/S/[ / ] to triage/page: "
         ).strip()
         if not selection:
+            if current_summaries:
+                selected_index = _normalize_visible_selected_index(len(current_summaries), selected_index)
+                selected_session_id = current_summaries[selected_index].session_id
+                _persist_picker_state(
+                    resolved_root,
+                    filter_mode=filter_mode,
+                    sort_mode=sort_mode,
+                    page_index=page_index,
+                    selected_index=selected_index,
+                    summaries=current_summaries,
+                )
+                return current_summaries[selected_index]
             _persist_picker_state(
                 resolved_root,
                 filter_mode=filter_mode,
@@ -332,6 +344,16 @@ def pick_session(
             )
             return None
         normalized = selection.lower()
+        if normalized == "n":
+            _persist_picker_state(
+                resolved_root,
+                filter_mode=filter_mode,
+                sort_mode=sort_mode,
+                page_index=page_index,
+                selected_index=selected_index,
+                summaries=current_summaries,
+            )
+            return None
         if normalized == "j":
             if current_summaries:
                 selected_index = min(selected_index + 1, len(current_summaries) - 1)
@@ -404,12 +426,12 @@ def pick_session(
                 return current_summaries[selected_index]
             if current_summaries:
                 output_fn(
-                    f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list or press Enter."
+                    f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list, press Enter to reopen highlighted, or N for a new session."
                 )
             else:
-                output_fn("No sessions are visible with the active filter. Use A, P, R, T, S, [, ], or press Enter.")
+                output_fn("No sessions are visible with the active filter. Use A, P, R, T, S, [, ], N, or press Enter to start a new session.")
             continue
-        output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, R, T, S, [, ], or press Enter.")
+        output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, R, T, S, [, ], Enter, or N.")
 
 
 def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:

@@ -91,8 +91,11 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- slot 1 on this page | overall 1 of 1 | session session-demo" in rendered
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
-    assert "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page" in rendered
-    assert "Press Enter to start a new session." in rendered
+    assert (
+        "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page, N new session"
+        in rendered
+    )
+    assert "Press Enter to reopen the highlighted session." in rendered
 
 
 def test_render_session_picker_supports_paged_views(tmp_path: Path) -> None:
@@ -129,6 +132,26 @@ def test_pick_session_returns_selected_summary(tmp_path: Path) -> None:
     assert summary is not None
     assert summary.session_id == "session-second"
     assert any("Recent sessions under" in line for line in captured)
+
+
+def test_pick_session_enter_reopens_highlighted_summary(tmp_path: Path) -> None:
+    first_store = SessionArtifactStore(tmp_path, session_id="session-first")
+    _append_turn(first_store, "first")
+
+    second_store = SessionArtifactStore(tmp_path, session_id="session-second")
+    _append_turn(second_store, "second")
+
+    captured: list[str] = []
+    inputs = iter(["j", ""])
+    summary = pick_session(
+        tmp_path,
+        input_fn=lambda _prompt: next(inputs),
+        output_fn=captured.append,
+    )
+
+    assert summary is not None
+    assert summary.session_id == "session-first"
+    assert any("> 2. session-first" in line for line in captured)
 
 
 def test_pick_session_handles_empty_artifact_root(tmp_path: Path) -> None:
@@ -180,7 +203,7 @@ def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_p
     )
 
     captured: list[str] = []
-    inputs = iter(["p", "s", "j", "k", "1"])
+    inputs = iter(["p", "s", "j", "k", ""])
     summary = pick_session(
         tmp_path,
         input_fn=lambda _prompt: next(inputs),
@@ -214,12 +237,12 @@ def test_pick_session_supports_paged_navigation_to_older_sessions(tmp_path: Path
     assert any("- slot 1 on this page | overall 9 of 11 | session session-02" in line for line in captured)
 
 
-def test_pick_session_restores_prior_page_and_selection_after_aborted_attempt(tmp_path: Path) -> None:
+def test_pick_session_restores_prior_page_and_selection_after_fresh_session_escape(tmp_path: Path) -> None:
     for index in range(MAX_RECENT_SESSIONS + 3):
         store = SessionArtifactStore(tmp_path, session_id=f"session-{index:02d}")
         _append_turn(store, f"prompt {index}")
 
-    first_inputs = iter(["]", "j", ""])
+    first_inputs = iter(["]", "j", "n"])
     assert (
         pick_session(
             tmp_path,
@@ -230,7 +253,7 @@ def test_pick_session_restores_prior_page_and_selection_after_aborted_attempt(tm
     )
 
     captured: list[str] = []
-    second_inputs = iter(["2"])
+    second_inputs = iter([""])
     summary = pick_session(
         tmp_path,
         input_fn=lambda _prompt: next(second_inputs),
