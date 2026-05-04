@@ -6,7 +6,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
-from .artifacts import SessionArtifactStore, SessionState, TurnArtifact
+from .artifacts import (
+    SessionArtifactStore,
+    SessionPickerState,
+    SessionState,
+    TurnArtifact,
+    load_session_picker_state,
+    save_session_picker_state,
+)
 
 MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
@@ -266,37 +273,44 @@ def pick_session(
     root: str | Path,
     limit: int = MAX_RECENT_SESSIONS,
     *,
-    filter_mode: str = "all",
-    sort_mode: str = "recent",
+    filter_mode: str | None = None,
+    sort_mode: str | None = None,
     input_fn: Callable[[str], str] | None = None,
     output_fn: Callable[[str], None] | None = None,
 ) -> SessionSummary | None:
     input_fn = input_fn or input
     output_fn = output_fn or print
-    filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
-    sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
-    summaries = list_recent_sessions(root, limit=limit)
+    resolved_root = Path(root).expanduser().resolve()
+    persisted_state = load_session_picker_state(resolved_root)
+    filter_mode, sort_mode, page_index, selected_index, selected_session_id = _initial_picker_state(
+        persisted_state,
+        filter_mode=filter_mode,
+        sort_mode=sort_mode,
+    )
+    summaries = list_recent_sessions(resolved_root, limit=limit)
     if not summaries:
-        output_fn(render_session_picker(root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode))
+        output_fn(render_session_picker(resolved_root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode))
         output_fn("Starting a new session instead.")
         return None
 
-    page_index = 0
-    selected_index = 0
     while True:
-        total_matches = count_recent_sessions(root, filter_mode=filter_mode, sort_mode=sort_mode)
+        total_matches = count_recent_sessions(resolved_root, filter_mode=filter_mode, sort_mode=sort_mode)
         page_index = _normalize_picker_page_index(total_matches, limit, page_index)
         current_summaries = list_recent_sessions(
-            root,
+            resolved_root,
             limit=limit,
             filter_mode=filter_mode,
             sort_mode=sort_mode,
             offset=page_index * limit,
         )
-        selected_index = _normalize_visible_selected_index(len(current_summaries), selected_index)
+        selected_index = _picker_selected_index_for_visible_page(
+            current_summaries,
+            selected_session_id,
+            selected_index,
+        )
         output_fn(
             render_session_picker(
-                root,
+                resolved_root,
                 limit=limit,
                 filter_mode=filter_mode,
                 sort_mode=sort_mode,
@@ -308,40 +322,55 @@ def pick_session(
             "Select visible session number, or use J/K to preview, A/P/R/T/S/[ / ] to triage/page, or press Enter for a new session: "
         ).strip()
         if not selection:
+            _persist_picker_state(
+                resolved_root,
+                filter_mode=filter_mode,
+                sort_mode=sort_mode,
+                page_index=page_index,
+                selected_index=selected_index,
+                summaries=current_summaries,
+            )
             return None
         normalized = selection.lower()
         if normalized == "j":
             if current_summaries:
                 selected_index = min(selected_index + 1, len(current_summaries) - 1)
+                selected_session_id = current_summaries[selected_index].session_id
             continue
         if normalized == "k":
             if current_summaries:
                 selected_index = max(selected_index - 1, 0)
+                selected_session_id = current_summaries[selected_index].session_id
             continue
         if normalized == "a":
             filter_mode = "all"
             page_index = 0
             selected_index = 0
+            selected_session_id = ""
             continue
         if normalized == "p":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "pending")
             page_index = 0
             selected_index = 0
+            selected_session_id = ""
             continue
         if normalized == "r":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "restore")
             page_index = 0
             selected_index = 0
+            selected_session_id = ""
             continue
         if normalized == "t":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "tool")
             page_index = 0
             selected_index = 0
+            selected_session_id = ""
             continue
         if normalized == "s":
             sort_mode = _cycle_picker_sort_mode(sort_mode)
             page_index = 0
             selected_index = 0
+            selected_session_id = ""
             continue
         if normalized == "[":
             if page_index == 0:
@@ -349,6 +378,7 @@ def pick_session(
             else:
                 page_index -= 1
                 selected_index = 0
+                selected_session_id = ""
             continue
         if normalized == "]":
             if (page_index + 1) * limit >= total_matches:
@@ -356,11 +386,22 @@ def pick_session(
             else:
                 page_index += 1
                 selected_index = 0
+                selected_session_id = ""
             continue
         if selection.isdigit():
             index = int(selection)
             if 1 <= index <= len(current_summaries):
-                return current_summaries[index - 1]
+                selected_index = index - 1
+                selected_session_id = current_summaries[selected_index].session_id
+                _persist_picker_state(
+                    resolved_root,
+                    filter_mode=filter_mode,
+                    sort_mode=sort_mode,
+                    page_index=page_index,
+                    selected_index=selected_index,
+                    summaries=current_summaries,
+                )
+                return current_summaries[selected_index]
             if current_summaries:
                 output_fn(
                     f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list or press Enter."
@@ -576,3 +617,65 @@ def _truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
+
+
+def _initial_picker_state(
+    persisted_state: SessionPickerState | None,
+    *,
+    filter_mode: str | None,
+    sort_mode: str | None,
+) -> tuple[str, str, int, int, str]:
+    state = persisted_state or SessionPickerState()
+    selected_session_id = state.selected_session_id
+    page_index = state.page_index
+    selected_index = state.selected_index
+    effective_filter = sanitize_session_switcher_filter_mode(state.filter_mode)
+    effective_sort = sanitize_session_switcher_sort_mode(state.sort_mode)
+    if filter_mode is not None:
+        effective_filter = sanitize_session_switcher_filter_mode(filter_mode)
+        page_index = 0
+        selected_index = 0
+        selected_session_id = ""
+    if sort_mode is not None:
+        effective_sort = sanitize_session_switcher_sort_mode(sort_mode)
+        page_index = 0
+        selected_index = 0
+        selected_session_id = ""
+    return effective_filter, effective_sort, page_index, selected_index, selected_session_id
+
+
+def _picker_selected_index_for_visible_page(
+    summaries: list[SessionSummary],
+    selected_session_id: str,
+    fallback_index: int,
+) -> int:
+    if not summaries:
+        return 0
+    if selected_session_id:
+        for index, summary in enumerate(summaries):
+            if summary.session_id == selected_session_id:
+                return index
+    return _normalize_visible_selected_index(len(summaries), fallback_index)
+
+
+def _persist_picker_state(
+    root: Path,
+    *,
+    filter_mode: str,
+    sort_mode: str,
+    page_index: int,
+    selected_index: int,
+    summaries: list[SessionSummary],
+) -> None:
+    selected_index = _normalize_visible_selected_index(len(summaries), selected_index)
+    selected_session_id = summaries[selected_index].session_id if summaries else ""
+    save_session_picker_state(
+        root,
+        SessionPickerState(
+            filter_mode=filter_mode,
+            sort_mode=sort_mode,
+            page_index=page_index,
+            selected_index=selected_index,
+            selected_session_id=selected_session_id,
+        ),
+    )

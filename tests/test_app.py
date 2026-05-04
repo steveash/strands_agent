@@ -9,8 +9,9 @@ from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.app import parse_args
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
-from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, TurnArtifact
+from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, SessionPickerState, TurnArtifact
 from strands_agent_tui.sessions import SessionState
+from strands_agent_tui.sessions import save_session_picker_state
 
 
 class FailingRuntime:
@@ -263,6 +264,17 @@ def test_parse_args_pick_session_accepts_initial_filter_and_sort(
         ]
     )
 
+    save_session_picker_state(
+        tmp_path,
+        SessionPickerState(
+            filter_mode="all",
+            sort_mode="attention",
+            page_index=1,
+            selected_index=2,
+            selected_session_id="session-plain",
+        ),
+    )
+
     monkeypatch.setattr(
         sys,
         "argv",
@@ -275,6 +287,43 @@ def test_parse_args_pick_session_accepts_initial_filter_and_sort(
 
     assert config.artifacts_root == str(tmp_path.resolve())
     assert config.session_id == "session-pending"
+
+
+def test_parse_args_pick_session_restores_prior_picker_state_when_no_explicit_overrides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    for index in range(MAX_RECENT_SESSIONS + 3):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-{index:02d}")
+        store.append_turn(
+            TurnArtifact(
+                prompt=f"prompt {index}",
+                response="done",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+    save_session_picker_state(
+        tmp_path,
+        SessionPickerState(
+            filter_mode="all",
+            sort_mode="recent",
+            page_index=1,
+            selected_index=1,
+            selected_session_id="session-01",
+        ),
+    )
+
+    monkeypatch.setattr(sys, "argv", ["strands-agent", "--pick-session"])
+    monkeypatch.setenv("STRANDS_AGENT_ARTIFACTS_ROOT", str(tmp_path))
+    monkeypatch.setattr("builtins.input", lambda _prompt: "2")
+
+    config = parse_args()
+
+    assert config.artifacts_root == str(tmp_path.resolve())
+    assert config.session_id == "session-01"
 
 
 def test_parse_args_pick_session_can_reach_older_sessions_beyond_first_page(

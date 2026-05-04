@@ -4,6 +4,7 @@ from strands_agent_tui.runtime import ApprovalRequest, runtime_event
 from strands_agent_tui.sessions import (
     MAX_RECENT_SESSIONS,
     SessionArtifactStore,
+    SessionPickerState,
     SessionState,
     TurnArtifact,
     count_recent_sessions,
@@ -11,6 +12,7 @@ from strands_agent_tui.sessions import (
     list_recent_sessions,
     pick_session,
     render_session_picker,
+    save_session_picker_state,
 )
 
 
@@ -210,6 +212,80 @@ def test_pick_session_supports_paged_navigation_to_older_sessions(tmp_path: Path
     assert summary.session_id == "session-00"
     assert any("Page: 2/2 | Showing: 9-11 of 11" in line for line in captured)
     assert any("- slot 1 on this page | overall 9 of 11 | session session-02" in line for line in captured)
+
+
+def test_pick_session_restores_prior_page_and_selection_after_aborted_attempt(tmp_path: Path) -> None:
+    for index in range(MAX_RECENT_SESSIONS + 3):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-{index:02d}")
+        _append_turn(store, f"prompt {index}")
+
+    first_inputs = iter(["]", "j", ""])
+    assert (
+        pick_session(
+            tmp_path,
+            input_fn=lambda _prompt: next(first_inputs),
+            output_fn=lambda _line: None,
+        )
+        is None
+    )
+
+    captured: list[str] = []
+    second_inputs = iter(["2"])
+    summary = pick_session(
+        tmp_path,
+        input_fn=lambda _prompt: next(second_inputs),
+        output_fn=captured.append,
+    )
+
+    assert summary is not None
+    assert summary.session_id == "session-01"
+    assert any("Page: 2/2 | Showing: 9-11 of 11" in line for line in captured)
+    assert any("> 2. session-01" in line for line in captured)
+    assert any("- slot 2 on this page | overall 10 of 11 | session session-01" in line for line in captured)
+
+
+def test_pick_session_explicit_overrides_ignore_persisted_picker_state(tmp_path: Path) -> None:
+    plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
+    _append_turn(plain_store, "plain")
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    _append_turn(pending_store, "pending")
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0014",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    save_session_picker_state(
+        tmp_path,
+        SessionPickerState(
+            filter_mode="tool",
+            sort_mode="attention",
+            page_index=1,
+            selected_index=3,
+            selected_session_id="session-plain",
+        ),
+    )
+
+    captured: list[str] = []
+    summary = pick_session(
+        tmp_path,
+        filter_mode="pending",
+        sort_mode="recent",
+        input_fn=lambda _prompt: "1",
+        output_fn=captured.append,
+    )
+
+    assert summary is not None
+    assert summary.session_id == "session-pending"
+    assert any("Filter: pending | Sort: recent | Page: 1/1 | Showing: 1-1 of 1" in line for line in captured)
 
 
 def test_session_artifact_store_persists_and_clears_pending_approvals(tmp_path: Path) -> None:

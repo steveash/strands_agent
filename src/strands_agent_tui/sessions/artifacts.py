@@ -10,6 +10,9 @@ from pathlib import Path
 from strands_agent_tui.runtime import ApprovalRequest, RuntimeEvent
 
 
+SESSION_PICKER_STATE_FILENAME = "session_picker_state.json"
+
+
 @dataclass(slots=True)
 class TurnArtifact:
     prompt: str
@@ -120,6 +123,55 @@ class SessionState:
             and self.session_switcher_filter_mode == "all"
             and self.session_switcher_sort_mode == "recent"
             and self.session_switcher_page_index == 0
+        )
+
+
+@dataclass(slots=True)
+class SessionPickerState:
+    filter_mode: str = "all"
+    sort_mode: str = "recent"
+    page_index: int = 0
+    selected_index: int = 0
+    selected_session_id: str = ""
+    updated_at: str | None = None
+    schema_version: str = "strands-agent/session-picker-state-v1"
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "updated_at": self.updated_at or datetime.now(UTC).isoformat(),
+            "filter_mode": self.filter_mode,
+            "sort_mode": self.sort_mode,
+            "page_index": self.page_index,
+            "selected_index": self.selected_index,
+            "selected_session_id": self.selected_session_id,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "SessionPickerState":
+        page_index = payload.get("page_index")
+        if not isinstance(page_index, int) or page_index < 0:
+            page_index = 0
+        selected_index = payload.get("selected_index")
+        if not isinstance(selected_index, int) or selected_index < 0:
+            selected_index = 0
+        return cls(
+            filter_mode=str(payload.get("filter_mode", "all") or "all"),
+            sort_mode=str(payload.get("sort_mode", "recent") or "recent"),
+            page_index=page_index,
+            selected_index=selected_index,
+            selected_session_id=str(payload.get("selected_session_id", "") or ""),
+            updated_at=str(payload.get("updated_at")) if payload.get("updated_at") else None,
+            schema_version=str(payload.get("schema_version", "strands-agent/session-picker-state-v1")),
+        )
+
+    def is_default(self) -> bool:
+        return (
+            self.filter_mode == "all"
+            and self.sort_mode == "recent"
+            and self.page_index == 0
+            and self.selected_index == 0
+            and not self.selected_session_id
         )
 
 
@@ -266,3 +318,33 @@ class SessionArtifactStore:
         payload = json.loads(self.pending_approvals_path.read_text(encoding="utf-8"))
         pending_payload = payload.get("pending_approvals") or []
         return [ApprovalRequest.from_dict(item) for item in pending_payload if isinstance(item, dict)]
+
+
+def save_session_picker_state(root: str | Path, state: SessionPickerState) -> None:
+    path = _session_picker_state_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if state.is_default():
+        if path.exists():
+            path.unlink()
+        return
+    path.write_text(json.dumps(state.as_dict(), indent=2) + "\n", encoding="utf-8")
+
+
+def load_session_picker_state(root: str | Path) -> SessionPickerState | None:
+    path = _session_picker_state_path(root)
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return SessionPickerState.from_dict(payload)
+
+
+def clear_session_picker_state(root: str | Path) -> bool:
+    path = _session_picker_state_path(root)
+    if not path.exists():
+        return False
+    path.unlink()
+    return True
+
+
+def _session_picker_state_path(root: str | Path) -> Path:
+    return Path(root).expanduser().resolve() / SESSION_PICKER_STATE_FILENAME

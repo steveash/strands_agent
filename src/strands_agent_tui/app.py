@@ -1035,8 +1035,8 @@ def parse_args() -> AppConfig:
     elif args.pick_session:
         summary = pick_session(
             config.artifacts_root,
-            filter_mode=args.pick_filter or "all",
-            sort_mode=args.pick_sort or "recent",
+            filter_mode=args.pick_filter,
+            sort_mode=args.pick_sort,
         )
         if summary is not None:
             selected_session_dir = summary.session_dir

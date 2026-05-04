@@ -120,6 +120,8 @@ def main() -> None:
         paged_inputs = iter(["]", "4"])
         paged_summary = pick_session(
             temp_dir,
+            filter_mode="all",
+            sort_mode="recent",
             input_fn=lambda _prompt: next(paged_inputs),
             output_fn=paged_captured.append,
         )
@@ -129,6 +131,39 @@ def main() -> None:
         print(
             "picker_interactive_paged_banner=",
             any("Page: 2/2 | Showing: 9-12 of 12" in line for line in paged_captured),
+        )
+
+        aborted_inputs = iter(["]", "j", ""])
+        aborted_summary = pick_session(
+            temp_dir,
+            filter_mode="all",
+            sort_mode="recent",
+            input_fn=lambda _prompt: next(aborted_inputs),
+            output_fn=lambda _line: None,
+        )
+        if aborted_summary is not None:
+            raise RuntimeError("expected the aborted picker run to start a new session")
+
+        restored_captured: list[str] = []
+        restored_inputs = iter(["2"])
+        restored_summary = pick_session(
+            temp_dir,
+            input_fn=lambda _prompt: next(restored_inputs),
+            output_fn=restored_captured.append,
+        )
+        if restored_summary is None:
+            raise RuntimeError("expected a restored picker selection")
+        print("picker_restored_selected=", restored_summary.session_id)
+        print(
+            "picker_restored_page=",
+            any("Page: 2/2 | Showing: 9-12 of 12" in line for line in restored_captured),
+        )
+        print(
+            "picker_restored_preview=",
+            any(
+                "- slot 2 on this page | overall 10 of 12 | session session-restore" in line
+                for line in restored_captured
+            ),
         )
 
         latest = latest_session(temp_dir)
