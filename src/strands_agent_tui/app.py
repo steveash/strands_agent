@@ -15,11 +15,12 @@ from strands_agent_tui.sessions import (
     SessionArtifactStore,
     SessionState,
     SessionSummary,
-    count_recent_sessions,
     TurnArtifact,
+    count_recent_sessions,
     latest_session,
     list_recent_sessions,
     pick_session,
+    render_recent_session_empty_state_lines,
     sanitize_session_switcher_filter_mode,
     sanitize_session_switcher_sort_mode,
 )
@@ -449,10 +450,17 @@ class StrandsAgentApp(App):
         ]
 
         if not self.session_switcher_summaries:
-            if self.session_switcher_filter_mode == "all":
+            available_count = count_recent_sessions(self.config.artifacts_root)
+            if available_count <= 0 or self.session_switcher_filter_mode == "all":
                 lines.append("No saved sessions found.")
             else:
-                lines.append("No saved sessions match the active switcher filter.")
+                lines.extend(
+                    render_recent_session_empty_state_lines(
+                        available_count=available_count,
+                        filter_mode=self.session_switcher_filter_mode,
+                        surface="switcher",
+                    )
+                )
             return "\n".join(lines)
 
         for index, summary in enumerate(self.session_switcher_summaries, start=1):

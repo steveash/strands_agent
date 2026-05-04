@@ -1156,6 +1156,54 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("p")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        prompt = app.query_one("#prompt", Input)
+
+        assert "Filter: pending | Sort: recent" in output
+        assert "No saved sessions match the active switcher filter." in output
+        assert "1 saved session still exists under this root." in output
+        assert "Try A to show all sessions, or P/R/T to jump between pending, restore, and tool triage." in output
+        assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output
+        assert "Enter switches the highlighted session once a visible row exists again." in output
+        assert "session-current | 1 turn(s)" not in output
+        assert "View: session switcher" in status
+        assert prompt.disabled is True
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_can_switch_to_selected_recent_session(tmp_path: Path) -> None:
     older_store = SessionArtifactStore(tmp_path, session_id="session-older")
     older_store.append_turn(

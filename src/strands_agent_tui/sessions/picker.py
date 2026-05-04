@@ -243,7 +243,13 @@ def render_session_picker(
         "",
     ]
     if not summaries:
-        lines.extend(_picker_empty_state_lines(available_count=available_count, filter_mode=filter_mode))
+        lines.extend(
+            render_recent_session_empty_state_lines(
+                available_count=available_count,
+                filter_mode=filter_mode,
+                surface="picker",
+            )
+        )
     else:
         selected_index = _normalize_visible_selected_index(len(summaries), selected_index)
         for index, summary in enumerate(summaries, start=1):
@@ -557,14 +563,24 @@ def sanitize_session_switcher_sort_mode(value: str) -> str:
     return value if value in SESSION_SWITCHER_SORT_MODES else "recent"
 
 
-def _picker_empty_state_lines(*, available_count: int, filter_mode: str) -> list[str]:
-    lines = ["No saved sessions match the active picker filter."]
+def render_recent_session_empty_state_lines(
+    *,
+    available_count: int,
+    filter_mode: str,
+    surface: str = "picker",
+) -> list[str]:
+    surface = "switcher" if surface == "switcher" else "picker"
+    lines = [f"No saved sessions match the active {surface} filter."]
     session_label = "session" if available_count == 1 else "sessions"
     verb = "exists" if available_count == 1 else "exist"
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append("Try A to show all sessions, or P/R/T to jump between pending, restore, and tool triage.")
-    lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
+    if surface == "picker":
+        lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
+    else:
+        lines.append("Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists.")
+        lines.append("Enter switches the highlighted session once a visible row exists again.")
     return lines
 
 

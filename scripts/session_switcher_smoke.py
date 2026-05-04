@@ -219,6 +219,36 @@ async def run_smoke() -> None:
                 and restored_page_state.session_switcher_selected_session_id in restored_paged_selected_line,
             )
 
+    with TemporaryDirectory() as empty_hint_root:
+        empty_current_store = SessionArtifactStore(empty_hint_root, session_id="session-empty-current")
+        append_turn(empty_current_store, "plain current session", "plain current response")
+
+        empty_hint_app = StrandsAgentApp(
+            runtime=FakeStrandsRuntime(),
+            config=AppConfig(
+                runtime_mode="fake",
+                openai_model="gpt-4o-mini",
+                workspace_root=".",
+                artifacts_root=empty_hint_root,
+                session_id="session-empty-current",
+            ),
+            artifact_store=empty_current_store,
+        )
+
+        async with empty_hint_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("f11")
+            await pilot.pause()
+            await pilot.press("p")
+            await pilot.pause()
+            empty_hint_output = str(empty_hint_app.query_one("#output").render())
+            print(
+                "switcher_empty_hint=",
+                "No saved sessions match the active switcher filter." in empty_hint_output
+                and "1 saved session still exists under this root." in empty_hint_output
+                and "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in empty_hint_output,
+            )
+
 
 def main() -> None:
     asyncio.run(run_smoke())

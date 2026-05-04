@@ -111,19 +111,20 @@ What exists now:
 - restart-safe session-switcher restoration so reopening a session can bring back the chooser with the prior target selection preserved where possible,
 - richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers, compact restore-state badges, last-event previews, and bounded recent-tool streak summaries before selection,
 - a selected-session preview block inside the in-app `F11` switcher so the highlighted session now exposes the same richer summary context as the launch-time picker,
+- explicit empty-filter guidance across both recent-session reopen surfaces so zero-match triage states say how many saved sessions still exist plus which keys recover all/pending/restore/tool views,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added an explicit empty-filter guidance block in the launch-time picker so zero-match triage states now explain how many saved sessions still exist plus which keys recover all/pending/restore/tool views,
-- clarified the no-match interactive prompt so `Enter`/`N` fresh-session behavior is stated directly instead of being implied by fallback behavior,
-- refreshed picker coverage and the picker smoke script around the new empty-filter hints.
+- mirrored the launch-time picker's zero-match triage guidance inside the in-app `F11` session switcher by reusing a shared empty-state renderer,
+- made the in-app empty-filter state explain how many saved sessions still exist, which triage keys recover all/pending/restore/tool views, and when `N`, `Esc`/`F11`, and `Enter` are meaningful,
+- refreshed app coverage and the session-switcher smoke script around the new switcher empty-filter hints while keeping the launch-time picker behavior green.
 
 Why this matters now:
-- It removes a confusing edge case in pre-boot triage where an empty filter could look like a missing artifact root instead of a recoverable picker state.
-- It keeps the faster highlight-first reopen flow from the last iteration while making the fresh-session fallback explicit when no row is selectable.
-- It reduces recovery friction because the picker now tells the operator exactly how to widen the filter instead of forcing guesswork.
+- It removes a confusing gap between pre-boot and in-app reopen flows, so zero-match triage reads the same way in both places.
+- It keeps the richer recent-session previews useful even when the active switcher filter temporarily narrows to nothing.
+- It reduces operator guesswork during live session triage because the switcher now tells you exactly how to recover or back out instead of looking broken.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -134,11 +135,11 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `97 passed`
+- automated tests: `98 passed`
 - runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_default_banner= True`, `picker_pending_filter= True`, `picker_pending_only_pending= True`, `picker_empty_hint= True`, `picker_tool_streak_preview= True`, `picker_attention_sort= True`, `picker_interactive_selected= session-pending`, `picker_interactive_toggled= True`, `picker_interactive_preview= True`, `picker_interactive_paged_selected= session-plain`, `picker_interactive_paged_banner= True`, `picker_restored_selected= session-restore`, `picker_restored_page= True`, `picker_restored_preview= True`, and `latest=session-page-7`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` now reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_has_tool_preview= True`, `switcher_has_event_preview= True`, `switcher_selected_preview= True`, `switcher_tool_streak_preview= True`, `switcher_pending_filter= True`, `switcher_pending_filter_only_newer= True`, `switcher_attention_sort= True`, `switcher_restored= True`, `switcher_restored_sort= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` now reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_has_tool_preview= True`, `switcher_has_event_preview= True`, `switcher_selected_preview= True`, `switcher_tool_streak_preview= True`, `switcher_pending_filter= True`, `switcher_pending_filter_only_newer= True`, `switcher_attention_sort= True`, `switcher_restored= True`, `switcher_restored_sort= True`, `restored_selection_is_newer= True`, `switcher_empty_hint= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
 - CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter`, `--pick-sort`, and `--resume-last`,
 - recent-session verification by test: recent session summaries still surface pending approvals, restore-state badges, and last-event previews while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
@@ -465,7 +466,7 @@ The launch-time picker now mirrors the in-app triage model: use `J` / `K` to mov
 
 Partially typed prompt text is also persisted in `session_state.json`, so a restart or session reload can reopen with the draft still in the input instead of discarding it.
 
-After startup, `F11` opens the same recent-session summaries inside the TUI so you can switch to another saved session or start a fresh one without restarting. Use ↑/↓ (or `J`/`K`) to move the highlighted row, `Enter` to switch to the highlighted session, number keys for quick direct selection, and `N` for a fresh session. The highlighted row now expands into a selected-session preview block, including pending approval details, restore badges, last prompt, last tool, and a bounded recent-tool streak. If the target session has persisted approvals, they are restored automatically; if the current session still has an unresolved approval, switching is blocked until you approve or deny it.
+After startup, `F11` opens the same recent-session summaries inside the TUI so you can switch to another saved session or start a fresh one without restarting. Use ↑/↓ (or `J`/`K`) to move the highlighted row, `Enter` to switch to the highlighted session, number keys for quick direct selection, and `N` for a fresh session. The highlighted row now expands into a selected-session preview block, including pending approval details, restore badges, last prompt, last tool, and a bounded recent-tool streak. If the active switcher filter narrows to zero matches, the switcher now explains how many saved sessions still exist, which triage keys widen the view again, when `Esc`/`F11` returns to the active session, and that `Enter` only becomes actionable once a visible row exists. If the target session has persisted approvals, they are restored automatically; if the current session still has an unresolved approval, switching is blocked until you approve or deny it.
 
 If you restart while the switcher is open, the app now restores that chooser mode and preserves the previously highlighted target session where possible, so you can keep triaging recent work instead of manually reopening the same picker state.
 
@@ -545,7 +546,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - resumed sessions render a compact live history window instead of dumping the full backlog
   - replay shortcuts browse older/newer turns and can return to live/latest view
   - restart-safe draft prompt state is restored into the input after restart
-  - the in-app session switcher supports highlighted keyboard navigation, direct number shortcuts, selected-session preview rendering, and restart-safe chooser restoration
+  - the in-app session switcher supports highlighted keyboard navigation, direct number shortcuts, selected-session preview rendering, explicit empty-filter triage guidance, and restart-safe chooser restoration
   - the launch-time recent-session picker can page past the first 8 visible sessions while preserving the same triage filters and sorts
   - CLI argument parsing overrides runtime/model/workspace selection correctly
   - CLI session selection can load an explicit session dir, reopen the latest session, or pick from recent sessions interactively
@@ -588,7 +589,7 @@ Why this stack:
 2. decide whether recent-session triage should summarize shell inspection/test outcomes even more explicitly than the generic tool streak
 3. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 4. decide whether recent-session attention sort should weight failed tool streaks more heavily than generic tool activity
-5. decide whether the in-app `F11` switcher should mirror the launch-time picker's richer empty-filter guidance
+5. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -620,4 +621,4 @@ Future daily iterations should:
 - add even denser recent-session triage hints, such as compact multi-approval counts or explicit shell/test outcome rollups
 - decide whether attention sort should weight failed tool streaks more heavily than generic recent tool activity
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-- decide whether the in-app `F11` switcher should mirror the launch-time picker's richer empty-filter guidance
+- decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
