@@ -40,7 +40,19 @@ async def run_smoke() -> None:
                         "list_files",
                         "Finished listing files",
                         data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                    )
+                    ),
+                    runtime_event(
+                        "tool_finished",
+                        "run_shell_command",
+                        "Finished shell command",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "command": "git status --short",
+                            "shell_policy": "inspect",
+                            "exit_code": 0,
+                            "result_preview": "git status --short -> M README.md",
+                        },
+                    ),
                 ],
                 response_metadata={"mode": "fake"},
             )
@@ -88,8 +100,13 @@ async def run_smoke() -> None:
                 "switcher_has_restore_badges=",
                 "restore: filter=tool, replay 1/1, draft 15c" in str(switcher_output),
             )
-            print("switcher_has_tool_preview=", "last tool: .: README.md" in str(switcher_output))
-            print("switcher_has_event_preview=", "last event: tool_finished: list_files" in str(switcher_output))
+            print("switcher_has_tool_preview=", "last tool: inspect/e0 git status --short -> M README.md" in str(switcher_output))
+            print("switcher_has_event_preview=", "last event: tool_finished: run_shell_command" in str(switcher_output))
+            await pilot.press("up")
+            await pilot.pause()
+            selected_preview_output = first_app.query_one("#output").render()
+            print("switcher_selected_preview=", "Selected preview:" in str(selected_preview_output))
+            print("switcher_tool_streak_preview=", "recent tools (2)" in str(selected_preview_output))
             await pilot.press("p")
             await pilot.pause()
             pending_output = first_app.query_one("#output").render()

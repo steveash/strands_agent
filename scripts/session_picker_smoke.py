@@ -56,7 +56,19 @@ def main() -> None:
                         "list_files",
                         "Finished listing files",
                         data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                    )
+                    ),
+                    runtime_event(
+                        "tool_finished",
+                        "run_shell_command",
+                        "Finished shell command",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "command": "git status --short",
+                            "shell_policy": "inspect",
+                            "exit_code": 0,
+                            "result_preview": "git status --short -> M README.md",
+                        },
+                    ),
                 ],
                 response_metadata={"mode": "fake"},
             )
@@ -76,6 +88,7 @@ def main() -> None:
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print("picker_pending_only_pending=", "session-pending" in pending_picker and "session-plain" not in pending_picker)
+        print("picker_tool_streak_preview=", "- recent tools (2):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker)
         attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("> 1. ", "  2. ", "  3. "))]
         print("picker_attention_sort=", bool(attention_lines) and attention_lines[0].startswith("> 1. session-pending"))
         print("picker_paged_banner=", "Page: 2/2 | Showing: 9-12 of 12" in paged_picker)

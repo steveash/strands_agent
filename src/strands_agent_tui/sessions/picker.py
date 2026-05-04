@@ -12,6 +12,7 @@ MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
 MAX_EVENT_PREVIEW = 50
 MAX_TOOL_PREVIEW = 72
+MAX_TOOL_STREAK_PREVIEWS = 3
 SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "restore", "tool"}
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
@@ -29,6 +30,7 @@ class SessionSummary:
     last_event_preview: str = ""
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
+    recent_tool_previews: list[str] = field(default_factory=list)
     restore_badges: list[str] = field(default_factory=list)
     draft_prompt_preview: str = ""
 
@@ -49,11 +51,14 @@ class SessionSummary:
                 tool_hint = f" | last tool: {badge_prefix}"
             else:
                 tool_hint = f" | last tool: {self.last_tool_preview}"
+        tool_streak_suffix = ""
+        if len(self.recent_tool_previews) > 1:
+            tool_streak_suffix = f" | tool streak: {len(self.recent_tool_previews)} recent"
         event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -84,6 +89,9 @@ class SessionSummary:
                 lines.append(f"- last tool: {badge_prefix}")
             else:
                 lines.append(f"- last tool: {self.last_tool_preview}")
+        if self.recent_tool_previews:
+            lines.append(f"- recent tools ({len(self.recent_tool_previews)}):")
+            lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_tool_previews, start=1))
         if self.last_event_preview:
             lines.append(f"- last event: {self.last_event_preview}")
         return lines
@@ -171,6 +179,7 @@ def _ordered_recent_sessions(
                     last_event_preview=_latest_event_preview(turns),
                     last_tool_preview=_latest_tool_preview(turns),
                     last_tool_badges=_latest_tool_badges(turns),
+                    recent_tool_previews=_recent_tool_previews(turns),
                     restore_badges=_restore_badges(session_state, len(turns)),
                     draft_prompt_preview=draft_prompt_preview,
                 ),
@@ -398,6 +407,39 @@ def _latest_tool_preview(turns: list[TurnArtifact]) -> str:
     event = _latest_tool_event(turns)
     if event is None:
         return ""
+    return _tool_event_preview(event)
+
+
+def _latest_tool_badges(turns: list[TurnArtifact]) -> list[str]:
+    event = _latest_tool_event(turns)
+    if event is None:
+        return []
+    return _tool_event_badges(event)
+
+
+def _recent_tool_previews(turns: list[TurnArtifact], limit: int = MAX_TOOL_STREAK_PREVIEWS) -> list[str]:
+    previews: list[str] = []
+    for event in _iter_recent_tool_events(turns):
+        rendered = _render_tool_event_summary(event)
+        if rendered:
+            previews.append(rendered)
+        if len(previews) >= limit:
+            break
+    return previews
+
+
+def _iter_recent_tool_events(turns: list[TurnArtifact]):
+    for turn in reversed(turns):
+        for event in reversed(turn.events):
+            if event.kind in {"tool_finished", "tool_failed"}:
+                yield event
+
+
+def _latest_tool_event(turns: list[TurnArtifact]):
+    return next(_iter_recent_tool_events(turns), None)
+
+
+def _tool_event_preview(event) -> str:
     preview = str(event.data.get("result_preview", "") or "").strip()
     if preview:
         return _truncate(preview, MAX_TOOL_PREVIEW)
@@ -408,11 +450,7 @@ def _latest_tool_preview(turns: list[TurnArtifact]) -> str:
     return _truncate(fallback, MAX_TOOL_PREVIEW)
 
 
-def _latest_tool_badges(turns: list[TurnArtifact]) -> list[str]:
-    event = _latest_tool_event(turns)
-    if event is None:
-        return []
-
+def _tool_event_badges(event) -> list[str]:
     badges: list[str] = []
     shell_policy = str(event.data.get("shell_policy", "") or "").strip()
     if shell_policy:
@@ -427,12 +465,15 @@ def _latest_tool_badges(turns: list[TurnArtifact]) -> list[str]:
     return badges
 
 
-def _latest_tool_event(turns: list[TurnArtifact]):
-    for turn in reversed(turns):
-        for event in reversed(turn.events):
-            if event.kind in {"tool_finished", "tool_failed"}:
-                return event
-    return None
+def _render_tool_event_summary(event) -> str:
+    preview = _tool_event_preview(event)
+    badges = _tool_event_badges(event)
+    badge_prefix = "/".join(badges)
+    if badge_prefix and preview:
+        return _truncate(f"{badge_prefix} {preview}", MAX_TOOL_PREVIEW)
+    if badge_prefix:
+        return _truncate(badge_prefix, MAX_TOOL_PREVIEW)
+    return preview
 
 
 def sanitize_session_switcher_filter_mode(value: str) -> str:

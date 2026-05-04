@@ -923,6 +923,80 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_shows_selected_preview_with_recent_tool_streak(tmp_path: Path) -> None:
+    older_store = SessionArtifactStore(tmp_path, session_id="session-older")
+    older_store.append_turn(
+        TurnArtifact(
+            prompt="older prompt",
+            response="older response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    newer_store = SessionArtifactStore(tmp_path, session_id="session-newer")
+    newer_store.append_turn(
+        TurnArtifact(
+            prompt="inspect workspace",
+            response="workspace summary",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-older",
+        ),
+        artifact_store=older_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("up")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+
+        assert "Selected preview:" in output
+        assert "- slot 1 on this page | overall 1 of 2 | session session-newer" in output
+        assert "- last tool: inspect/e0 git status --short -> M README.md" in output
+        assert "- recent tools (2):" in output
+        assert "  1. inspect/e0 git status --short -> M README.md" in output
+        assert "  2. .: README.md" in output
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(

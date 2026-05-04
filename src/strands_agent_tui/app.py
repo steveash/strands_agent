@@ -459,6 +459,21 @@ class StrandsAgentApp(App):
             current_suffix = " (current)" if summary.session_id == self.artifact_store.session_id else ""
             marker = ">" if index - 1 == self.session_switcher_selected_index else " "
             lines.append(f"{marker} {summary.render_line(index)}{current_suffix}")
+
+        selected_summary = self._current_session_switcher_summary()
+        if selected_summary is not None:
+            lines.extend(
+                [
+                    "",
+                    *selected_summary.render_preview(
+                        visible_index=self.session_switcher_selected_index + 1,
+                        overall_index=self.session_switcher_page_index * MAX_RECENT_SESSIONS
+                        + self.session_switcher_selected_index
+                        + 1,
+                        total_matches=self.session_switcher_total_matches,
+                    ),
+                ]
+            )
         return "\n".join(lines)
 
     def render_events(self) -> str:

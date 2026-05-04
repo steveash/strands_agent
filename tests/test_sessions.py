@@ -395,6 +395,64 @@ def test_list_recent_sessions_surfaces_shell_tool_preview_and_exit_badges(tmp_pa
     assert "last tool: inspect/e0 git status --short -> M README.md" in summary.render_line(1)
 
 
+def test_list_recent_sessions_surfaces_recent_tool_streak_preview(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-tool-streak")
+    store.append_turn(
+        TurnArtifact(
+            prompt="inspect repo layout",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: src/"},
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "read_file",
+                    "Finished reading file",
+                    data={"tool_name": "read_file", "result_preview": "README.md lines 1-20"},
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    store.append_turn(
+        TurnArtifact(
+            prompt="attempt broad edit",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_failed",
+                    "replace_text",
+                    "Edit failed",
+                    data={"tool_name": "replace_text", "result_preview": "replace_text notes.txt (2 occurrences)"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.recent_tool_previews == [
+        "failed replace_text notes.txt (2 occurrences)",
+        "README.md lines 1-20",
+        ".: src/",
+    ]
+    assert "tool streak: 3 recent" in summary.render_line(1)
+    assert "- recent tools (3):" in preview
+    assert "  1. failed replace_text notes.txt (2 occurrences)" in preview
+    assert "  2. README.md lines 1-20" in preview
+    assert "  3. .: src/" in preview
+
+
 def test_list_recent_sessions_can_filter_to_pending_restore_or_tool_triage(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
