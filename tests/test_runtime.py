@@ -97,6 +97,8 @@ def test_fake_runtime_returns_pending_approval_for_risky_mutation_prompt() -> No
     ]
     assert result.pending_approval is not None
     assert result.pending_approval.tool_name == "write_file"
+    assert result.events[4].data["approval_status"] == "pending"
+    assert result.events[4].data["approval_source"] == "fake_runtime"
     assert result.events[4].data["pending_count"] == 2
     assert "Approval required before continuing" in result.text
 
@@ -154,7 +156,12 @@ def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_
     ]
     assert approved.pending_approval is not None
     assert approved.pending_approval.tool_name == "replace_text"
+    assert approved.events[0].data["approval_status"] == "approved"
+    assert approved.events[1].data["approval_id"] == approval.request_id
+    assert approved.events[1].data["resumed_from_approval"] is True
+    assert approved.events[2].data["remaining_pending_count"] == 1
     assert approved.events[3].data["approval_id"] == approved.pending_approval.request_id
+    assert approved.events[3].data["approval_status"] == "pending"
     assert "Approved write_file" in approved.text
 
 
@@ -167,6 +174,8 @@ def test_fake_runtime_denial_resolution_clears_last_pending_request() -> None:
     denied = runtime.resolve_pending_approval(first_response.pending_approval.request_id, approve=False)
 
     assert [event.kind for event in denied.events] == ["steering_denied", "response_completed"]
+    assert denied.events[0].data["approval_status"] == "denied"
+    assert denied.events[0].data["remaining_pending_count"] == 0
     assert denied.pending_approval is None
     assert "Skipped write_file" in denied.text
 
@@ -222,6 +231,11 @@ def test_live_runtime_can_restore_pending_approvals_without_requeuing(monkeypatc
         "tool_finished",
         "response_completed",
     ]
+    assert result.events[0].data["approval_status"] == "approved"
+    assert result.events[1].data["approval_id"] == "approval-0007"
+    assert result.events[1].data["resumed_from_approval"] is True
+    assert result.events[2].data["approval_source"] == "live_runtime"
+    assert result.events[2].data["remaining_pending_count"] == 0
     assert result.pending_approval is None
     assert "continued:" in result.text
 
@@ -262,8 +276,11 @@ def test_live_runtime_can_restore_shell_pending_approval(monkeypatch: pytest.Mon
     ]
     assert result.pending_approval is None
     assert "continued:" in result.text
+    assert result.events[1].data["approval_id"] == "approval-0003"
     assert result.events[1].data["args"]["command"] == "pwd"
+    assert result.events[1].data["resumed_from_approval"] is True
     assert result.events[2].title == "run_shell_command"
+    assert result.events[2].data["approval_status"] == "approved"
 
 
 def test_build_runtime_defaults_to_fake() -> None:
@@ -341,6 +358,8 @@ def test_build_workspace_tools_can_queue_confirmation_instead_of_raising(tmp_pat
     assert approvals.current().tool_name == "write_file"
     assert [event.kind for event in events] == ["steering_confirmation_required"]
     assert events[0].data["approval_id"] == approvals.current().request_id
+    assert events[0].data["approval_status"] == "pending"
+    assert events[0].data["approval_source"] == "live_runtime"
 
 
 def test_build_workspace_tools_queues_shell_command_confirmation(tmp_path: Path) -> None:
@@ -364,6 +383,7 @@ def test_build_workspace_tools_queues_shell_command_confirmation(tmp_path: Path)
     assert [event.kind for event in events] == ["steering_confirmation_required"]
     assert events[0].data["command"] == "pytest -q"
     assert events[0].data["shell_policy"] == "test"
+    assert events[0].data["approval_status"] == "pending"
 
 
 def test_app_config_merge_applies_non_empty_overrides() -> None:
@@ -481,6 +501,7 @@ def test_build_workspace_tools_allows_read_only_shell_command_without_confirmati
     assert events[0].data["command"] == "pwd"
     assert events[0].data["requires_confirmation"] is False
     assert events[0].data["shell_policy"] == "inspect"
+    assert events[0].data["approval_status"] == "not_needed"
     assert events[2].data["command"] == "pwd"
     assert events[2].data["shell_policy"] == "inspect"
     assert events[2].data["exit_code"] == 0

@@ -120,7 +120,7 @@ class _ApprovalQueue:
         args: dict[str, object],
         source: str,
         prompt: str,
-        execute: Callable[[], str],
+        execute_factory: Callable[[ApprovalRequest], Callable[[], str]],
     ) -> ApprovalRequest:
         self._counter += 1
         request = ApprovalRequest(
@@ -131,7 +131,7 @@ class _ApprovalQueue:
             source=source,
             prompt=prompt,
         )
-        self._pending.append(_PendingApproval(request=request, execute=execute))
+        self._pending.append(_PendingApproval(request=request, execute=execute_factory(request)))
         return request
 
     def current(self) -> ApprovalRequest | None:
@@ -201,6 +201,14 @@ def _steering_event_kind(decision: SteeringDecision) -> str:
     if not decision.allowed:
         return "steering_blocked"
     return "steering_decision"
+
+
+def _steering_decision_status(decision: SteeringDecision) -> str:
+    if decision.requires_confirmation:
+        return "pending"
+    if not decision.allowed:
+        return "blocked"
+    return "not_needed"
 
 
 def _summarize_tool_value(value: object, limit: int = 120) -> str:
@@ -354,6 +362,30 @@ def _approval_counter(request_id: str) -> int:
     return int(suffix) if suffix.isdigit() else 0
 
 
+def _approval_event_context(
+    request: ApprovalRequest,
+    *,
+    status: str,
+    pending_count: int | None = None,
+    remaining_pending_count: int | None = None,
+    resumed_from_approval: bool | None = None,
+) -> dict[str, object]:
+    data: dict[str, object] = {
+        "approval_id": request.request_id,
+        "approval_status": status,
+        "approval_source": request.source,
+        "requires_confirmation": True,
+        **request.args,
+    }
+    if pending_count is not None:
+        data["pending_count"] = pending_count
+    if remaining_pending_count is not None:
+        data["remaining_pending_count"] = remaining_pending_count
+    if resumed_from_approval is not None:
+        data["resumed_from_approval"] = resumed_from_approval
+    return data
+
+
 def _build_workspace_actions(workspace_root: str | Path) -> dict[str, Callable[..., str]]:
     workspace = WorkspaceTools(Path(workspace_root))
     return {
@@ -372,15 +404,18 @@ def _execute_action_with_events(
     action: Callable[..., str],
     kwargs: dict[str, object],
     event_sink: RuntimeEventSink | None = None,
+    *,
+    event_context: dict[str, object] | None = None,
 ) -> str:
     started_at = perf_counter()
+    event_context = dict(event_context or {})
     if event_sink is not None:
         event_sink(
             runtime_event(
                 kind="tool_started",
                 title=tool_name,
                 detail=f"args={_summarize_tool_value(kwargs)}",
-                data={"tool_name": tool_name, "args": kwargs},
+                data={"tool_name": tool_name, "args": kwargs, **event_context},
             )
         )
     try:
@@ -392,6 +427,7 @@ def _execute_action_with_events(
                 "tool_name": tool_name,
                 "error": str(exc),
                 "elapsed_ms": elapsed_ms,
+                **event_context,
                 **_tool_event_data(tool_name, kwargs, error_text=str(exc), success=False),
             }
             event_sink(
@@ -408,6 +444,7 @@ def _execute_action_with_events(
         event_data = {
             "tool_name": tool_name,
             "elapsed_ms": elapsed_ms,
+            **event_context,
             **_tool_event_data(tool_name, kwargs, result_text=result, success=True),
         }
         event_sink(
@@ -638,7 +675,7 @@ class FakeStrandsRuntime:
                 args=spec["args"],
                 source="fake_runtime",
                 prompt=normalized,
-                execute=lambda spec=spec: self._execute_fake_pending_tool(spec),
+                execute_factory=lambda _request, spec=spec: lambda: self._execute_fake_pending_tool(spec),
             )
 
         pending_approval = self._approval_queue.current()
@@ -653,9 +690,12 @@ class FakeStrandsRuntime:
                         "source": pending_approval.source,
                         "disposition": "confirm",
                         "requires_confirmation": True,
-                        "approval_id": pending_approval.request_id,
-                        "pending_count": self._approval_queue.pending_count(),
-                        **pending_approval.args,
+                        "decision_reason": pending_approval.reason,
+                        **_approval_event_context(
+                            pending_approval,
+                            status="pending",
+                            pending_count=self._approval_queue.pending_count(),
+                        ),
                     },
                 )
             )
@@ -705,8 +745,13 @@ class FakeStrandsRuntime:
                     detail="User approved the pending mutation request in the TUI.",
                     data={
                         "tool_name": pending.request.tool_name,
-                        "approval_id": pending.request.request_id,
-                        **pending.request.args,
+                        "decision_reason": pending.request.reason,
+                        **_approval_event_context(
+                            pending.request,
+                            status="approved",
+                            remaining_pending_count=self._approval_queue.pending_count(),
+                            resumed_from_approval=True,
+                        ),
                     },
                 )
             )
@@ -717,9 +762,13 @@ class FakeStrandsRuntime:
                     detail="Executing previously approved fake mutation request.",
                     data={
                         "tool_name": pending.request.tool_name,
-                        "approval_id": pending.request.request_id,
                         "source": "fake_runtime",
-                        **pending.request.args,
+                        **_approval_event_context(
+                            pending.request,
+                            status="approved",
+                            remaining_pending_count=self._approval_queue.pending_count(),
+                            resumed_from_approval=True,
+                        ),
                     },
                 )
             )
@@ -731,9 +780,13 @@ class FakeStrandsRuntime:
                     detail=tool_result,
                     data={
                         "tool_name": pending.request.tool_name,
-                        "approval_id": pending.request.request_id,
                         "source": "fake_runtime",
-                        **pending.request.args,
+                        **_approval_event_context(
+                            pending.request,
+                            status="approved",
+                            remaining_pending_count=self._approval_queue.pending_count(),
+                            resumed_from_approval=True,
+                        ),
                     },
                 )
             )
@@ -746,8 +799,13 @@ class FakeStrandsRuntime:
                     detail="User denied the pending mutation request in the TUI.",
                     data={
                         "tool_name": pending.request.tool_name,
-                        "approval_id": pending.request.request_id,
-                        **pending.request.args,
+                        "decision_reason": pending.request.reason,
+                        **_approval_event_context(
+                            pending.request,
+                            status="denied",
+                            remaining_pending_count=self._approval_queue.pending_count(),
+                            resumed_from_approval=False,
+                        ),
                     },
                 )
             )
@@ -765,9 +823,12 @@ class FakeStrandsRuntime:
                         "source": next_pending.source,
                         "disposition": "confirm",
                         "requires_confirmation": True,
-                        "approval_id": next_pending.request_id,
-                        "pending_count": self._approval_queue.pending_count(),
-                        **next_pending.args,
+                        "decision_reason": next_pending.reason,
+                        **_approval_event_context(
+                            next_pending,
+                            status="pending",
+                            pending_count=self._approval_queue.pending_count(),
+                        ),
                     },
                 )
             )
@@ -898,7 +959,18 @@ def build_workspace_tools(
                     args=dict(kwargs),
                     source=approval_source,
                     prompt=prompt_provider() if prompt_provider is not None else "",
-                    execute=lambda: _execute_action_with_events(tool_name, action, dict(kwargs), event_sink),
+                    execute_factory=lambda request: lambda: _execute_action_with_events(
+                        tool_name,
+                        action,
+                        dict(kwargs),
+                        event_sink,
+                        event_context=_approval_event_context(
+                            request,
+                            status="approved",
+                            remaining_pending_count=approval_queue.pending_count(),
+                            resumed_from_approval=True,
+                        ),
+                    ),
                 )
                 if event_sink is not None:
                     event_sink(
@@ -913,7 +985,12 @@ def build_workspace_tools(
                                 "disposition": decision.disposition,
                                 "severity": decision.severity,
                                 "category": decision.category,
-                                "approval_id": request.request_id,
+                                "decision_reason": decision.reason,
+                                **_approval_event_context(
+                                    request,
+                                    status="pending",
+                                    pending_count=approval_queue.pending_count(),
+                                ),
                                 **decision.details,
                             },
                         )
@@ -936,6 +1013,8 @@ def build_workspace_tools(
                             "disposition": decision.disposition,
                             "severity": decision.severity,
                             "category": decision.category,
+                            "decision_reason": decision.reason,
+                            "approval_status": _steering_decision_status(decision),
                             **decision.details,
                         },
                     )
@@ -1099,6 +1178,12 @@ class StrandsSDKRuntime:
                 action,
                 dict(request.args),
                 self._emit_event,
+                event_context=_approval_event_context(
+                    request,
+                    status="approved",
+                    remaining_pending_count=self._approval_queue.pending_count(),
+                    resumed_from_approval=True,
+                ),
             )
 
         self._approval_queue.restore(requests, execute_factory)
@@ -1187,8 +1272,13 @@ class StrandsSDKRuntime:
                         detail="User approved the pending mutation request in the TUI.",
                         data={
                             "tool_name": pending.request.tool_name,
-                            "approval_id": pending.request.request_id,
-                            **pending.request.args,
+                            "decision_reason": pending.request.reason,
+                            **_approval_event_context(
+                                pending.request,
+                                status="approved",
+                                remaining_pending_count=self._approval_queue.pending_count(),
+                                resumed_from_approval=True,
+                            ),
                         },
                     )
                 )
@@ -1206,8 +1296,13 @@ class StrandsSDKRuntime:
                         detail="User denied the pending mutation request in the TUI.",
                         data={
                             "tool_name": pending.request.tool_name,
-                            "approval_id": pending.request.request_id,
-                            **pending.request.args,
+                            "decision_reason": pending.request.reason,
+                            **_approval_event_context(
+                                pending.request,
+                                status="denied",
+                                remaining_pending_count=self._approval_queue.pending_count(),
+                                resumed_from_approval=False,
+                            ),
                         },
                     )
                 )
