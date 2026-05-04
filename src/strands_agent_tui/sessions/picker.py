@@ -25,10 +25,12 @@ class SessionSummary:
     last_prompt_preview: str = ""
     pending_approval_count: int = 0
     pending_approval_tool: str = ""
+    pending_approval_summary: str = ""
     last_event_preview: str = ""
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
     restore_badges: list[str] = field(default_factory=list)
+    draft_prompt_preview: str = ""
 
     def render_line(self, index: int) -> str:
         prompt_suffix = f" | last prompt: {self.last_prompt_preview}" if self.last_prompt_preview else ""
@@ -53,6 +55,38 @@ class SessionSummary:
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
             f"updated {self.updated_at}{pending_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{event_suffix}"
         )
+
+    def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
+        lines = [
+            "Selected preview:",
+            (
+                f"- slot {visible_index} on this page | overall {overall_index} of {total_matches} | "
+                f"session {self.session_id}"
+            ),
+            f"- artifact dir: {self.session_dir}",
+        ]
+        if self.pending_approval_count > 0:
+            pending_line = self.pending_approval_summary or self.pending_approval_tool or "pending approval"
+            if self.pending_approval_count > 1:
+                pending_line = f"{self.pending_approval_count} approvals | first: {pending_line}"
+            lines.append(f"- pending: {pending_line}")
+        if self.restore_badges:
+            lines.append(f"- restore: {', '.join(self.restore_badges)}")
+        if self.draft_prompt_preview:
+            lines.append(f"- draft: {self.draft_prompt_preview}")
+        if self.last_prompt_preview:
+            lines.append(f"- last prompt: {self.last_prompt_preview}")
+        if self.last_tool_preview or self.last_tool_badges:
+            badge_prefix = "/".join(self.last_tool_badges)
+            if badge_prefix and self.last_tool_preview:
+                lines.append(f"- last tool: {badge_prefix} {self.last_tool_preview}")
+            elif badge_prefix:
+                lines.append(f"- last tool: {badge_prefix}")
+            else:
+                lines.append(f"- last tool: {self.last_tool_preview}")
+        if self.last_event_preview:
+            lines.append(f"- last event: {self.last_event_preview}")
+        return lines
 
 
 def list_recent_sessions(
@@ -117,6 +151,9 @@ def _ordered_recent_sessions(
         last_prompt_preview = ""
         if turns:
             last_prompt_preview = _truncate(turns[-1].prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
+        draft_prompt_preview = ""
+        if session_state.draft_prompt:
+            draft_prompt_preview = _truncate(session_state.draft_prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
         activity_timestamp = _session_activity_timestamp(session_dir, turns)
         summaries_with_sort.append(
             (
@@ -130,10 +167,12 @@ def _ordered_recent_sessions(
                     last_prompt_preview=last_prompt_preview,
                     pending_approval_count=len(pending_approvals),
                     pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
+                    pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
                     last_event_preview=_latest_event_preview(turns),
                     last_tool_preview=_latest_tool_preview(turns),
                     last_tool_badges=_latest_tool_badges(turns),
                     restore_badges=_restore_badges(session_state, len(turns)),
+                    draft_prompt_preview=draft_prompt_preview,
                 ),
             )
         )
@@ -159,6 +198,7 @@ def render_session_picker(
     filter_mode: str = "all",
     sort_mode: str = "recent",
     page_index: int = 0,
+    selected_index: int = 0,
 ) -> str:
     filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
     sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
@@ -189,11 +229,24 @@ def render_session_picker(
     if not summaries:
         lines.append("No saved sessions match the active picker filter.")
     else:
-        lines.extend(summary.render_line(index) for index, summary in enumerate(summaries, start=1))
+        selected_index = _normalize_visible_selected_index(len(summaries), selected_index)
+        for index, summary in enumerate(summaries, start=1):
+            marker = ">" if index - 1 == selected_index else " "
+            lines.append(f"{marker} {summary.render_line(index)}")
+        lines.extend(
+            [
+                "",
+                *summaries[selected_index].render_preview(
+                    visible_index=selected_index + 1,
+                    overall_index=page_index * limit + selected_index + 1,
+                    total_matches=total_matches,
+                ),
+            ]
+        )
     lines.extend(
         [
             "",
-            "Picker controls: A all, P pending, R restore, T tool, S sort, [ prev page, ] next page",
+            "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page",
             "Press Enter to start a new session.",
         ]
     )
@@ -220,6 +273,7 @@ def pick_session(
         return None
 
     page_index = 0
+    selected_index = 0
     while True:
         total_matches = count_recent_sessions(root, filter_mode=filter_mode, sort_mode=sort_mode)
         page_index = _normalize_picker_page_index(total_matches, limit, page_index)
@@ -230,6 +284,7 @@ def pick_session(
             sort_mode=sort_mode,
             offset=page_index * limit,
         )
+        selected_index = _normalize_visible_selected_index(len(current_summaries), selected_index)
         output_fn(
             render_session_picker(
                 root,
@@ -237,45 +292,61 @@ def pick_session(
                 filter_mode=filter_mode,
                 sort_mode=sort_mode,
                 page_index=page_index,
+                selected_index=selected_index,
             )
         )
         selection = input_fn(
-            "Select visible session number, or use A/P/R/T/S/[ / ] to triage/page, or press Enter for a new session: "
+            "Select visible session number, or use J/K to preview, A/P/R/T/S/[ / ] to triage/page, or press Enter for a new session: "
         ).strip()
         if not selection:
             return None
         normalized = selection.lower()
+        if normalized == "j":
+            if current_summaries:
+                selected_index = min(selected_index + 1, len(current_summaries) - 1)
+            continue
+        if normalized == "k":
+            if current_summaries:
+                selected_index = max(selected_index - 1, 0)
+            continue
         if normalized == "a":
             filter_mode = "all"
             page_index = 0
+            selected_index = 0
             continue
         if normalized == "p":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "pending")
             page_index = 0
+            selected_index = 0
             continue
         if normalized == "r":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "restore")
             page_index = 0
+            selected_index = 0
             continue
         if normalized == "t":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "tool")
             page_index = 0
+            selected_index = 0
             continue
         if normalized == "s":
             sort_mode = _cycle_picker_sort_mode(sort_mode)
             page_index = 0
+            selected_index = 0
             continue
         if normalized == "[":
             if page_index == 0:
                 output_fn("Already on the first picker page.")
             else:
                 page_index -= 1
+                selected_index = 0
             continue
         if normalized == "]":
             if (page_index + 1) * limit >= total_matches:
                 output_fn("Already on the last picker page.")
             else:
                 page_index += 1
+                selected_index = 0
             continue
         if selection.isdigit():
             index = int(selection)
@@ -288,7 +359,7 @@ def pick_session(
             else:
                 output_fn("No sessions are visible with the active filter. Use A, P, R, T, S, [, ], or press Enter.")
             continue
-        output_fn(f"Invalid selection. Use 1-{limit}, A, P, R, T, S, [, ], or press Enter.")
+        output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, R, T, S, [, ], or press Enter.")
 
 
 def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:
@@ -382,6 +453,12 @@ def _cycle_picker_sort_mode(current_sort_mode: str) -> str:
     if current_sort_mode == "recent":
         return "attention"
     return "recent"
+
+
+def _normalize_visible_selected_index(visible_count: int, selected_index: int) -> int:
+    if visible_count <= 0:
+        return 0
+    return max(0, min(selected_index, visible_count - 1))
 
 
 def _normalize_picker_page_index(total_matches: int, limit: int, page_index: int) -> int:

@@ -84,8 +84,12 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
 
     assert "Recent sessions under" in rendered
     assert "Filter: all | Sort: recent | Page: 1/1 | Showing: 1-1 of 1" in rendered
-    assert "1. session-demo" in rendered
-    assert "Picker controls: A all, P pending, R restore, T tool, S sort, [ prev page, ] next page" in rendered
+    assert "> 1. session-demo" in rendered
+    assert "Selected preview:" in rendered
+    assert "- slot 1 on this page | overall 1 of 1 | session session-demo" in rendered
+    assert "- artifact dir:" in rendered
+    assert "- last prompt: review demo" in rendered
+    assert "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page" in rendered
     assert "Press Enter to start a new session." in rendered
 
 
@@ -100,8 +104,9 @@ def test_render_session_picker_supports_paged_views(tmp_path: Path) -> None:
     second_page = render_session_picker(tmp_path, page_index=1)
 
     assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
-    assert "1. session-01" in second_page
-    assert "2. session-00" in second_page
+    assert "> 1. session-01" in second_page
+    assert "  2. session-00" in second_page
+    assert "- slot 1 on this page | overall 9 of 10 | session session-01" in second_page
     assert "session-09" not in second_page
 
 
@@ -149,7 +154,7 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "1. session-demo" not in rendered
 
 
-def test_pick_session_supports_filter_and_sort_commands(tmp_path: Path) -> None:
+def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
 
@@ -173,7 +178,7 @@ def test_pick_session_supports_filter_and_sort_commands(tmp_path: Path) -> None:
     )
 
     captured: list[str] = []
-    inputs = iter(["p", "s", "1"])
+    inputs = iter(["p", "s", "j", "k", "1"])
     summary = pick_session(
         tmp_path,
         input_fn=lambda _prompt: next(inputs),
@@ -184,6 +189,8 @@ def test_pick_session_supports_filter_and_sort_commands(tmp_path: Path) -> None:
     assert summary.session_id == "session-pending"
     assert any("Filter: pending | Sort: recent" in line for line in captured)
     assert any("Filter: pending | Sort: attention" in line for line in captured)
+    assert any("Selected preview:" in line for line in captured)
+    assert any("- pending: run_shell_command [approval-0012] | Needs confirmation | command='pytest -q'" in line for line in captured)
 
 
 def test_pick_session_supports_paged_navigation_to_older_sessions(tmp_path: Path) -> None:
@@ -202,6 +209,7 @@ def test_pick_session_supports_paged_navigation_to_older_sessions(tmp_path: Path
     assert summary is not None
     assert summary.session_id == "session-00"
     assert any("Page: 2/2 | Showing: 9-11 of 11" in line for line in captured)
+    assert any("- slot 1 on this page | overall 9 of 11 | session session-02" in line for line in captured)
 
 
 def test_session_artifact_store_persists_and_clears_pending_approvals(tmp_path: Path) -> None:
@@ -330,6 +338,7 @@ def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_pat
     summary = list_recent_sessions(tmp_path)[0]
 
     assert summary.restore_badges == ["filter=tool", "replay 2/2", "draft 15c", "chooser p2"]
+    assert summary.draft_prompt_preview == "draft follow-up"
     assert "restore: filter=tool, replay 2/2, draft 15c, chooser p2" in summary.render_line(1)
 
 

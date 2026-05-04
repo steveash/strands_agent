@@ -73,18 +73,19 @@ def main() -> None:
         paged_picker = render_session_picker(temp_dir, page_index=1)
 
         print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/1 | Showing: 1-4 of 4" in default_picker)
+        print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print("picker_pending_only_pending=", "session-pending" in pending_picker and "session-plain" not in pending_picker)
-        attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("1. ", "2. ", "3. "))]
-        print("picker_attention_sort=", bool(attention_lines) and attention_lines[0].startswith("1. session-pending"))
+        attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("> 1. ", "  2. ", "  3. "))]
+        print("picker_attention_sort=", bool(attention_lines) and attention_lines[0].startswith("> 1. session-pending"))
         print("picker_paged_banner=", "Page: 2/2 | Showing: 9-12 of 12" in paged_picker)
         print(
             "picker_paged_window=",
-            "1. session-tool" in paged_picker and "4. session-plain" in paged_picker and "session-page-07" not in paged_picker,
+            "> 1. session-tool" in paged_picker and "  4. session-plain" in paged_picker and "session-page-07" not in paged_picker,
         )
 
         captured: list[str] = []
-        inputs = iter(["p", "s", "1"])
+        inputs = iter(["p", "s", "j", "k", "1"])
         summary = pick_session(
             temp_dir,
             input_fn=lambda _prompt: next(inputs),
@@ -96,6 +97,10 @@ def main() -> None:
         print(
             "picker_interactive_toggled=",
             any("Filter: pending | Sort: attention" in line for line in captured),
+        )
+        print(
+            "picker_interactive_preview=",
+            any("Selected preview:" in line and "command='pytest -q'" in line for line in captured),
         )
 
         paged_captured: list[str] = []
