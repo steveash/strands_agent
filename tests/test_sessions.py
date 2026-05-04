@@ -176,7 +176,33 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
 
     assert "Filter: pending | Sort: recent" in rendered
     assert "No saved sessions match the active picker filter." in rendered
+    assert "1 saved session still exists under this root." in rendered
+    assert "Try A to show all sessions, or P/R/T to jump between pending, restore, and tool triage." in rendered
+    assert "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in rendered
     assert "1. session-demo" not in rendered
+
+
+def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_paths(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-demo")
+    _append_turn(store, "review demo")
+
+    prompts: list[str] = []
+    captured: list[str] = []
+
+    summary = pick_session(
+        tmp_path,
+        filter_mode="pending",
+        input_fn=lambda prompt: prompts.append(prompt) or "",
+        output_fn=captured.append,
+    )
+
+    assert summary is None
+    assert prompts == [
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/R/T/S/[ / ] to change triage: "
+    ]
+    assert any("No saved sessions match the active picker filter." in line for line in captured)
+    assert any("Try A to show all sessions" in line for line in captured)
+    assert any("Press Enter or N to start a fresh session" in line for line in captured)
 
 
 def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_path: Path) -> None:

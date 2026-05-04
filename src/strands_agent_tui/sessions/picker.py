@@ -243,7 +243,7 @@ def render_session_picker(
         "",
     ]
     if not summaries:
-        lines.append("No saved sessions match the active picker filter.")
+        lines.extend(_picker_empty_state_lines(available_count=available_count, filter_mode=filter_mode))
     else:
         selected_index = _normalize_visible_selected_index(len(summaries), selected_index)
         for index, summary in enumerate(summaries, start=1):
@@ -318,9 +318,12 @@ def pick_session(
                 selected_index=selected_index,
             )
         )
-        selection = input_fn(
+        prompt = (
             "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/R/T/S/[ / ] to triage/page: "
-        ).strip()
+            if current_summaries
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/R/T/S/[ / ] to change triage: "
+        )
+        selection = input_fn(prompt).strip()
         if not selection:
             if current_summaries:
                 selected_index = _normalize_visible_selected_index(len(current_summaries), selected_index)
@@ -429,9 +432,16 @@ def pick_session(
                     f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list, press Enter to reopen highlighted, or N for a new session."
                 )
             else:
-                output_fn("No sessions are visible with the active filter. Use A, P, R, T, S, [, ], N, or press Enter to start a new session.")
+                output_fn(
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/R/T/S/[ / ] to keep triaging; Enter or N starts a new session."
+                )
             continue
-        output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, R, T, S, [, ], Enter, or N.")
+        if current_summaries:
+            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, R, T, S, [, ], Enter, or N.")
+        else:
+            output_fn(
+                "No sessions match the active filter. Use A/P/R/T/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+            )
 
 
 def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:
@@ -545,6 +555,17 @@ def sanitize_session_switcher_filter_mode(value: str) -> str:
 
 def sanitize_session_switcher_sort_mode(value: str) -> str:
     return value if value in SESSION_SWITCHER_SORT_MODES else "recent"
+
+
+def _picker_empty_state_lines(*, available_count: int, filter_mode: str) -> list[str]:
+    lines = ["No saved sessions match the active picker filter."]
+    session_label = "session" if available_count == 1 else "sessions"
+    verb = "exists" if available_count == 1 else "exist"
+    lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
+    if filter_mode != "all":
+        lines.append("Try A to show all sessions, or P/R/T to jump between pending, restore, and tool triage.")
+    lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
+    return lines
 
 
 def _toggle_picker_filter_mode(current_filter_mode: str, next_filter_mode: str) -> str:

@@ -116,14 +116,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- let the launch-time picker reopen the highlighted recent session on `Enter` instead of forcing number-only activation,
-- added an explicit `N` fresh-session escape so pre-boot triage can keep a clear new-session path without losing saved picker context,
-- refreshed picker coverage and the picker smoke script around the new `Enter`-to-reopen flow.
+- added an explicit empty-filter guidance block in the launch-time picker so zero-match triage states now explain how many saved sessions still exist plus which keys recover all/pending/restore/tool views,
+- clarified the no-match interactive prompt so `Enter`/`N` fresh-session behavior is stated directly instead of being implied by fallback behavior,
+- refreshed picker coverage and the picker smoke script around the new empty-filter hints.
 
 Why this matters now:
-- It closes the biggest remaining ergonomics gap between the launch-time picker and the in-app `F11` switcher.
-- It makes pre-boot reopen flow faster because preview navigation and activation now use the same highlight-first mental model.
-- It keeps a deliberate fresh-session escape via `N`, so triage context can still be preserved without overloading ambiguous numeric selection.
+- It removes a confusing edge case in pre-boot triage where an empty filter could look like a missing artifact root instead of a recoverable picker state.
+- It keeps the faster highlight-first reopen flow from the last iteration while making the fresh-session fallback explicit when no row is selectable.
+- It reduces recovery friction because the picker now tells the operator exactly how to widen the filter instead of forcing guesswork.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -134,8 +134,8 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `96 passed`
-- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_default_banner= True`, `picker_pending_filter= True`, `picker_pending_only_pending= True`, `picker_tool_streak_preview= True`, `picker_attention_sort= True`, `picker_interactive_selected= session-pending`, `picker_interactive_toggled= True`, `picker_interactive_preview= True`, `picker_interactive_paged_selected= session-plain`, `picker_interactive_paged_banner= True`, `picker_restored_selected= session-restore`, `picker_restored_page= True`, `picker_restored_preview= True`, and `latest=session-page-7`,
+- automated tests: `97 passed`
+- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_default_banner= True`, `picker_pending_filter= True`, `picker_pending_only_pending= True`, `picker_empty_hint= True`, `picker_tool_streak_preview= True`, `picker_attention_sort= True`, `picker_interactive_selected= session-pending`, `picker_interactive_toggled= True`, `picker_interactive_preview= True`, `picker_interactive_paged_selected= session-plain`, `picker_interactive_paged_banner= True`, `picker_restored_selected= session-restore`, `picker_restored_page= True`, `picker_restored_preview= True`, and `latest=session-page-7`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` now reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_restore_badges= True`, `switcher_has_tool_preview= True`, `switcher_has_event_preview= True`, `switcher_selected_preview= True`, `switcher_tool_streak_preview= True`, `switcher_pending_filter= True`, `switcher_pending_filter_only_newer= True`, `switcher_attention_sort= True`, `switcher_restored= True`, `switcher_restored_sort= True`, `restored_selection_is_newer= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
@@ -461,7 +461,7 @@ strands-agent --pick-session --pick-filter pending --pick-sort attention
 
 Those flows reload the saved prompt/response history plus timeline events from `turns.jsonl`, then continue appending new turns into the selected session directory.
 
-The launch-time picker now mirrors the in-app triage model: use `J` / `K` to move the highlighted row, `Enter` to reopen the highlighted session, number keys for quick direct selection, `N` to start a fresh session, `A` for all sessions, `P` for pending approvals, `R` for restore-state sessions, `T` for recent tool-active sessions, and `S` to toggle recent-vs-attention sorting. When there are more than 8 matches, use `[` and `]` to page backward/forward so older sessions are still reachable before the TUI boots. The selected row also shows a bounded multi-tool streak preview so recent inspect/test/edit activity is visible before you reopen the session.
+The launch-time picker now mirrors the in-app triage model: use `J` / `K` to move the highlighted row, `Enter` to reopen the highlighted session, number keys for quick direct selection, `N` to start a fresh session, `A` for all sessions, `P` for pending approvals, `R` for restore-state sessions, `T` for recent tool-active sessions, and `S` to toggle recent-vs-attention sorting. When there are more than 8 matches, use `[` and `]` to page backward/forward so older sessions are still reachable before the TUI boots. If the active filter has zero matches, the picker now explains that saved sessions still exist, shows how to widen triage with `A` / `P` / `R` / `T`, and makes the `Enter` / `N` fresh-session fallback explicit. The selected row also shows a bounded multi-tool streak preview so recent inspect/test/edit activity is visible before you reopen the session.
 
 Partially typed prompt text is also persisted in `session_state.json`, so a restart or session reload can reopen with the draft still in the input instead of discarding it.
 
@@ -587,8 +587,8 @@ Why this stack:
 1. keep the fake runtime path green while refining the event schema around steering/intervention events
 2. decide whether recent-session triage should summarize shell inspection/test outcomes even more explicitly than the generic tool streak
 3. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-4. decide whether the launch-time picker should surface a more explicit empty-filter hint before falling back to `N`/`Enter` fresh-session behavior
-5. decide whether recent-session attention sort should weight failed tool streaks more heavily than generic tool activity
+4. decide whether recent-session attention sort should weight failed tool streaks more heavily than generic tool activity
+5. decide whether the in-app `F11` switcher should mirror the launch-time picker's richer empty-filter guidance
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -620,4 +620,4 @@ Future daily iterations should:
 - add even denser recent-session triage hints, such as compact multi-approval counts or explicit shell/test outcome rollups
 - decide whether attention sort should weight failed tool streaks more heavily than generic recent tool activity
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-- decide whether recent-session previews should surface short multi-turn “what happened here” summaries above raw tool streaks
+- decide whether the in-app `F11` switcher should mirror the launch-time picker's richer empty-filter guidance

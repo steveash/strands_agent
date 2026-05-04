@@ -78,6 +78,11 @@ def main() -> None:
         pending_picker = render_session_picker(temp_dir, filter_mode="pending")
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
 
+        with TemporaryDirectory() as empty_hint_root:
+            empty_store = SessionArtifactStore(empty_hint_root, session_id="session-empty")
+            append_turn(empty_store, "plain session for empty-filter hint")
+            empty_pending_picker = render_session_picker(empty_hint_root, filter_mode="pending")
+
         for index in range(8):
             store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index}")
             append_turn(store, f"page prompt {index}")
@@ -88,6 +93,11 @@ def main() -> None:
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print("picker_pending_only_pending=", "session-pending" in pending_picker and "session-plain" not in pending_picker)
+        print(
+            "picker_empty_hint=",
+            "Try A to show all sessions" in empty_pending_picker
+            and "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in empty_pending_picker,
+        )
         print("picker_tool_streak_preview=", "- recent tools (2):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker)
         attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("> 1. ", "  2. ", "  3. "))]
         print("picker_attention_sort=", bool(attention_lines) and attention_lines[0].startswith("> 1. session-pending"))
