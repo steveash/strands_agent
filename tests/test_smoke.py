@@ -29,5 +29,5 @@ def test_live_restore_denied_smoke_exercises_restored_denial_metadata_end_to_end
     assert results["live_restore_denied_event"] is True
     assert results["live_restore_denied_no_tool_event"] is True
     assert results["live_restore_denied_summary"] is True
-    assert results["summary_value"] == "denied write_file via live_runtime | remaining 0"
+    assert results["summary_value"] == "denied write_file via live_runtime | restored queue | remaining 0"
     assert results["notes_text"] == "old"

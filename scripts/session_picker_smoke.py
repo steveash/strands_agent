@@ -91,6 +91,7 @@ def main() -> None:
                             "approval_id": "approval-0009",
                             "approval_status": "denied",
                             "approval_source": "fake_runtime",
+                            "approval_restored": True,
                             "remaining_pending_count": 0,
                         },
                     )
@@ -157,6 +158,10 @@ def main() -> None:
         print(
             "picker_denied_filter=",
             "Filter: denied | Sort: recent" in denied_picker and "session-denied" in denied_picker and "session-plain" not in denied_picker,
+        )
+        print(
+            "picker_denied_preview_origin=",
+            "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_picker,
         )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in default_picker)
         print(

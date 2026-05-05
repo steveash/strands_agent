@@ -97,10 +97,12 @@ def _run_live_restore_smoke(*, approve: bool) -> dict[str, object]:
                 "live_restore_approved_event": resolution_event is not None
                 and resolution_event.data.get("approval_status") == "approved"
                 and resolution_event.data.get("approval_source") == "live_runtime"
+                and resolution_event.data.get("approval_restored") is True
                 and resolution_event.data.get("resumed_from_approval") is True,
                 "live_restore_tool_event": finished_event is not None
                 and finished_event.data.get("approval_status") == "approved"
                 and finished_event.data.get("approval_source") == "live_runtime"
+                and finished_event.data.get("approval_restored") is True
                 and finished_event.data.get("remaining_pending_count") == 0
                 and finished_event.data.get("resumed_from_approval") is True,
                 "live_restore_summary": summary.last_approval_summary
@@ -124,12 +126,13 @@ def _run_live_restore_smoke(*, approve: bool) -> dict[str, object]:
             "live_restore_denied_event": resolution_event is not None
             and resolution_event.data.get("approval_status") == "denied"
             and resolution_event.data.get("approval_source") == "live_runtime"
+            and resolution_event.data.get("approval_restored") is True
             and resolution_event.data.get("remaining_pending_count") == 0
             and resolution_event.data.get("resumed_from_approval") is False,
             "live_restore_denied_no_tool_event": finished_event is None,
             "live_restore_denied_summary": summary.last_approval_summary
-            == "denied write_file via live_runtime | remaining 0"
-            and summary.last_denied_approval_summary == "denied write_file via live_runtime | remaining 0"
+            == "denied write_file via live_runtime | restored queue | remaining 0"
+            and summary.last_denied_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
             and summary.approval_status_badges == ["denied 1"],
             "summary_value": summary.last_approval_summary,
             "notes_text": (workspace_root / "notes.txt").read_text(encoding="utf-8").strip(),

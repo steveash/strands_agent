@@ -44,6 +44,7 @@ class ApprovalRequest:
     args: dict[str, object] = field(default_factory=dict)
     source: str = "runtime"
     prompt: str = ""
+    restored_from_session: bool = False
 
     def summary(self) -> str:
         args_preview = ", ".join(f"{key}={value!r}" for key, value in sorted(self.args.items())) or "no args"
@@ -57,6 +58,7 @@ class ApprovalRequest:
             "args": dict(self.args),
             "source": self.source,
             "prompt": self.prompt,
+            "restored_from_session": self.restored_from_session,
         }
 
     @classmethod
@@ -68,6 +70,7 @@ class ApprovalRequest:
             args=dict(payload.get("args") or {}),
             source=str(payload.get("source", "runtime")),
             prompt=str(payload.get("prompt", "")),
+            restored_from_session=bool(payload.get("restored_from_session", False)),
         )
 
 
@@ -150,9 +153,13 @@ class _ApprovalQueue:
         requests: list[ApprovalRequest],
         execute_factory: Callable[[ApprovalRequest], Callable[[], str]],
     ) -> None:
+        restored_requests: list[ApprovalRequest] = []
+        for request in requests:
+            request.restored_from_session = True
+            restored_requests.append(request)
         self._pending = [
             _PendingApproval(request=request, execute=execute_factory(request))
-            for request in requests
+            for request in restored_requests
         ]
         self._counter = max(self._counter, max((_approval_counter(request.request_id) for request in requests), default=0))
 
@@ -374,6 +381,7 @@ def _approval_event_context(
         "approval_id": request.request_id,
         "approval_status": status,
         "approval_source": request.source,
+        "approval_restored": request.restored_from_session,
         "requires_confirmation": True,
         **request.args,
     }

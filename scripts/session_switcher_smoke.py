@@ -107,6 +107,7 @@ async def run_smoke() -> None:
                             "approval_id": "approval-0005",
                             "approval_status": "denied",
                             "approval_source": "fake_runtime",
+                            "approval_restored": True,
                             "remaining_pending_count": 0,
                         },
                     )
@@ -176,6 +177,10 @@ async def run_smoke() -> None:
             print(
                 "switcher_denied_filter_only_denied=",
                 "session-denied | 1 turn(s)" in denied_text and "session-newer | 1 turn(s)" not in denied_text,
+            )
+            print(
+                "switcher_denied_preview_origin=",
+                "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_text,
             )
             await pilot.press("s")
             await pilot.pause()

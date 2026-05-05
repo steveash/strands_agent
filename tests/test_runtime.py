@@ -191,6 +191,10 @@ def test_fake_runtime_can_restore_pending_approvals_after_restart() -> None:
 
     assert restored.pending_approval is not None
     assert restored.pending_approval.request_id == "approval-0002"
+    assert restored.events[0].data["approval_restored"] is True
+    assert restored.events[1].data["approval_restored"] is True
+    assert restored.events[2].data["approval_restored"] is True
+    assert restored.pending_approval.restored_from_session is True
     assert "Approved write_file" in restored.text
 
 
@@ -232,9 +236,12 @@ def test_live_runtime_can_restore_pending_approvals_without_requeuing(monkeypatc
         "response_completed",
     ]
     assert result.events[0].data["approval_status"] == "approved"
+    assert result.events[0].data["approval_restored"] is True
     assert result.events[1].data["approval_id"] == "approval-0007"
+    assert result.events[1].data["approval_restored"] is True
     assert result.events[1].data["resumed_from_approval"] is True
     assert result.events[2].data["approval_source"] == "live_runtime"
+    assert result.events[2].data["approval_restored"] is True
     assert result.events[2].data["remaining_pending_count"] == 0
     assert result.pending_approval is None
     assert "continued:" in result.text
@@ -278,9 +285,11 @@ def test_live_runtime_can_restore_shell_pending_approval(monkeypatch: pytest.Mon
     assert "continued:" in result.text
     assert result.events[1].data["approval_id"] == "approval-0003"
     assert result.events[1].data["args"]["command"] == "pwd"
+    assert result.events[1].data["approval_restored"] is True
     assert result.events[1].data["resumed_from_approval"] is True
     assert result.events[2].title == "run_shell_command"
     assert result.events[2].data["approval_status"] == "approved"
+    assert result.events[2].data["approval_restored"] is True
 
 
 def test_live_runtime_can_restore_pending_approvals_and_deny_without_execution(
@@ -318,6 +327,7 @@ def test_live_runtime_can_restore_pending_approvals_and_deny_without_execution(
     assert [event.kind for event in result.events] == ["steering_denied", "response_completed"]
     assert result.events[0].data["approval_status"] == "denied"
     assert result.events[0].data["approval_source"] == "live_runtime"
+    assert result.events[0].data["approval_restored"] is True
     assert result.events[0].data["remaining_pending_count"] == 0
     assert result.events[0].data["resumed_from_approval"] is False
     assert result.pending_approval is None

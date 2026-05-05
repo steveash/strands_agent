@@ -712,6 +712,7 @@ def _approval_activity(
                 "pending_count": event.data.get("pending_count"),
                 "remaining_pending_count": event.data.get("remaining_pending_count"),
                 "resumed_from_approval": bool(event.data.get("resumed_from_approval", False)),
+                "approval_restored": bool(event.data.get("approval_restored", False)),
                 "order": order,
             }
             latest_by_request_id[approval_id] = record
@@ -730,6 +731,7 @@ def _approval_activity(
             "pending_count": len(pending_approvals),
             "remaining_pending_count": None,
             "resumed_from_approval": False,
+            "approval_restored": approval.restored_from_session,
             "order": order,
         }
         latest_by_request_id[approval.request_id] = record
@@ -776,6 +778,11 @@ def _render_last_approval_summary(record: dict[str, object] | None) -> str:
     tool_name = str(record.get("tool_name", "") or "tool")
     source = str(record.get("source", "") or "runtime")
     bits = [f"{status} {tool_name} via {source}"]
+
+    if bool(record.get("approval_restored", False)) and status == "denied":
+        bits.append("restored queue")
+    elif status == "denied":
+        bits.append("fresh request")
 
     if bool(record.get("resumed_from_approval", False)):
         bits.append("resumed")

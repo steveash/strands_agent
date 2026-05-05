@@ -574,9 +574,9 @@ def test_list_recent_sessions_surfaces_last_denied_approval_summary(tmp_path: Pa
     preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
 
     assert summary.denied_approval_count == 1
-    assert summary.last_denied_approval_summary == "denied write_file via fake_runtime | remaining 0"
+    assert summary.last_denied_approval_summary == "denied write_file via fake_runtime | fresh request | remaining 0"
     assert summary.approval_status_badges == ["denied 1"]
-    assert "- last denied approval: denied write_file via fake_runtime | remaining 0" in preview
+    assert "- last denied approval: denied write_file via fake_runtime | fresh request | remaining 0" in preview
 
 
 def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tmp_path: Path) -> None:
@@ -620,6 +620,7 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tm
                         "approval_id": "approval-0042",
                         "approval_status": "approved",
                         "approval_source": "live_runtime",
+                        "approval_restored": True,
                         "remaining_pending_count": 0,
                         "resumed_from_approval": True,
                     },
@@ -633,6 +634,7 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tm
                         "approval_id": "approval-0042",
                         "approval_status": "approved",
                         "approval_source": "live_runtime",
+                        "approval_restored": True,
                         "remaining_pending_count": 0,
                         "resumed_from_approval": True,
                         "result_preview": "updated: notes.txt",
@@ -693,6 +695,7 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
                         "approval_id": "approval-0043",
                         "approval_status": "denied",
                         "approval_source": "live_runtime",
+                        "approval_restored": True,
                         "remaining_pending_count": 0,
                         "resumed_from_approval": False,
                     },
@@ -706,11 +709,11 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
     preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
 
     assert summary.approval_status_badges == ["denied 1"]
-    assert summary.last_approval_summary == "denied write_file via live_runtime | remaining 0"
-    assert summary.last_denied_approval_summary == "denied write_file via live_runtime | remaining 0"
+    assert summary.last_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
+    assert summary.last_denied_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert "- approvals: denied 1" in preview
-    assert "- last approval: denied write_file via live_runtime | remaining 0" in preview
-    assert "- last denied approval: denied write_file via live_runtime | remaining 0" in preview
+    assert "- last approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
+    assert "- last denied approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
 
 
 def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_path: Path) -> None:

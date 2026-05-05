@@ -1224,6 +1224,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
                         "approval_id": "approval-0012b",
                         "approval_status": "denied",
                         "approval_source": "fake_runtime",
+                        "approval_restored": True,
                         "remaining_pending_count": 0,
                     },
                 )
@@ -1277,6 +1278,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-denied" in denied_output
         assert "session-pending | 1 turn(s)" not in denied_output
         assert "session-restore | 1 turn(s)" not in denied_output
+        assert "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_output
 
         await pilot.press("s")
         await pilot.pause()
