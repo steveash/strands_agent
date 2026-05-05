@@ -20,6 +20,9 @@ MAX_PROMPT_PREVIEW = 60
 MAX_EVENT_PREVIEW = 50
 MAX_TOOL_PREVIEW = 72
 MAX_TOOL_STREAK_PREVIEWS = 3
+MAX_SHELL_STREAK_PREVIEWS = 3
+MAX_SHELL_ROLLUP_EVENTS = 6
+MAX_FAILURE_ROLLUP_EVENTS = 6
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "restore", "tool"}
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
@@ -41,6 +44,11 @@ class SessionSummary:
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
     recent_tool_previews: list[str] = field(default_factory=list)
+    shell_activity_badges: list[str] = field(default_factory=list)
+    last_shell_preview: str = ""
+    recent_shell_previews: list[str] = field(default_factory=list)
+    recent_failure_count: int = 0
+    recent_shell_failure_count: int = 0
     restore_badges: list[str] = field(default_factory=list)
     draft_prompt_preview: str = ""
 
@@ -67,11 +75,14 @@ class SessionSummary:
         tool_streak_suffix = ""
         if len(self.recent_tool_previews) > 1:
             tool_streak_suffix = f" | tool streak: {len(self.recent_tool_previews)} recent"
+        shell_suffix = (
+            f" | shell: {', '.join(self.shell_activity_badges)}" if self.shell_activity_badges else ""
+        )
         event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -109,6 +120,13 @@ class SessionSummary:
         if self.recent_tool_previews:
             lines.append(f"- recent tools ({len(self.recent_tool_previews)}):")
             lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_tool_previews, start=1))
+        if self.shell_activity_badges:
+            lines.append(f"- shell: {', '.join(self.shell_activity_badges)}")
+        if self.last_shell_preview:
+            lines.append(f"- last shell: {self.last_shell_preview}")
+        if self.recent_shell_previews:
+            lines.append(f"- recent shell outcomes ({len(self.recent_shell_previews)}):")
+            lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_shell_previews, start=1))
         if self.last_event_preview:
             lines.append(f"- last event: {self.last_event_preview}")
         return lines
@@ -200,6 +218,11 @@ def _ordered_recent_sessions(
                     last_tool_preview=_latest_tool_preview(turns),
                     last_tool_badges=_latest_tool_badges(turns),
                     recent_tool_previews=_recent_tool_previews(turns),
+                    shell_activity_badges=_shell_activity_badges(turns),
+                    last_shell_preview=_latest_shell_preview(turns),
+                    recent_shell_previews=_recent_shell_previews(turns),
+                    recent_failure_count=_recent_tool_failure_count(turns),
+                    recent_shell_failure_count=_recent_shell_failure_count(turns),
                     restore_badges=_restore_badges(session_state, len(turns)),
                     draft_prompt_preview=draft_prompt_preview,
                 ),
@@ -520,15 +543,95 @@ def _recent_tool_previews(turns: list[TurnArtifact], limit: int = MAX_TOOL_STREA
     return previews
 
 
-def _iter_recent_tool_events(turns: list[TurnArtifact]):
+def _iter_recent_tool_events(turns: list[TurnArtifact], *, tool_name: str | None = None):
     for turn in reversed(turns):
         for event in reversed(turn.events):
             if event.kind in {"tool_finished", "tool_failed"}:
+                if tool_name is not None and str(event.data.get("tool_name", "") or event.title or "") != tool_name:
+                    continue
                 yield event
 
 
 def _latest_tool_event(turns: list[TurnArtifact]):
     return next(_iter_recent_tool_events(turns), None)
+
+
+def _latest_shell_preview(turns: list[TurnArtifact]) -> str:
+    event = next(_iter_recent_tool_events(turns, tool_name="run_shell_command"), None)
+    if event is None:
+        return ""
+    return _render_tool_event_summary(event)
+
+
+def _recent_shell_previews(turns: list[TurnArtifact], limit: int = MAX_SHELL_STREAK_PREVIEWS) -> list[str]:
+    previews: list[str] = []
+    for event in _iter_recent_tool_events(turns, tool_name="run_shell_command"):
+        rendered = _render_tool_event_summary(event)
+        if rendered:
+            previews.append(rendered)
+        if len(previews) >= limit:
+            break
+    return previews
+
+
+def _shell_activity_badges(turns: list[TurnArtifact], count_window: int = MAX_SHELL_ROLLUP_EVENTS) -> list[str]:
+    events = list(_bounded_recent_tool_events(turns, tool_name="run_shell_command", limit=count_window))
+    if not events:
+        return []
+
+    inspect_count = 0
+    test_count = 0
+    failure_count = 0
+    for event in events:
+        shell_policy = str(event.data.get("shell_policy", "") or "").strip()
+        if shell_policy == "inspect":
+            inspect_count += 1
+        else:
+            test_count += 1
+        if _is_tool_failure_event(event):
+            failure_count += 1
+
+    badges: list[str] = []
+    if inspect_count:
+        badges.append(f"inspect {inspect_count}")
+    if test_count:
+        badges.append(f"test {test_count}")
+    if failure_count:
+        badges.append(f"fail {failure_count}")
+    return badges
+
+
+def _bounded_recent_tool_events(
+    turns: list[TurnArtifact],
+    *,
+    tool_name: str | None = None,
+    limit: int,
+) -> list[object]:
+    events = []
+    for event in _iter_recent_tool_events(turns, tool_name=tool_name):
+        events.append(event)
+        if len(events) >= limit:
+            break
+    return events
+
+
+def _recent_tool_failure_count(turns: list[TurnArtifact], count_window: int = MAX_FAILURE_ROLLUP_EVENTS) -> int:
+    return sum(1 for event in _bounded_recent_tool_events(turns, limit=count_window) if _is_tool_failure_event(event))
+
+
+def _recent_shell_failure_count(turns: list[TurnArtifact], count_window: int = MAX_FAILURE_ROLLUP_EVENTS) -> int:
+    return sum(
+        1
+        for event in _bounded_recent_tool_events(turns, tool_name="run_shell_command", limit=count_window)
+        if _is_tool_failure_event(event)
+    )
+
+
+def _is_tool_failure_event(event) -> bool:
+    if event.kind == "tool_failed":
+        return True
+    exit_code = event.data.get("exit_code")
+    return isinstance(exit_code, int) and exit_code != 0
 
 
 def _tool_event_preview(event) -> str:
@@ -743,7 +846,12 @@ def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[
         return (
             summary.pending_approval_count > 0,
             summary.pending_approval_count,
+            summary.recent_failure_count > 0,
+            summary.recent_failure_count,
+            summary.recent_shell_failure_count > 0,
+            summary.recent_shell_failure_count,
             bool(summary.restore_badges),
+            bool(summary.shell_activity_badges or summary.last_shell_preview),
             bool(summary.last_tool_preview or summary.last_tool_badges),
             activity_timestamp,
             session_id,

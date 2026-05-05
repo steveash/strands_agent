@@ -612,10 +612,72 @@ def test_list_recent_sessions_surfaces_shell_tool_preview_and_exit_badges(tmp_pa
     )
 
     summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
 
     assert summary.last_tool_preview == "git status --short -> M README.md"
     assert summary.last_tool_badges == ["inspect", "e0"]
+    assert summary.shell_activity_badges == ["inspect 1"]
+    assert summary.last_shell_preview == "inspect/e0 git status --short -> M README.md"
+    assert summary.recent_shell_previews == ["inspect/e0 git status --short -> M README.md"]
     assert "last tool: inspect/e0 git status --short -> M README.md" in summary.render_line(1)
+    assert "shell: inspect 1" in summary.render_line(1)
+    assert "- shell: inspect 1" in preview
+    assert "- last shell: inspect/e0 git status --short -> M README.md" in preview
+
+
+def test_list_recent_sessions_surfaces_shell_test_rollup_and_failures(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-shell-rollup")
+    store.append_turn(
+        TurnArtifact(
+            prompt="inspect and test",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                ),
+                runtime_event(
+                    "tool_failed",
+                    "run_shell_command",
+                    "Shell test failed",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "pytest -q",
+                        "shell_policy": "confirm",
+                        "exit_code": 1,
+                        "result_preview": "pytest -q -> exit 1",
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.shell_activity_badges == ["inspect 1", "test 1", "fail 1"]
+    assert summary.last_shell_preview == "confirm/e1 pytest -q -> exit 1"
+    assert summary.recent_shell_previews == [
+        "confirm/e1 pytest -q -> exit 1",
+        "inspect/e0 git status --short -> M README.md",
+    ]
+    assert summary.recent_failure_count == 1
+    assert summary.recent_shell_failure_count == 1
+    assert "shell: inspect 1, test 1, fail 1" in summary.render_line(1)
+    assert "- recent shell outcomes (2):" in preview
+    assert "  1. confirm/e1 pytest -q -> exit 1" in preview
+    assert "  2. inspect/e0 git status --short -> M README.md" in preview
 
 
 def test_list_recent_sessions_surfaces_recent_tool_streak_preview(tmp_path: Path) -> None:
@@ -727,13 +789,63 @@ def test_list_recent_sessions_can_filter_to_pending_restore_or_tool_triage(tmp_p
     assert [session.session_id for session in tool_sessions] == ["session-tool"]
 
 
-def test_list_recent_sessions_attention_sort_prioritizes_pending_and_restore_state(tmp_path: Path) -> None:
+def test_list_recent_sessions_attention_sort_prioritizes_pending_failures_restore_and_shell_activity(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
+
+    failed_store = SessionArtifactStore(tmp_path, session_id="session-failed")
+    failed_store.append_turn(
+        TurnArtifact(
+            prompt="run failing test",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_failed",
+                    "run_shell_command",
+                    "Shell test failed",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "pytest -q",
+                        "shell_policy": "confirm",
+                        "exit_code": 1,
+                        "result_preview": "pytest -q -> exit 1",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
 
     restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
     _append_turn(restore_store, "restore")
     restore_store.save_session_state(SessionState(draft_prompt="draft"))
+
+    inspect_store = SessionArtifactStore(tmp_path, session_id="session-inspect")
+    inspect_store.append_turn(
+        TurnArtifact(
+            prompt="inspect repo",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
 
     pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
     _append_turn(pending_store, "pending")
@@ -752,8 +864,10 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_and_restore_sta
 
     ordered = list_recent_sessions(tmp_path, sort_mode="attention")
 
-    assert [session.session_id for session in ordered[:3]] == [
+    assert [session.session_id for session in ordered[:5]] == [
         "session-pending",
+        "session-failed",
         "session-restore",
+        "session-inspect",
         "session-plain",
     ]

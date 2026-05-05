@@ -115,6 +115,7 @@ async def run_smoke() -> None:
                 "restore: filter=tool, replay 1/1, draft 15c" in str(switcher_output),
             )
             print("switcher_has_tool_preview=", "last tool: inspect/e0 git status --short -> M README.md" in str(switcher_output))
+            print("switcher_has_shell_rollup=", "shell: inspect 1" in str(switcher_output))
             print("switcher_has_event_preview=", "last event: tool_finished: run_shell_command" in str(switcher_output))
             await pilot.press("up")
             await pilot.pause()
@@ -123,6 +124,10 @@ async def run_smoke() -> None:
             print(
                 "switcher_last_approval_preview=",
                 "last approval: pending run_shell_command via fake_runtime | queued 1" in str(selected_preview_output),
+            )
+            print(
+                "switcher_shell_preview=",
+                "- last shell: inspect/e0 git status --short -> M README.md" in str(selected_preview_output),
             )
             print("switcher_tool_streak_preview=", "recent tools (2)" in str(selected_preview_output))
             await pilot.press("p")

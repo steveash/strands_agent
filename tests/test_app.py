@@ -1147,7 +1147,11 @@ async def test_session_switcher_shows_selected_preview_with_recent_tool_streak(t
         assert "Selected preview:" in output
         assert "- slot 1 on this page | overall 1 of 2 | session session-newer" in output
         assert "- last tool: inspect/e0 git status --short -> M README.md" in output
+        assert "- shell: inspect 1" in output
+        assert "- last shell: inspect/e0 git status --short -> M README.md" in output
         assert "- recent tools (2):" in output
+        assert "- recent shell outcomes (1):" in output
+        assert "  1. inspect/e0 git status --short -> M README.md" in output
         assert "  1. inspect/e0 git status --short -> M README.md" in output
         assert "  2. .: README.md" in output
 
@@ -1260,6 +1264,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-current" in all_output
         assert "session-pending" in all_output
         assert "session-restore" in all_output
+        assert "shell: inspect 1" in all_output
 
 
 @pytest.mark.asyncio

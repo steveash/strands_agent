@@ -134,6 +134,11 @@ def main() -> None:
             "Try A to show all sessions" in empty_pending_picker
             and "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in empty_pending_picker,
         )
+        print(
+            "picker_shell_rollup=",
+            "shell: inspect 1" in default_picker
+            and "- last shell: inspect/e0 git status --short -> M README.md" in default_picker,
+        )
         print("picker_tool_streak_preview=", "- recent tools (2):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker)
         attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("> 1. ", "  2. ", "  3. "))]
         print("picker_attention_sort=", bool(attention_lines) and attention_lines[0].startswith("> 1. session-pending"))
