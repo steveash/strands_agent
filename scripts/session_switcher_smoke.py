@@ -90,6 +90,31 @@ async def run_smoke() -> None:
             ]
         )
 
+        denied_store = SessionArtifactStore(temp_dir, session_id="session-denied")
+        denied_store.append_turn(
+            TurnArtifact(
+                prompt="deny risky edit",
+                response="skipped",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "steering_denied",
+                        "replace_text",
+                        "Denied in the TUI",
+                        data={
+                            "tool_name": "replace_text",
+                            "approval_id": "approval-0005",
+                            "approval_status": "denied",
+                            "approval_source": "fake_runtime",
+                            "remaining_pending_count": 0,
+                        },
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
         first_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
             config=AppConfig(
@@ -107,7 +132,11 @@ async def run_smoke() -> None:
             await pilot.press("f11")
             await pilot.pause()
             switcher_output = first_app.query_one("#output").render()
-            print("switcher_default_selection_is_current=", "> 2. session-older" in str(switcher_output))
+            selected_line = next(
+                (line for line in str(switcher_output).splitlines() if line.startswith("> ")),
+                "",
+            )
+            print("switcher_default_selection_is_current=", "session-older" in selected_line and "(current)" in selected_line)
             print("switcher_has_pending_marker=", "pending: run_shell_command" in str(switcher_output))
             print("switcher_has_approval_rollup=", "approvals: pending 1, approved 1" in str(switcher_output))
             print(
@@ -139,10 +168,19 @@ async def run_smoke() -> None:
                 "switcher_pending_filter_only_newer=",
                 "session-newer | 1 turn(s)" in pending_text and "session-older | 1 turn(s)" not in pending_text,
             )
+            await pilot.press("d")
+            await pilot.pause()
+            denied_output = first_app.query_one("#output").render()
+            denied_text = str(denied_output)
+            print("switcher_denied_filter=", "Filter: denied | Sort: recent" in denied_text)
+            print(
+                "switcher_denied_filter_only_denied=",
+                "session-denied | 1 turn(s)" in denied_text and "session-newer | 1 turn(s)" not in denied_text,
+            )
             await pilot.press("s")
             await pilot.pause()
             attention_output = first_app.query_one("#output").render()
-            print("switcher_attention_sort=", "Filter: pending | Sort: attention" in str(attention_output))
+            print("switcher_attention_sort=", "Filter: denied | Sort: attention" in str(attention_output))
             await pilot.press("a")
             await pilot.pause()
             await pilot.press("up")
@@ -207,7 +245,7 @@ async def run_smoke() -> None:
             paged_output = str(paged_app.query_one("#output").render())
             stored_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
             print("switcher_paged=", "Page: 2/2" in paged_output)
-            print("switcher_paged_window=", "Showing: 9-12 of 12" in paged_output)
+            print("switcher_paged_window=", "Showing: 9-13 of 13" in paged_output)
             print(
                 "switcher_paged_state=",
                 stored_state is not None

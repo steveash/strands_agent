@@ -964,7 +964,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, R restore, T tool, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, T tool, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1207,6 +1207,31 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         ]
     )
 
+    denied_store = SessionArtifactStore(tmp_path, session_id="session-denied")
+    denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny risky edit",
+            response="skipped",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "replace_text",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "replace_text",
+                        "approval_id": "approval-0012b",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 0,
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
     restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
     restore_store.append_turn(
         TurnArtifact(
@@ -1245,10 +1270,18 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-current | 1 turn(s)" not in pending_output
         assert "session-restore | 1 turn(s)" not in pending_output
 
+        await pilot.press("d")
+        await pilot.pause()
+        denied_output = str(app.query_one("#output").render())
+        assert "Filter: denied | Sort: recent" in denied_output
+        assert "session-denied" in denied_output
+        assert "session-pending | 1 turn(s)" not in denied_output
+        assert "session-restore | 1 turn(s)" not in denied_output
+
         await pilot.press("s")
         await pilot.pause()
         attention_output = str(app.query_one("#output").render())
-        assert "Filter: pending | Sort: attention" in attention_output
+        assert "Filter: denied | Sort: attention" in attention_output
 
         await pilot.press("r")
         await pilot.pause()
@@ -1307,7 +1340,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "Filter: pending | Sort: recent" in output
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
-        assert "Try A to show all sessions, or P/R/T to jump between pending, restore, and tool triage." in output
+        assert "Try A to show all sessions, or P/D/R/T to jump between pending, denied, restore, and tool triage." in output
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output
         assert "Enter switches the highlighted session once a visible row exists again." in output
         assert "session-current | 1 turn(s)" not in output

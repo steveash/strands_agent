@@ -92,7 +92,7 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
     assert (
-        "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page, N new session"
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, T tool, S sort, [ prev page, ] next page, N new session"
         in rendered
     )
     assert "Press Enter to reopen the highlighted session." in rendered
@@ -177,7 +177,7 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "Filter: pending | Sort: recent" in rendered
     assert "No saved sessions match the active picker filter." in rendered
     assert "1 saved session still exists under this root." in rendered
-    assert "Try A to show all sessions, or P/R/T to jump between pending, restore, and tool triage." in rendered
+    assert "Try A to show all sessions, or P/D/R/T to jump between pending, denied, restore, and tool triage." in rendered
     assert "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in rendered
     assert "1. session-demo" not in rendered
 
@@ -198,7 +198,7 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
 
     assert summary is None
     assert prompts == [
-        "No sessions match this filter. Press Enter or N for a new session, or use A/P/R/T/S/[ / ] to change triage: "
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/T/S/[ / ] to change triage: "
     ]
     assert any("No saved sessions match the active picker filter." in line for line in captured)
     assert any("Try A to show all sessions" in line for line in captured)
@@ -544,6 +544,41 @@ def test_list_recent_sessions_surfaces_approval_rollup_and_last_summary(tmp_path
     assert "- last approval: pending run_shell_command via fake_runtime | queued 1" in preview
 
 
+def test_list_recent_sessions_surfaces_last_denied_approval_summary(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-denied")
+    store.append_turn(
+        TurnArtifact(
+            prompt="deny risky write",
+            response="skipped write",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "write_file",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-9000",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 0,
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.denied_approval_count == 1
+    assert summary.last_denied_approval_summary == "denied write_file via fake_runtime | remaining 0"
+    assert summary.approval_status_badges == ["denied 1"]
+    assert "- last denied approval: denied write_file via fake_runtime | remaining 0" in preview
+
+
 def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-restore")
     _append_turn(store, "inspect repo")
@@ -738,7 +773,7 @@ def test_list_recent_sessions_surfaces_recent_tool_streak_preview(tmp_path: Path
     assert "  3. .: src/" in preview
 
 
-def test_list_recent_sessions_can_filter_to_pending_restore_or_tool_triage(tmp_path: Path) -> None:
+def test_list_recent_sessions_can_filter_to_pending_denied_restore_or_tool_triage(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
 
@@ -755,6 +790,31 @@ def test_list_recent_sessions_can_filter_to_pending_restore_or_tool_triage(tmp_p
                 prompt="run tests",
             )
         ]
+    )
+
+    denied_store = SessionArtifactStore(tmp_path, session_id="session-denied")
+    denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny risky edit",
+            response="skipped",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "replace_text",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "replace_text",
+                        "approval_id": "approval-0010b",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 0,
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
     )
 
     restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
@@ -781,17 +841,44 @@ def test_list_recent_sessions_can_filter_to_pending_restore_or_tool_triage(tmp_p
     )
 
     pending_sessions = list_recent_sessions(tmp_path, filter_mode="pending")
+    denied_sessions = list_recent_sessions(tmp_path, filter_mode="denied")
     restore_sessions = list_recent_sessions(tmp_path, filter_mode="restore")
     tool_sessions = list_recent_sessions(tmp_path, filter_mode="tool")
 
     assert [session.session_id for session in pending_sessions] == ["session-pending"]
+    assert [session.session_id for session in denied_sessions] == ["session-denied"]
     assert [session.session_id for session in restore_sessions] == ["session-restore"]
     assert [session.session_id for session in tool_sessions] == ["session-tool"]
 
 
-def test_list_recent_sessions_attention_sort_prioritizes_pending_failures_restore_and_shell_activity(tmp_path: Path) -> None:
+def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_then_failures_restore_and_shell_activity(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
+
+    denied_store = SessionArtifactStore(tmp_path, session_id="session-denied")
+    denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny risky write",
+            response="skipped",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "write_file",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0010c",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 0,
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
 
     failed_store = SessionArtifactStore(tmp_path, session_id="session-failed")
     failed_store.append_turn(
@@ -864,8 +951,9 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_failures_restor
 
     ordered = list_recent_sessions(tmp_path, sort_mode="attention")
 
-    assert [session.session_id for session in ordered[:5]] == [
+    assert [session.session_id for session in ordered[:6]] == [
         "session-pending",
+        "session-denied",
         "session-failed",
         "session-restore",
         "session-inspect",

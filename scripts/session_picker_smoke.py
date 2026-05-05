@@ -74,6 +74,31 @@ def main() -> None:
             ]
         )
 
+        denied_store = SessionArtifactStore(temp_dir, session_id="session-denied")
+        denied_store.append_turn(
+            TurnArtifact(
+                prompt="deny the risky edit",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "steering_denied",
+                        "replace_text",
+                        "Denied in the TUI",
+                        data={
+                            "tool_name": "replace_text",
+                            "approval_id": "approval-0009",
+                            "approval_status": "denied",
+                            "approval_source": "fake_runtime",
+                            "remaining_pending_count": 0,
+                        },
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
         restore_store = SessionArtifactStore(temp_dir, session_id="session-restore")
         append_turn(restore_store, "resume the saved triage flow")
         restore_store.save_session_state(SessionState(draft_prompt="queued follow-up"))
@@ -111,6 +136,7 @@ def main() -> None:
 
         default_picker = render_session_picker(temp_dir)
         pending_picker = render_session_picker(temp_dir, filter_mode="pending")
+        denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
 
         with TemporaryDirectory() as empty_hint_root:
@@ -124,10 +150,14 @@ def main() -> None:
 
         paged_picker = render_session_picker(temp_dir, page_index=1)
 
-        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/1 | Showing: 1-4 of 4" in default_picker)
+        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/1 | Showing: 1-5 of 5" in default_picker)
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print("picker_pending_only_pending=", "session-pending" in pending_picker and "session-plain" not in pending_picker)
+        print(
+            "picker_denied_filter=",
+            "Filter: denied | Sort: recent" in denied_picker and "session-denied" in denied_picker and "session-plain" not in denied_picker,
+        )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in default_picker)
         print(
             "picker_empty_hint=",
@@ -140,12 +170,17 @@ def main() -> None:
             and "- last shell: inspect/e0 git status --short -> M README.md" in default_picker,
         )
         print("picker_tool_streak_preview=", "- recent tools (2):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker)
-        attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("> 1. ", "  2. ", "  3. "))]
-        print("picker_attention_sort=", bool(attention_lines) and attention_lines[0].startswith("> 1. session-pending"))
-        print("picker_paged_banner=", "Page: 2/2 | Showing: 9-12 of 12" in paged_picker)
+        attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("> 1. ", "  2. ", "  3. ", "  4. "))]
+        print(
+            "picker_attention_sort=",
+            len(attention_lines) >= 2
+            and attention_lines[0].startswith("> 1. session-pending")
+            and attention_lines[1].startswith("  2. session-denied"),
+        )
+        print("picker_paged_banner=", "Page: 2/2 | Showing: 9-13 of 13" in paged_picker)
         print(
             "picker_paged_window=",
-            "> 1. session-tool" in paged_picker and "  4. session-plain" in paged_picker and "session-page-07" not in paged_picker,
+            "> 1. session-tool" in paged_picker and "  5. session-plain" in paged_picker and "session-page-07" not in paged_picker,
         )
 
         captured: list[str] = []
@@ -181,7 +216,7 @@ def main() -> None:
         print("picker_interactive_paged_selected=", paged_summary.session_id)
         print(
             "picker_interactive_paged_banner=",
-            any("Page: 2/2 | Showing: 9-12 of 12" in line for line in paged_captured),
+            any("Page: 2/2 | Showing: 9-13 of 13" in line for line in paged_captured),
         )
 
         aborted_inputs = iter(["]", "j", "n"])
@@ -207,12 +242,12 @@ def main() -> None:
         print("picker_restored_selected=", restored_summary.session_id)
         print(
             "picker_restored_page=",
-            any("Page: 2/2 | Showing: 9-12 of 12" in line for line in restored_captured),
+            any("Page: 2/2 | Showing: 9-13 of 13" in line for line in restored_captured),
         )
         print(
             "picker_restored_preview=",
             any(
-                "- slot 2 on this page | overall 10 of 12 | session session-restore" in line
+                "- slot 2 on this page | overall 10 of 13 | session session-restore" in line
                 for line in restored_captured
             ),
         )

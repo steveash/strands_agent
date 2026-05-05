@@ -24,7 +24,7 @@ MAX_SHELL_STREAK_PREVIEWS = 3
 MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
-SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "restore", "tool"}
+SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "denied", "restore", "tool"}
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
 
@@ -40,6 +40,8 @@ class SessionSummary:
     pending_approval_summary: str = ""
     approval_status_badges: list[str] = field(default_factory=list)
     last_approval_summary: str = ""
+    denied_approval_count: int = 0
+    last_denied_approval_summary: str = ""
     last_event_preview: str = ""
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
@@ -103,6 +105,8 @@ class SessionSummary:
             lines.append(f"- approvals: {', '.join(self.approval_status_badges)}")
         if self.last_approval_summary:
             lines.append(f"- last approval: {self.last_approval_summary}")
+        if self.last_denied_approval_summary:
+            lines.append(f"- last denied approval: {self.last_denied_approval_summary}")
         if self.restore_badges:
             lines.append(f"- restore: {', '.join(self.restore_badges)}")
         if self.draft_prompt_preview:
@@ -191,7 +195,12 @@ def _ordered_recent_sessions(
         turns = store.load_turns()
         session_state = store.load_session_state() or SessionState()
         pending_approvals = store.load_pending_approvals()
-        approval_status_badges, last_approval_summary = _approval_activity(turns, pending_approvals)
+        (
+            approval_status_badges,
+            last_approval_summary,
+            denied_approval_count,
+            last_denied_approval_summary,
+        ) = _approval_activity(turns, pending_approvals)
         last_prompt_preview = ""
         if turns:
             last_prompt_preview = _truncate(turns[-1].prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
@@ -214,6 +223,8 @@ def _ordered_recent_sessions(
                     pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
                     approval_status_badges=approval_status_badges,
                     last_approval_summary=last_approval_summary,
+                    denied_approval_count=denied_approval_count,
+                    last_denied_approval_summary=last_denied_approval_summary,
                     last_event_preview=_latest_event_preview(turns),
                     last_tool_preview=_latest_tool_preview(turns),
                     last_tool_badges=_latest_tool_badges(turns),
@@ -304,7 +315,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, R restore, T tool, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, T tool, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -361,9 +372,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/R/T/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/T/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/R/T/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/T/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -417,6 +428,12 @@ def pick_session(
             continue
         if normalized == "p":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "pending")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
+        if normalized == "d":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "denied")
             page_index = 0
             selected_index = 0
             selected_session_id = ""
@@ -475,14 +492,14 @@ def pick_session(
                 )
             else:
                 output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/R/T/S/[ / ] to keep triaging; Enter or N starts a new session."
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/T/S/[ / ] to keep triaging; Enter or N starts a new session."
                 )
             continue
         if current_summaries:
-            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, R, T, S, [, ], Enter, or N.")
+            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, T, S, [, ], Enter, or N.")
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/R/T/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/T/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -674,9 +691,10 @@ def _render_tool_event_summary(event) -> str:
 def _approval_activity(
     turns: list[TurnArtifact],
     pending_approvals,
-) -> tuple[list[str], str]:
+) -> tuple[list[str], str, int, str]:
     latest_by_request_id: dict[str, dict[str, object]] = {}
     last_record: dict[str, object] | None = None
+    last_denied_record: dict[str, object] | None = None
     order = 0
 
     for turn in turns:
@@ -698,6 +716,8 @@ def _approval_activity(
             }
             latest_by_request_id[approval_id] = record
             last_record = record
+            if status == "denied":
+                last_denied_record = record
 
     for approval in pending_approvals:
         if approval.request_id in latest_by_request_id:
@@ -725,6 +745,10 @@ def _approval_activity(
     for record in latest_by_request_id.values():
         status = str(record["status"])
         status_counts[status] = status_counts.get(status, 0) + 1
+        if status == "denied" and (
+            last_denied_record is None or int(record.get("order", 0)) >= int(last_denied_record.get("order", 0))
+        ):
+            last_denied_record = record
 
     badges: list[str] = []
     for status in APPROVAL_STATUS_DISPLAY_ORDER:
@@ -736,7 +760,12 @@ def _approval_activity(
             continue
         badges.append(f"{status} {status_counts[status]}")
 
-    return badges, _render_last_approval_summary(last_record)
+    return (
+        badges,
+        _render_last_approval_summary(last_record),
+        status_counts.get("denied", 0),
+        _render_last_approval_summary(last_denied_record),
+    )
 
 
 def _render_last_approval_summary(record: dict[str, object] | None) -> str:
@@ -781,7 +810,7 @@ def render_recent_session_empty_state_lines(
     verb = "exists" if available_count == 1 else "exist"
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
-        lines.append("Try A to show all sessions, or P/R/T to jump between pending, restore, and tool triage.")
+        lines.append("Try A to show all sessions, or P/D/R/T to jump between pending, denied, restore, and tool triage.")
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
     else:
@@ -833,6 +862,8 @@ def _picker_page_window_label(total_matches: int, limit: int, page_index: int, v
 def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
     if filter_mode == "pending":
         return summary.pending_approval_count > 0
+    if filter_mode == "denied":
+        return summary.denied_approval_count > 0
     if filter_mode == "restore":
         return bool(summary.restore_badges)
     if filter_mode == "tool":
@@ -846,6 +877,8 @@ def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[
         return (
             summary.pending_approval_count > 0,
             summary.pending_approval_count,
+            summary.denied_approval_count > 0,
+            summary.denied_approval_count,
             summary.recent_failure_count > 0,
             summary.recent_failure_count,
             summary.recent_shell_failure_count > 0,
