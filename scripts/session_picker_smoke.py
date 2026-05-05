@@ -25,7 +25,42 @@ def main() -> None:
         append_turn(plain_store, "inspect the plain artifact set")
 
         pending_store = SessionArtifactStore(temp_dir, session_id="session-pending")
-        append_turn(pending_store, "run the gated test suite")
+        pending_store.append_turn(
+            TurnArtifact(
+                prompt="run the gated test suite",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "steering_approved",
+                        "write_file",
+                        "Approved in the TUI",
+                        data={
+                            "tool_name": "write_file",
+                            "approval_id": "approval-0000",
+                            "approval_status": "approved",
+                            "approval_source": "fake_runtime",
+                            "remaining_pending_count": 1,
+                            "resumed_from_approval": True,
+                        },
+                    ),
+                    runtime_event(
+                        "steering_confirmation_required",
+                        "run_shell_command",
+                        "Needs confirmation",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "approval_id": "approval-0001",
+                            "approval_status": "pending",
+                            "approval_source": "fake_runtime",
+                            "pending_count": 1,
+                        },
+                    ),
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
         pending_store.save_pending_approvals(
             [
                 ApprovalRequest(
@@ -93,6 +128,7 @@ def main() -> None:
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print("picker_pending_only_pending=", "session-pending" in pending_picker and "session-plain" not in pending_picker)
+        print("picker_approval_rollup=", "approvals: pending 1, approved 1" in default_picker)
         print(
             "picker_empty_hint=",
             "Try A to show all sessions" in empty_pending_picker

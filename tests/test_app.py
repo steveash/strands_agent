@@ -972,6 +972,113 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_surfaces_approval_rollups_in_summary_and_preview(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    rollup_store = SessionArtifactStore(tmp_path, session_id="session-rollup")
+    rollup_store.append_turn(
+        TurnArtifact(
+            prompt="resume guarded changes",
+            response="approval summary",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_approved",
+                    "write_file",
+                    "Approved in the TUI",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0001",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 1,
+                        "resumed_from_approval": True,
+                    },
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "write_file",
+                    "Finished write",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0001",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 1,
+                        "resumed_from_approval": True,
+                        "result_preview": "wrote: notes.txt",
+                    },
+                ),
+                runtime_event(
+                    "steering_confirmation_required",
+                    "run_shell_command",
+                    "Needs confirmation",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "approval_id": "approval-0002",
+                        "approval_status": "pending",
+                        "approval_source": "fake_runtime",
+                        "pending_count": 1,
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    rollup_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0002",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        assert "session-rollup | 1 turn(s)" in output
+        assert "approvals: pending 1, approved 1" in output
+
+        await pilot.press("up")
+        await pilot.pause()
+
+        selected_output = str(app.query_one("#output").render())
+        assert "- approvals: pending 1, approved 1" in selected_output
+        assert "- last approval: pending run_shell_command via fake_runtime | queued 1" in selected_output
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_shows_selected_preview_with_recent_tool_streak(tmp_path: Path) -> None:
     older_store = SessionArtifactStore(tmp_path, session_id="session-older")
     older_store.append_turn(

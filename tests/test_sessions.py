@@ -446,6 +446,104 @@ def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path)
     assert "pending: run_shell_command" in summary.render_line(1)
 
 
+def test_list_recent_sessions_surfaces_approval_rollup_and_last_summary(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-approval-rollup")
+    store.append_turn(
+        TurnArtifact(
+            prompt="run the guarded write flow",
+            response="approval state updated",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_confirmation_required",
+                    "write_file",
+                    "Needs confirmation",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0001",
+                        "approval_status": "pending",
+                        "approval_source": "fake_runtime",
+                        "pending_count": 1,
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    store.append_turn(
+        TurnArtifact(
+            prompt="approve the write and queue tests",
+            response="approval state updated again",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_approved",
+                    "write_file",
+                    "Approved in the TUI",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0001",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 1,
+                        "resumed_from_approval": True,
+                    },
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "write_file",
+                    "Finished write",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0001",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 1,
+                        "resumed_from_approval": True,
+                        "result_preview": "wrote: notes.txt",
+                    },
+                ),
+                runtime_event(
+                    "steering_confirmation_required",
+                    "run_shell_command",
+                    "Needs confirmation",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "approval_id": "approval-0002",
+                        "approval_status": "pending",
+                        "approval_source": "fake_runtime",
+                        "pending_count": 1,
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0002",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.approval_status_badges == ["pending 1", "approved 1"]
+    assert summary.last_approval_summary == "pending run_shell_command via fake_runtime | queued 1"
+    assert "approvals: pending 1, approved 1" in summary.render_line(1)
+    assert "- approvals: pending 1, approved 1" in preview
+    assert "- last approval: pending run_shell_command via fake_runtime | queued 1" in preview
+
+
 def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-restore")
     _append_turn(store, "inspect repo")

@@ -20,6 +20,7 @@ MAX_PROMPT_PREVIEW = 60
 MAX_EVENT_PREVIEW = 50
 MAX_TOOL_PREVIEW = 72
 MAX_TOOL_STREAK_PREVIEWS = 3
+APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "restore", "tool"}
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
@@ -34,6 +35,8 @@ class SessionSummary:
     pending_approval_count: int = 0
     pending_approval_tool: str = ""
     pending_approval_summary: str = ""
+    approval_status_badges: list[str] = field(default_factory=list)
+    last_approval_summary: str = ""
     last_event_preview: str = ""
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
@@ -49,6 +52,9 @@ class SessionSummary:
         elif self.pending_approval_count > 1:
             tool_hint = f" ({self.pending_approval_tool} first)" if self.pending_approval_tool else ""
             pending_suffix = f" | pending: {self.pending_approval_count} approvals{tool_hint}"
+        approval_suffix = (
+            f" | approvals: {', '.join(self.approval_status_badges)}" if self.approval_status_badges else ""
+        )
         tool_hint = ""
         if self.last_tool_preview or self.last_tool_badges:
             badge_prefix = "/".join(self.last_tool_badges)
@@ -65,7 +71,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -82,6 +88,10 @@ class SessionSummary:
             if self.pending_approval_count > 1:
                 pending_line = f"{self.pending_approval_count} approvals | first: {pending_line}"
             lines.append(f"- pending: {pending_line}")
+        if self.approval_status_badges:
+            lines.append(f"- approvals: {', '.join(self.approval_status_badges)}")
+        if self.last_approval_summary:
+            lines.append(f"- last approval: {self.last_approval_summary}")
         if self.restore_badges:
             lines.append(f"- restore: {', '.join(self.restore_badges)}")
         if self.draft_prompt_preview:
@@ -163,6 +173,7 @@ def _ordered_recent_sessions(
         turns = store.load_turns()
         session_state = store.load_session_state() or SessionState()
         pending_approvals = store.load_pending_approvals()
+        approval_status_badges, last_approval_summary = _approval_activity(turns, pending_approvals)
         last_prompt_preview = ""
         if turns:
             last_prompt_preview = _truncate(turns[-1].prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
@@ -183,6 +194,8 @@ def _ordered_recent_sessions(
                     pending_approval_count=len(pending_approvals),
                     pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
                     pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
+                    approval_status_badges=approval_status_badges,
+                    last_approval_summary=last_approval_summary,
                     last_event_preview=_latest_event_preview(turns),
                     last_tool_preview=_latest_tool_preview(turns),
                     last_tool_badges=_latest_tool_badges(turns),
@@ -553,6 +566,96 @@ def _render_tool_event_summary(event) -> str:
     if badge_prefix:
         return _truncate(badge_prefix, MAX_TOOL_PREVIEW)
     return preview
+
+
+def _approval_activity(
+    turns: list[TurnArtifact],
+    pending_approvals,
+) -> tuple[list[str], str]:
+    latest_by_request_id: dict[str, dict[str, object]] = {}
+    last_record: dict[str, object] | None = None
+    order = 0
+
+    for turn in turns:
+        for event in turn.events:
+            approval_id = str(event.data.get("approval_id", "") or "").strip()
+            status = str(event.data.get("approval_status", "") or "").strip()
+            if not approval_id or not status:
+                continue
+            order += 1
+            record = {
+                "approval_id": approval_id,
+                "status": status,
+                "tool_name": str(event.data.get("tool_name", "") or event.title or "").strip(),
+                "source": str(event.data.get("approval_source", "") or event.data.get("source", "") or "runtime").strip(),
+                "pending_count": event.data.get("pending_count"),
+                "remaining_pending_count": event.data.get("remaining_pending_count"),
+                "resumed_from_approval": bool(event.data.get("resumed_from_approval", False)),
+                "order": order,
+            }
+            latest_by_request_id[approval_id] = record
+            last_record = record
+
+    for approval in pending_approvals:
+        if approval.request_id in latest_by_request_id:
+            continue
+        record = {
+            "approval_id": approval.request_id,
+            "status": "pending",
+            "tool_name": approval.tool_name,
+            "source": approval.source,
+            "pending_count": len(pending_approvals),
+            "remaining_pending_count": None,
+            "resumed_from_approval": False,
+            "order": order,
+        }
+        latest_by_request_id[approval.request_id] = record
+        if last_record is None:
+            last_record = record
+
+    if pending_approvals:
+        preferred_pending = latest_by_request_id.get(pending_approvals[0].request_id)
+        if preferred_pending is not None:
+            last_record = preferred_pending
+
+    status_counts: dict[str, int] = {}
+    for record in latest_by_request_id.values():
+        status = str(record["status"])
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    badges: list[str] = []
+    for status in APPROVAL_STATUS_DISPLAY_ORDER:
+        count = status_counts.get(status, 0)
+        if count:
+            badges.append(f"{status} {count}")
+    for status in sorted(status_counts):
+        if status in APPROVAL_STATUS_DISPLAY_ORDER:
+            continue
+        badges.append(f"{status} {status_counts[status]}")
+
+    return badges, _render_last_approval_summary(last_record)
+
+
+def _render_last_approval_summary(record: dict[str, object] | None) -> str:
+    if record is None:
+        return ""
+
+    status = str(record.get("status", "") or "pending")
+    tool_name = str(record.get("tool_name", "") or "tool")
+    source = str(record.get("source", "") or "runtime")
+    bits = [f"{status} {tool_name} via {source}"]
+
+    if bool(record.get("resumed_from_approval", False)):
+        bits.append("resumed")
+
+    pending_count = record.get("pending_count")
+    remaining_pending_count = record.get("remaining_pending_count")
+    if isinstance(pending_count, int):
+        bits.append(f"queued {pending_count}")
+    elif isinstance(remaining_pending_count, int):
+        bits.append(f"remaining {remaining_pending_count}")
+
+    return " | ".join(bits)
 
 
 def sanitize_session_switcher_filter_mode(value: str) -> str:

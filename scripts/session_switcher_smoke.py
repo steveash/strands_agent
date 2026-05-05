@@ -36,6 +36,19 @@ async def run_smoke() -> None:
                 mode="fake",
                 events=[
                     runtime_event(
+                        "steering_approved",
+                        "write_file",
+                        "Approved in the TUI",
+                        data={
+                            "tool_name": "write_file",
+                            "approval_id": "approval-0003",
+                            "approval_status": "approved",
+                            "approval_source": "fake_runtime",
+                            "remaining_pending_count": 1,
+                            "resumed_from_approval": True,
+                        },
+                    ),
+                    runtime_event(
                         "tool_finished",
                         "list_files",
                         "Finished listing files",
@@ -96,6 +109,7 @@ async def run_smoke() -> None:
             switcher_output = first_app.query_one("#output").render()
             print("switcher_default_selection_is_current=", "> 2. session-older" in str(switcher_output))
             print("switcher_has_pending_marker=", "pending: run_shell_command" in str(switcher_output))
+            print("switcher_has_approval_rollup=", "approvals: pending 1, approved 1" in str(switcher_output))
             print(
                 "switcher_has_restore_badges=",
                 "restore: filter=tool, replay 1/1, draft 15c" in str(switcher_output),
@@ -106,6 +120,10 @@ async def run_smoke() -> None:
             await pilot.pause()
             selected_preview_output = first_app.query_one("#output").render()
             print("switcher_selected_preview=", "Selected preview:" in str(selected_preview_output))
+            print(
+                "switcher_last_approval_preview=",
+                "last approval: pending run_shell_command via fake_runtime | queued 1" in str(selected_preview_output),
+            )
             print("switcher_tool_streak_preview=", "recent tools (2)" in str(selected_preview_output))
             await pilot.press("p")
             await pilot.pause()
