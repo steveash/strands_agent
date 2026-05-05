@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, denied-approval triage filters, failure-aware attention sorting, recent multi-tool streak summaries, and restart-safe launch-time picker state across both recent-session reopen surfaces.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, denied-approval triage filters, failure-aware attention sorting, recent multi-tool streak summaries, restart-safe launch-time picker state, and a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -118,15 +118,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a dedicated `denied` recent-session triage filter across the launch-time picker, in-app `F11` session switcher, and `--pick-filter` CLI surface,
-- surfaced the latest denied-approval summary in selected-session previews so approval-heavy sessions show what was rejected without reopening them,
-- boosted attention sorting so pending approvals still rank first, recently denied approvals rank next, and recent tool failures still outrank generic restore/tool activity,
-- refreshed picker/switcher smoke scripts and session/app coverage around denied-approval filtering plus the new attention ordering.
+- added a stubbed `live_restore_smoke.py` path that drives the live runtime through queued approval persistence, restart-safe restore, approval replay, and summary rollup verification without needing a real model response,
+- added reusable smoke helper coverage so tests can assert restored live approval metadata end-to-end instead of relying only on hand-authored fake-runtime schema fixtures,
+- extended recent-session summary coverage to verify `live_runtime` approval rollups preserve resumed/remaining metadata in preview text.
 
 Why this matters now:
-- It makes approval-heavy sessions easier to triage from the chooser itself, especially when the agent was explicitly denied and needs a different next step.
-- It keeps blocked work near the top of the attention view, so denied approvals do not get buried under generic recent activity.
-- It sharpens the learning value of the artifacts seam: the same captured approval metadata now drives observability, restart-safe workflow navigation, and targeted reopen filters.
+- It proves the live runtime's approval metadata survives the real persistence/restore seam instead of only looking correct in isolated fake-runtime fixtures.
+- It gives future iterations a one-command regression check for restart-safe approval replay without needing live model output or manual TUI driving.
+- It sharpens the learning value of the artifacts seam: the same captured approval metadata now drives runtime execution, persistence, and recent-session summaries end-to-end.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -137,10 +136,11 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `102 passed`
+- automated tests: `104 passed`
 - runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_default_banner= True`, `picker_pending_filter= True`, `picker_pending_only_pending= True`, `picker_denied_filter= True`, `picker_approval_rollup= True`, `picker_empty_hint= True`, `picker_shell_rollup= True`, `picker_tool_streak_preview= True`, `picker_attention_sort= True`, `picker_interactive_selected= session-pending`, `picker_interactive_toggled= True`, `picker_interactive_preview= True`, `picker_interactive_paged_selected= session-pending`, `picker_interactive_paged_banner= True`, `picker_restored_selected= session-restore`, `picker_restored_page= True`, `picker_restored_preview= True`, and `latest=session-page-7`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
+- runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
 - runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` now reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_approval_rollup= True`, `switcher_has_restore_badges= True`, `switcher_has_tool_preview= True`, `switcher_has_shell_rollup= True`, `switcher_has_event_preview= True`, `switcher_selected_preview= True`, `switcher_last_approval_preview= True`, `switcher_shell_preview= True`, `switcher_tool_streak_preview= True`, `switcher_pending_filter= True`, `switcher_pending_filter_only_newer= True`, `switcher_denied_filter= True`, `switcher_denied_filter_only_denied= True`, `switcher_attention_sort= True`, `switcher_restored= True`, `switcher_restored_sort= True`, `restored_selection_is_newer= True`, `switcher_empty_hint= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
 - CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter`, `--pick-sort`, and `--resume-last`,
 - recent-session verification by test: recent session summaries now surface pending approvals, denied-approval rollups, latest denied approval previews, restore-state badges, last-event previews, explicit shell/test rollups, and denied-first attention ordering while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
@@ -398,6 +398,16 @@ python scripts/live_smoke.py
 ```
 
 Expected result is a short successful reply plus a provider/mode line.
+
+### Live approval-restore smoke check
+
+To verify the live runtime's restored approval metadata flow without launching the TUI:
+
+```bash
+.venv/bin/python scripts/live_restore_smoke.py
+```
+
+Expected result includes `live_restore_initial_pending= True`, `live_restore_approved_event= True`, and `live_restore_summary= True`.
 
 ### Replay smoke check
 
