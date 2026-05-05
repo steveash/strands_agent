@@ -540,7 +540,9 @@ def test_list_recent_sessions_surfaces_approval_rollup_and_last_summary(tmp_path
     assert summary.approval_status_badges == ["pending 1", "approved 1"]
     assert summary.last_approval_summary == "pending run_shell_command via fake_runtime | queued 1"
     assert "approvals: pending 1, approved 1" in summary.render_line(1)
+    assert "approval focus: pending" in summary.render_line(1)
     assert "- approvals: pending 1, approved 1" in preview
+    assert "- approval focus: pending" in preview
     assert "- last approval: pending run_shell_command via fake_runtime | queued 1" in preview
 
 
@@ -576,6 +578,8 @@ def test_list_recent_sessions_surfaces_last_denied_approval_summary(tmp_path: Pa
     assert summary.denied_approval_count == 1
     assert summary.last_denied_approval_summary == "denied write_file via fake_runtime | fresh request | remaining 0"
     assert summary.approval_status_badges == ["denied 1"]
+    assert "approval focus: denied/fresh" in summary.render_line(1)
+    assert "- approval focus: denied/fresh" in preview
     assert "- last denied approval: denied write_file via fake_runtime | fresh request | remaining 0" in preview
 
 
@@ -650,7 +654,9 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tm
 
     assert summary.approval_status_badges == ["approved 1"]
     assert summary.last_approval_summary == "approved write_file via live_runtime | resumed | remaining 0"
+    assert "approval focus: approved/restored/resumed" in summary.render_line(1)
     assert "- approvals: approved 1" in preview
+    assert "- approval focus: approved/restored/resumed" in preview
     assert "- last approval: approved write_file via live_runtime | resumed | remaining 0" in preview
 
 
@@ -711,7 +717,9 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
     assert summary.approval_status_badges == ["denied 1"]
     assert summary.last_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert summary.last_denied_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
+    assert "approval focus: denied/restored" in summary.render_line(1)
     assert "- approvals: denied 1" in preview
+    assert "- approval focus: denied/restored" in preview
     assert "- last approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
     assert "- last denied approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
 

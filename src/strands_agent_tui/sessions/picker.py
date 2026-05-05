@@ -39,6 +39,7 @@ class SessionSummary:
     pending_approval_tool: str = ""
     pending_approval_summary: str = ""
     approval_status_badges: list[str] = field(default_factory=list)
+    approval_focus_badges: list[str] = field(default_factory=list)
     last_approval_summary: str = ""
     denied_approval_count: int = 0
     last_denied_approval_summary: str = ""
@@ -65,6 +66,9 @@ class SessionSummary:
         approval_suffix = (
             f" | approvals: {', '.join(self.approval_status_badges)}" if self.approval_status_badges else ""
         )
+        approval_focus_suffix = (
+            f" | approval focus: {'/'.join(self.approval_focus_badges)}" if self.approval_focus_badges else ""
+        )
         tool_hint = ""
         if self.last_tool_preview or self.last_tool_badges:
             badge_prefix = "/".join(self.last_tool_badges)
@@ -84,7 +88,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -103,6 +107,8 @@ class SessionSummary:
             lines.append(f"- pending: {pending_line}")
         if self.approval_status_badges:
             lines.append(f"- approvals: {', '.join(self.approval_status_badges)}")
+        if self.approval_focus_badges:
+            lines.append(f"- approval focus: {'/'.join(self.approval_focus_badges)}")
         if self.last_approval_summary:
             lines.append(f"- last approval: {self.last_approval_summary}")
         if self.last_denied_approval_summary:
@@ -197,6 +203,7 @@ def _ordered_recent_sessions(
         pending_approvals = store.load_pending_approvals()
         (
             approval_status_badges,
+            approval_focus_badges,
             last_approval_summary,
             denied_approval_count,
             last_denied_approval_summary,
@@ -222,6 +229,7 @@ def _ordered_recent_sessions(
                     pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
                     pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
                     approval_status_badges=approval_status_badges,
+                    approval_focus_badges=approval_focus_badges,
                     last_approval_summary=last_approval_summary,
                     denied_approval_count=denied_approval_count,
                     last_denied_approval_summary=last_denied_approval_summary,
@@ -691,7 +699,7 @@ def _render_tool_event_summary(event) -> str:
 def _approval_activity(
     turns: list[TurnArtifact],
     pending_approvals,
-) -> tuple[list[str], str, int, str]:
+) -> tuple[list[str], list[str], str, int, str]:
     latest_by_request_id: dict[str, dict[str, object]] = {}
     last_record: dict[str, object] | None = None
     last_denied_record: dict[str, object] | None = None
@@ -764,10 +772,26 @@ def _approval_activity(
 
     return (
         badges,
+        _render_approval_focus_badges(last_record),
         _render_last_approval_summary(last_record),
         status_counts.get("denied", 0),
         _render_last_approval_summary(last_denied_record),
     )
+
+
+def _render_approval_focus_badges(record: dict[str, object] | None) -> list[str]:
+    if record is None:
+        return []
+
+    badges = [str(record.get("status", "") or "pending")]
+    if bool(record.get("approval_restored", False)):
+        badges.append("restored")
+    elif badges[0] == "denied":
+        badges.append("fresh")
+
+    if bool(record.get("resumed_from_approval", False)):
+        badges.append("resumed")
+    return badges
 
 
 def _render_last_approval_summary(record: dict[str, object] | None) -> str:

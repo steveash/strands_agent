@@ -164,6 +164,7 @@ def main() -> None:
             "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_picker,
         )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in default_picker)
+        print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)
         print(
             "picker_empty_hint=",
             "Try A to show all sessions" in empty_pending_picker

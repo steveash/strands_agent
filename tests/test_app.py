@@ -1069,12 +1069,14 @@ async def test_session_switcher_surfaces_approval_rollups_in_summary_and_preview
         output = str(app.query_one("#output").render())
         assert "session-rollup | 1 turn(s)" in output
         assert "approvals: pending 1, approved 1" in output
+        assert "approval focus: pending" in output
 
         await pilot.press("up")
         await pilot.pause()
 
         selected_output = str(app.query_one("#output").render())
         assert "- approvals: pending 1, approved 1" in selected_output
+        assert "- approval focus: pending" in selected_output
         assert "- last approval: pending run_shell_command via fake_runtime | queued 1" in selected_output
 
 
@@ -1278,6 +1280,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-denied" in denied_output
         assert "session-pending | 1 turn(s)" not in denied_output
         assert "session-restore | 1 turn(s)" not in denied_output
+        assert "approval focus: denied/restored" in denied_output
         assert "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_output
 
         await pilot.press("s")

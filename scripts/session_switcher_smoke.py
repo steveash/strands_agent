@@ -182,6 +182,7 @@ async def run_smoke() -> None:
                 "switcher_denied_preview_origin=",
                 "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_text,
             )
+            print("switcher_row_approval_focus=", "approval focus: denied/restored" in denied_text)
             await pilot.press("s")
             await pilot.pause()
             attention_output = first_app.query_one("#output").render()
