@@ -20,7 +20,9 @@ class _StubLiveRestoreRuntime(StrandsSDKRuntime):
         tool_map = {tool.tool_name: tool for tool in tools}
 
         def agent(prompt: str) -> str:
-            if prompt.startswith("User approved pending tool `write_file`"):
+            if prompt.startswith("User approved pending tool `write_file`") or prompt.startswith(
+                "User denied pending tool `write_file`"
+            ):
                 return f"continued: {prompt.splitlines()[0]}"
             return tool_map["write_file"](
                 relative_path="notes.txt",
@@ -44,7 +46,7 @@ def _append_response(store: SessionArtifactStore, prompt: str, response) -> None
     )
 
 
-def run_live_restore_smoke() -> dict[str, object]:
+def _run_live_restore_smoke(*, approve: bool) -> dict[str, object]:
     with TemporaryDirectory() as workspace_tmp, TemporaryDirectory() as artifacts_tmp:
         workspace_root = Path(workspace_tmp)
         artifacts_root = Path(artifacts_tmp)
@@ -64,8 +66,9 @@ def run_live_restore_smoke() -> dict[str, object]:
             restored_runtime = _StubLiveRestoreRuntime(workspace_root=workspace_root)
             restored_runtime.restore_pending_approvals(restored_pending)
             restored_queue = restored_runtime.pending_approvals()
-            approved = restored_runtime.resolve_pending_approval("approval-0001", approve=True)
-            _append_response(store, "approve restored write", approved)
+            resolved = restored_runtime.resolve_pending_approval("approval-0001", approve=approve)
+            resolution_prompt = "approve restored write" if approve else "deny restored write"
+            _append_response(store, resolution_prompt, resolved)
             store.save_pending_approvals(restored_runtime.pending_approvals())
         finally:
             if previous_api_key is None:
@@ -75,32 +78,67 @@ def run_live_restore_smoke() -> dict[str, object]:
 
         summary = list_recent_sessions(artifacts_root)[0]
         initial_pending_event = next((event for event in first.events if event.kind == "steering_confirmation_required"), None)
-        approved_event = next((event for event in approved.events if event.kind == "steering_approved"), None)
-        finished_event = next((event for event in approved.events if event.kind == "tool_finished"), None)
+        resolution_event_kind = "steering_approved" if approve else "steering_denied"
+        resolution_event = next((event for event in resolved.events if event.kind == resolution_event_kind), None)
+        finished_event = next((event for event in resolved.events if event.kind == "tool_finished"), None)
+
+        if approve:
+            return {
+                "live_restore_initial_pending": first.pending_approval is not None
+                and initial_pending_event is not None
+                and initial_pending_event.data.get("approval_status") == "pending"
+                and initial_pending_event.data.get("approval_source") == "live_runtime"
+                and initial_pending_event.data.get("pending_count") == 1,
+                "live_restore_saved_pending": len(restored_pending) == 1
+                and restored_pending[0].request_id == "approval-0001"
+                and restored_pending[0].source == "live_runtime",
+                "live_restore_restored_queue": len(restored_queue) == 1
+                and restored_queue[0].request_id == "approval-0001",
+                "live_restore_approved_event": resolution_event is not None
+                and resolution_event.data.get("approval_status") == "approved"
+                and resolution_event.data.get("approval_source") == "live_runtime"
+                and resolution_event.data.get("resumed_from_approval") is True,
+                "live_restore_tool_event": finished_event is not None
+                and finished_event.data.get("approval_status") == "approved"
+                and finished_event.data.get("approval_source") == "live_runtime"
+                and finished_event.data.get("remaining_pending_count") == 0
+                and finished_event.data.get("resumed_from_approval") is True,
+                "live_restore_summary": summary.last_approval_summary
+                == "approved write_file via live_runtime | resumed | remaining 0"
+                and summary.approval_status_badges == ["approved 1"],
+                "summary_value": summary.last_approval_summary,
+                "notes_text": (workspace_root / "notes.txt").read_text(encoding="utf-8").strip(),
+            }
 
         return {
-            "live_restore_initial_pending": first.pending_approval is not None
+            "live_restore_denied_initial_pending": first.pending_approval is not None
             and initial_pending_event is not None
             and initial_pending_event.data.get("approval_status") == "pending"
             and initial_pending_event.data.get("approval_source") == "live_runtime"
             and initial_pending_event.data.get("pending_count") == 1,
-            "live_restore_saved_pending": len(restored_pending) == 1
+            "live_restore_denied_saved_pending": len(restored_pending) == 1
             and restored_pending[0].request_id == "approval-0001"
             and restored_pending[0].source == "live_runtime",
-            "live_restore_restored_queue": len(restored_queue) == 1
+            "live_restore_denied_restored_queue": len(restored_queue) == 1
             and restored_queue[0].request_id == "approval-0001",
-            "live_restore_approved_event": approved_event is not None
-            and approved_event.data.get("approval_status") == "approved"
-            and approved_event.data.get("approval_source") == "live_runtime"
-            and approved_event.data.get("resumed_from_approval") is True,
-            "live_restore_tool_event": finished_event is not None
-            and finished_event.data.get("approval_status") == "approved"
-            and finished_event.data.get("approval_source") == "live_runtime"
-            and finished_event.data.get("remaining_pending_count") == 0
-            and finished_event.data.get("resumed_from_approval") is True,
-            "live_restore_summary": summary.last_approval_summary
-            == "approved write_file via live_runtime | resumed | remaining 0"
-            and summary.approval_status_badges == ["approved 1"],
+            "live_restore_denied_event": resolution_event is not None
+            and resolution_event.data.get("approval_status") == "denied"
+            and resolution_event.data.get("approval_source") == "live_runtime"
+            and resolution_event.data.get("remaining_pending_count") == 0
+            and resolution_event.data.get("resumed_from_approval") is False,
+            "live_restore_denied_no_tool_event": finished_event is None,
+            "live_restore_denied_summary": summary.last_approval_summary
+            == "denied write_file via live_runtime | remaining 0"
+            and summary.last_denied_approval_summary == "denied write_file via live_runtime | remaining 0"
+            and summary.approval_status_badges == ["denied 1"],
             "summary_value": summary.last_approval_summary,
             "notes_text": (workspace_root / "notes.txt").read_text(encoding="utf-8").strip(),
         }
+
+
+def run_live_restore_smoke() -> dict[str, object]:
+    return _run_live_restore_smoke(approve=True)
+
+
+def run_live_restore_denied_smoke() -> dict[str, object]:
+    return _run_live_restore_smoke(approve=False)

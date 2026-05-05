@@ -283,6 +283,47 @@ def test_live_runtime_can_restore_shell_pending_approval(monkeypatch: pytest.Mon
     assert result.events[2].data["approval_status"] == "approved"
 
 
+def test_live_runtime_can_restore_pending_approvals_and_deny_without_execution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class StubRuntime(StrandsSDKRuntime):
+        def _build_agent(self, api_key: str, event_sink=None):
+            tools = build_workspace_tools(tmp_path, event_sink=event_sink, approval_queue=self._approval_queue)
+
+            def agent(prompt: str) -> str:
+                return f"continued: {prompt}"
+
+            self._restored_tools = {tool.tool_name: tool for tool in tools}
+            return agent, len(tools)
+
+    (tmp_path / "notes.txt").write_text("old\n", encoding="utf-8")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    runtime = StubRuntime(workspace_root=tmp_path)
+    runtime.restore_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0008",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "content": "new\n", "overwrite": True},
+                source="live_runtime",
+                prompt="overwrite notes",
+            )
+        ]
+    )
+
+    result = runtime.resolve_pending_approval("approval-0008", approve=False)
+
+    assert (tmp_path / "notes.txt").read_text(encoding="utf-8") == "old\n"
+    assert [event.kind for event in result.events] == ["steering_denied", "response_completed"]
+    assert result.events[0].data["approval_status"] == "denied"
+    assert result.events[0].data["approval_source"] == "live_runtime"
+    assert result.events[0].data["remaining_pending_count"] == 0
+    assert result.events[0].data["resumed_from_approval"] is False
+    assert result.pending_approval is None
+    assert "continued:" in result.text
+
+
 def test_build_runtime_defaults_to_fake() -> None:
     runtime = build_runtime()
     assert isinstance(runtime, FakeStrandsRuntime)

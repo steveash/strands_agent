@@ -652,6 +652,67 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tm
     assert "- last approval: approved write_file via live_runtime | resumed | remaining 0" in preview
 
 
+def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_summary(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-live-denied")
+    store.append_turn(
+        TurnArtifact(
+            prompt="request overwrite",
+            response="approval required",
+            provider="strands-openai",
+            mode="live",
+            events=[
+                runtime_event(
+                    "steering_confirmation_required",
+                    "write_file",
+                    "Needs confirmation",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0043",
+                        "approval_status": "pending",
+                        "approval_source": "live_runtime",
+                        "pending_count": 1,
+                    },
+                )
+            ],
+            response_metadata={"mode": "live"},
+        )
+    )
+    store.append_turn(
+        TurnArtifact(
+            prompt="deny overwrite",
+            response="continued after denial",
+            provider="strands-openai",
+            mode="live",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "write_file",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0043",
+                        "approval_status": "denied",
+                        "approval_source": "live_runtime",
+                        "remaining_pending_count": 0,
+                        "resumed_from_approval": False,
+                    },
+                )
+            ],
+            response_metadata={"mode": "live"},
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.approval_status_badges == ["denied 1"]
+    assert summary.last_approval_summary == "denied write_file via live_runtime | remaining 0"
+    assert summary.last_denied_approval_summary == "denied write_file via live_runtime | remaining 0"
+    assert "- approvals: denied 1" in preview
+    assert "- last approval: denied write_file via live_runtime | remaining 0" in preview
+    assert "- last denied approval: denied write_file via live_runtime | remaining 0" in preview
+
+
 def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-restore")
     _append_turn(store, "inspect repo")
