@@ -1235,6 +1235,31 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         )
     )
 
+    restored_pending_store = SessionArtifactStore(tmp_path, session_id="session-restored-pending")
+    restored_pending_store.append_turn(
+        TurnArtifact(
+            prompt="reopen restored test queue",
+            response="pending restored approval",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    restored_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0012c",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="resume tests",
+                restored_from_session=True,
+            )
+        ]
+    )
+
     restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
     restore_store.append_turn(
         TurnArtifact(
@@ -1289,9 +1314,13 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         approval_restore_output = str(app.query_one("#output").render())
         assert "Filter: approval-restore | Sort: recent" in approval_restore_output
+        assert "session-restored-pending" in approval_restore_output
         assert "session-denied" in approval_restore_output
         assert "session-restore | 1 turn(s)" not in approval_restore_output
         assert "session-pending | 1 turn(s)" not in approval_restore_output
+        assert "approval restore tools: test 1" in approval_restore_output
+        assert "approval restore tools: edit 1" in approval_restore_output
+        assert "last restored approval:" in approval_restore_output
 
         await pilot.press("s")
         await pilot.pause()

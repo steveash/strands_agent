@@ -116,6 +116,22 @@ async def run_smoke() -> None:
             )
         )
 
+        restored_pending_store = SessionArtifactStore(temp_dir, session_id="session-restored-pending")
+        append_turn(restored_pending_store, "resume restored test queue", "restored pending response")
+        restored_pending_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-0006",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt="resume tests",
+                    restored_from_session=True,
+                )
+            ]
+        )
+
         failed_test_store = SessionArtifactStore(temp_dir, session_id="session-failed-test")
         failed_test_store.append_turn(
             TurnArtifact(
@@ -239,7 +255,18 @@ async def run_smoke() -> None:
             print("switcher_approval_restore_filter=", "Filter: approval-restore | Sort: recent" in approval_restore_text)
             print(
                 "switcher_approval_restore_only_restored=",
-                "session-denied | 1 turn(s)" in approval_restore_text and "session-newer | 1 turn(s)" not in approval_restore_text,
+                "session-denied | 1 turn(s)" in approval_restore_text
+                and "session-restored-pending | 1 turn(s)" in approval_restore_text
+                and "session-newer | 1 turn(s)" not in approval_restore_text,
+            )
+            print(
+                "switcher_restored_approval_tool_badges=",
+                "approval restore tools: test 1" in approval_restore_text
+                and "approval restore tools: edit 1" in approval_restore_text,
+            )
+            print(
+                "switcher_last_restored_approval_preview=",
+                "last restored approval:" in approval_restore_text,
             )
             await pilot.press("s")
             await pilot.pause()
@@ -284,7 +311,7 @@ async def run_smoke() -> None:
             print("switcher_restored=", "Session Switcher" in str(restored_output))
             print("switcher_restored_sort=", "Filter: all | Sort: attention" in str(restored_output))
             print("restored_selected_line=", selected_line)
-            print("restored_selection_is_newer=", "session-newer" in selected_line)
+            print("restored_selection_is_restored_pending=", "session-restored-pending" in selected_line)
             print("restored_latest_event=", restored_app.events[-1].kind if restored_app.events else None)
             await pilot.press("enter")
             await pilot.pause()
@@ -321,7 +348,7 @@ async def run_smoke() -> None:
             paged_output = str(paged_app.query_one("#output").render())
             stored_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
             print("switcher_paged=", "Page: 2/2" in paged_output)
-            print("switcher_paged_window=", "Showing: 9-15 of 15" in paged_output)
+            print("switcher_paged_window=", "Showing: 9-16 of 16" in paged_output)
             print(
                 "switcher_paged_state=",
                 stored_state is not None

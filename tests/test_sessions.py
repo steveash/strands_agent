@@ -713,12 +713,17 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tm
     assert summary.approval_status_badges == ["approved 1"]
     assert summary.last_approval_summary == "approved write_file via live_runtime | resumed | remaining 0"
     assert summary.restored_approval_badges == ["approved 1"]
+    assert summary.restored_approval_tool_badges == ["edit 1"]
+    assert summary.last_restored_approval_summary == "approved write_file via live_runtime | resumed | remaining 0"
     assert "approval focus: approved/restored/resumed" in summary.render_line(1)
     assert "approval restore: approved 1" in summary.render_line(1)
+    assert "approval restore tools: edit 1" in summary.render_line(1)
     assert "- approvals: approved 1" in preview
     assert "- approval focus: approved/restored/resumed" in preview
     assert "- approval restore: approved 1" in preview
+    assert "- approval restore tools: edit 1" in preview
     assert "- last approval: approved write_file via live_runtime | resumed | remaining 0" in preview
+    assert "- last restored approval: approved write_file via live_runtime | resumed | remaining 0" in preview
 
 
 def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_summary(tmp_path: Path) -> None:
@@ -780,15 +785,74 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
     assert summary.last_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert summary.last_denied_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert summary.restored_approval_badges == ["denied 1"]
+    assert summary.restored_approval_tool_badges == ["edit 1"]
+    assert summary.last_restored_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert "approval focus: denied/restored" in summary.render_line(1)
     assert "denied: edit 1" in summary.render_line(1)
     assert "approval restore: denied 1" in summary.render_line(1)
+    assert "approval restore tools: edit 1" in summary.render_line(1)
     assert "- approvals: denied 1" in preview
     assert "- approval focus: denied/restored" in preview
     assert "- denied: edit 1" in preview
     assert "- approval restore: denied 1" in preview
+    assert "- approval restore tools: edit 1" in preview
     assert "- last approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
     assert "- last denied approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
+    assert "- last restored approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
+
+
+def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-restored-breakdown")
+    store.append_turn(
+        TurnArtifact(
+            prompt="restore denied edit and pending test",
+            response="triaged restored approvals",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "replace_text",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "replace_text",
+                        "approval_id": "approval-9300",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "approval_restored": True,
+                        "remaining_pending_count": 0,
+                        "relative_path": "notes.txt",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-9301",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun restored tests",
+                restored_from_session=True,
+            )
+        ]
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.restored_approval_count == 2
+    assert summary.restored_approval_badges == ["pending 1", "denied 1"]
+    assert summary.restored_approval_tool_badges == ["test 1", "edit 1"]
+    assert summary.last_restored_approval_summary == "pending run_shell_command via fake_runtime | queued 1"
+    assert "approval restore tools: test 1, edit 1" in summary.render_line(1)
+    assert "- approval restore: pending 1, denied 1" in preview
+    assert "- approval restore tools: test 1, edit 1" in preview
+    assert "- last restored approval: pending run_shell_command via fake_runtime | queued 1" in preview
 
 
 def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_path: Path) -> None:
