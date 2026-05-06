@@ -183,10 +183,20 @@ async def run_smoke() -> None:
                 "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_text,
             )
             print("switcher_row_approval_focus=", "approval focus: denied/restored" in denied_text)
+            print("switcher_restored_approval_badge=", "approval restore: denied 1" in denied_text)
+            await pilot.press("v")
+            await pilot.pause()
+            approval_restore_output = first_app.query_one("#output").render()
+            approval_restore_text = str(approval_restore_output)
+            print("switcher_approval_restore_filter=", "Filter: approval-restore | Sort: recent" in approval_restore_text)
+            print(
+                "switcher_approval_restore_only_restored=",
+                "session-denied | 1 turn(s)" in approval_restore_text and "session-newer | 1 turn(s)" not in approval_restore_text,
+            )
             await pilot.press("s")
             await pilot.pause()
             attention_output = first_app.query_one("#output").render()
-            print("switcher_attention_sort=", "Filter: denied | Sort: attention" in str(attention_output))
+            print("switcher_attention_sort=", "Filter: approval-restore | Sort: attention" in str(attention_output))
             await pilot.press("a")
             await pilot.pause()
             await pilot.press("up")

@@ -92,7 +92,7 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
     assert (
-        "Picker controls: J/K preview, A all, P pending, D denied, R restore, T tool, S sort, [ prev page, ] next page, N new session"
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, S sort, [ prev page, ] next page, N new session"
         in rendered
     )
     assert "Press Enter to reopen the highlighted session." in rendered
@@ -177,7 +177,10 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "Filter: pending | Sort: recent" in rendered
     assert "No saved sessions match the active picker filter." in rendered
     assert "1 saved session still exists under this root." in rendered
-    assert "Try A to show all sessions, or P/D/R/T to jump between pending, denied, restore, and tool triage." in rendered
+    assert (
+        "Try A to show all sessions, or P/D/R/V/T to jump between pending, denied, restore, restored-approval, and tool triage."
+        in rendered
+    )
     assert "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in rendered
     assert "1. session-demo" not in rendered
 
@@ -198,7 +201,7 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
 
     assert summary is None
     assert prompts == [
-        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/T/S/[ / ] to change triage: "
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/S/[ / ] to change triage: "
     ]
     assert any("No saved sessions match the active picker filter." in line for line in captured)
     assert any("Try A to show all sessions" in line for line in captured)
@@ -578,6 +581,7 @@ def test_list_recent_sessions_surfaces_last_denied_approval_summary(tmp_path: Pa
     assert summary.denied_approval_count == 1
     assert summary.last_denied_approval_summary == "denied write_file via fake_runtime | fresh request | remaining 0"
     assert summary.approval_status_badges == ["denied 1"]
+    assert summary.restored_approval_badges == []
     assert "approval focus: denied/fresh" in summary.render_line(1)
     assert "- approval focus: denied/fresh" in preview
     assert "- last denied approval: denied write_file via fake_runtime | fresh request | remaining 0" in preview
@@ -654,9 +658,12 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tm
 
     assert summary.approval_status_badges == ["approved 1"]
     assert summary.last_approval_summary == "approved write_file via live_runtime | resumed | remaining 0"
+    assert summary.restored_approval_badges == ["approved 1"]
     assert "approval focus: approved/restored/resumed" in summary.render_line(1)
+    assert "approval restore: approved 1" in summary.render_line(1)
     assert "- approvals: approved 1" in preview
     assert "- approval focus: approved/restored/resumed" in preview
+    assert "- approval restore: approved 1" in preview
     assert "- last approval: approved write_file via live_runtime | resumed | remaining 0" in preview
 
 
@@ -717,9 +724,12 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
     assert summary.approval_status_badges == ["denied 1"]
     assert summary.last_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert summary.last_denied_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
+    assert summary.restored_approval_badges == ["denied 1"]
     assert "approval focus: denied/restored" in summary.render_line(1)
+    assert "approval restore: denied 1" in summary.render_line(1)
     assert "- approvals: denied 1" in preview
     assert "- approval focus: denied/restored" in preview
+    assert "- approval restore: denied 1" in preview
     assert "- last approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
     assert "- last denied approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
 
@@ -918,7 +928,7 @@ def test_list_recent_sessions_surfaces_recent_tool_streak_preview(tmp_path: Path
     assert "  3. .: src/" in preview
 
 
-def test_list_recent_sessions_can_filter_to_pending_denied_restore_or_tool_triage(tmp_path: Path) -> None:
+def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_restore_or_tool_triage(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
 
@@ -954,6 +964,7 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_or_tool_triag
                         "approval_id": "approval-0010b",
                         "approval_status": "denied",
                         "approval_source": "fake_runtime",
+                        "approval_restored": True,
                         "remaining_pending_count": 0,
                     },
                 )
@@ -988,11 +999,13 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_or_tool_triag
     pending_sessions = list_recent_sessions(tmp_path, filter_mode="pending")
     denied_sessions = list_recent_sessions(tmp_path, filter_mode="denied")
     restore_sessions = list_recent_sessions(tmp_path, filter_mode="restore")
+    approval_restore_sessions = list_recent_sessions(tmp_path, filter_mode="approval-restore")
     tool_sessions = list_recent_sessions(tmp_path, filter_mode="tool")
 
     assert [session.session_id for session in pending_sessions] == ["session-pending"]
     assert [session.session_id for session in denied_sessions] == ["session-denied"]
     assert [session.session_id for session in restore_sessions] == ["session-restore"]
+    assert [session.session_id for session in approval_restore_sessions] == ["session-denied"]
     assert [session.session_id for session in tool_sessions] == ["session-tool"]
 
 

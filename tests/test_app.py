@@ -964,7 +964,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, T tool, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, T tool, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1282,11 +1282,20 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-restore | 1 turn(s)" not in denied_output
         assert "approval focus: denied/restored" in denied_output
         assert "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_output
+        assert "approval restore: denied 1" in denied_output
+
+        await pilot.press("v")
+        await pilot.pause()
+        approval_restore_output = str(app.query_one("#output").render())
+        assert "Filter: approval-restore | Sort: recent" in approval_restore_output
+        assert "session-denied" in approval_restore_output
+        assert "session-restore | 1 turn(s)" not in approval_restore_output
+        assert "session-pending | 1 turn(s)" not in approval_restore_output
 
         await pilot.press("s")
         await pilot.pause()
         attention_output = str(app.query_one("#output").render())
-        assert "Filter: denied | Sort: attention" in attention_output
+        assert "Filter: approval-restore | Sort: attention" in attention_output
 
         await pilot.press("r")
         await pilot.pause()
@@ -1345,7 +1354,10 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "Filter: pending | Sort: recent" in output
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
-        assert "Try A to show all sessions, or P/D/R/T to jump between pending, denied, restore, and tool triage." in output
+        assert (
+            "Try A to show all sessions, or P/D/R/V/T to jump between pending, denied, restore, restored-approval, and tool triage."
+            in output
+        )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output
         assert "Enter switches the highlighted session once a visible row exists again." in output
         assert "session-current | 1 turn(s)" not in output

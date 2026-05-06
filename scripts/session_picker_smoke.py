@@ -138,6 +138,7 @@ def main() -> None:
         default_picker = render_session_picker(temp_dir)
         pending_picker = render_session_picker(temp_dir, filter_mode="pending")
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
+        approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
 
         with TemporaryDirectory() as empty_hint_root:
@@ -160,8 +161,18 @@ def main() -> None:
             "Filter: denied | Sort: recent" in denied_picker and "session-denied" in denied_picker and "session-plain" not in denied_picker,
         )
         print(
+            "picker_approval_restore_filter=",
+            "Filter: approval-restore | Sort: recent" in approval_restore_picker
+            and "session-denied" in approval_restore_picker
+            and "session-restore" not in approval_restore_picker,
+        )
+        print(
             "picker_denied_preview_origin=",
             "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_picker,
+        )
+        print(
+            "picker_restored_approval_badge=",
+            "approval restore: denied 1" in approval_restore_picker,
         )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in default_picker)
         print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)
