@@ -52,8 +52,11 @@ class SessionSummary:
     shell_activity_badges: list[str] = field(default_factory=list)
     last_shell_preview: str = ""
     recent_shell_previews: list[str] = field(default_factory=list)
+    failure_activity_badges: list[str] = field(default_factory=list)
     recent_failure_count: int = 0
     recent_shell_failure_count: int = 0
+    recent_test_failure_count: int = 0
+    recent_tool_failure_count: int = 0
     restore_badges: list[str] = field(default_factory=list)
     draft_prompt_preview: str = ""
 
@@ -91,11 +94,14 @@ class SessionSummary:
         shell_suffix = (
             f" | shell: {', '.join(self.shell_activity_badges)}" if self.shell_activity_badges else ""
         )
+        failure_suffix = (
+            f" | failures: {', '.join(self.failure_activity_badges)}" if self.failure_activity_badges else ""
+        )
         event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{approval_restore_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{approval_restore_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -141,6 +147,8 @@ class SessionSummary:
             lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_tool_previews, start=1))
         if self.shell_activity_badges:
             lines.append(f"- shell: {', '.join(self.shell_activity_badges)}")
+        if self.failure_activity_badges:
+            lines.append(f"- failures: {', '.join(self.failure_activity_badges)}")
         if self.last_shell_preview:
             lines.append(f"- last shell: {self.last_shell_preview}")
         if self.recent_shell_previews:
@@ -226,6 +234,9 @@ def _ordered_recent_sessions(
         if session_state.draft_prompt:
             draft_prompt_preview = _truncate(session_state.draft_prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
         activity_timestamp = _session_activity_timestamp(session_dir, turns)
+        recent_failure_count = _recent_tool_failure_count(turns)
+        recent_shell_failure_count = _recent_shell_failure_count(turns)
+        recent_test_failure_count, recent_tool_failure_count = _recent_failure_activity_counts(turns)
         summaries_with_sort.append(
             (
                 activity_timestamp,
@@ -253,8 +264,14 @@ def _ordered_recent_sessions(
                     shell_activity_badges=_shell_activity_badges(turns),
                     last_shell_preview=_latest_shell_preview(turns),
                     recent_shell_previews=_recent_shell_previews(turns),
-                    recent_failure_count=_recent_tool_failure_count(turns),
-                    recent_shell_failure_count=_recent_shell_failure_count(turns),
+                    failure_activity_badges=_failure_activity_badges(
+                        recent_test_failure_count,
+                        recent_tool_failure_count,
+                    ),
+                    recent_failure_count=recent_failure_count,
+                    recent_shell_failure_count=recent_shell_failure_count,
+                    recent_test_failure_count=recent_test_failure_count,
+                    recent_tool_failure_count=recent_tool_failure_count,
                     restore_badges=_restore_badges(session_state, len(turns)),
                     draft_prompt_preview=draft_prompt_preview,
                 ),
@@ -627,11 +644,10 @@ def _shell_activity_badges(turns: list[TurnArtifact], count_window: int = MAX_SH
     test_count = 0
     failure_count = 0
     for event in events:
-        shell_policy = str(event.data.get("shell_policy", "") or "").strip()
-        if shell_policy == "inspect":
-            inspect_count += 1
-        else:
+        if _is_test_shell_event(event):
             test_count += 1
+        else:
+            inspect_count += 1
         if _is_tool_failure_event(event):
             failure_count += 1
 
@@ -671,11 +687,50 @@ def _recent_shell_failure_count(turns: list[TurnArtifact], count_window: int = M
     )
 
 
+def _recent_failure_activity_counts(
+    turns: list[TurnArtifact],
+    count_window: int = MAX_FAILURE_ROLLUP_EVENTS,
+) -> tuple[int, int]:
+    test_failure_count = 0
+    tool_failure_count = 0
+    for event in _bounded_recent_tool_events(turns, limit=count_window):
+        if not _is_tool_failure_event(event):
+            continue
+        if _is_test_shell_event(event):
+            test_failure_count += 1
+        else:
+            tool_failure_count += 1
+    return test_failure_count, tool_failure_count
+
+
+def _failure_activity_badges(test_failure_count: int, tool_failure_count: int) -> list[str]:
+    badges: list[str] = []
+    if test_failure_count:
+        badges.append(f"test {test_failure_count}")
+    if tool_failure_count:
+        badges.append(f"tool {tool_failure_count}")
+    return badges
+
+
 def _is_tool_failure_event(event) -> bool:
     if event.kind == "tool_failed":
         return True
     exit_code = event.data.get("exit_code")
     return isinstance(exit_code, int) and exit_code != 0
+
+
+def _is_shell_tool_event(event) -> bool:
+    return str(event.data.get("tool_name", "") or event.title or "") == "run_shell_command"
+
+
+def _is_test_shell_event(event) -> bool:
+    if not _is_shell_tool_event(event):
+        return False
+    shell_policy = str(event.data.get("shell_policy", "") or "").strip()
+    if shell_policy:
+        return shell_policy != "inspect"
+    shell_family = str(event.data.get("shell_command_family", "") or "").strip()
+    return shell_family.startswith("pytest")
 
 
 def _tool_event_preview(event) -> str:
@@ -944,10 +999,12 @@ def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[
             summary.pending_approval_count,
             summary.denied_approval_count > 0,
             summary.denied_approval_count,
+            summary.recent_test_failure_count > 0,
+            summary.recent_test_failure_count,
+            summary.recent_tool_failure_count > 0,
+            summary.recent_tool_failure_count,
             summary.recent_failure_count > 0,
             summary.recent_failure_count,
-            summary.recent_shell_failure_count > 0,
-            summary.recent_shell_failure_count,
             bool(summary.restore_badges),
             bool(summary.shell_activity_badges or summary.last_shell_preview),
             bool(summary.last_tool_preview or summary.last_tool_badges),

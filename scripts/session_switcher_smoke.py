@@ -116,6 +116,53 @@ async def run_smoke() -> None:
             )
         )
 
+        failed_test_store = SessionArtifactStore(temp_dir, session_id="session-failed-test")
+        failed_test_store.append_turn(
+            TurnArtifact(
+                prompt="run failing test",
+                response="done",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "tool_failed",
+                        "run_shell_command",
+                        "Shell test failed",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "command": "pytest -q",
+                            "shell_policy": "confirm",
+                            "exit_code": 1,
+                            "result_preview": "pytest -q -> exit 1",
+                        },
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+        failed_tool_store = SessionArtifactStore(temp_dir, session_id="session-failed-tool")
+        failed_tool_store.append_turn(
+            TurnArtifact(
+                prompt="attempt failing edit",
+                response="done",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "tool_failed",
+                        "replace_text",
+                        "Edit failed",
+                        data={
+                            "tool_name": "replace_text",
+                            "result_preview": "replace_text notes.txt (2 occurrences)",
+                        },
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
         first_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
             config=AppConfig(
@@ -199,6 +246,18 @@ async def run_smoke() -> None:
             print("switcher_attention_sort=", "Filter: approval-restore | Sort: attention" in str(attention_output))
             await pilot.press("a")
             await pilot.pause()
+            all_attention_output = str(first_app.query_one("#output").render())
+            print(
+                "switcher_failure_badges=",
+                "failures: test 1" in all_attention_output and "failures: tool 1" in all_attention_output,
+            )
+            print(
+                "switcher_failure_attention_order=",
+                all_attention_output.index("session-newer | 1 turn(s)")
+                < all_attention_output.index("session-denied | 1 turn(s)")
+                < all_attention_output.index("session-failed-test | 1 turn(s)")
+                < all_attention_output.index("session-failed-tool | 1 turn(s)"),
+            )
             await pilot.press("up")
             await pilot.pause()
 
@@ -261,7 +320,7 @@ async def run_smoke() -> None:
             paged_output = str(paged_app.query_one("#output").render())
             stored_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
             print("switcher_paged=", "Page: 2/2" in paged_output)
-            print("switcher_paged_window=", "Showing: 9-13 of 13" in paged_output)
+            print("switcher_paged_window=", "Showing: 9-15 of 15" in paged_output)
             print(
                 "switcher_paged_state=",
                 stored_state is not None

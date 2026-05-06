@@ -104,6 +104,53 @@ def main() -> None:
         append_turn(restore_store, "resume the saved triage flow")
         restore_store.save_session_state(SessionState(draft_prompt="queued follow-up"))
 
+        failed_test_store = SessionArtifactStore(temp_dir, session_id="session-failed-test")
+        failed_test_store.append_turn(
+            TurnArtifact(
+                prompt="run the failing test suite",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "tool_failed",
+                        "run_shell_command",
+                        "Shell test failed",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "command": "pytest -q",
+                            "shell_policy": "confirm",
+                            "exit_code": 1,
+                            "result_preview": "pytest -q -> exit 1",
+                        },
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+        failed_tool_store = SessionArtifactStore(temp_dir, session_id="session-failed-tool")
+        failed_tool_store.append_turn(
+            TurnArtifact(
+                prompt="attempt the failing edit",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "tool_failed",
+                        "replace_text",
+                        "Edit failed",
+                        data={
+                            "tool_name": "replace_text",
+                            "result_preview": "replace_text notes.txt (2 occurrences)",
+                        },
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
         tool_store = SessionArtifactStore(temp_dir, session_id="session-tool")
         tool_store.append_turn(
             TurnArtifact(
@@ -152,7 +199,7 @@ def main() -> None:
 
         paged_picker = render_session_picker(temp_dir, page_index=1)
 
-        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/1 | Showing: 1-5 of 5" in default_picker)
+        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/1 | Showing: 1-7 of 7" in default_picker)
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print("picker_pending_only_pending=", "session-pending" in pending_picker and "session-plain" not in pending_picker)
@@ -187,17 +234,27 @@ def main() -> None:
             and "- last shell: inspect/e0 git status --short -> M README.md" in default_picker,
         )
         print("picker_tool_streak_preview=", "- recent tools (2):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker)
-        attention_lines = [line for line in attention_picker.splitlines() if line.startswith(("> 1. ", "  2. ", "  3. ", "  4. "))]
+        print(
+            "picker_failure_badges=",
+            "failures: test 1" in default_picker and "failures: tool 1" in default_picker,
+        )
+        attention_lines = [
+            line
+            for line in attention_picker.splitlines()
+            if line.startswith(("> 1. ", "  2. ", "  3. ", "  4. ", "  5. "))
+        ]
         print(
             "picker_attention_sort=",
-            len(attention_lines) >= 2
+            len(attention_lines) >= 4
             and attention_lines[0].startswith("> 1. session-pending")
-            and attention_lines[1].startswith("  2. session-denied"),
+            and attention_lines[1].startswith("  2. session-denied")
+            and attention_lines[2].startswith("  3. session-failed-test")
+            and attention_lines[3].startswith("  4. session-failed-tool"),
         )
-        print("picker_paged_banner=", "Page: 2/2 | Showing: 9-13 of 13" in paged_picker)
+        print("picker_paged_banner=", "Page: 2/2 | Showing: 9-15 of 15" in paged_picker)
         print(
             "picker_paged_window=",
-            "> 1. session-tool" in paged_picker and "  5. session-plain" in paged_picker and "session-page-07" not in paged_picker,
+            "> 1. session-tool" in paged_picker and "  7. session-plain" in paged_picker and "session-page-07" not in paged_picker,
         )
 
         captured: list[str] = []
@@ -233,7 +290,7 @@ def main() -> None:
         print("picker_interactive_paged_selected=", paged_summary.session_id)
         print(
             "picker_interactive_paged_banner=",
-            any("Page: 2/2 | Showing: 9-13 of 13" in line for line in paged_captured),
+            any("Page: 2/2 | Showing: 9-15 of 15" in line for line in paged_captured),
         )
 
         aborted_inputs = iter(["]", "j", "n"])
@@ -259,12 +316,12 @@ def main() -> None:
         print("picker_restored_selected=", restored_summary.session_id)
         print(
             "picker_restored_page=",
-            any("Page: 2/2 | Showing: 9-13 of 13" in line for line in restored_captured),
+            any("Page: 2/2 | Showing: 9-15 of 15" in line for line in restored_captured),
         )
         print(
             "picker_restored_preview=",
             any(
-                "- slot 2 on this page | overall 10 of 13 | session session-restore" in line
+                "- slot 2 on this page | overall 10 of 15 | session session-failed-tool" in line
                 for line in restored_captured
             ),
         )

@@ -857,6 +857,7 @@ def test_list_recent_sessions_surfaces_shell_test_rollup_and_failures(tmp_path: 
     preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
 
     assert summary.shell_activity_badges == ["inspect 1", "test 1", "fail 1"]
+    assert summary.failure_activity_badges == ["test 1"]
     assert summary.last_shell_preview == "confirm/e1 pytest -q -> exit 1"
     assert summary.recent_shell_previews == [
         "confirm/e1 pytest -q -> exit 1",
@@ -864,10 +865,49 @@ def test_list_recent_sessions_surfaces_shell_test_rollup_and_failures(tmp_path: 
     ]
     assert summary.recent_failure_count == 1
     assert summary.recent_shell_failure_count == 1
+    assert summary.recent_test_failure_count == 1
+    assert summary.recent_tool_failure_count == 0
     assert "shell: inspect 1, test 1, fail 1" in summary.render_line(1)
+    assert "failures: test 1" in summary.render_line(1)
+    assert "- failures: test 1" in preview
     assert "- recent shell outcomes (2):" in preview
     assert "  1. confirm/e1 pytest -q -> exit 1" in preview
     assert "  2. inspect/e0 git status --short -> M README.md" in preview
+
+
+def test_list_recent_sessions_surfaces_non_shell_failure_rollup(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-tool-failure-rollup")
+    store.append_turn(
+        TurnArtifact(
+            prompt="attempt edit",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_failed",
+                    "replace_text",
+                    "Edit failed",
+                    data={
+                        "tool_name": "replace_text",
+                        "result_preview": "replace_text notes.txt (2 occurrences)",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.failure_activity_badges == ["tool 1"]
+    assert summary.recent_failure_count == 1
+    assert summary.recent_shell_failure_count == 0
+    assert summary.recent_test_failure_count == 0
+    assert summary.recent_tool_failure_count == 1
+    assert "failures: tool 1" in summary.render_line(1)
+    assert "- failures: tool 1" in preview
 
 
 def test_list_recent_sessions_surfaces_recent_tool_streak_preview(tmp_path: Path) -> None:
@@ -1009,7 +1049,7 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert [session.session_id for session in tool_sessions] == ["session-tool"]
 
 
-def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_then_failures_restore_and_shell_activity(tmp_path: Path) -> None:
+def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_then_test_failures_tool_failures_restore_and_shell_activity(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
 
@@ -1038,8 +1078,8 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_the
         )
     )
 
-    failed_store = SessionArtifactStore(tmp_path, session_id="session-failed")
-    failed_store.append_turn(
+    failed_test_store = SessionArtifactStore(tmp_path, session_id="session-failed-test")
+    failed_test_store.append_turn(
         TurnArtifact(
             prompt="run failing test",
             response="done",
@@ -1056,6 +1096,28 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_the
                         "shell_policy": "confirm",
                         "exit_code": 1,
                         "result_preview": "pytest -q -> exit 1",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    failed_tool_store = SessionArtifactStore(tmp_path, session_id="session-failed-tool")
+    failed_tool_store.append_turn(
+        TurnArtifact(
+            prompt="attempt failing edit",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_failed",
+                    "replace_text",
+                    "Edit failed",
+                    data={
+                        "tool_name": "replace_text",
+                        "result_preview": "replace_text notes.txt (2 occurrences)",
                     },
                 )
             ],
@@ -1109,10 +1171,11 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_the
 
     ordered = list_recent_sessions(tmp_path, sort_mode="attention")
 
-    assert [session.session_id for session in ordered[:6]] == [
+    assert [session.session_id for session in ordered[:7]] == [
         "session-pending",
         "session-denied",
-        "session-failed",
+        "session-failed-test",
+        "session-failed-tool",
         "session-restore",
         "session-inspect",
         "session-plain",
