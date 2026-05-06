@@ -218,6 +218,10 @@ def main() -> None:
             "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_picker,
         )
         print(
+            "picker_denied_badges=",
+            "denied: edit 1" in denied_picker,
+        )
+        print(
             "picker_restored_approval_badge=",
             "approval restore: denied 1" in approval_restore_picker,
         )

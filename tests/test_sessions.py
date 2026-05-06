@@ -579,12 +579,66 @@ def test_list_recent_sessions_surfaces_last_denied_approval_summary(tmp_path: Pa
     preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
 
     assert summary.denied_approval_count == 1
+    assert summary.denied_approval_badges == ["edit 1"]
     assert summary.last_denied_approval_summary == "denied write_file via fake_runtime | fresh request | remaining 0"
     assert summary.approval_status_badges == ["denied 1"]
     assert summary.restored_approval_badges == []
     assert "approval focus: denied/fresh" in summary.render_line(1)
+    assert "denied: edit 1" in summary.render_line(1)
     assert "- approval focus: denied/fresh" in preview
+    assert "- denied: edit 1" in preview
     assert "- last denied approval: denied write_file via fake_runtime | fresh request | remaining 0" in preview
+
+
+def test_list_recent_sessions_surfaces_denied_approval_tool_family_breakdown(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-denied-breakdown")
+    store.append_turn(
+        TurnArtifact(
+            prompt="deny risky actions",
+            response="skipped actions",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "replace_text",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "replace_text",
+                        "approval_id": "approval-9100",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 1,
+                        "relative_path": "notes.txt",
+                    },
+                ),
+                runtime_event(
+                    "steering_denied",
+                    "run_shell_command",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "approval_id": "approval-9101",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 0,
+                        "command": "pytest -q",
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.denied_approval_count == 2
+    assert summary.denied_approval_badges == ["test 1", "edit 1"]
+    assert summary.last_denied_approval_summary == "denied run_shell_command via fake_runtime | fresh request | remaining 0"
+    assert "denied: test 1, edit 1" in summary.render_line(1)
+    assert "- denied: test 1, edit 1" in preview
+    assert "- last denied approval: denied run_shell_command via fake_runtime | fresh request | remaining 0" in preview
 
 
 def test_list_recent_sessions_surfaces_live_runtime_restored_approval_summary(tmp_path: Path) -> None:
@@ -722,13 +776,16 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
     preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
 
     assert summary.approval_status_badges == ["denied 1"]
+    assert summary.denied_approval_badges == ["edit 1"]
     assert summary.last_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert summary.last_denied_approval_summary == "denied write_file via live_runtime | restored queue | remaining 0"
     assert summary.restored_approval_badges == ["denied 1"]
     assert "approval focus: denied/restored" in summary.render_line(1)
+    assert "denied: edit 1" in summary.render_line(1)
     assert "approval restore: denied 1" in summary.render_line(1)
     assert "- approvals: denied 1" in preview
     assert "- approval focus: denied/restored" in preview
+    assert "- denied: edit 1" in preview
     assert "- approval restore: denied 1" in preview
     assert "- last approval: denied write_file via live_runtime | restored queue | remaining 0" in preview
     assert "- last denied approval: denied write_file via live_runtime | restored queue | remaining 0" in preview

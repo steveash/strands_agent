@@ -1281,6 +1281,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-pending | 1 turn(s)" not in denied_output
         assert "session-restore | 1 turn(s)" not in denied_output
         assert "approval focus: denied/restored" in denied_output
+        assert "denied: edit 1" in denied_output
         assert "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_output
         assert "approval restore: denied 1" in denied_output
 

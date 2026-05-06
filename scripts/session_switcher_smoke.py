@@ -230,6 +230,7 @@ async def run_smoke() -> None:
                 "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_text,
             )
             print("switcher_row_approval_focus=", "approval focus: denied/restored" in denied_text)
+            print("switcher_denied_badges=", "denied: edit 1" in denied_text)
             print("switcher_restored_approval_badge=", "approval restore: denied 1" in denied_text)
             await pilot.press("v")
             await pilot.pause()

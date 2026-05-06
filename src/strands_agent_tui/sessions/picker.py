@@ -14,6 +14,7 @@ from .artifacts import (
     load_session_picker_state,
     save_session_picker_state,
 )
+from ..tools.workspace import resolve_shell_command
 
 MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
@@ -24,6 +25,7 @@ MAX_SHELL_STREAK_PREVIEWS = 3
 MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
+APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
 SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "denied", "restore", "approval-restore", "tool"}
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
@@ -42,6 +44,7 @@ class SessionSummary:
     approval_focus_badges: list[str] = field(default_factory=list)
     last_approval_summary: str = ""
     denied_approval_count: int = 0
+    denied_approval_badges: list[str] = field(default_factory=list)
     last_denied_approval_summary: str = ""
     restored_approval_count: int = 0
     restored_approval_badges: list[str] = field(default_factory=list)
@@ -74,6 +77,7 @@ class SessionSummary:
         approval_focus_suffix = (
             f" | approval focus: {'/'.join(self.approval_focus_badges)}" if self.approval_focus_badges else ""
         )
+        denied_suffix = f" | denied: {', '.join(self.denied_approval_badges)}" if self.denied_approval_badges else ""
         approval_restore_suffix = (
             f" | approval restore: {', '.join(self.restored_approval_badges)}"
             if self.restored_approval_badges
@@ -101,7 +105,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{approval_restore_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -124,6 +128,8 @@ class SessionSummary:
             lines.append(f"- approval focus: {'/'.join(self.approval_focus_badges)}")
         if self.last_approval_summary:
             lines.append(f"- last approval: {self.last_approval_summary}")
+        if self.denied_approval_badges:
+            lines.append(f"- denied: {', '.join(self.denied_approval_badges)}")
         if self.last_denied_approval_summary:
             lines.append(f"- last denied approval: {self.last_denied_approval_summary}")
         if self.restored_approval_badges:
@@ -223,6 +229,7 @@ def _ordered_recent_sessions(
             approval_focus_badges,
             last_approval_summary,
             denied_approval_count,
+            denied_approval_badges,
             last_denied_approval_summary,
             restored_approval_count,
             restored_approval_badges,
@@ -254,6 +261,7 @@ def _ordered_recent_sessions(
                     approval_focus_badges=approval_focus_badges,
                     last_approval_summary=last_approval_summary,
                     denied_approval_count=denied_approval_count,
+                    denied_approval_badges=denied_approval_badges,
                     last_denied_approval_summary=last_denied_approval_summary,
                     restored_approval_count=restored_approval_count,
                     restored_approval_badges=restored_approval_badges,
@@ -773,7 +781,7 @@ def _render_tool_event_summary(event) -> str:
 def _approval_activity(
     turns: list[TurnArtifact],
     pending_approvals,
-) -> tuple[list[str], list[str], str, int, str, int, list[str]]:
+) -> tuple[list[str], list[str], str, int, list[str], str, int, list[str]]:
     latest_by_request_id: dict[str, dict[str, object]] = {}
     last_record: dict[str, object] | None = None
     last_denied_record: dict[str, object] | None = None
@@ -791,6 +799,8 @@ def _approval_activity(
                 "status": status,
                 "tool_name": str(event.data.get("tool_name", "") or event.title or "").strip(),
                 "source": str(event.data.get("approval_source", "") or event.data.get("source", "") or "runtime").strip(),
+                "command": str(event.data.get("command", "") or "").strip(),
+                "shell_command_family": str(event.data.get("shell_command_family", "") or "").strip(),
                 "pending_count": event.data.get("pending_count"),
                 "remaining_pending_count": event.data.get("remaining_pending_count"),
                 "resumed_from_approval": bool(event.data.get("resumed_from_approval", False)),
@@ -826,10 +836,14 @@ def _approval_activity(
             last_record = preferred_pending
 
     status_counts: dict[str, int] = {}
+    denied_family_counts: dict[str, int] = {}
     restored_status_counts: dict[str, int] = {}
     for record in latest_by_request_id.values():
         status = str(record["status"])
         status_counts[status] = status_counts.get(status, 0) + 1
+        if status == "denied":
+            family = _approval_tool_family(record)
+            denied_family_counts[family] = denied_family_counts.get(family, 0) + 1
         if bool(record.get("approval_restored", False)):
             restored_status_counts[status] = restored_status_counts.get(status, 0) + 1
         if status == "denied" and (
@@ -838,6 +852,7 @@ def _approval_activity(
             last_denied_record = record
 
     badges = _render_status_badges(status_counts)
+    denied_badges = _render_tool_family_badges(denied_family_counts)
     restored_badges = _render_status_badges(restored_status_counts)
 
     return (
@@ -845,6 +860,7 @@ def _approval_activity(
         _render_approval_focus_badges(last_record),
         _render_last_approval_summary(last_record),
         status_counts.get("denied", 0),
+        denied_badges,
         _render_last_approval_summary(last_denied_record),
         sum(restored_status_counts.values()),
         restored_badges,
@@ -862,6 +878,40 @@ def _render_status_badges(status_counts: dict[str, int]) -> list[str]:
             continue
         badges.append(f"{status} {status_counts[status]}")
     return badges
+
+
+def _render_tool_family_badges(tool_family_counts: dict[str, int]) -> list[str]:
+    badges: list[str] = []
+    for family in APPROVAL_TOOL_FAMILY_DISPLAY_ORDER:
+        count = tool_family_counts.get(family, 0)
+        if count:
+            badges.append(f"{family} {count}")
+    for family in sorted(tool_family_counts):
+        if family in APPROVAL_TOOL_FAMILY_DISPLAY_ORDER:
+            continue
+        badges.append(f"{family} {tool_family_counts[family]}")
+    return badges
+
+
+def _approval_tool_family(record: dict[str, object]) -> str:
+    tool_name = str(record.get("tool_name", "") or "").strip()
+    if tool_name == "run_shell_command":
+        shell_family = str(record.get("shell_command_family", "") or "").strip()
+        if shell_family.startswith("pytest"):
+            return "test"
+        command = str(record.get("command", "") or "").strip()
+        if command:
+            try:
+                profile = resolve_shell_command(command)
+            except ValueError:
+                return "shell"
+            return "test" if profile.family.startswith("pytest") else "shell"
+        return "shell"
+    if tool_name in {"write_file", "replace_text"}:
+        return "edit"
+    if tool_name:
+        return "tool"
+    return "tool"
 
 
 def _render_approval_focus_badges(record: dict[str, object] | None) -> list[str]:
