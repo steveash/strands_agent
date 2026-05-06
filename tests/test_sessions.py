@@ -1170,9 +1170,56 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert [session.session_id for session in tool_sessions] == ["session-tool"]
 
 
-def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_then_test_failures_tool_failures_restore_and_shell_activity(tmp_path: Path) -> None:
+def test_list_recent_sessions_attention_sort_prioritizes_restored_test_queues_before_restored_edits_fresh_pending_then_denied_and_failures(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
+
+    restored_test_pending_store = SessionArtifactStore(tmp_path, session_id="session-restored-pending-test")
+    _append_turn(restored_test_pending_store, "resume restored tests")
+    restored_test_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0011a",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="resume tests",
+                restored_from_session=True,
+            )
+        ]
+    )
+
+    restored_edit_pending_store = SessionArtifactStore(tmp_path, session_id="session-restored-pending-edit")
+    _append_turn(restored_edit_pending_store, "resume restored edit")
+    restored_edit_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0011b",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+            )
+        ]
+    )
+
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
+    _append_turn(pending_store, "pending")
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0011",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
 
     denied_store = SessionArtifactStore(tmp_path, session_id="session-denied")
     denied_store.append_turn(
@@ -1191,6 +1238,7 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_the
                         "approval_id": "approval-0010c",
                         "approval_status": "denied",
                         "approval_source": "fake_runtime",
+                        "approval_restored": True,
                         "remaining_pending_count": 0,
                     },
                 )
@@ -1275,24 +1323,11 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_the
         )
     )
 
-    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
-    _append_turn(pending_store, "pending")
-    pending_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0011",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="run tests",
-            )
-        ]
-    )
+    ordered = list_recent_sessions(tmp_path, sort_mode="attention", limit=count_recent_sessions(tmp_path))
 
-    ordered = list_recent_sessions(tmp_path, sort_mode="attention")
-
-    assert [session.session_id for session in ordered[:7]] == [
+    assert [session.session_id for session in ordered[:9]] == [
+        "session-restored-pending-test",
+        "session-restored-pending-edit",
         "session-pending",
         "session-denied",
         "session-failed-test",
@@ -1300,4 +1335,11 @@ def test_list_recent_sessions_attention_sort_prioritizes_pending_then_denied_the
         "session-restore",
         "session-inspect",
         "session-plain",
+    ]
+
+    approval_restore_ordered = list_recent_sessions(tmp_path, sort_mode="attention", filter_mode="approval-restore")
+    assert [session.session_id for session in approval_restore_ordered] == [
+        "session-restored-pending-test",
+        "session-restored-pending-edit",
+        "session-denied",
     ]

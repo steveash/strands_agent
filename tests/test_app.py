@@ -1260,6 +1260,31 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         ]
     )
 
+    restored_edit_pending_store = SessionArtifactStore(tmp_path, session_id="session-restored-edit-pending")
+    restored_edit_pending_store.append_turn(
+        TurnArtifact(
+            prompt="reopen restored edit queue",
+            response="pending restored edit approval",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    restored_edit_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0012d",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+            )
+        ]
+    )
+
     restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
     restore_store.append_turn(
         TurnArtifact(
@@ -1315,6 +1340,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         approval_restore_output = str(app.query_one("#output").render())
         assert "Filter: approval-restore | Sort: recent" in approval_restore_output
         assert "session-restored-pending" in approval_restore_output
+        assert "session-restored-edit-pending" in approval_restore_output
         assert "session-denied" in approval_restore_output
         assert "session-restore | 1 turn(s)" not in approval_restore_output
         assert "session-pending | 1 turn(s)" not in approval_restore_output
@@ -1326,6 +1352,12 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         attention_output = str(app.query_one("#output").render())
         assert "Filter: approval-restore | Sort: attention" in attention_output
+        assert attention_output.index("session-restored-pending | 1 turn(s)") < attention_output.index(
+            "session-restored-edit-pending | 1 turn(s)"
+        )
+        assert attention_output.index("session-restored-edit-pending | 1 turn(s)") < attention_output.index(
+            "session-denied | 1 turn(s)"
+        )
 
         await pilot.press("r")
         await pilot.pause()

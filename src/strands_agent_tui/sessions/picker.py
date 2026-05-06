@@ -50,6 +50,7 @@ class SessionSummary:
     restored_approval_badges: list[str] = field(default_factory=list)
     restored_approval_tool_badges: list[str] = field(default_factory=list)
     last_restored_approval_summary: str = ""
+    approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     last_event_preview: str = ""
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
@@ -246,6 +247,7 @@ def _ordered_recent_sessions(
             restored_approval_badges,
             restored_approval_tool_badges,
             last_restored_approval_summary,
+            approval_attention_sort_key,
         ) = _approval_activity(turns, pending_approvals)
         last_prompt_preview = ""
         if turns:
@@ -280,6 +282,7 @@ def _ordered_recent_sessions(
                     restored_approval_badges=restored_approval_badges,
                     restored_approval_tool_badges=restored_approval_tool_badges,
                     last_restored_approval_summary=last_restored_approval_summary,
+                    approval_attention_sort_key=approval_attention_sort_key,
                     last_event_preview=_latest_event_preview(turns),
                     last_tool_preview=_latest_tool_preview(turns),
                     last_tool_badges=_latest_tool_badges(turns),
@@ -796,7 +799,7 @@ def _render_tool_event_summary(event) -> str:
 def _approval_activity(
     turns: list[TurnArtifact],
     pending_approvals,
-) -> tuple[list[str], list[str], str, int, list[str], str, int, list[str], list[str], str]:
+) -> tuple[list[str], list[str], str, int, list[str], str, int, list[str], list[str], str, tuple[int, ...]]:
     latest_by_request_id: dict[str, dict[str, object]] = {}
     last_record: dict[str, object] | None = None
     last_denied_record: dict[str, object] | None = None
@@ -867,6 +870,8 @@ def _approval_activity(
     status_counts: dict[str, int] = {}
     denied_family_counts: dict[str, int] = {}
     restored_status_counts: dict[str, int] = {}
+    restored_pending_family_counts: dict[str, int] = {}
+    restored_denied_family_counts: dict[str, int] = {}
     restored_family_counts: dict[str, int] = {}
     for record in latest_by_request_id.values():
         status = str(record["status"])
@@ -878,6 +883,10 @@ def _approval_activity(
             restored_status_counts[status] = restored_status_counts.get(status, 0) + 1
             family = _approval_tool_family(record)
             restored_family_counts[family] = restored_family_counts.get(family, 0) + 1
+            if status == "pending":
+                restored_pending_family_counts[family] = restored_pending_family_counts.get(family, 0) + 1
+            elif status == "denied":
+                restored_denied_family_counts[family] = restored_denied_family_counts.get(family, 0) + 1
             if last_restored_record is None or int(record.get("order", 0)) >= int(last_restored_record.get("order", 0)):
                 last_restored_record = record
         if status == "denied" and (
@@ -889,6 +898,11 @@ def _approval_activity(
     denied_badges = _render_tool_family_badges(denied_family_counts)
     restored_badges = _render_status_badges(restored_status_counts)
     restored_tool_badges = _render_tool_family_badges(restored_family_counts)
+    approval_attention_sort_key = _approval_attention_sort_key(
+        restored_pending_family_counts,
+        restored_denied_family_counts,
+        restored_family_counts,
+    )
 
     return (
         badges,
@@ -901,6 +915,7 @@ def _approval_activity(
         restored_badges,
         restored_tool_badges,
         _render_last_approval_summary(last_restored_record),
+        approval_attention_sort_key,
     )
 
 
@@ -928,6 +943,19 @@ def _render_tool_family_badges(tool_family_counts: dict[str, int]) -> list[str]:
             continue
         badges.append(f"{family} {tool_family_counts[family]}")
     return badges
+
+
+def _approval_attention_sort_key(
+    restored_pending_family_counts: dict[str, int],
+    restored_denied_family_counts: dict[str, int],
+    restored_family_counts: dict[str, int],
+) -> tuple[int, ...]:
+    families = (*APPROVAL_TOOL_FAMILY_DISPLAY_ORDER,)
+    return (
+        *(restored_pending_family_counts.get(family, 0) for family in families),
+        *(restored_denied_family_counts.get(family, 0) for family in families),
+        *(restored_family_counts.get(family, 0) for family in families),
+    )
 
 
 def _approval_tool_family(record: dict[str, object]) -> str:
@@ -1081,17 +1109,25 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
 def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[object, ...]:
     activity_timestamp, session_id, summary = item
     if sort_mode == "attention":
+        approval_attention_sort_key = summary.approval_attention_sort_key or (0,) * 12
+        restored_pending_key = approval_attention_sort_key[:4]
+        restored_denied_key = approval_attention_sort_key[4:8]
+        restored_family_key = approval_attention_sort_key[8:12]
         return (
             summary.pending_approval_count > 0,
             summary.pending_approval_count,
+            restored_pending_key,
             summary.denied_approval_count > 0,
             summary.denied_approval_count,
+            restored_denied_key,
             summary.recent_test_failure_count > 0,
             summary.recent_test_failure_count,
             summary.recent_tool_failure_count > 0,
             summary.recent_tool_failure_count,
             summary.recent_failure_count > 0,
             summary.recent_failure_count,
+            summary.restored_approval_count > 0,
+            restored_family_key,
             bool(summary.restore_badges),
             bool(summary.shell_activity_badges or summary.last_shell_preview),
             bool(summary.last_tool_preview or summary.last_tool_badges),

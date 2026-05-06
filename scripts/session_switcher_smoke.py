@@ -132,6 +132,22 @@ async def run_smoke() -> None:
             ]
         )
 
+        restored_edit_pending_store = SessionArtifactStore(temp_dir, session_id="session-restored-edit-pending")
+        append_turn(restored_edit_pending_store, "resume restored edit queue", "restored edit response")
+        restored_edit_pending_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-0006b",
+                    tool_name="write_file",
+                    reason="Needs confirmation",
+                    args={"relative_path": "notes.txt", "overwrite": True},
+                    source="fake_runtime",
+                    prompt="resume edit",
+                    restored_from_session=True,
+                )
+            ]
+        )
+
         failed_test_store = SessionArtifactStore(temp_dir, session_id="session-failed-test")
         failed_test_store.append_turn(
             TurnArtifact(
@@ -257,6 +273,7 @@ async def run_smoke() -> None:
                 "switcher_approval_restore_only_restored=",
                 "session-denied | 1 turn(s)" in approval_restore_text
                 and "session-restored-pending | 1 turn(s)" in approval_restore_text
+                and "session-restored-edit-pending | 1 turn(s)" in approval_restore_text
                 and "session-newer | 1 turn(s)" not in approval_restore_text,
             )
             print(
@@ -272,6 +289,13 @@ async def run_smoke() -> None:
             await pilot.pause()
             attention_output = first_app.query_one("#output").render()
             print("switcher_attention_sort=", "Filter: approval-restore | Sort: attention" in str(attention_output))
+            attention_text = str(attention_output)
+            print(
+                "switcher_approval_restore_attention_order=",
+                attention_text.index("session-restored-pending | 1 turn(s)")
+                < attention_text.index("session-restored-edit-pending | 1 turn(s)")
+                < attention_text.index("session-denied | 1 turn(s)"),
+            )
             await pilot.press("a")
             await pilot.pause()
             all_attention_output = str(first_app.query_one("#output").render())
@@ -311,7 +335,7 @@ async def run_smoke() -> None:
             print("switcher_restored=", "Session Switcher" in str(restored_output))
             print("switcher_restored_sort=", "Filter: all | Sort: attention" in str(restored_output))
             print("restored_selected_line=", selected_line)
-            print("restored_selection_is_restored_pending=", "session-restored-pending" in selected_line)
+            print("restored_selection_is_newer=", "session-newer" in selected_line)
             print("restored_latest_event=", restored_app.events[-1].kind if restored_app.events else None)
             await pilot.press("enter")
             await pilot.pause()
@@ -347,8 +371,8 @@ async def run_smoke() -> None:
             await pilot.pause()
             paged_output = str(paged_app.query_one("#output").render())
             stored_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
-            print("switcher_paged=", "Page: 2/2" in paged_output)
-            print("switcher_paged_window=", "Showing: 9-16 of 16" in paged_output)
+            print("switcher_paged=", "Page: 2/3" in paged_output)
+            print("switcher_paged_window=", "Showing: 9-16 of 17" in paged_output)
             print(
                 "switcher_paged_state=",
                 stored_state is not None
@@ -376,7 +400,7 @@ async def run_smoke() -> None:
                 "",
             )
             restored_page_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
-            print("switcher_restored_page=", "Page: 2/2" in restored_paged_output)
+            print("switcher_restored_page=", "Page: 2/3" in restored_paged_output)
             print(
                 "switcher_restored_paged_selection=",
                 restored_page_state is not None
