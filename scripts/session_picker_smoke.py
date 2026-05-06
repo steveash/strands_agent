@@ -307,6 +307,11 @@ def main() -> None:
             and approval_restore_attention_lines[1].startswith("  2. session-restored-edit-pending")
             and approval_restore_attention_lines[2].startswith("  3. session-denied"),
         )
+        print(
+            "picker_attention_reason=",
+            "- attention reason: restored pending test approval queue; tests sort ahead of restored edits"
+            in approval_restore_attention_picker,
+        )
         print("picker_paged_banner=", "Page: 2/3 | Showing: 9-16 of 17" in paged_picker)
         print(
             "picker_paged_window=",

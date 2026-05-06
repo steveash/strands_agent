@@ -296,6 +296,16 @@ async def run_smoke() -> None:
                 < attention_text.index("session-restored-edit-pending | 1 turn(s)")
                 < attention_text.index("session-denied | 1 turn(s)"),
             )
+            await pilot.press("up")
+            await pilot.pause()
+            await pilot.press("up")
+            await pilot.pause()
+            attention_preview_output = str(first_app.query_one("#output").render())
+            print(
+                "switcher_attention_reason=",
+                "- attention reason: restored pending test approval queue; tests sort ahead of restored edits"
+                in attention_preview_output,
+            )
             await pilot.press("a")
             await pilot.pause()
             all_attention_output = str(first_app.query_one("#output").render())

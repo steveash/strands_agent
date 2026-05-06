@@ -51,6 +51,7 @@ class SessionSummary:
     restored_approval_tool_badges: list[str] = field(default_factory=list)
     last_restored_approval_summary: str = ""
     approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
+    attention_reason_summary: str = ""
     last_event_preview: str = ""
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
@@ -125,6 +126,8 @@ class SessionSummary:
             ),
             f"- artifact dir: {self.session_dir}",
         ]
+        if self.attention_reason_summary:
+            lines.append(f"- attention reason: {self.attention_reason_summary}")
         if self.pending_approval_count > 0:
             pending_line = self.pending_approval_summary or self.pending_approval_tool or "pending approval"
             if self.pending_approval_count > 1:
@@ -259,50 +262,46 @@ def _ordered_recent_sessions(
         recent_failure_count = _recent_tool_failure_count(turns)
         recent_shell_failure_count = _recent_shell_failure_count(turns)
         recent_test_failure_count, recent_tool_failure_count = _recent_failure_activity_counts(turns)
-        summaries_with_sort.append(
-            (
-                activity_timestamp,
-                store.session_id,
-                SessionSummary(
-                    session_id=store.session_id,
-                    session_dir=store.session_dir,
-                    turn_count=len(turns),
-                    updated_at=_format_timestamp(activity_timestamp),
-                    last_prompt_preview=last_prompt_preview,
-                    pending_approval_count=len(pending_approvals),
-                    pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
-                    pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
-                    approval_status_badges=approval_status_badges,
-                    approval_focus_badges=approval_focus_badges,
-                    last_approval_summary=last_approval_summary,
-                    denied_approval_count=denied_approval_count,
-                    denied_approval_badges=denied_approval_badges,
-                    last_denied_approval_summary=last_denied_approval_summary,
-                    restored_approval_count=restored_approval_count,
-                    restored_approval_badges=restored_approval_badges,
-                    restored_approval_tool_badges=restored_approval_tool_badges,
-                    last_restored_approval_summary=last_restored_approval_summary,
-                    approval_attention_sort_key=approval_attention_sort_key,
-                    last_event_preview=_latest_event_preview(turns),
-                    last_tool_preview=_latest_tool_preview(turns),
-                    last_tool_badges=_latest_tool_badges(turns),
-                    recent_tool_previews=_recent_tool_previews(turns),
-                    shell_activity_badges=_shell_activity_badges(turns),
-                    last_shell_preview=_latest_shell_preview(turns),
-                    recent_shell_previews=_recent_shell_previews(turns),
-                    failure_activity_badges=_failure_activity_badges(
-                        recent_test_failure_count,
-                        recent_tool_failure_count,
-                    ),
-                    recent_failure_count=recent_failure_count,
-                    recent_shell_failure_count=recent_shell_failure_count,
-                    recent_test_failure_count=recent_test_failure_count,
-                    recent_tool_failure_count=recent_tool_failure_count,
-                    restore_badges=_restore_badges(session_state, len(turns)),
-                    draft_prompt_preview=draft_prompt_preview,
-                ),
-            )
+        summary = SessionSummary(
+            session_id=store.session_id,
+            session_dir=store.session_dir,
+            turn_count=len(turns),
+            updated_at=_format_timestamp(activity_timestamp),
+            last_prompt_preview=last_prompt_preview,
+            pending_approval_count=len(pending_approvals),
+            pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
+            pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
+            approval_status_badges=approval_status_badges,
+            approval_focus_badges=approval_focus_badges,
+            last_approval_summary=last_approval_summary,
+            denied_approval_count=denied_approval_count,
+            denied_approval_badges=denied_approval_badges,
+            last_denied_approval_summary=last_denied_approval_summary,
+            restored_approval_count=restored_approval_count,
+            restored_approval_badges=restored_approval_badges,
+            restored_approval_tool_badges=restored_approval_tool_badges,
+            last_restored_approval_summary=last_restored_approval_summary,
+            approval_attention_sort_key=approval_attention_sort_key,
+            last_event_preview=_latest_event_preview(turns),
+            last_tool_preview=_latest_tool_preview(turns),
+            last_tool_badges=_latest_tool_badges(turns),
+            recent_tool_previews=_recent_tool_previews(turns),
+            shell_activity_badges=_shell_activity_badges(turns),
+            last_shell_preview=_latest_shell_preview(turns),
+            recent_shell_previews=_recent_shell_previews(turns),
+            failure_activity_badges=_failure_activity_badges(
+                recent_test_failure_count,
+                recent_tool_failure_count,
+            ),
+            recent_failure_count=recent_failure_count,
+            recent_shell_failure_count=recent_shell_failure_count,
+            recent_test_failure_count=recent_test_failure_count,
+            recent_tool_failure_count=recent_tool_failure_count,
+            restore_badges=_restore_badges(session_state, len(turns)),
+            draft_prompt_preview=draft_prompt_preview,
         )
+        summary.attention_reason_summary = _attention_reason_summary(summary)
+        summaries_with_sort.append((activity_timestamp, store.session_id, summary))
 
     filtered = [item for item in summaries_with_sort if _matches_filter(item[2], filter_mode)]
     ordered = sorted(filtered, key=lambda item: _sort_key(item, sort_mode), reverse=True)
@@ -956,6 +955,63 @@ def _approval_attention_sort_key(
         *(restored_denied_family_counts.get(family, 0) for family in families),
         *(restored_family_counts.get(family, 0) for family in families),
     )
+
+
+def _attention_reason_summary(summary: SessionSummary) -> str:
+    family_count = len(APPROVAL_TOOL_FAMILY_DISPLAY_ORDER)
+    approval_attention_sort_key = summary.approval_attention_sort_key or (0,) * (family_count * 3)
+    restored_pending_key = approval_attention_sort_key[:family_count]
+    restored_denied_key = approval_attention_sort_key[family_count : family_count * 2]
+    restored_family_key = approval_attention_sort_key[family_count * 2 : family_count * 3]
+
+    restored_pending_family = _first_attention_family(restored_pending_key)
+    if restored_pending_family:
+        if restored_pending_family == "test":
+            return "restored pending test approval queue; tests sort ahead of restored edits"
+        if restored_pending_family == "edit":
+            return "restored pending edit approval queue; restored tests sort ahead of this queue"
+        return f"restored pending {restored_pending_family} approval queue"
+
+    if summary.pending_approval_count > 0:
+        return "pending approval queue"
+
+    restored_denied_family = _first_attention_family(restored_denied_key)
+    if restored_denied_family:
+        return f"restored denied {restored_denied_family} approval"
+
+    if summary.denied_approval_count > 0:
+        return "denied approval"
+
+    if summary.recent_test_failure_count > 0:
+        return "recent shell test failure"
+
+    if summary.recent_tool_failure_count > 0:
+        return "recent tool failure"
+
+    if summary.recent_failure_count > 0:
+        return "recent failure activity"
+
+    restored_family = _first_attention_family(restored_family_key)
+    if restored_family:
+        return f"restored {restored_family} approval activity"
+
+    if summary.restore_badges:
+        return "saved restore context"
+
+    if summary.last_shell_preview or summary.shell_activity_badges:
+        return "recent shell activity"
+
+    if summary.last_tool_preview or summary.last_tool_badges:
+        return "recent tool activity"
+
+    return ""
+
+
+def _first_attention_family(counts: tuple[int, ...]) -> str:
+    for family, count in zip(APPROVAL_TOOL_FAMILY_DISPLAY_ORDER, counts, strict=False):
+        if count > 0:
+            return family
+    return ""
 
 
 def _approval_tool_family(record: dict[str, object]) -> str:

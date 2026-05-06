@@ -849,7 +849,12 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     assert summary.restored_approval_badges == ["pending 1", "denied 1"]
     assert summary.restored_approval_tool_badges == ["test 1", "edit 1"]
     assert summary.last_restored_approval_summary == "pending run_shell_command via fake_runtime | queued 1"
+    assert (
+        summary.attention_reason_summary
+        == "restored pending test approval queue; tests sort ahead of restored edits"
+    )
     assert "approval restore tools: test 1, edit 1" in summary.render_line(1)
+    assert "- attention reason: restored pending test approval queue; tests sort ahead of restored edits" in preview
     assert "- approval restore: pending 1, denied 1" in preview
     assert "- approval restore tools: test 1, edit 1" in preview
     assert "- last restored approval: pending run_shell_command via fake_runtime | queued 1" in preview
@@ -1336,6 +1341,14 @@ def test_list_recent_sessions_attention_sort_prioritizes_restored_test_queues_be
         "session-inspect",
         "session-plain",
     ]
+    assert ordered[0].attention_reason_summary == "restored pending test approval queue; tests sort ahead of restored edits"
+    assert (
+        ordered[1].attention_reason_summary
+        == "restored pending edit approval queue; restored tests sort ahead of this queue"
+    )
+    assert ordered[2].attention_reason_summary == "pending approval queue"
+    assert ordered[3].attention_reason_summary == "restored denied edit approval"
+    assert ordered[4].attention_reason_summary == "recent shell test failure"
 
     approval_restore_ordered = list_recent_sessions(tmp_path, sort_mode="attention", filter_mode="approval-restore")
     assert [session.session_id for session in approval_restore_ordered] == [

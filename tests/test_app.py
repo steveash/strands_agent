@@ -1359,6 +1359,16 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
             "session-denied | 1 turn(s)"
         )
 
+        await pilot.press("up")
+        await pilot.pause()
+        await pilot.press("up")
+        await pilot.pause()
+        attention_preview_output = str(app.query_one("#output").render())
+        assert (
+            "- attention reason: restored pending test approval queue; tests sort ahead of restored edits"
+            in attention_preview_output
+        )
+
         await pilot.press("r")
         await pilot.pause()
         restore_output = str(app.query_one("#output").render())
