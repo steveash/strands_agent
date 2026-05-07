@@ -40,6 +40,7 @@ class SessionSummary:
     pending_approval_count: int = 0
     pending_approval_tool: str = ""
     pending_approval_summary: str = ""
+    pending_approval_badges: list[str] = field(default_factory=list)
     approval_status_badges: list[str] = field(default_factory=list)
     approval_focus_badges: list[str] = field(default_factory=list)
     last_approval_summary: str = ""
@@ -50,6 +51,7 @@ class SessionSummary:
     restored_approval_badges: list[str] = field(default_factory=list)
     restored_approval_tool_badges: list[str] = field(default_factory=list)
     last_restored_approval_summary: str = ""
+    pending_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     denied_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     attention_reason_summary: str = ""
@@ -76,6 +78,9 @@ class SessionSummary:
         elif self.pending_approval_count > 1:
             tool_hint = f" ({self.pending_approval_tool} first)" if self.pending_approval_tool else ""
             pending_suffix = f" | pending: {self.pending_approval_count} approvals{tool_hint}"
+        pending_tool_suffix = (
+            f" | pending tools: {', '.join(self.pending_approval_badges)}" if self.pending_approval_badges else ""
+        )
         approval_suffix = (
             f" | approvals: {', '.join(self.approval_status_badges)}" if self.approval_status_badges else ""
         )
@@ -119,7 +124,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{attention_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{attention_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -138,6 +143,8 @@ class SessionSummary:
             if self.pending_approval_count > 1:
                 pending_line = f"{self.pending_approval_count} approvals | first: {pending_line}"
             lines.append(f"- pending: {pending_line}")
+        if self.pending_approval_badges:
+            lines.append(f"- pending tools: {', '.join(self.pending_approval_badges)}")
         if self.approval_status_badges:
             lines.append(f"- approvals: {', '.join(self.approval_status_badges)}")
         if self.approval_focus_badges:
@@ -245,6 +252,7 @@ def _ordered_recent_sessions(
         session_state = store.load_session_state() or SessionState()
         pending_approvals = store.load_pending_approvals()
         (
+            pending_approval_badges,
             approval_status_badges,
             approval_focus_badges,
             last_approval_summary,
@@ -255,6 +263,7 @@ def _ordered_recent_sessions(
             restored_approval_badges,
             restored_approval_tool_badges,
             last_restored_approval_summary,
+            pending_approval_attention_sort_key,
             approval_attention_sort_key,
             denied_approval_attention_sort_key,
         ) = _approval_activity(turns, pending_approvals)
@@ -277,6 +286,7 @@ def _ordered_recent_sessions(
             pending_approval_count=len(pending_approvals),
             pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
             pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
+            pending_approval_badges=pending_approval_badges,
             approval_status_badges=approval_status_badges,
             approval_focus_badges=approval_focus_badges,
             last_approval_summary=last_approval_summary,
@@ -287,6 +297,7 @@ def _ordered_recent_sessions(
             restored_approval_badges=restored_approval_badges,
             restored_approval_tool_badges=restored_approval_tool_badges,
             last_restored_approval_summary=last_restored_approval_summary,
+            pending_approval_attention_sort_key=pending_approval_attention_sort_key,
             approval_attention_sort_key=approval_attention_sort_key,
             denied_approval_attention_sort_key=denied_approval_attention_sort_key,
             last_event_preview=_latest_event_preview(turns),
@@ -807,7 +818,22 @@ def _render_tool_event_summary(event) -> str:
 def _approval_activity(
     turns: list[TurnArtifact],
     pending_approvals,
-) -> tuple[list[str], list[str], str, int, list[str], str, int, list[str], list[str], str, tuple[int, ...], tuple[int, ...]]:
+) -> tuple[
+    list[str],
+    list[str],
+    list[str],
+    str,
+    int,
+    list[str],
+    str,
+    int,
+    list[str],
+    list[str],
+    str,
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+]:
     latest_by_request_id: dict[str, dict[str, object]] = {}
     last_record: dict[str, object] | None = None
     last_denied_record: dict[str, object] | None = None
@@ -842,8 +868,6 @@ def _approval_activity(
                 last_restored_record = record
 
     for approval in pending_approvals:
-        if approval.request_id in latest_by_request_id:
-            continue
         command = str(approval.args.get("command", "") or "").strip() if isinstance(approval.args, dict) else ""
         shell_command_family = ""
         if command:
@@ -851,6 +875,18 @@ def _approval_activity(
                 shell_command_family = resolve_shell_command(command).family
             except ValueError:
                 shell_command_family = ""
+        existing_record = latest_by_request_id.get(approval.request_id)
+        if existing_record is not None:
+            if command and not str(existing_record.get("command", "") or "").strip():
+                existing_record["command"] = command
+            if shell_command_family and not str(existing_record.get("shell_command_family", "") or "").strip():
+                existing_record["shell_command_family"] = shell_command_family
+            if approval.tool_name and not str(existing_record.get("tool_name", "") or "").strip():
+                existing_record["tool_name"] = approval.tool_name
+            existing_record["pending_count"] = len(pending_approvals)
+            if approval.restored_from_session:
+                existing_record["approval_restored"] = True
+            continue
         record = {
             "approval_id": approval.request_id,
             "status": "pending",
@@ -876,6 +912,7 @@ def _approval_activity(
                 last_restored_record = preferred_pending
 
     status_counts: dict[str, int] = {}
+    fresh_pending_family_counts: dict[str, int] = {}
     denied_family_counts: dict[str, int] = {}
     restored_status_counts: dict[str, int] = {}
     restored_pending_family_counts: dict[str, int] = {}
@@ -884,12 +921,13 @@ def _approval_activity(
     for record in latest_by_request_id.values():
         status = str(record["status"])
         status_counts[status] = status_counts.get(status, 0) + 1
+        family = _approval_tool_family(record)
+        if status == "pending" and not bool(record.get("approval_restored", False)):
+            fresh_pending_family_counts[family] = fresh_pending_family_counts.get(family, 0) + 1
         if status == "denied":
-            family = _approval_tool_family(record)
             denied_family_counts[family] = denied_family_counts.get(family, 0) + 1
         if bool(record.get("approval_restored", False)):
             restored_status_counts[status] = restored_status_counts.get(status, 0) + 1
-            family = _approval_tool_family(record)
             restored_family_counts[family] = restored_family_counts.get(family, 0) + 1
             if status == "pending":
                 restored_pending_family_counts[family] = restored_pending_family_counts.get(family, 0) + 1
@@ -903,9 +941,11 @@ def _approval_activity(
             last_denied_record = record
 
     badges = _render_status_badges(status_counts)
+    pending_badges = _render_tool_family_badges(fresh_pending_family_counts)
     denied_badges = _render_tool_family_badges(denied_family_counts)
     restored_badges = _render_status_badges(restored_status_counts)
     restored_tool_badges = _render_tool_family_badges(restored_family_counts)
+    pending_approval_attention_sort_key = _tool_family_attention_sort_key(fresh_pending_family_counts)
     approval_attention_sort_key = _approval_attention_sort_key(
         restored_pending_family_counts,
         restored_denied_family_counts,
@@ -914,6 +954,7 @@ def _approval_activity(
     denied_approval_attention_sort_key = _tool_family_attention_sort_key(denied_family_counts)
 
     return (
+        pending_badges,
         badges,
         _render_approval_focus_badges(last_record),
         _render_last_approval_summary(last_record),
@@ -924,6 +965,7 @@ def _approval_activity(
         restored_badges,
         restored_tool_badges,
         _render_last_approval_summary(last_restored_record),
+        pending_approval_attention_sort_key,
         approval_attention_sort_key,
         denied_approval_attention_sort_key,
     )
@@ -1001,6 +1043,14 @@ def _attention_reason_summary(summary: SessionSummary) -> str:
             return "restored pending edit approval queue; restored tests sort ahead of this queue"
         return f"restored pending {restored_pending_family} approval queue"
 
+    pending_family = _first_attention_family(summary.pending_approval_attention_sort_key)
+    if pending_family:
+        if pending_family == "test":
+            return "pending test approval queue"
+        if pending_family == "edit":
+            return "pending edit approval queue; tests sort ahead of edits"
+        return f"pending {pending_family} approval queue"
+
     if summary.pending_approval_count > 0:
         return "pending approval queue"
 
@@ -1048,6 +1098,10 @@ def _attention_reason_badge(summary: SessionSummary) -> str:
     restored_pending_family = _first_attention_family(restored_pending_key)
     if restored_pending_family:
         return f"restored {restored_pending_family} queue"
+
+    pending_family = _first_attention_family(summary.pending_approval_attention_sort_key)
+    if pending_family:
+        return f"pending {pending_family}"
 
     if summary.pending_approval_count > 0:
         return "pending queue"
@@ -1257,10 +1311,16 @@ def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[
         restored_pending_key, restored_denied_key, restored_family_key, denied_key, fresh_denied_key = (
             _approval_attention_family_keys(summary)
         )
+        pending_approval_attention_sort_key = summary.pending_approval_attention_sort_key or (0,) * len(
+            APPROVAL_TOOL_FAMILY_DISPLAY_ORDER
+        )
         return (
             summary.pending_approval_count > 0,
-            summary.pending_approval_count,
+            any(restored_pending_key),
             restored_pending_key,
+            any(pending_approval_attention_sort_key),
+            pending_approval_attention_sort_key,
+            summary.pending_approval_count,
             summary.denied_approval_count > 0,
             denied_key,
             fresh_denied_key,

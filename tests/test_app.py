@@ -1209,6 +1209,30 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         ]
     )
 
+    pending_edit_store = SessionArtifactStore(tmp_path, session_id="session-pending-edit")
+    pending_edit_store.append_turn(
+        TurnArtifact(
+            prompt="pending edit prompt",
+            response="pending edit response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    pending_edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0012aa",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit",
+            )
+        ]
+    )
+
     denied_store = SessionArtifactStore(tmp_path, session_id="session-denied")
     denied_store.append_turn(
         TurnArtifact(
@@ -1320,6 +1344,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         pending_output = str(app.query_one("#output").render())
         assert "Filter: pending | Sort: recent" in pending_output
         assert "session-pending" in pending_output
+        assert "session-pending-edit" in pending_output
         assert "session-current | 1 turn(s)" not in pending_output
         assert "session-restore | 1 turn(s)" not in pending_output
 
@@ -1387,7 +1412,13 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "Filter: all | Sort: attention" in all_output
         assert "session-current" in all_output
         assert "session-pending" in all_output
+        assert "session-pending-edit" in all_output
         assert "session-restore" in all_output
+        assert "attention: pending test" in all_output
+        assert "attention: pending edit" in all_output
+        assert "pending tools: test 1" in all_output
+        assert "pending tools: edit 1" in all_output
+        assert all_output.index("session-pending | 1 turn(s)") < all_output.index("session-pending-edit | 1 turn(s)")
         assert "attention: restore" in all_output
         assert "shell: inspect 1" in all_output
 

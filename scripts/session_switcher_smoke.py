@@ -90,6 +90,21 @@ async def run_smoke() -> None:
             ]
         )
 
+        pending_edit_store = SessionArtifactStore(temp_dir, session_id="session-pending-edit")
+        append_turn(pending_edit_store, "queue pending edit", "queued edit response")
+        pending_edit_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-0004b",
+                    tool_name="write_file",
+                    reason="Needs confirmation",
+                    args={"relative_path": "notes.txt", "overwrite": True},
+                    source="fake_runtime",
+                    prompt="queue edit",
+                )
+            ]
+        )
+
         denied_store = SessionArtifactStore(temp_dir, session_id="session-denied")
         denied_store.append_turn(
             TurnArtifact(
@@ -265,7 +280,9 @@ async def run_smoke() -> None:
             print("switcher_pending_filter=", "Filter: pending | Sort: recent" in str(pending_output))
             print(
                 "switcher_pending_filter_only_newer=",
-                "session-newer | 1 turn(s)" in pending_text and "session-older | 1 turn(s)" not in pending_text,
+                "session-newer | 1 turn(s)" in pending_text
+                and "session-pending-edit | 1 turn(s)" in pending_text
+                and "session-older | 1 turn(s)" not in pending_text,
             )
             await pilot.press("d")
             await pilot.pause()
@@ -341,6 +358,7 @@ async def run_smoke() -> None:
             print(
                 "switcher_failure_attention_order=",
                 all_attention_output.index("session-newer | 1 turn(s)")
+                < all_attention_output.index("session-pending-edit | 1 turn(s)")
                 < all_attention_output.index("session-denied | 1 turn(s)")
                 < all_attention_output.index("session-failed-test | 1 turn(s)")
                 < all_attention_output.index("session-failed-tool | 1 turn(s)"),
@@ -350,6 +368,13 @@ async def run_smoke() -> None:
                 "attention: test fail" in all_attention_output
                 and "attention: tool fail" in all_attention_output
                 and "attention: restore" in all_attention_output,
+            )
+            print(
+                "switcher_pending_attention_hints=",
+                "attention: pending test" in all_attention_output
+                and "attention: pending edit" in all_attention_output
+                and "pending tools: test 1" in all_attention_output
+                and "pending tools: edit 1" in all_attention_output,
             )
             print(
                 "switcher_suppressed_generic_attention_hints=",

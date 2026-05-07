@@ -1226,6 +1226,21 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
         ]
     )
 
+    pending_edit_store = SessionArtifactStore(tmp_path, session_id="session-pending-edit")
+    _append_turn(pending_edit_store, "pending edit")
+    pending_edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0011c",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="write notes",
+            )
+        ]
+    )
+
     denied_test_store = SessionArtifactStore(tmp_path, session_id="session-denied-test")
     denied_test_store.append_turn(
         TurnArtifact(
@@ -1375,10 +1390,11 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
 
     ordered = list_recent_sessions(tmp_path, sort_mode="attention", limit=count_recent_sessions(tmp_path))
 
-    assert [session.session_id for session in ordered[:11]] == [
+    assert [session.session_id for session in ordered[:12]] == [
         "session-restored-pending-test",
         "session-restored-pending-edit",
         "session-pending",
+        "session-pending-edit",
         "session-denied-test",
         "session-denied",
         "session-failed-test",
@@ -1393,29 +1409,36 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
         ordered[1].attention_reason_summary
         == "restored pending edit approval queue; restored tests sort ahead of this queue"
     )
-    assert ordered[2].attention_reason_summary == "pending approval queue"
-    assert ordered[3].attention_reason_summary == "denied test approval"
-    assert ordered[4].attention_reason_summary == "restored denied edit approval"
-    assert ordered[5].attention_reason_summary == "recent shell test failure"
+    assert ordered[2].attention_reason_summary == "pending test approval queue"
+    assert ordered[3].attention_reason_summary == "pending edit approval queue; tests sort ahead of edits"
+    assert ordered[4].attention_reason_summary == "denied test approval"
+    assert ordered[5].attention_reason_summary == "restored denied edit approval"
+    assert ordered[6].attention_reason_summary == "recent shell test failure"
     assert "attention: restored test queue" in ordered[0].render_line(1, include_attention_reason=True)
     assert "attention: restored edit queue" in ordered[1].render_line(2, include_attention_reason=True)
-    assert "attention: pending queue" in ordered[2].render_line(3, include_attention_reason=True)
-    assert "attention: denied test" in ordered[3].render_line(4, include_attention_reason=True)
-    assert "attention: restored denied edit" in ordered[4].render_line(5, include_attention_reason=True)
-    assert "attention: test fail" in ordered[5].render_line(6, include_attention_reason=True)
-    assert "attention: tool fail" in ordered[6].render_line(7, include_attention_reason=True)
-    assert "attention: restore" in ordered[7].render_line(8, include_attention_reason=True)
-    assert ordered[8].attention_reason_summary == "recent shell activity"
-    shell_line = ordered[8].render_line(9, include_attention_reason=True)
+    assert "pending tools: test 1" in ordered[2].render_line(3, include_attention_reason=True)
+    assert "attention: pending test" in ordered[2].render_line(3, include_attention_reason=True)
+    assert "pending tools: edit 1" in ordered[3].render_line(4, include_attention_reason=True)
+    assert "attention: pending edit" in ordered[3].render_line(4, include_attention_reason=True)
+    assert "attention: denied test" in ordered[4].render_line(5, include_attention_reason=True)
+    assert "attention: restored denied edit" in ordered[5].render_line(6, include_attention_reason=True)
+    assert "attention: test fail" in ordered[6].render_line(7, include_attention_reason=True)
+    assert "attention: tool fail" in ordered[7].render_line(8, include_attention_reason=True)
+    assert "attention: restore" in ordered[8].render_line(9, include_attention_reason=True)
+    assert ordered[9].attention_reason_summary == "recent shell activity"
+    shell_line = ordered[9].render_line(10, include_attention_reason=True)
     assert "attention:" not in shell_line
     assert "shell: inspect 1" in shell_line
-    shell_preview = "\n".join(ordered[8].render_preview(visible_index=9, overall_index=9, total_matches=len(ordered)))
+    shell_preview = "\n".join(ordered[9].render_preview(visible_index=10, overall_index=10, total_matches=len(ordered)))
     assert "- attention reason: recent shell activity" in shell_preview
-    assert ordered[9].attention_reason_summary == "recent tool activity"
-    tool_line = ordered[9].render_line(10, include_attention_reason=True)
+    pending_preview = "\n".join(ordered[3].render_preview(visible_index=4, overall_index=4, total_matches=len(ordered)))
+    assert "- pending tools: edit 1" in pending_preview
+    assert "- attention reason: pending edit approval queue; tests sort ahead of edits" in pending_preview
+    assert ordered[10].attention_reason_summary == "recent tool activity"
+    tool_line = ordered[10].render_line(11, include_attention_reason=True)
     assert "attention:" not in tool_line
     assert "last tool: .: README.md" in tool_line
-    tool_preview = "\n".join(ordered[9].render_preview(visible_index=10, overall_index=10, total_matches=len(ordered)))
+    tool_preview = "\n".join(ordered[10].render_preview(visible_index=11, overall_index=11, total_matches=len(ordered)))
     assert "- attention reason: recent tool activity" in tool_preview
     assert "attention:" not in ordered[0].render_line(1)
 
