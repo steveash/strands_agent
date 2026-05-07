@@ -326,6 +326,12 @@ async def run_smoke() -> None:
                 < all_attention_output.index("session-failed-test | 1 turn(s)")
                 < all_attention_output.index("session-failed-tool | 1 turn(s)"),
             )
+            print(
+                "switcher_compact_attention_hints=",
+                "attention: test fail" in all_attention_output
+                and "attention: tool fail" in all_attention_output
+                and "attention: restore" in all_attention_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 

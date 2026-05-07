@@ -1382,6 +1382,9 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
     assert "attention: pending queue" in ordered[2].render_line(3, include_attention_reason=True)
     assert "attention: denied test" in ordered[3].render_line(4, include_attention_reason=True)
     assert "attention: restored denied edit" in ordered[4].render_line(5, include_attention_reason=True)
+    assert "attention: test fail" in ordered[5].render_line(6, include_attention_reason=True)
+    assert "attention: tool fail" in ordered[6].render_line(7, include_attention_reason=True)
+    assert "attention: restore" in ordered[7].render_line(8, include_attention_reason=True)
     assert "attention:" not in ordered[0].render_line(1)
 
     approval_restore_ordered = list_recent_sessions(tmp_path, sort_mode="attention", filter_mode="approval-restore")

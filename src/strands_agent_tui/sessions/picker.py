@@ -1060,29 +1060,29 @@ def _attention_reason_badge(summary: SessionSummary) -> str:
             return f"restored denied {denied_family}"
 
     if summary.denied_approval_count > 0:
-        return "denied approval"
+        return "denied"
 
     if summary.recent_test_failure_count > 0:
-        return "test failure"
+        return "test fail"
 
     if summary.recent_tool_failure_count > 0:
-        return "tool failure"
+        return "tool fail"
 
     if summary.recent_failure_count > 0:
-        return "failure activity"
+        return "failures"
 
     restored_family = _first_attention_family(restored_family_key)
     if restored_family:
-        return f"restored {restored_family} activity"
+        return f"restored {restored_family}"
 
     if summary.restore_badges:
-        return "restore context"
+        return "restore"
 
     if summary.last_shell_preview or summary.shell_activity_badges:
-        return "shell activity"
+        return "shell"
 
     if summary.last_tool_preview or summary.last_tool_badges:
-        return "tool activity"
+        return "tool"
 
     return ""
 

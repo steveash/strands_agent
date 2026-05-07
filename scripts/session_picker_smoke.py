@@ -350,6 +350,12 @@ def main() -> None:
             "attention: denied test" in attention_picker
             and "denied: test 1" in attention_picker,
         )
+        print(
+            "picker_compact_attention_hints=",
+            "attention: test fail" in attention_picker
+            and "attention: tool fail" in attention_picker
+            and "attention: restore" in attention_picker,
+        )
         print("picker_paged_banner=", "Page: 2/3 | Showing: 9-16 of 18" in paged_picker)
         print(
             "picker_paged_window=",

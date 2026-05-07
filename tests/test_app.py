@@ -1378,6 +1378,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         restore_output = str(app.query_one("#output").render())
         assert "Filter: restore | Sort: attention" in restore_output
         assert "session-restore" in restore_output
+        assert "attention: restore" in restore_output
         assert "session-pending | 1 turn(s)" not in restore_output
 
         await pilot.press("a")
@@ -1387,6 +1388,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-current" in all_output
         assert "session-pending" in all_output
         assert "session-restore" in all_output
+        assert "attention: restore" in all_output
         assert "shell: inspect 1" in all_output
 
 
