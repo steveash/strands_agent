@@ -281,6 +281,39 @@ def main() -> None:
             append_turn(empty_store, "plain session for empty-filter hint")
             empty_pending_picker = render_session_picker(empty_hint_root, filter_mode="pending")
 
+        with TemporaryDirectory() as mixed_pending_root:
+            mixed_pending_store = SessionArtifactStore(mixed_pending_root, session_id="session-pending-mixed")
+            append_turn(mixed_pending_store, "queue mixed approvals")
+            mixed_pending_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-mixed-1",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="run tests",
+                    ),
+                    ApprovalRequest(
+                        request_id="approval-mixed-2",
+                        tool_name="write_file",
+                        reason="Needs confirmation",
+                        args={"relative_path": "notes.txt", "overwrite": True},
+                        source="fake_runtime",
+                        prompt="queue edit",
+                    ),
+                    ApprovalRequest(
+                        request_id="approval-mixed-3",
+                        tool_name="list_files",
+                        reason="Needs confirmation",
+                        args={"relative_path": "."},
+                        source="fake_runtime",
+                        prompt="inspect tree",
+                    ),
+                ]
+            )
+            mixed_pending_picker = render_session_picker(mixed_pending_root, filter_mode="pending")
+
         for index in range(8):
             store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index}")
             append_turn(store, f"page prompt {index}")
@@ -388,6 +421,11 @@ def main() -> None:
             and "attention: pending edit" in attention_picker
             and "pending tools: test 1" in attention_picker
             and "pending tools: edit 1" in attention_picker,
+        )
+        print(
+            "picker_pending_queue_breakdown=",
+            "pending: 3 approvals (first test; rest edit 1, tool 1)" in mixed_pending_picker
+            and "- pending queue: first test; rest edit 1, tool 1" in mixed_pending_picker,
         )
         print(
             "picker_denied_test_attention=",

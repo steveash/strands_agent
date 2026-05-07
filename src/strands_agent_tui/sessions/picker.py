@@ -14,6 +14,7 @@ from .artifacts import (
     load_session_picker_state,
     save_session_picker_state,
 )
+from ..runtime import ApprovalRequest
 from ..tools.workspace import resolve_shell_command
 
 MAX_RECENT_SESSIONS = 8
@@ -40,6 +41,7 @@ class SessionSummary:
     pending_approval_count: int = 0
     pending_approval_tool: str = ""
     pending_approval_summary: str = ""
+    pending_approval_queue_summary: str = ""
     pending_approval_badges: list[str] = field(default_factory=list)
     approval_status_badges: list[str] = field(default_factory=list)
     approval_focus_badges: list[str] = field(default_factory=list)
@@ -76,7 +78,7 @@ class SessionSummary:
         if self.pending_approval_count == 1 and self.pending_approval_tool:
             pending_suffix = f" | pending: {self.pending_approval_tool}"
         elif self.pending_approval_count > 1:
-            tool_hint = f" ({self.pending_approval_tool} first)" if self.pending_approval_tool else ""
+            tool_hint = f" ({self.pending_approval_queue_summary})" if self.pending_approval_queue_summary else ""
             pending_suffix = f" | pending: {self.pending_approval_count} approvals{tool_hint}"
         pending_tool_suffix = (
             f" | pending tools: {', '.join(self.pending_approval_badges)}" if self.pending_approval_badges else ""
@@ -143,6 +145,8 @@ class SessionSummary:
             if self.pending_approval_count > 1:
                 pending_line = f"{self.pending_approval_count} approvals | first: {pending_line}"
             lines.append(f"- pending: {pending_line}")
+        if self.pending_approval_queue_summary:
+            lines.append(f"- pending queue: {self.pending_approval_queue_summary}")
         if self.pending_approval_badges:
             lines.append(f"- pending tools: {', '.join(self.pending_approval_badges)}")
         if self.approval_status_badges:
@@ -286,6 +290,7 @@ def _ordered_recent_sessions(
             pending_approval_count=len(pending_approvals),
             pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
             pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
+            pending_approval_queue_summary=_pending_approval_queue_summary(pending_approvals),
             pending_approval_badges=pending_approval_badges,
             approval_status_badges=approval_status_badges,
             approval_focus_badges=approval_focus_badges,
@@ -997,6 +1002,38 @@ def _render_tool_family_badges(tool_family_counts: dict[str, int]) -> list[str]:
     return badges
 
 
+def _pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) -> str:
+    if len(pending_approvals) <= 1:
+        return ""
+
+    first_approval = pending_approvals[0]
+    first_family = _approval_tool_family_for_values(
+        tool_name=str(first_approval.tool_name or ""),
+        command=_approval_command_from_args(first_approval.args),
+        shell_command_family="",
+    ) or str(first_approval.tool_name or "approval")
+
+    remaining_family_counts: dict[str, int] = {}
+    for approval in pending_approvals[1:]:
+        family = _approval_tool_family_for_values(
+            tool_name=str(approval.tool_name or ""),
+            command=_approval_command_from_args(approval.args),
+            shell_command_family="",
+        )
+        remaining_family_counts[family] = remaining_family_counts.get(family, 0) + 1
+
+    remaining_badges = _render_tool_family_badges(remaining_family_counts)
+    if remaining_badges:
+        return f"first {first_family}; rest {', '.join(remaining_badges)}"
+    return f"first {first_family}"
+
+
+def _approval_command_from_args(args: object) -> str:
+    if not isinstance(args, dict):
+        return ""
+    return str(args.get("command", "") or "").strip()
+
+
 def _tool_family_attention_sort_key(tool_family_counts: dict[str, int]) -> tuple[int, ...]:
     families = (*APPROVAL_TOOL_FAMILY_DISPLAY_ORDER,)
     return tuple(tool_family_counts.get(family, 0) for family in families)
@@ -1158,12 +1195,17 @@ def _first_attention_family(counts: tuple[int, ...]) -> str:
 
 
 def _approval_tool_family(record: dict[str, object]) -> str:
-    tool_name = str(record.get("tool_name", "") or "").strip()
+    return _approval_tool_family_for_values(
+        tool_name=str(record.get("tool_name", "") or "").strip(),
+        command=str(record.get("command", "") or "").strip(),
+        shell_command_family=str(record.get("shell_command_family", "") or "").strip(),
+    )
+
+
+def _approval_tool_family_for_values(*, tool_name: str, command: str, shell_command_family: str) -> str:
     if tool_name == "run_shell_command":
-        shell_family = str(record.get("shell_command_family", "") or "").strip()
-        if shell_family.startswith("pytest"):
+        if shell_command_family.startswith("pytest"):
             return "test"
-        command = str(record.get("command", "") or "").strip()
         if command:
             try:
                 profile = resolve_shell_command(command)

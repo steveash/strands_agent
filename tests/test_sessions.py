@@ -449,6 +449,49 @@ def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path)
     assert "pending: run_shell_command" in summary.render_line(1)
 
 
+def test_list_recent_sessions_surfaces_pending_queue_first_vs_rest_breakdown(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-pending-mixed")
+    _append_turn(store, "queue mixed approvals")
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0007a",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run pytest",
+            ),
+            ApprovalRequest(
+                request_id="approval-0007b",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit",
+            ),
+            ApprovalRequest(
+                request_id="approval-0007c",
+                tool_name="list_files",
+                reason="Needs confirmation",
+                args={"relative_path": "."},
+                source="fake_runtime",
+                prompt="inspect tree",
+            ),
+        ]
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.pending_approval_count == 3
+    assert summary.pending_approval_queue_summary == "first test; rest edit 1, tool 1"
+    assert "pending: 3 approvals (first test; rest edit 1, tool 1)" in summary.render_line(1)
+    assert "pending tools: test 1, edit 1, tool 1" in summary.render_line(1)
+    assert "- pending queue: first test; rest edit 1, tool 1" in preview
+    assert "- last approval: pending run_shell_command via fake_runtime | queued 3" in preview
+
+
 def test_list_recent_sessions_surfaces_approval_rollup_and_last_summary(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-approval-rollup")
     store.append_turn(
