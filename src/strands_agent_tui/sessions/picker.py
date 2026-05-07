@@ -51,6 +51,7 @@ class SessionSummary:
     restored_approval_tool_badges: list[str] = field(default_factory=list)
     last_restored_approval_summary: str = ""
     approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
+    denied_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     attention_reason_summary: str = ""
     last_event_preview: str = ""
     last_tool_preview: str = ""
@@ -254,6 +255,7 @@ def _ordered_recent_sessions(
             restored_approval_tool_badges,
             last_restored_approval_summary,
             approval_attention_sort_key,
+            denied_approval_attention_sort_key,
         ) = _approval_activity(turns, pending_approvals)
         last_prompt_preview = ""
         if turns:
@@ -285,6 +287,7 @@ def _ordered_recent_sessions(
             restored_approval_tool_badges=restored_approval_tool_badges,
             last_restored_approval_summary=last_restored_approval_summary,
             approval_attention_sort_key=approval_attention_sort_key,
+            denied_approval_attention_sort_key=denied_approval_attention_sort_key,
             last_event_preview=_latest_event_preview(turns),
             last_tool_preview=_latest_tool_preview(turns),
             last_tool_badges=_latest_tool_badges(turns),
@@ -803,7 +806,7 @@ def _render_tool_event_summary(event) -> str:
 def _approval_activity(
     turns: list[TurnArtifact],
     pending_approvals,
-) -> tuple[list[str], list[str], str, int, list[str], str, int, list[str], list[str], str, tuple[int, ...]]:
+) -> tuple[list[str], list[str], str, int, list[str], str, int, list[str], list[str], str, tuple[int, ...], tuple[int, ...]]:
     latest_by_request_id: dict[str, dict[str, object]] = {}
     last_record: dict[str, object] | None = None
     last_denied_record: dict[str, object] | None = None
@@ -907,6 +910,7 @@ def _approval_activity(
         restored_denied_family_counts,
         restored_family_counts,
     )
+    denied_approval_attention_sort_key = _tool_family_attention_sort_key(denied_family_counts)
 
     return (
         badges,
@@ -920,6 +924,7 @@ def _approval_activity(
         restored_tool_badges,
         _render_last_approval_summary(last_restored_record),
         approval_attention_sort_key,
+        denied_approval_attention_sort_key,
     )
 
 
@@ -949,25 +954,43 @@ def _render_tool_family_badges(tool_family_counts: dict[str, int]) -> list[str]:
     return badges
 
 
+def _tool_family_attention_sort_key(tool_family_counts: dict[str, int]) -> tuple[int, ...]:
+    families = (*APPROVAL_TOOL_FAMILY_DISPLAY_ORDER,)
+    return tuple(tool_family_counts.get(family, 0) for family in families)
+
+
 def _approval_attention_sort_key(
     restored_pending_family_counts: dict[str, int],
     restored_denied_family_counts: dict[str, int],
     restored_family_counts: dict[str, int],
 ) -> tuple[int, ...]:
-    families = (*APPROVAL_TOOL_FAMILY_DISPLAY_ORDER,)
     return (
-        *(restored_pending_family_counts.get(family, 0) for family in families),
-        *(restored_denied_family_counts.get(family, 0) for family in families),
-        *(restored_family_counts.get(family, 0) for family in families),
+        *_tool_family_attention_sort_key(restored_pending_family_counts),
+        *_tool_family_attention_sort_key(restored_denied_family_counts),
+        *_tool_family_attention_sort_key(restored_family_counts),
     )
 
 
-def _attention_reason_summary(summary: SessionSummary) -> str:
+def _approval_attention_family_keys(
+    summary: SessionSummary,
+) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
     family_count = len(APPROVAL_TOOL_FAMILY_DISPLAY_ORDER)
     approval_attention_sort_key = summary.approval_attention_sort_key or (0,) * (family_count * 3)
     restored_pending_key = approval_attention_sort_key[:family_count]
     restored_denied_key = approval_attention_sort_key[family_count : family_count * 2]
     restored_family_key = approval_attention_sort_key[family_count * 2 : family_count * 3]
+    denied_key = summary.denied_approval_attention_sort_key or (0,) * family_count
+    fresh_denied_key = tuple(
+        max(denied_count - restored_count, 0)
+        for denied_count, restored_count in zip(denied_key, restored_denied_key, strict=False)
+    )
+    return restored_pending_key, restored_denied_key, restored_family_key, denied_key, fresh_denied_key
+
+
+def _attention_reason_summary(summary: SessionSummary) -> str:
+    restored_pending_key, restored_denied_key, restored_family_key, denied_key, fresh_denied_key = (
+        _approval_attention_family_keys(summary)
+    )
 
     restored_pending_family = _first_attention_family(restored_pending_key)
     if restored_pending_family:
@@ -980,9 +1003,13 @@ def _attention_reason_summary(summary: SessionSummary) -> str:
     if summary.pending_approval_count > 0:
         return "pending approval queue"
 
-    restored_denied_family = _first_attention_family(restored_denied_key)
-    if restored_denied_family:
-        return f"restored denied {restored_denied_family} approval"
+    denied_family = _first_attention_family(denied_key)
+    if denied_family:
+        denied_family_index = APPROVAL_TOOL_FAMILY_DISPLAY_ORDER.index(denied_family)
+        if fresh_denied_key[denied_family_index] > 0:
+            return f"denied {denied_family} approval"
+        if restored_denied_key[denied_family_index] > 0:
+            return f"restored denied {denied_family} approval"
 
     if summary.denied_approval_count > 0:
         return "denied approval"
@@ -1013,11 +1040,9 @@ def _attention_reason_summary(summary: SessionSummary) -> str:
 
 
 def _attention_reason_badge(summary: SessionSummary) -> str:
-    family_count = len(APPROVAL_TOOL_FAMILY_DISPLAY_ORDER)
-    approval_attention_sort_key = summary.approval_attention_sort_key or (0,) * (family_count * 3)
-    restored_pending_key = approval_attention_sort_key[:family_count]
-    restored_denied_key = approval_attention_sort_key[family_count : family_count * 2]
-    restored_family_key = approval_attention_sort_key[family_count * 2 : family_count * 3]
+    restored_pending_key, restored_denied_key, restored_family_key, denied_key, fresh_denied_key = (
+        _approval_attention_family_keys(summary)
+    )
 
     restored_pending_family = _first_attention_family(restored_pending_key)
     if restored_pending_family:
@@ -1026,9 +1051,13 @@ def _attention_reason_badge(summary: SessionSummary) -> str:
     if summary.pending_approval_count > 0:
         return "pending queue"
 
-    restored_denied_family = _first_attention_family(restored_denied_key)
-    if restored_denied_family:
-        return f"restored denied {restored_denied_family}"
+    denied_family = _first_attention_family(denied_key)
+    if denied_family:
+        denied_family_index = APPROVAL_TOOL_FAMILY_DISPLAY_ORDER.index(denied_family)
+        if fresh_denied_key[denied_family_index] > 0:
+            return f"denied {denied_family}"
+        if restored_denied_key[denied_family_index] > 0:
+            return f"restored denied {denied_family}"
 
     if summary.denied_approval_count > 0:
         return "denied approval"
@@ -1216,17 +1245,18 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
 def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[object, ...]:
     activity_timestamp, session_id, summary = item
     if sort_mode == "attention":
-        approval_attention_sort_key = summary.approval_attention_sort_key or (0,) * 12
-        restored_pending_key = approval_attention_sort_key[:4]
-        restored_denied_key = approval_attention_sort_key[4:8]
-        restored_family_key = approval_attention_sort_key[8:12]
+        restored_pending_key, restored_denied_key, restored_family_key, denied_key, fresh_denied_key = (
+            _approval_attention_family_keys(summary)
+        )
         return (
             summary.pending_approval_count > 0,
             summary.pending_approval_count,
             restored_pending_key,
             summary.denied_approval_count > 0,
-            summary.denied_approval_count,
+            denied_key,
+            fresh_denied_key,
             restored_denied_key,
+            summary.denied_approval_count,
             summary.recent_test_failure_count > 0,
             summary.recent_test_failure_count,
             summary.recent_tool_failure_count > 0,

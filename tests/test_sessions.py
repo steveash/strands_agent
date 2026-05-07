@@ -1175,7 +1175,7 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert [session.session_id for session in tool_sessions] == ["session-tool"]
 
 
-def test_list_recent_sessions_attention_sort_prioritizes_restored_test_queues_before_restored_edits_fresh_pending_then_denied_and_failures(tmp_path: Path) -> None:
+def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_before_other_failures(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
 
@@ -1224,6 +1224,32 @@ def test_list_recent_sessions_attention_sort_prioritizes_restored_test_queues_be
                 prompt="run tests",
             )
         ]
+    )
+
+    denied_test_store = SessionArtifactStore(tmp_path, session_id="session-denied-test")
+    denied_test_store.append_turn(
+        TurnArtifact(
+            prompt="deny risky test run",
+            response="skipped",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_denied",
+                    "run_shell_command",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "approval_id": "approval-0010b",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 0,
+                        "command": "pytest -q",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
     )
 
     denied_store = SessionArtifactStore(tmp_path, session_id="session-denied")
@@ -1330,10 +1356,11 @@ def test_list_recent_sessions_attention_sort_prioritizes_restored_test_queues_be
 
     ordered = list_recent_sessions(tmp_path, sort_mode="attention", limit=count_recent_sessions(tmp_path))
 
-    assert [session.session_id for session in ordered[:9]] == [
+    assert [session.session_id for session in ordered[:10]] == [
         "session-restored-pending-test",
         "session-restored-pending-edit",
         "session-pending",
+        "session-denied-test",
         "session-denied",
         "session-failed-test",
         "session-failed-tool",
@@ -1347,11 +1374,14 @@ def test_list_recent_sessions_attention_sort_prioritizes_restored_test_queues_be
         == "restored pending edit approval queue; restored tests sort ahead of this queue"
     )
     assert ordered[2].attention_reason_summary == "pending approval queue"
-    assert ordered[3].attention_reason_summary == "restored denied edit approval"
-    assert ordered[4].attention_reason_summary == "recent shell test failure"
+    assert ordered[3].attention_reason_summary == "denied test approval"
+    assert ordered[4].attention_reason_summary == "restored denied edit approval"
+    assert ordered[5].attention_reason_summary == "recent shell test failure"
     assert "attention: restored test queue" in ordered[0].render_line(1, include_attention_reason=True)
     assert "attention: restored edit queue" in ordered[1].render_line(2, include_attention_reason=True)
     assert "attention: pending queue" in ordered[2].render_line(3, include_attention_reason=True)
+    assert "attention: denied test" in ordered[3].render_line(4, include_attention_reason=True)
+    assert "attention: restored denied edit" in ordered[4].render_line(5, include_attention_reason=True)
     assert "attention:" not in ordered[0].render_line(1)
 
     approval_restore_ordered = list_recent_sessions(tmp_path, sort_mode="attention", filter_mode="approval-restore")
