@@ -1354,9 +1354,28 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
         )
     )
 
+    tool_store = SessionArtifactStore(tmp_path, session_id="session-tool")
+    tool_store.append_turn(
+        TurnArtifact(
+            prompt="list files",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
     ordered = list_recent_sessions(tmp_path, sort_mode="attention", limit=count_recent_sessions(tmp_path))
 
-    assert [session.session_id for session in ordered[:10]] == [
+    assert [session.session_id for session in ordered[:11]] == [
         "session-restored-pending-test",
         "session-restored-pending-edit",
         "session-pending",
@@ -1366,6 +1385,7 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
         "session-failed-tool",
         "session-restore",
         "session-inspect",
+        "session-tool",
         "session-plain",
     ]
     assert ordered[0].attention_reason_summary == "restored pending test approval queue; tests sort ahead of restored edits"
@@ -1385,6 +1405,18 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
     assert "attention: test fail" in ordered[5].render_line(6, include_attention_reason=True)
     assert "attention: tool fail" in ordered[6].render_line(7, include_attention_reason=True)
     assert "attention: restore" in ordered[7].render_line(8, include_attention_reason=True)
+    assert ordered[8].attention_reason_summary == "recent shell activity"
+    shell_line = ordered[8].render_line(9, include_attention_reason=True)
+    assert "attention:" not in shell_line
+    assert "shell: inspect 1" in shell_line
+    shell_preview = "\n".join(ordered[8].render_preview(visible_index=9, overall_index=9, total_matches=len(ordered)))
+    assert "- attention reason: recent shell activity" in shell_preview
+    assert ordered[9].attention_reason_summary == "recent tool activity"
+    tool_line = ordered[9].render_line(10, include_attention_reason=True)
+    assert "attention:" not in tool_line
+    assert "last tool: .: README.md" in tool_line
+    tool_preview = "\n".join(ordered[9].render_preview(visible_index=10, overall_index=10, total_matches=len(ordered)))
+    assert "- attention reason: recent tool activity" in tool_preview
     assert "attention:" not in ordered[0].render_line(1)
 
     approval_restore_ordered = list_recent_sessions(tmp_path, sort_mode="attention", filter_mode="approval-restore")

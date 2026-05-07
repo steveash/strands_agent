@@ -195,6 +195,25 @@ async def run_smoke() -> None:
             )
         )
 
+        tool_store = SessionArtifactStore(temp_dir, session_id="session-tool")
+        tool_store.append_turn(
+            TurnArtifact(
+                prompt="list files",
+                response="done",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "tool_finished",
+                        "list_files",
+                        "Finished listing files",
+                        data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
         first_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
             config=AppConfig(
@@ -332,6 +351,17 @@ async def run_smoke() -> None:
                 and "attention: tool fail" in all_attention_output
                 and "attention: restore" in all_attention_output,
             )
+            print(
+                "switcher_suppressed_generic_attention_hints=",
+                not any(
+                    "attention: shell |" in line
+                    or line.endswith("attention: shell")
+                    or "attention: tool |" in line
+                    or line.endswith("attention: tool")
+                    for line in all_attention_output.splitlines()
+                )
+                and "session-tool | 1 turn(s)" in all_attention_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 
@@ -357,7 +387,7 @@ async def run_smoke() -> None:
             print("switcher_restored=", "Session Switcher" in str(restored_output))
             print("switcher_restored_sort=", "Filter: all | Sort: attention" in str(restored_output))
             print("restored_selected_line=", selected_line)
-            print("restored_selection_is_newer=", "session-newer" in selected_line)
+            print("restored_selection_is_persisted=", "session-restored-pending" in selected_line)
             print("restored_latest_event=", restored_app.events[-1].kind if restored_app.events else None)
             await pilot.press("enter")
             await pilot.pause()
@@ -394,7 +424,7 @@ async def run_smoke() -> None:
             paged_output = str(paged_app.query_one("#output").render())
             stored_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
             print("switcher_paged=", "Page: 2/3" in paged_output)
-            print("switcher_paged_window=", "Showing: 9-16 of 17" in paged_output)
+            print("switcher_paged_window=", "Showing: 9-16 of 18" in paged_output)
             print(
                 "switcher_paged_state=",
                 stored_state is not None

@@ -93,9 +93,6 @@ class SessionSummary:
             if self.restored_approval_tool_badges
             else ""
         )
-        attention_suffix = ""
-        if include_attention_reason and self.attention_reason_summary:
-            attention_suffix = f" | attention: {_attention_reason_badge(self)}"
         tool_hint = ""
         if self.last_tool_preview or self.last_tool_badges:
             badge_prefix = "/".join(self.last_tool_badges)
@@ -114,6 +111,10 @@ class SessionSummary:
         failure_suffix = (
             f" | failures: {', '.join(self.failure_activity_badges)}" if self.failure_activity_badges else ""
         )
+        attention_suffix = ""
+        attention_badge = _attention_reason_badge(self) if include_attention_reason and self.attention_reason_summary else ""
+        if attention_badge and not _is_redundant_attention_badge(self, attention_badge):
+            attention_suffix = f" | attention: {attention_badge}"
         event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
@@ -1085,6 +1086,14 @@ def _attention_reason_badge(summary: SessionSummary) -> str:
         return "tool"
 
     return ""
+
+
+def _is_redundant_attention_badge(summary: SessionSummary, attention_badge: str) -> bool:
+    if attention_badge == "shell":
+        return bool(summary.last_shell_preview or summary.shell_activity_badges)
+    if attention_badge == "tool":
+        return bool(summary.last_tool_preview or summary.last_tool_badges)
+    return False
 
 
 def _first_attention_family(counts: tuple[int, ...]) -> str:

@@ -212,7 +212,7 @@ def main() -> None:
         tool_store = SessionArtifactStore(temp_dir, session_id="session-tool")
         tool_store.append_turn(
             TurnArtifact(
-                prompt="inspect repo",
+                prompt="list files",
                 response="ok",
                 provider="fake-strands",
                 mode="fake",
@@ -222,7 +222,20 @@ def main() -> None:
                         "list_files",
                         "Finished listing files",
                         data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                    ),
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+        inspect_store = SessionArtifactStore(temp_dir, session_id="session-inspect")
+        inspect_store.append_turn(
+            TurnArtifact(
+                prompt="inspect repo",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[
                     runtime_event(
                         "tool_finished",
                         "run_shell_command",
@@ -245,6 +258,7 @@ def main() -> None:
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
+        attention_page_two_picker = render_session_picker(temp_dir, sort_mode="attention", page_index=1)
         approval_restore_attention_picker = render_session_picker(temp_dir, filter_mode="approval-restore", sort_mode="attention")
 
         with TemporaryDirectory() as empty_hint_root:
@@ -258,7 +272,7 @@ def main() -> None:
 
         paged_picker = render_session_picker(temp_dir, page_index=1)
 
-        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 10" in default_picker)
+        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 11" in default_picker)
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print("picker_pending_only_pending=", "session-pending" in pending_picker and "session-plain" not in pending_picker)
@@ -302,7 +316,10 @@ def main() -> None:
             "shell: inspect 1" in default_picker
             and "- last shell: inspect/e0 git status --short -> M README.md" in default_picker,
         )
-        print("picker_tool_streak_preview=", "- recent tools (2):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker)
+        print(
+            "picker_tool_streak_preview=",
+            "- recent tools (1):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker,
+        )
         print(
             "picker_failure_badges=",
             "failures: test 1" in default_picker and "failures: tool 1" in default_picker,
@@ -356,11 +373,24 @@ def main() -> None:
             and "attention: tool fail" in attention_picker
             and "attention: restore" in attention_picker,
         )
-        print("picker_paged_banner=", "Page: 2/3 | Showing: 9-16 of 18" in paged_picker)
+        print(
+            "picker_suppressed_generic_attention_hints=",
+            not any(
+                "attention: shell |" in line
+                or line.endswith("attention: shell")
+                or "attention: tool |" in line
+                or line.endswith("attention: tool")
+                for line in attention_page_two_picker.splitlines()
+            )
+            and "session-inspect | 1 turn(s)" in attention_page_two_picker
+            and "session-tool | 1 turn(s)" in attention_page_two_picker,
+        )
+        print("picker_paged_banner=", "Page: 2/3 | Showing: 9-16 of 19" in paged_picker)
         print(
             "picker_paged_window=",
-            "> 1. session-tool" in paged_picker
-            and "  8. session-denied-test" in paged_picker
+            "> 1. session-inspect" in paged_picker
+            and "  2. session-tool" in paged_picker
+            and "  8. session-denied" in paged_picker
             and "session-page-7" not in paged_picker,
         )
 
@@ -397,7 +427,7 @@ def main() -> None:
         print("picker_interactive_paged_selected=", paged_summary.session_id)
         print(
             "picker_interactive_paged_banner=",
-            any("Page: 2/3 | Showing: 9-16 of 18" in line for line in paged_captured),
+            any("Page: 2/3 | Showing: 9-16 of 19" in line for line in paged_captured),
         )
 
         aborted_inputs = iter(["]", "j", "n"])
@@ -423,12 +453,12 @@ def main() -> None:
         print("picker_restored_selected=", restored_summary.session_id)
         print(
             "picker_restored_page=",
-            any("Page: 2/3 | Showing: 9-16 of 18" in line for line in restored_captured),
+            any("Page: 2/3 | Showing: 9-16 of 19" in line for line in restored_captured),
         )
         print(
             "picker_restored_preview=",
             any(
-                "- slot 2 on this page | overall 10 of 18 | session session-failed-tool" in line
+                "- slot 2 on this page | overall 10 of 19 | session session-tool" in line
                 for line in restored_captured
             ),
         )
