@@ -52,6 +52,7 @@ class SessionSummary:
     restored_approval_count: int = 0
     restored_approval_badges: list[str] = field(default_factory=list)
     restored_approval_tool_badges: list[str] = field(default_factory=list)
+    restored_pending_approval_queue_summary: str = ""
     last_restored_approval_summary: str = ""
     pending_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
@@ -100,6 +101,11 @@ class SessionSummary:
             if self.restored_approval_tool_badges
             else ""
         )
+        approval_restore_queue_suffix = (
+            f" | approval restore queue: {self.restored_pending_approval_queue_summary}"
+            if self.restored_pending_approval_queue_summary
+            else ""
+        )
         tool_hint = ""
         if self.last_tool_preview or self.last_tool_badges:
             badge_prefix = "/".join(self.last_tool_badges)
@@ -126,7 +132,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{attention_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{attention_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -163,6 +169,8 @@ class SessionSummary:
             lines.append(f"- approval restore: {', '.join(self.restored_approval_badges)}")
         if self.restored_approval_tool_badges:
             lines.append(f"- approval restore tools: {', '.join(self.restored_approval_tool_badges)}")
+        if self.restored_pending_approval_queue_summary:
+            lines.append(f"- approval restore queue: {self.restored_pending_approval_queue_summary}")
         if self.last_restored_approval_summary:
             lines.append(f"- last restored approval: {self.last_restored_approval_summary}")
         if self.restore_badges:
@@ -301,6 +309,7 @@ def _ordered_recent_sessions(
             restored_approval_count=restored_approval_count,
             restored_approval_badges=restored_approval_badges,
             restored_approval_tool_badges=restored_approval_tool_badges,
+            restored_pending_approval_queue_summary=_restored_pending_approval_queue_summary(pending_approvals),
             last_restored_approval_summary=last_restored_approval_summary,
             pending_approval_attention_sort_key=pending_approval_attention_sort_key,
             approval_attention_sort_key=approval_attention_sort_key,
@@ -1002,11 +1011,11 @@ def _render_tool_family_badges(tool_family_counts: dict[str, int]) -> list[str]:
     return badges
 
 
-def _pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) -> str:
-    if len(pending_approvals) <= 1:
+def _approval_queue_summary(approvals: list[ApprovalRequest]) -> str:
+    if len(approvals) <= 1:
         return ""
 
-    first_approval = pending_approvals[0]
+    first_approval = approvals[0]
     first_family = _approval_tool_family_for_values(
         tool_name=str(first_approval.tool_name or ""),
         command=_approval_command_from_args(first_approval.args),
@@ -1014,7 +1023,7 @@ def _pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) ->
     ) or str(first_approval.tool_name or "approval")
 
     remaining_family_counts: dict[str, int] = {}
-    for approval in pending_approvals[1:]:
+    for approval in approvals[1:]:
         family = _approval_tool_family_for_values(
             tool_name=str(approval.tool_name or ""),
             command=_approval_command_from_args(approval.args),
@@ -1026,6 +1035,15 @@ def _pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) ->
     if remaining_badges:
         return f"first {first_family}; rest {', '.join(remaining_badges)}"
     return f"first {first_family}"
+
+
+def _pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) -> str:
+    return _approval_queue_summary(pending_approvals)
+
+
+def _restored_pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) -> str:
+    restored_pending = [approval for approval in pending_approvals if approval.restored_from_session]
+    return _approval_queue_summary(restored_pending)
 
 
 def _approval_command_from_args(args: object) -> str:

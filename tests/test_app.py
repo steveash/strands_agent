@@ -1505,6 +1505,93 @@ async def test_session_switcher_surfaces_pending_queue_breakdown_for_multi_appro
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_surfaces_restored_pending_queue_breakdown_for_multi_approval_session(
+    tmp_path: Path,
+) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    mixed_restored_store = SessionArtifactStore(tmp_path, session_id="session-restored-mixed")
+    mixed_restored_store.append_turn(
+        TurnArtifact(
+            prompt="restored pending prompt",
+            response="restored pending response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    mixed_restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0091a",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun restored tests",
+                restored_from_session=True,
+            ),
+            ApprovalRequest(
+                request_id="approval-0091b",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume restored edit",
+                restored_from_session=True,
+            ),
+            ApprovalRequest(
+                request_id="approval-0091c",
+                tool_name="list_files",
+                reason="Needs confirmation",
+                args={"relative_path": "."},
+                source="fake_runtime",
+                prompt="resume restored inspection",
+                restored_from_session=True,
+            ),
+        ]
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("v")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+
+        assert "session-restored-mixed" in output
+        assert "pending: 3 approvals (first test; rest edit 1, tool 1)" in output
+        assert "approval restore queue: first test; rest edit 1, tool 1" in output
+        assert "- approval restore queue: first test; rest edit 1, tool 1" in output
+        assert "- approval restore tools: test 1, edit 1, tool 1" in output
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(

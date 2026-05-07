@@ -314,6 +314,42 @@ def main() -> None:
             )
             mixed_pending_picker = render_session_picker(mixed_pending_root, filter_mode="pending")
 
+        with TemporaryDirectory() as mixed_restored_root:
+            mixed_restored_store = SessionArtifactStore(mixed_restored_root, session_id="session-restored-mixed")
+            append_turn(mixed_restored_store, "resume mixed restored approvals")
+            mixed_restored_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-0020a",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="rerun restored tests",
+                        restored_from_session=True,
+                    ),
+                    ApprovalRequest(
+                        request_id="approval-0020b",
+                        tool_name="write_file",
+                        reason="Needs confirmation",
+                        args={"relative_path": "notes.txt", "overwrite": True},
+                        source="fake_runtime",
+                        prompt="resume restored edit",
+                        restored_from_session=True,
+                    ),
+                    ApprovalRequest(
+                        request_id="approval-0020c",
+                        tool_name="list_files",
+                        reason="Needs confirmation",
+                        args={"relative_path": "."},
+                        source="fake_runtime",
+                        prompt="resume restored inspection",
+                        restored_from_session=True,
+                    ),
+                ]
+            )
+            mixed_restored_picker = render_session_picker(mixed_restored_root, filter_mode="approval-restore")
+
         for index in range(8):
             store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index}")
             append_turn(store, f"page prompt {index}")
@@ -426,6 +462,11 @@ def main() -> None:
             "picker_pending_queue_breakdown=",
             "pending: 3 approvals (first test; rest edit 1, tool 1)" in mixed_pending_picker
             and "- pending queue: first test; rest edit 1, tool 1" in mixed_pending_picker,
+        )
+        print(
+            "picker_restored_pending_queue_breakdown=",
+            "approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker
+            and "- approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker,
         )
         print(
             "picker_denied_test_attention=",

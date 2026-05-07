@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, denied-approval triage filters, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, and a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, denied-approval triage filters, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, and restored multi-approval queue breakdowns that mirror the existing pending-triage wording.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -118,32 +118,32 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- taught recent-session attention sorting to prioritize denied `run_shell_command` test approvals ahead of denied edit approvals and executed test/tool failures,
-- added explicit `denied test approval` attention summaries/badges so the picker and switcher expose blocked test execution distinctly from a test run that actually failed,
-- refreshed session-picker smoke coverage plus session tests to lock the new denied-test ordering and wording in place.
+- taught recent-session approval-restore summaries to mirror the pending queue's first-vs-rest wording for restored multi-approval queues,
+- added explicit `approval restore queue:` row/preview copy in both the launch-time picker and in-app `F11` switcher while preserving the existing aggregate restored status/family badges,
+- refreshed session/app regression coverage plus picker/switcher smoke checks to lock the restored queue breakdown wording in place.
 
 Why this matters now:
-- It sharpens the operator triage story around Strands steering: a denied test approval is meaningfully different from a denied edit or a shell test that actually ran and failed.
-- It makes the saved-session surfaces better at explaining whether work is blocked on approval, blocked on policy, or blocked on a broken test run.
-- It deepens the learning value of the shared event schema because one approval/test distinction now shapes persistence artifacts, attention ordering, and recent-session previews together.
+- It keeps restored approval queues skimmable without reopening the session or mentally reconstructing queue order from aggregate badges alone.
+- It makes fresh pending triage and restored pending triage speak the same compact language, which lowers operator context switching inside the picker and `F11` switcher.
+- It deepens the learning value of the shared approval schema because restored pending metadata now shapes persistence artifacts, preview copy, and triage rendering together.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including recent-session selection, denied-approval filtering, shell/test outcome rollups, denied-aware attention sorting, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, and the shell-command seam,
+- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including recent-session selection, denied-approval filtering, restored approval-queue breakdowns, shell/test outcome rollups, denied-aware attention sorting, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, and the shell-command seam,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `110 passed`
-- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_default_banner= True`, `picker_pending_filter= True`, `picker_pending_only_pending= True`, `picker_denied_filter= True`, `picker_approval_restore_filter= True`, `picker_restored_approval_badge= True`, `picker_approval_rollup= True`, `picker_empty_hint= True`, `picker_shell_rollup= True`, `picker_tool_streak_preview= True`, `picker_attention_sort= True`, `picker_denied_test_attention= True`, `picker_interactive_selected= session-restored-pending`, `picker_interactive_toggled= True`, `picker_interactive_preview= True`, `picker_interactive_paged_selected= session-restore`, `picker_interactive_paged_banner= True`, `picker_restored_selected= session-failed-tool`, `picker_restored_page= True`, `picker_restored_preview= True`, and `latest=session-page-7`,
+- automated tests: `114 passed`
+- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_default_banner= True`, `picker_pending_filter= True`, `picker_pending_only_pending= True`, `picker_denied_filter= True`, `picker_approval_restore_filter= True`, `picker_restored_approval_badge= True`, `picker_restored_pending_queue_breakdown= True`, `picker_approval_rollup= True`, `picker_empty_hint= True`, `picker_shell_rollup= True`, `picker_tool_streak_preview= True`, `picker_attention_sort= True`, `picker_denied_test_attention= True`, `picker_interactive_selected= session-restored-pending`, `picker_interactive_toggled= True`, `picker_interactive_preview= True`, `picker_interactive_paged_selected= session-restore`, `picker_interactive_paged_banner= True`, `picker_restored_selected= session-failed-tool`, `picker_restored_page= True`, `picker_restored_preview= True`, and `latest=session-page-7`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py` now reports `switcher_default_selection_is_current= True`, `switcher_has_pending_marker= True`, `switcher_has_approval_rollup= True`, `switcher_has_restore_badges= True`, `switcher_has_tool_preview= True`, `switcher_has_shell_rollup= True`, `switcher_has_event_preview= True`, `switcher_selected_preview= True`, `switcher_last_approval_preview= True`, `switcher_shell_preview= True`, `switcher_tool_streak_preview= True`, `switcher_pending_filter= True`, `switcher_pending_filter_only_newer= True`, `switcher_denied_filter= True`, `switcher_denied_filter_only_denied= True`, `switcher_restored_approval_badge= True`, `switcher_approval_restore_filter= True`, `switcher_approval_restore_only_restored= True`, `switcher_attention_sort= True`, `switcher_restored= True`, `switcher_restored_sort= True`, `restored_selection_is_newer= True`, `switcher_empty_hint= True`, then switches from `session-older` to `session-newer` and prints `latest_event= session_switched`,
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py | grep 'switcher_restored_pending_queue_breakdown='` prints `switcher_restored_pending_queue_breakdown= True`,
 - CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter {all,pending,denied,restore,approval-restore,tool}`, `--pick-sort`, and `--resume-last`,
-- recent-session verification by test: recent session summaries now surface pending approvals, denied-approval rollups, latest denied approval previews, restore-state badges, last-event previews, explicit shell/test rollups, and attention ordering that now lifts denied test approvals above denied edits plus executed test failures while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
+- recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, latest denied approval previews, restore-state badges, last-event previews, explicit shell/test rollups, and attention ordering that now lifts denied test approvals above denied edits plus executed test failures while `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
 - UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
@@ -600,7 +600,7 @@ Why this stack:
 ## Next highest-value implementation order
 
 1. keep the fake runtime path green while refining the event schema around steering/intervention events
-2. decide whether recent-session shell rollups should grow into compact multi-approval + failed-test rollups per session row
+2. decide whether generic shell/tool activity now needs a preview-only cue, a dedicated filter, or no extra triage affordance beyond the existing row metadata
 3. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 4. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 5. decide whether recent-session attention should expose explicit approval-age or stale-session cues once triage lists grow larger
@@ -632,7 +632,7 @@ Future daily iterations should:
 ## Next iteration ideas
 
 - keep tightening the fake/live event schema around steering and intervention milestones
-- extend the shell rollups with denser approval/test summaries, such as explicit failed-test counters or compact multi-approval grouping inside the restored-approval triage path
+- decide whether generic shell/tool activity now needs a preview-only cue, a dedicated filter, or no extra triage affordance beyond the existing row metadata
 - reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether recent-session attention should expose explicit approval-age or stale-session cues once triage lists grow larger

@@ -903,6 +903,52 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     assert "- last restored approval: pending run_shell_command via fake_runtime | queued 1" in preview
 
 
+def test_list_recent_sessions_surfaces_restored_pending_queue_breakdown(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-restored-pending-mixed")
+    _append_turn(store, "reopen restored approval queue")
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-9310",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun restored tests",
+                restored_from_session=True,
+            ),
+            ApprovalRequest(
+                request_id="approval-9311",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume restored edit",
+                restored_from_session=True,
+            ),
+            ApprovalRequest(
+                request_id="approval-9312",
+                tool_name="list_files",
+                reason="Needs confirmation",
+                args={"relative_path": "."},
+                source="fake_runtime",
+                prompt="resume restored inspection",
+                restored_from_session=True,
+            ),
+        ]
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.pending_approval_queue_summary == "first test; rest edit 1, tool 1"
+    assert summary.restored_pending_approval_queue_summary == "first test; rest edit 1, tool 1"
+    assert "pending: 3 approvals (first test; rest edit 1, tool 1)" in summary.render_line(1)
+    assert "approval restore queue: first test; rest edit 1, tool 1" in summary.render_line(1)
+    assert "- pending queue: first test; rest edit 1, tool 1" in preview
+    assert "- approval restore queue: first test; rest edit 1, tool 1" in preview
+
+
 def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-restore")
     _append_turn(store, "inspect repo")

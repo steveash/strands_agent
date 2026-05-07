@@ -574,6 +574,69 @@ async def run_smoke() -> None:
                 and "- pending queue: first test; rest edit 1, tool 1" in mixed_pending_output,
             )
 
+    with TemporaryDirectory() as mixed_restored_root:
+        mixed_current_store = SessionArtifactStore(mixed_restored_root, session_id="session-current")
+        append_turn(mixed_current_store, "current prompt", "current response")
+
+        mixed_restored_store = SessionArtifactStore(mixed_restored_root, session_id="session-restored-mixed")
+        append_turn(mixed_restored_store, "resume mixed restored approvals", "restored mixed response")
+        mixed_restored_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-restored-1",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt="rerun restored tests",
+                    restored_from_session=True,
+                ),
+                ApprovalRequest(
+                    request_id="approval-restored-2",
+                    tool_name="write_file",
+                    reason="Needs confirmation",
+                    args={"relative_path": "notes.txt", "overwrite": True},
+                    source="fake_runtime",
+                    prompt="resume restored edit",
+                    restored_from_session=True,
+                ),
+                ApprovalRequest(
+                    request_id="approval-restored-3",
+                    tool_name="list_files",
+                    reason="Needs confirmation",
+                    args={"relative_path": "."},
+                    source="fake_runtime",
+                    prompt="resume restored inspection",
+                    restored_from_session=True,
+                ),
+            ]
+        )
+
+        mixed_restored_app = StrandsAgentApp(
+            runtime=FakeStrandsRuntime(),
+            config=AppConfig(
+                runtime_mode="fake",
+                openai_model="gpt-4o-mini",
+                workspace_root=".",
+                artifacts_root=mixed_restored_root,
+                session_id="session-current",
+            ),
+            artifact_store=mixed_current_store,
+        )
+
+        async with mixed_restored_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("f11")
+            await pilot.pause()
+            await pilot.press("v")
+            await pilot.pause()
+            mixed_restored_output = str(mixed_restored_app.query_one("#output").render())
+            print(
+                "switcher_restored_pending_queue_breakdown=",
+                "approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_output
+                and "- approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_output,
+            )
+
 
 def main() -> None:
     asyncio.run(run_smoke())
