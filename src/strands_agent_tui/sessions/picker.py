@@ -67,7 +67,7 @@ class SessionSummary:
     restore_badges: list[str] = field(default_factory=list)
     draft_prompt_preview: str = ""
 
-    def render_line(self, index: int) -> str:
+    def render_line(self, index: int, *, include_attention_reason: bool = False) -> str:
         prompt_suffix = f" | last prompt: {self.last_prompt_preview}" if self.last_prompt_preview else ""
         pending_suffix = ""
         if self.pending_approval_count == 1 and self.pending_approval_tool:
@@ -92,6 +92,9 @@ class SessionSummary:
             if self.restored_approval_tool_badges
             else ""
         )
+        attention_suffix = ""
+        if include_attention_reason and self.attention_reason_summary:
+            attention_suffix = f" | attention: {_attention_reason_badge(self)}"
         tool_hint = ""
         if self.last_tool_preview or self.last_tool_badges:
             badge_prefix = "/".join(self.last_tool_badges)
@@ -114,7 +117,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{attention_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -364,7 +367,9 @@ def render_session_picker(
         selected_index = _normalize_visible_selected_index(len(summaries), selected_index)
         for index, summary in enumerate(summaries, start=1):
             marker = ">" if index - 1 == selected_index else " "
-            lines.append(f"{marker} {summary.render_line(index)}")
+            lines.append(
+                f"{marker} {summary.render_line(index, include_attention_reason=sort_mode == 'attention')}"
+            )
         lines.extend(
             [
                 "",
@@ -1003,6 +1008,52 @@ def _attention_reason_summary(summary: SessionSummary) -> str:
 
     if summary.last_tool_preview or summary.last_tool_badges:
         return "recent tool activity"
+
+    return ""
+
+
+def _attention_reason_badge(summary: SessionSummary) -> str:
+    family_count = len(APPROVAL_TOOL_FAMILY_DISPLAY_ORDER)
+    approval_attention_sort_key = summary.approval_attention_sort_key or (0,) * (family_count * 3)
+    restored_pending_key = approval_attention_sort_key[:family_count]
+    restored_denied_key = approval_attention_sort_key[family_count : family_count * 2]
+    restored_family_key = approval_attention_sort_key[family_count * 2 : family_count * 3]
+
+    restored_pending_family = _first_attention_family(restored_pending_key)
+    if restored_pending_family:
+        return f"restored {restored_pending_family} queue"
+
+    if summary.pending_approval_count > 0:
+        return "pending queue"
+
+    restored_denied_family = _first_attention_family(restored_denied_key)
+    if restored_denied_family:
+        return f"restored denied {restored_denied_family}"
+
+    if summary.denied_approval_count > 0:
+        return "denied approval"
+
+    if summary.recent_test_failure_count > 0:
+        return "test failure"
+
+    if summary.recent_tool_failure_count > 0:
+        return "tool failure"
+
+    if summary.recent_failure_count > 0:
+        return "failure activity"
+
+    restored_family = _first_attention_family(restored_family_key)
+    if restored_family:
+        return f"restored {restored_family} activity"
+
+    if summary.restore_badges:
+        return "restore context"
+
+    if summary.last_shell_preview or summary.shell_activity_badges:
+        return "shell activity"
+
+    if summary.last_tool_preview or summary.last_tool_badges:
+        return "tool activity"
 
     return ""
 

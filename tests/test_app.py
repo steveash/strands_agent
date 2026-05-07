@@ -1347,11 +1347,15 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "approval restore tools: test 1" in approval_restore_output
         assert "approval restore tools: edit 1" in approval_restore_output
         assert "last restored approval:" in approval_restore_output
+        assert "attention:" not in approval_restore_output
 
         await pilot.press("s")
         await pilot.pause()
         attention_output = str(app.query_one("#output").render())
         assert "Filter: approval-restore | Sort: attention" in attention_output
+        assert "attention: restored test queue" in attention_output
+        assert "attention: restored edit queue" in attention_output
+        assert "attention: restored denied edit" in attention_output
         assert attention_output.index("session-restored-pending | 1 turn(s)") < attention_output.index(
             "session-restored-edit-pending | 1 turn(s)"
         )

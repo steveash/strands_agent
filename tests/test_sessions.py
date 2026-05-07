@@ -1349,6 +1349,10 @@ def test_list_recent_sessions_attention_sort_prioritizes_restored_test_queues_be
     assert ordered[2].attention_reason_summary == "pending approval queue"
     assert ordered[3].attention_reason_summary == "restored denied edit approval"
     assert ordered[4].attention_reason_summary == "recent shell test failure"
+    assert "attention: restored test queue" in ordered[0].render_line(1, include_attention_reason=True)
+    assert "attention: restored edit queue" in ordered[1].render_line(2, include_attention_reason=True)
+    assert "attention: pending queue" in ordered[2].render_line(3, include_attention_reason=True)
+    assert "attention:" not in ordered[0].render_line(1)
 
     approval_restore_ordered = list_recent_sessions(tmp_path, sort_mode="attention", filter_mode="approval-restore")
     assert [session.session_id for session in approval_restore_ordered] == [

@@ -312,6 +312,12 @@ def main() -> None:
             "- attention reason: restored pending test approval queue; tests sort ahead of restored edits"
             in approval_restore_attention_picker,
         )
+        print(
+            "picker_row_attention_reason=",
+            "attention: restored test queue" in approval_restore_attention_picker
+            and "attention: restored edit queue" in approval_restore_attention_picker
+            and "attention: restored denied edit" in approval_restore_attention_picker,
+        )
         print("picker_paged_banner=", "Page: 2/3 | Showing: 9-16 of 17" in paged_picker)
         print(
             "picker_paged_window=",
