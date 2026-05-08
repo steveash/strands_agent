@@ -316,6 +316,8 @@ def main() -> None:
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
         shell_picker = render_session_picker(temp_dir, filter_mode="shell")
+        shell_inspect_picker = render_session_picker(temp_dir, filter_mode="shell-inspect")
+        shell_test_picker = render_session_picker(temp_dir, filter_mode="shell-test")
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
         attention_page_two_picker = render_session_picker(temp_dir, sort_mode="attention", page_index=1)
         approval_restore_attention_picker = render_session_picker(temp_dir, filter_mode="approval-restore", sort_mode="attention")
@@ -425,8 +427,24 @@ def main() -> None:
             "picker_shell_filter=",
             "Filter: shell | Sort: recent" in shell_picker
             and "session-inspect | 1 turn(s)" in shell_picker
+            and "session-pending | 1 turn(s)" in shell_picker
             and "shell: inspect 1" in shell_picker
             and "session-tool | 1 turn(s)" not in shell_picker,
+        )
+        print(
+            "picker_shell_inspect_filter=",
+            "Filter: shell-inspect | Sort: recent" in shell_inspect_picker
+            and "session-inspect | 1 turn(s)" in shell_inspect_picker
+            and "session-pending | 1 turn(s)" not in shell_inspect_picker
+            and "session-tool | 1 turn(s)" not in shell_inspect_picker,
+        )
+        print(
+            "picker_shell_test_filter=",
+            "Filter: shell-test | Sort: recent" in shell_test_picker
+            and "session-pending | 1 turn(s)" in shell_test_picker
+            and "session-aged | 1 turn(s)" in shell_test_picker
+            and "session-failed-test | 1 turn(s)" in shell_test_picker
+            and "session-inspect | 1 turn(s)" not in shell_test_picker,
         )
         print(
             "picker_denied_preview_origin=",

@@ -441,6 +441,29 @@ async def run_smoke() -> None:
                 and "session-tool | 1 turn(s)" not in shell_attention_output
                 and "session-denied | 1 turn(s)" not in shell_attention_output,
             )
+            await pilot.press("i")
+            await pilot.pause()
+            shell_inspect_output = str(first_app.query_one("#output").render())
+            print("switcher_shell_inspect_filter=", "Filter: shell-inspect | Sort: attention" in shell_inspect_output)
+            print(
+                "switcher_shell_inspect_only_inspect=",
+                "session-newer | 1 turn(s)" in shell_inspect_output
+                and "session-failed-test | 1 turn(s)" not in shell_inspect_output
+                and "session-restored-pending | 1 turn(s)" not in shell_inspect_output
+                and "session-tool | 1 turn(s)" not in shell_inspect_output,
+            )
+            await pilot.press("y")
+            await pilot.pause()
+            shell_test_output = str(first_app.query_one("#output").render())
+            print("switcher_shell_test_filter=", "Filter: shell-test | Sort: attention" in shell_test_output)
+            print(
+                "switcher_shell_test_only_test=",
+                "session-newer | 1 turn(s)" in shell_test_output
+                and "session-aged | 1 turn(s)" in shell_test_output
+                and "session-failed-test | 1 turn(s)" in shell_test_output
+                and "session-restored-pending | 1 turn(s)" in shell_test_output
+                and "session-tool | 1 turn(s)" not in shell_test_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 

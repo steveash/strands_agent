@@ -29,7 +29,17 @@ STALE_SESSION_WARNING_SECONDS = 7 * 24 * 60 * 60
 STALE_SESSION_DANGER_SECONDS = 30 * 24 * 60 * 60
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
-SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "denied", "restore", "approval-restore", "tool", "shell"}
+SESSION_SWITCHER_FILTER_MODES = {
+    "all",
+    "pending",
+    "denied",
+    "restore",
+    "approval-restore",
+    "tool",
+    "shell",
+    "shell-inspect",
+    "shell-test",
+}
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
 
@@ -67,6 +77,8 @@ class SessionSummary:
     last_tool_badges: list[str] = field(default_factory=list)
     recent_tool_previews: list[str] = field(default_factory=list)
     shell_activity_badges: list[str] = field(default_factory=list)
+    has_shell_inspect_activity: bool = False
+    has_shell_test_activity: bool = False
     last_shell_preview: str = ""
     recent_shell_previews: list[str] = field(default_factory=list)
     failure_activity_badges: list[str] = field(default_factory=list)
@@ -309,6 +321,7 @@ def _ordered_recent_sessions(
         recent_failure_count = _recent_tool_failure_count(turns)
         recent_shell_failure_count = _recent_shell_failure_count(turns)
         recent_test_failure_count, recent_tool_failure_count = _recent_failure_activity_counts(turns)
+        has_shell_inspect_activity, has_shell_test_activity = _shell_activity_presence(turns, pending_approvals)
         summary = SessionSummary(
             session_id=store.session_id,
             session_dir=store.session_dir,
@@ -341,6 +354,8 @@ def _ordered_recent_sessions(
             last_tool_badges=_latest_tool_badges(turns),
             recent_tool_previews=_recent_tool_previews(turns),
             shell_activity_badges=_shell_activity_badges(turns),
+            has_shell_inspect_activity=has_shell_inspect_activity,
+            has_shell_test_activity=has_shell_test_activity,
             last_shell_preview=_latest_shell_preview(turns),
             recent_shell_previews=_recent_shell_previews(turns),
             failure_activity_badges=_failure_activity_badges(
@@ -438,7 +453,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -495,9 +510,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/T/H/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/T/H/I/Y/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/H/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/H/I/Y/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -585,6 +600,18 @@ def pick_session(
             selected_index = 0
             selected_session_id = ""
             continue
+        if normalized == "i":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "shell-inspect")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
+        if normalized == "y":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "shell-test")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
         if normalized == "s":
             sort_mode = _cycle_picker_sort_mode(sort_mode)
             page_index = 0
@@ -627,14 +654,14 @@ def pick_session(
                 )
             else:
                 output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/T/H/S/[ / ] to keep triaging; Enter or N starts a new session."
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
                 )
             continue
         if current_summaries:
-            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, T, H, S, [, ], Enter, or N.")
+            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, T, H, I, Y, S, [, ], Enter, or N.")
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/T/H/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/V/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -776,6 +803,34 @@ def _recent_shell_failure_count(turns: list[TurnArtifact], count_window: int = M
         for event in _bounded_recent_tool_events(turns, tool_name="run_shell_command", limit=count_window)
         if _is_tool_failure_event(event)
     )
+
+
+def _shell_activity_presence(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> tuple[bool, bool]:
+    has_inspect_activity = False
+    has_test_activity = False
+
+    for event in _iter_recent_tool_events(turns, tool_name="run_shell_command"):
+        if _is_test_shell_event(event):
+            has_test_activity = True
+        else:
+            has_inspect_activity = True
+        if has_inspect_activity and has_test_activity:
+            return has_inspect_activity, has_test_activity
+
+    if any(str(approval.tool_name or "") == "run_shell_command" for approval in pending_approvals):
+        has_test_activity = True
+
+    if has_test_activity:
+        return has_inspect_activity, has_test_activity
+
+    for turn in turns:
+        for event in turn.events:
+            if not str(event.data.get("approval_status", "") or "").strip():
+                continue
+            if str(event.data.get("tool_name", "") or event.title or "") == "run_shell_command":
+                return has_inspect_activity, True
+
+    return has_inspect_activity, has_test_activity
 
 
 def _recent_failure_activity_counts(
@@ -1343,7 +1398,7 @@ def render_recent_session_empty_state_lines(
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append(
-            "Try A to show all sessions, or P/D/R/V/T/H to jump between pending, denied, restore, restored-approval, tool, and shell triage."
+            "Try A to show all sessions, or P/D/R/V/T/H/I/Y to jump between pending, denied, restore, restored-approval, tool, shell, shell-inspect, and shell-test triage."
         )
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
@@ -1405,7 +1460,11 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
     if filter_mode == "tool":
         return bool(summary.last_tool_preview or summary.last_tool_badges)
     if filter_mode == "shell":
-        return bool(summary.last_shell_preview or summary.shell_activity_badges)
+        return summary.has_shell_inspect_activity or summary.has_shell_test_activity
+    if filter_mode == "shell-inspect":
+        return summary.has_shell_inspect_activity
+    if filter_mode == "shell-test":
+        return summary.has_shell_test_activity
     return True
 
 

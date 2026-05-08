@@ -104,28 +104,28 @@ What exists now:
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
 - restart-safe restoration of event-filter, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
-- launch-time CLI picker triage controls for all/pending/denied/restore/restored-approval/tool/shell filters plus recent-vs-attention sorting, including `--pick-filter` / `--pick-sort` defaults and interactive `A` / `P` / `D` / `R` / `V` / `T` / `H` / `S` toggles,
+- launch-time CLI picker triage controls for all/pending/denied/restore/restored-approval/tool/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting, including `--pick-filter` / `--pick-sort` defaults and interactive `A` / `P` / `D` / `R` / `V` / `T` / `H` / `I` / `Y` / `S` toggles,
 - an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline,
 - keyboard-driven session-switcher navigation with ↑/↓ (or J/K), Enter-to-switch, and a highlighted selection row rather than number-only switching,
-- in-app session-switcher triage controls for all/pending/denied/restore/restored-approval/tool/shell filters plus recent-vs-attention sorting so denser recent-session summaries stay skimmable as the list grows,
+- in-app session-switcher triage controls for all/pending/denied/restore/restored-approval/tool/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting so denser recent-session summaries stay skimmable as the list grows,
 - restart-safe session-switcher restoration so reopening a session can bring back the chooser with the prior target selection preserved where possible,
 - richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers, compact restore-state badges, explicit pending-approval age cues, stale-session badges, last-event previews, bounded recent-tool streak summaries, and explicit recent shell/test outcome rollups before selection,
 - a selected-session preview block inside the in-app `F11` switcher so the highlighted session now exposes the same richer summary context as the launch-time picker,
-- explicit empty-filter guidance across both recent-session reopen surfaces so zero-match triage states say how many saved sessions still exist plus which keys recover all/pending/denied/restore/tool/shell views,
+- explicit empty-filter guidance across both recent-session reopen surfaces so zero-match triage states say how many saved sessions still exist plus which keys recover all/pending/denied/restore/tool/shell/shell-inspect/shell-test views,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - attention sorting that now pulls sessions with pending approvals first, recently denied approvals next, then recent tool failures above generic restore/tool activity so blocked or broken work stays easier to spot,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added persisted approval-request timestamps so recent-session summaries can surface queue age without guessing from filesystem mtimes,
-- surfaced compact `pending age` and `stale` cues in picker/switcher summary rows plus selected-session previews,
-- tightened attention sorting/tests so equally risky pending queues now prefer older confirmations first, and refreshed picker smoke coverage around the new age/staleness cues.
+- split shell-session triage into dedicated `shell-inspect` and `shell-test` lanes while keeping the broader `shell` view for mixed shell activity,
+- added `I` / `Y` switcher and picker shortcuts plus CLI `--pick-filter` support for the new shell lanes,
+- refreshed picker/switcher regression and smoke coverage so inspect-only rows stay separate from pending/executed test-oriented shell work.
 
 Why this matters now:
-- It makes blocked work easier to prioritize once the session list gets dense, because older pending approvals stop looking identical to fresh ones.
-- It helps Steve study the practical cost of paused Strands flows: approval queues now expose how long they have been sitting and which sessions have gone stale.
-- It keeps the recent-session triage seam focused on operational recovery rather than generic chat history, which is exactly where a coding-agent workstation needs signal.
+- It lets Steve jump directly to shell inspection history or approval/test-heavy shell sessions without manually scanning mixed shell rows.
+- It keeps the combined `shell` lane useful for broad shell recovery while adding higher-signal triage when the session list grows dense.
+- It makes the shell-policy seam easier to study operationally, because direct inspect flows and approval-gated test flows now have distinct recovery surfaces.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -137,13 +137,13 @@ How we know the prototype is working right now:
 
 Current evidence:
 - automated tests: `116 passed`
-- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_pending_age_and_stale_cues= True`, `picker_approval_restore_filter= True`, `picker_shell_filter= True`, and `picker_restored_pending_queue_breakdown= True`,
+- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py | grep -E 'picker_shell_filter=|picker_shell_inspect_filter=|picker_shell_test_filter='` now prints `picker_shell_filter= True`, `picker_shell_inspect_filter= True`, and `picker_shell_test_filter= True`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py | grep -E 'switcher_pending_age_and_stale_cues=|switcher_shell_filter=|switcher_shell_filter_only_shell=|switcher_restored_pending_queue_breakdown='` prints `switcher_pending_age_and_stale_cues= True`, `switcher_shell_filter= True`, `switcher_shell_filter_only_shell= True`, and `switcher_restored_pending_queue_breakdown= True`,
-- CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter {all,pending,denied,restore,approval-restore,tool,shell}`, `--pick-sort`, and `--resume-last`,
-- recent-session verification by test: recent session summaries now surface pending approvals, pending-approval age cues, stale-session badges, restored approval-queue breakdowns, denied-approval rollups, latest denied approval previews, restore-state badges, last-event previews, explicit shell/test rollups, and attention ordering that now lifts denied test approvals above denied edits plus executed test failures while also preferring older like-for-like pending queues when risk level ties and `latest_session(...)` still returns the newest artifact turn even when filesystem mtimes tie,
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py | grep -E 'switcher_shell_filter=|switcher_shell_inspect_filter=|switcher_shell_test_filter=|switcher_shell_test_only_test='` prints `switcher_shell_filter= True`, `switcher_shell_inspect_filter= True`, `switcher_shell_test_filter= True`, and `switcher_shell_test_only_test= True`,
+- CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter {all,pending,denied,restore,approval-restore,tool,shell,shell-inspect,shell-test}`, `--pick-sort`, and `--resume-last`,
+- recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
 - UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,

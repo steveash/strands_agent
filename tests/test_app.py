@@ -964,7 +964,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1440,6 +1440,24 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-restore | 1 turn(s)" not in shell_output
         assert "shell: inspect 1" in shell_output
 
+        await pilot.press("i")
+        await pilot.pause()
+        shell_inspect_output = str(app.query_one("#output").render())
+        assert "Filter: shell-inspect | Sort: attention" in shell_inspect_output
+        assert "session-shell | 1 turn(s)" in shell_inspect_output
+        assert "session-pending | 1 turn(s)" in shell_inspect_output
+        assert "session-restored-pending | 1 turn(s)" not in shell_inspect_output
+        assert "session-failed-test | 1 turn(s)" not in shell_inspect_output
+
+        await pilot.press("y")
+        await pilot.pause()
+        shell_test_output = str(app.query_one("#output").render())
+        assert "Filter: shell-test | Sort: attention" in shell_test_output
+        assert "session-pending | 1 turn(s)" in shell_test_output
+        assert "session-restored-pending | 1 turn(s)" in shell_test_output
+        assert "session-shell | 1 turn(s)" not in shell_test_output
+        assert "session-tool | 1 turn(s)" not in shell_test_output
+
         await pilot.press("a")
         await pilot.pause()
         all_output = str(app.query_one("#output").render())
@@ -1666,7 +1684,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
         assert (
-            "Try A to show all sessions, or P/D/R/V/T/H to jump between pending, denied, restore, restored-approval, tool, and shell triage."
+            "Try A to show all sessions, or P/D/R/V/T/H/I/Y to jump between pending, denied, restore, restored-approval, tool, shell, shell-inspect, and shell-test triage."
             in output
         )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output

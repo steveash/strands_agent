@@ -226,6 +226,16 @@ class StrandsAgentApp(App):
             event.stop()
             return
 
+        if key == "i":
+            self._toggle_session_switcher_filter_mode("shell-inspect")
+            event.stop()
+            return
+
+        if key == "y":
+            self._toggle_session_switcher_filter_mode("shell-test")
+            event.stop()
+            return
+
         if key == "s":
             self._cycle_session_switcher_sort_mode()
             event.stop()
@@ -454,7 +464,7 @@ class StrandsAgentApp(App):
             f"Artifacts root: {self.artifact_store.root}",
             (
                 "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-                "A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, S sort, N new session, Esc/F11 cancel"
+                "A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
             ),
             (
                 f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode} | "
@@ -1022,7 +1032,7 @@ def parse_args() -> AppConfig:
     )
     parser.add_argument(
         "--pick-filter",
-        choices=["all", "pending", "denied", "restore", "approval-restore", "tool", "shell"],
+        choices=["all", "pending", "denied", "restore", "approval-restore", "tool", "shell", "shell-inspect", "shell-test"],
         help="Set the initial recent-session picker filter when using --pick-session.",
     )
     parser.add_argument(
