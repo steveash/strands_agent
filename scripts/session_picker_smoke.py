@@ -272,6 +272,7 @@ def main() -> None:
         pending_picker = render_session_picker(temp_dir, filter_mode="pending")
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
+        shell_picker = render_session_picker(temp_dir, filter_mode="shell")
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
         attention_page_two_picker = render_session_picker(temp_dir, sort_mode="attention", page_index=1)
         approval_restore_attention_picker = render_session_picker(temp_dir, filter_mode="approval-restore", sort_mode="attention")
@@ -376,6 +377,13 @@ def main() -> None:
             and "session-restored-edit-pending" in approval_restore_picker
             and "session-denied" in approval_restore_picker
             and "session-restore | 1 turn(s)" not in approval_restore_picker,
+        )
+        print(
+            "picker_shell_filter=",
+            "Filter: shell | Sort: recent" in shell_picker
+            and "session-inspect | 1 turn(s)" in shell_picker
+            and "shell: inspect 1" in shell_picker
+            and "session-tool | 1 turn(s)" not in shell_picker,
         )
         print(
             "picker_denied_preview_origin=",

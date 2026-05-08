@@ -92,7 +92,7 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
     assert (
-        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, S sort, [ prev page, ] next page, N new session"
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, S sort, [ prev page, ] next page, N new session"
         in rendered
     )
     assert "Press Enter to reopen the highlighted session." in rendered
@@ -178,7 +178,7 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "No saved sessions match the active picker filter." in rendered
     assert "1 saved session still exists under this root." in rendered
     assert (
-        "Try A to show all sessions, or P/D/R/V/T to jump between pending, denied, restore, restored-approval, and tool triage."
+        "Try A to show all sessions, or P/D/R/V/T/H to jump between pending, denied, restore, restored-approval, tool, and shell triage."
         in rendered
     )
     assert "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in rendered
@@ -201,7 +201,7 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
 
     assert summary is None
     assert prompts == [
-        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/S/[ / ] to change triage: "
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/H/S/[ / ] to change triage: "
     ]
     assert any("No saved sessions match the active picker filter." in line for line in captured)
     assert any("Try A to show all sessions" in line for line in captured)
@@ -1251,17 +1251,44 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
         )
     )
 
+    shell_store = SessionArtifactStore(tmp_path, session_id="session-shell")
+    shell_store.append_turn(
+        TurnArtifact(
+            prompt="inspect git status",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
     pending_sessions = list_recent_sessions(tmp_path, filter_mode="pending")
     denied_sessions = list_recent_sessions(tmp_path, filter_mode="denied")
     restore_sessions = list_recent_sessions(tmp_path, filter_mode="restore")
     approval_restore_sessions = list_recent_sessions(tmp_path, filter_mode="approval-restore")
     tool_sessions = list_recent_sessions(tmp_path, filter_mode="tool")
+    shell_sessions = list_recent_sessions(tmp_path, filter_mode="shell")
 
     assert [session.session_id for session in pending_sessions] == ["session-pending"]
     assert [session.session_id for session in denied_sessions] == ["session-denied"]
     assert [session.session_id for session in restore_sessions] == ["session-restore"]
     assert [session.session_id for session in approval_restore_sessions] == ["session-denied"]
-    assert [session.session_id for session in tool_sessions] == ["session-tool"]
+    assert [session.session_id for session in tool_sessions] == ["session-shell", "session-tool"]
+    assert [session.session_id for session in shell_sessions] == ["session-shell"]
 
 
 def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_before_other_failures(tmp_path: Path) -> None:

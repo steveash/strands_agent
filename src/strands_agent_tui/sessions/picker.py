@@ -27,7 +27,7 @@ MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
-SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "denied", "restore", "approval-restore", "tool"}
+SESSION_SWITCHER_FILTER_MODES = {"all", "pending", "denied", "restore", "approval-restore", "tool", "shell"}
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
 
@@ -412,7 +412,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -469,9 +469,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/T/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/T/H/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/H/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -553,6 +553,12 @@ def pick_session(
             selected_index = 0
             selected_session_id = ""
             continue
+        if normalized == "h":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "shell")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
         if normalized == "s":
             sort_mode = _cycle_picker_sort_mode(sort_mode)
             page_index = 0
@@ -595,14 +601,14 @@ def pick_session(
                 )
             else:
                 output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/T/S/[ / ] to keep triaging; Enter or N starts a new session."
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/T/H/S/[ / ] to keep triaging; Enter or N starts a new session."
                 )
             continue
         if current_summaries:
-            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, T, S, [, ], Enter, or N.")
+            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, T, H, S, [, ], Enter, or N.")
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/T/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/V/T/H/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -1301,7 +1307,7 @@ def render_recent_session_empty_state_lines(
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append(
-            "Try A to show all sessions, or P/D/R/V/T to jump between pending, denied, restore, restored-approval, and tool triage."
+            "Try A to show all sessions, or P/D/R/V/T/H to jump between pending, denied, restore, restored-approval, tool, and shell triage."
         )
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
@@ -1362,6 +1368,8 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
         return summary.restored_approval_count > 0
     if filter_mode == "tool":
         return bool(summary.last_tool_preview or summary.last_tool_badges)
+    if filter_mode == "shell":
+        return bool(summary.last_shell_preview or summary.shell_activity_badges)
     return True
 
 

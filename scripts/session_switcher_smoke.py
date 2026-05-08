@@ -387,6 +387,17 @@ async def run_smoke() -> None:
                 )
                 and "session-tool | 1 turn(s)" in all_attention_output,
             )
+            await pilot.press("h")
+            await pilot.pause()
+            shell_attention_output = str(first_app.query_one("#output").render())
+            print("switcher_shell_filter=", "Filter: shell | Sort: attention" in shell_attention_output)
+            print(
+                "switcher_shell_filter_only_shell=",
+                "session-newer | 1 turn(s)" in shell_attention_output
+                and "session-failed-test | 1 turn(s)" in shell_attention_output
+                and "session-tool | 1 turn(s)" not in shell_attention_output
+                and "session-denied | 1 turn(s)" not in shell_attention_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 

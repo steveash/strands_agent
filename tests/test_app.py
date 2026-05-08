@@ -964,7 +964,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, V restored approvals, T tool, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1322,6 +1322,31 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
     )
     restore_store.save_session_state(SessionState(draft_prompt="draft restore"))
 
+    shell_store = SessionArtifactStore(tmp_path, session_id="session-shell")
+    shell_store.append_turn(
+        TurnArtifact(
+            prompt="inspect shell-only repo state",
+            response="shell response",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "pwd",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "pwd -> /workspace/demo",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
     app = StrandsAgentApp(
         runtime=FakeStrandsRuntime(),
         config=AppConfig(
@@ -1405,6 +1430,15 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-restore" in restore_output
         assert "attention: restore" in restore_output
         assert "session-pending | 1 turn(s)" not in restore_output
+
+        await pilot.press("h")
+        await pilot.pause()
+        shell_output = str(app.query_one("#output").render())
+        assert "Filter: shell | Sort: attention" in shell_output
+        assert "session-shell | 1 turn(s)" in shell_output
+        assert "session-pending | 1 turn(s)" in shell_output
+        assert "session-restore | 1 turn(s)" not in shell_output
+        assert "shell: inspect 1" in shell_output
 
         await pilot.press("a")
         await pilot.pause()
@@ -1632,7 +1666,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
         assert (
-            "Try A to show all sessions, or P/D/R/V/T to jump between pending, denied, restore, restored-approval, and tool triage."
+            "Try A to show all sessions, or P/D/R/V/T/H to jump between pending, denied, restore, restored-approval, tool, and shell triage."
             in output
         )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output
