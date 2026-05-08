@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
 from strands_agent_tui.runtime import ApprovalRequest, runtime_event
@@ -17,6 +19,12 @@ def append_turn(store: SessionArtifactStore, prompt: str) -> None:
             response_metadata={"mode": "fake"},
         )
     )
+
+
+def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> None:
+    timestamp = when.timestamp()
+    for path in [store.session_dir, *store.session_dir.iterdir()]:
+        os.utime(path, (timestamp, timestamp))
 
 
 def main() -> None:
@@ -177,6 +185,34 @@ def main() -> None:
         append_turn(restore_store, "resume the saved triage flow")
         restore_store.save_session_state(SessionState(draft_prompt="queued follow-up"))
 
+        aged_store = SessionArtifactStore(temp_dir, session_id="session-aged")
+        aged_turn_time = datetime.now(UTC) - timedelta(days=10)
+        aged_store.append_turn(
+            TurnArtifact(
+                prompt="resume the stale test queue",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+                created_at=aged_turn_time.isoformat(),
+            )
+        )
+        aged_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-aged",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt="resume old tests",
+                    created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+                )
+            ]
+        )
+        set_session_artifact_mtime(aged_store, aged_turn_time)
+
         failed_test_store = SessionArtifactStore(temp_dir, session_id="session-failed-test")
         failed_test_store.append_turn(
             TurnArtifact(
@@ -270,6 +306,13 @@ def main() -> None:
 
         default_picker = render_session_picker(temp_dir)
         pending_picker = render_session_picker(temp_dir, filter_mode="pending")
+        pending_attention_picker = render_session_picker(temp_dir, filter_mode="pending", sort_mode="attention")
+        pending_attention_age_picker = render_session_picker(
+            temp_dir,
+            filter_mode="pending",
+            sort_mode="attention",
+            selected_index=2,
+        )
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
         shell_picker = render_session_picker(temp_dir, filter_mode="shell")
@@ -465,6 +508,13 @@ def main() -> None:
             and "attention: pending edit" in attention_picker
             and "pending tools: test 1" in attention_picker
             and "pending tools: edit 1" in attention_picker,
+        )
+        print(
+            "picker_pending_age_and_stale_cues=",
+            "session-aged" in pending_attention_picker
+            and "pending age: 45d" in pending_attention_picker
+            and "stale: warning 10d" in pending_attention_picker
+            and "- session age: idle 10d since last artifact activity" in pending_attention_age_picker,
         )
         print(
             "picker_pending_queue_breakdown=",

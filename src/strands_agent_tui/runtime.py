@@ -45,6 +45,7 @@ class ApprovalRequest:
     source: str = "runtime"
     prompt: str = ""
     restored_from_session: bool = False
+    created_at: str | None = None
 
     def summary(self) -> str:
         args_preview = ", ".join(f"{key}={value!r}" for key, value in sorted(self.args.items())) or "no args"
@@ -59,6 +60,7 @@ class ApprovalRequest:
             "source": self.source,
             "prompt": self.prompt,
             "restored_from_session": self.restored_from_session,
+            "created_at": self.created_at,
         }
 
     @classmethod
@@ -71,6 +73,7 @@ class ApprovalRequest:
             source=str(payload.get("source", "runtime")),
             prompt=str(payload.get("prompt", "")),
             restored_from_session=bool(payload.get("restored_from_session", False)),
+            created_at=str(payload.get("created_at")) if payload.get("created_at") else None,
         )
 
 
@@ -133,6 +136,7 @@ class _ApprovalQueue:
             args=dict(args),
             source=source,
             prompt=prompt,
+            created_at=datetime.now(UTC).isoformat(),
         )
         self._pending.append(_PendingApproval(request=request, execute=execute_factory(request)))
         return request

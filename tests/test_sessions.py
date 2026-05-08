@@ -1,3 +1,5 @@
+import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from strands_agent_tui.runtime import ApprovalRequest, runtime_event
@@ -27,6 +29,12 @@ def _append_turn(store: SessionArtifactStore, prompt: str) -> None:
             response_metadata={"mode": "fake"},
         )
     )
+
+
+def _set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> None:
+    timestamp = when.timestamp()
+    for path in [store.session_dir, *store.session_dir.iterdir()]:
+        os.utime(path, (timestamp, timestamp))
 
 
 def test_list_recent_sessions_orders_by_latest_activity_and_includes_prompt_preview(tmp_path: Path) -> None:
@@ -447,6 +455,50 @@ def test_list_recent_sessions_surfaces_pending_approval_metadata(tmp_path: Path)
     assert summary.pending_approval_count == 1
     assert summary.pending_approval_tool == "run_shell_command"
     assert "pending: run_shell_command" in summary.render_line(1)
+
+
+def test_list_recent_sessions_surfaces_pending_approval_age_and_stale_session_cues(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    stale_turn_time = now - timedelta(days=10)
+    old_approval_time = now - timedelta(days=45)
+
+    store = SessionArtifactStore(tmp_path, session_id="session-aged")
+    store.append_turn(
+        TurnArtifact(
+            prompt="resume old test queue",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=stale_turn_time.isoformat(),
+        )
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-aged-1",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+                created_at=old_approval_time.isoformat(),
+            )
+        ]
+    )
+    _set_session_artifact_mtime(store, stale_turn_time)
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.pending_approval_age_summary == "45d"
+    assert summary.stale_session_badges == ["warning 10d"]
+    assert summary.stale_session_summary == "idle 10d since last artifact activity"
+    assert "pending age: 45d" in summary.render_line(1)
+    assert "stale: warning 10d" in summary.render_line(1)
+    assert "- pending age: 45d" in preview
+    assert "- session age: idle 10d since last artifact activity" in preview
 
 
 def test_list_recent_sessions_surfaces_pending_queue_first_vs_rest_breakdown(tmp_path: Path) -> None:
@@ -1564,3 +1616,45 @@ def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_b
         "session-restored-pending-edit",
         "session-denied",
     ]
+
+
+def test_list_recent_sessions_attention_sort_prefers_older_pending_approval_with_same_family(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+
+    newer_pending_store = SessionArtifactStore(tmp_path, session_id="session-pending-newer")
+    _append_turn(newer_pending_store, "newer pending")
+    newer_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-age-newer",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+                created_at=(now - timedelta(days=3)).isoformat(),
+            )
+        ]
+    )
+
+    older_pending_store = SessionArtifactStore(tmp_path, session_id="session-pending-older")
+    _append_turn(older_pending_store, "older pending")
+    older_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-age-older",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+                created_at=(now - timedelta(days=14)).isoformat(),
+            )
+        ]
+    )
+
+    ordered = list_recent_sessions(tmp_path, sort_mode="attention", limit=count_recent_sessions(tmp_path))
+
+    assert [summary.session_id for summary in ordered[:2]] == ["session-pending-older", "session-pending-newer"]
+    assert ordered[0].pending_approval_age_summary == "14d"
+    assert ordered[1].pending_approval_age_summary == "3d"

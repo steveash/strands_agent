@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
 from strands_agent_tui.app import StrandsAgentApp
@@ -20,6 +22,12 @@ def append_turn(store: SessionArtifactStore, prompt: str, response: str) -> None
             response_metadata={"mode": "fake"},
         )
     )
+
+
+def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> None:
+    timestamp = when.timestamp()
+    for path in [store.session_dir, *store.session_dir.iterdir()]:
+        os.utime(path, (timestamp, timestamp))
 
 
 async def run_smoke() -> None:
@@ -89,6 +97,34 @@ async def run_smoke() -> None:
                 )
             ]
         )
+
+        aged_store = SessionArtifactStore(temp_dir, session_id="session-aged")
+        aged_turn_time = datetime.now(UTC) - timedelta(days=10)
+        aged_store.append_turn(
+            TurnArtifact(
+                prompt="resume stale queue",
+                response="stale response",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+                created_at=aged_turn_time.isoformat(),
+            )
+        )
+        aged_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-aged-switcher",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt="resume old tests",
+                    created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+                )
+            ]
+        )
+        set_session_artifact_mtime(aged_store, aged_turn_time)
 
         pending_edit_store = SessionArtifactStore(temp_dir, session_id="session-pending-edit")
         append_turn(pending_edit_store, "queue pending edit", "queued edit response")
@@ -281,8 +317,15 @@ async def run_smoke() -> None:
             print(
                 "switcher_pending_filter_only_newer=",
                 "session-newer | 1 turn(s)" in pending_text
+                and "session-aged | 1 turn(s)" in pending_text
                 and "session-pending-edit | 1 turn(s)" in pending_text
                 and "session-older | 1 turn(s)" not in pending_text,
+            )
+            print(
+                "switcher_pending_age_and_stale_cues=",
+                "session-aged | 1 turn(s)" in pending_text
+                and "pending age: 45d" in pending_text
+                and "stale: warning 10d" in pending_text,
             )
             await pilot.press("d")
             await pilot.pause()
