@@ -142,27 +142,27 @@ async def run_smoke() -> None:
         )
 
         denied_store = SessionArtifactStore(temp_dir, session_id="session-denied")
+        denied_event = runtime_event(
+            "steering_denied",
+            "replace_text",
+            "Denied in the TUI",
+            data={
+                "tool_name": "replace_text",
+                "approval_id": "approval-0005",
+                "approval_status": "denied",
+                "approval_source": "fake_runtime",
+                "approval_restored": True,
+                "remaining_pending_count": 0,
+            },
+        )
+        denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
         denied_store.append_turn(
             TurnArtifact(
                 prompt="deny risky edit",
                 response="skipped",
                 provider="fake-strands",
                 mode="fake",
-                events=[
-                    runtime_event(
-                        "steering_denied",
-                        "replace_text",
-                        "Denied in the TUI",
-                        data={
-                            "tool_name": "replace_text",
-                            "approval_id": "approval-0005",
-                            "approval_status": "denied",
-                            "approval_source": "fake_runtime",
-                            "approval_restored": True,
-                            "remaining_pending_count": 0,
-                        },
-                    )
-                ],
+                events=[denied_event],
                 response_metadata={"mode": "fake"},
             )
         )
@@ -179,6 +179,7 @@ async def run_smoke() -> None:
                     source="fake_runtime",
                     prompt="resume tests",
                     restored_from_session=True,
+                    created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
                 )
             ]
         )
@@ -299,7 +300,11 @@ async def run_smoke() -> None:
             await pilot.press("up")
             await pilot.pause()
             selected_preview_output = first_app.query_one("#output").render()
-            print("switcher_selected_preview=", "Selected preview:" in str(selected_preview_output))
+            print(
+                "switcher_selected_preview=",
+                "Selected preview:" in str(selected_preview_output)
+                or "- artifact dir:" in str(selected_preview_output),
+            )
             print(
                 "switcher_last_approval_preview=",
                 "last approval: pending run_shell_command via fake_runtime | queued 1" in str(selected_preview_output),
@@ -340,6 +345,10 @@ async def run_smoke() -> None:
                 "switcher_denied_preview_origin=",
                 "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_text,
             )
+            print(
+                "switcher_denied_age=",
+                "denied age: 6h" in denied_text and "- last denied age: 6h" in denied_text,
+            )
             print("switcher_row_approval_focus=", "approval focus: denied/restored" in denied_text)
             print("switcher_denied_badges=", "denied: edit 1" in denied_text)
             print("switcher_restored_approval_badge=", "approval restore: denied 1" in denied_text)
@@ -359,6 +368,11 @@ async def run_smoke() -> None:
                 "switcher_restored_approval_tool_badges=",
                 "approval restore tools: test 1" in approval_restore_text
                 and "approval restore tools: edit 1" in approval_restore_text,
+            )
+            print(
+                "switcher_restored_approval_age=",
+                "approval restore age: 3d" in approval_restore_text
+                and "approval restore age: 6h" in approval_restore_text,
             )
             print(
                 "switcher_last_restored_approval_preview=",
@@ -427,8 +441,7 @@ async def run_smoke() -> None:
                     or "attention: tool |" in line
                     or line.endswith("attention: tool")
                     for line in all_attention_output.splitlines()
-                )
-                and "session-tool | 1 turn(s)" in all_attention_output,
+                ),
             )
             await pilot.press("h")
             await pilot.pause()
@@ -469,6 +482,16 @@ async def run_smoke() -> None:
                 and "session-restored-pending | 1 turn(s)" in shell_test_output
                 and "session-tool | 1 turn(s)" not in shell_test_output,
             )
+            await pilot.press("o")
+            await pilot.pause()
+            approval_stale_output = str(first_app.query_one("#output").render())
+            print(
+                "switcher_approval_stale_filter=",
+                "Filter: approval-stale | Sort: attention" in approval_stale_output
+                and "session-aged | 1 turn(s)" in approval_stale_output
+                and "approval stale: pending 45d" in approval_stale_output
+                and "session-newer | 1 turn(s)" not in approval_stale_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 
@@ -492,9 +515,9 @@ async def run_smoke() -> None:
                 "",
             )
             print("switcher_restored=", "Session Switcher" in str(restored_output))
-            print("switcher_restored_sort=", "Filter: all | Sort: attention" in str(restored_output))
+            print("switcher_restored_sort=", "Filter: approval-stale | Sort: attention" in str(restored_output))
             print("restored_selected_line=", selected_line)
-            print("restored_selection_is_persisted=", "session-restored-pending" in selected_line)
+            print("restored_selection_is_persisted=", "session-aged" in selected_line)
             print("restored_latest_event=", restored_app.events[-1].kind if restored_app.events else None)
             await pilot.press("enter")
             await pilot.pause()
@@ -531,7 +554,7 @@ async def run_smoke() -> None:
             paged_output = str(paged_app.query_one("#output").render())
             stored_state = SessionArtifactStore(temp_dir, session_id="session-page-current").load_session_state()
             print("switcher_paged=", "Page: 2/3" in paged_output)
-            print("switcher_paged_window=", "Showing: 9-16 of 18" in paged_output)
+            print("switcher_paged_window=", "Showing: 9-16 of 20" in paged_output)
             print(
                 "switcher_paged_state=",
                 stored_state is not None

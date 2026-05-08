@@ -136,27 +136,27 @@ def main() -> None:
         )
 
         denied_store = SessionArtifactStore(temp_dir, session_id="session-denied")
+        denied_event = runtime_event(
+            "steering_denied",
+            "replace_text",
+            "Denied in the TUI",
+            data={
+                "tool_name": "replace_text",
+                "approval_id": "approval-0009",
+                "approval_status": "denied",
+                "approval_source": "fake_runtime",
+                "approval_restored": True,
+                "remaining_pending_count": 0,
+            },
+        )
+        denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
         denied_store.append_turn(
             TurnArtifact(
                 prompt="deny the risky edit",
                 response="ok",
                 provider="fake-strands",
                 mode="fake",
-                events=[
-                    runtime_event(
-                        "steering_denied",
-                        "replace_text",
-                        "Denied in the TUI",
-                        data={
-                            "tool_name": "replace_text",
-                            "approval_id": "approval-0009",
-                            "approval_status": "denied",
-                            "approval_source": "fake_runtime",
-                            "approval_restored": True,
-                            "remaining_pending_count": 0,
-                        },
-                    )
-                ],
+                events=[denied_event],
                 response_metadata={"mode": "fake"},
             )
         )
@@ -173,6 +173,7 @@ def main() -> None:
                     source="fake_runtime",
                     prompt="resume tests",
                     restored_from_session=True,
+                    created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
                 )
             ]
         )
@@ -327,6 +328,7 @@ def main() -> None:
         )
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
+        approval_stale_picker = render_session_picker(temp_dir, filter_mode="approval-stale")
         shell_picker = render_session_picker(temp_dir, filter_mode="shell")
         shell_inspect_picker = render_session_picker(temp_dir, filter_mode="shell-inspect")
         shell_test_picker = render_session_picker(temp_dir, filter_mode="shell-test")
@@ -414,7 +416,7 @@ def main() -> None:
 
         paged_picker = render_session_picker(temp_dir, page_index=1)
 
-        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 12" in default_picker)
+        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 13" in default_picker)
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
         print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
         print(
@@ -469,6 +471,10 @@ def main() -> None:
             "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_picker,
         )
         print(
+            "picker_denied_age=",
+            "denied age: 6h" in denied_picker and "- last denied age: 6h" in denied_picker,
+        )
+        print(
             "picker_denied_badges=",
             "denied: edit 1" in denied_picker,
         )
@@ -479,6 +485,17 @@ def main() -> None:
         print(
             "picker_restored_approval_tool_badges=",
             "approval restore tools: test 1" in approval_restore_picker and "approval restore tools: edit 1" in approval_restore_picker,
+        )
+        print(
+            "picker_restored_approval_age=",
+            "approval restore age: 3d" in approval_restore_picker and "approval restore age: 6h" in approval_restore_picker,
+        )
+        print(
+            "picker_approval_stale_filter=",
+            "Filter: approval-stale | Sort: recent" in approval_stale_picker
+            and "session-aged | 1 turn(s)" in approval_stale_picker
+            and "approval stale: pending 45d" in approval_stale_picker
+            and "session-restored-pending | 1 turn(s)" not in approval_stale_picker,
         )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in pending_picker)
         print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)
@@ -503,17 +520,19 @@ def main() -> None:
         attention_lines = [
             line
             for line in attention_picker.splitlines()
-            if line.startswith(("> 1. ", "  2. ", "  3. ", "  4. ", "  5. ", "  6. "))
+            if line.startswith(("> 1. ", "  2. ", "  3. ", "  4. ", "  5. ", "  6. ", "  7. ", "  8. "))
         ]
         print(
             "picker_attention_sort=",
-            len(attention_lines) >= 6
+            len(attention_lines) >= 8
             and attention_lines[0].startswith("> 1. session-restored-pending")
             and attention_lines[1].startswith("  2. session-restored-edit-pending")
-            and attention_lines[2].startswith("  3. session-pending")
-            and attention_lines[3].startswith("  4. session-pending-edit")
-            and attention_lines[4].startswith("  5. session-denied-test")
-            and attention_lines[5].startswith("  6. session-denied"),
+            and attention_lines[2].startswith("  3. session-aged")
+            and attention_lines[3].startswith("  4. session-pending")
+            and attention_lines[4].startswith("  5. session-pending-edit")
+            and attention_lines[5].startswith("  6. session-denied-test")
+            and attention_lines[6].startswith("  7. session-denied")
+            and attention_lines[7].startswith("  8. session-failed-test"),
         )
         approval_restore_attention_lines = [
             line
@@ -570,8 +589,8 @@ def main() -> None:
         print(
             "picker_compact_attention_hints=",
             "attention: test fail" in attention_picker
-            and "attention: tool fail" in attention_picker
-            and "attention: restore" in attention_picker,
+            and "attention: tool fail" in attention_page_two_picker
+            and "attention: restore" in attention_page_two_picker,
         )
         print(
             "picker_suppressed_generic_attention_hints=",
@@ -585,7 +604,7 @@ def main() -> None:
             and "session-inspect | 1 turn(s)" in attention_page_two_picker
             and "session-tool | 1 turn(s)" in attention_page_two_picker,
         )
-        print("picker_paged_banner=", "Page: 2/3 | Showing: 9-16 of 20" in paged_picker)
+        print("picker_paged_banner=", "Page: 2/3 | Showing: 9-16 of 21" in paged_picker)
         print(
             "picker_paged_window=",
             "> 1. session-inspect" in paged_picker
@@ -631,7 +650,7 @@ def main() -> None:
         print("picker_interactive_paged_selected=", paged_summary.session_id)
         print(
             "picker_interactive_paged_banner=",
-            any("Page: 2/3 | Showing: 9-16 of 20" in line for line in paged_captured),
+            any("Page: 2/3 | Showing: 9-16 of 21" in line for line in paged_captured),
         )
 
         aborted_inputs = iter(["]", "j", "n"])
@@ -657,12 +676,12 @@ def main() -> None:
         print("picker_restored_selected=", restored_summary.session_id)
         print(
             "picker_restored_page=",
-            any("Page: 2/3 | Showing: 9-16 of 20" in line for line in restored_captured),
+            any("Page: 2/3 | Showing: 9-16 of 21" in line for line in restored_captured),
         )
         print(
             "picker_restored_preview=",
             any(
-                "- slot 2 on this page | overall 10 of 20 | session session-tool" in line
+                "- slot 2 on this page | overall 10 of 21 | session session-tool" in line
                 for line in restored_captured
             ),
         )

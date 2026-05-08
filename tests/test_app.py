@@ -1,5 +1,6 @@
 import json
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -964,7 +965,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1309,6 +1310,31 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         ]
     )
 
+    aged_store = SessionArtifactStore(tmp_path, session_id="session-aged")
+    aged_store.append_turn(
+        TurnArtifact(
+            prompt="resume stale test queue",
+            response="stale response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    aged_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-aged",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="resume old tests",
+                created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+            )
+        ]
+    )
+
     restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
     restore_store.append_turn(
         TurnArtifact(
@@ -1399,6 +1425,17 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "last restored approval:" in approval_restore_output
         assert "attention:" not in approval_restore_output
 
+        await pilot.press("o")
+        await pilot.pause()
+        approval_stale_output = str(app.query_one("#output").render())
+        assert "Filter: approval-stale | Sort: recent" in approval_stale_output
+        assert "session-aged" in approval_stale_output
+        assert "approval stale: pending 45d" in approval_stale_output
+        assert "session-pending | 1 turn(s)" not in approval_stale_output
+        assert "session-restored-pending | 1 turn(s)" not in approval_stale_output
+
+        await pilot.press("v")
+        await pilot.pause()
         await pilot.press("s")
         await pilot.pause()
         attention_output = str(app.query_one("#output").render())
@@ -1686,7 +1723,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
         assert (
-            "Try A to show all sessions, or P/D/R/V/T/H/I/Y to jump between pending, denied, restore, restored-approval, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, tool, shell, shell-inspect, and shell-test triage."
             in output
         )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output

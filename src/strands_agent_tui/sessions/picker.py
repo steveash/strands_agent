@@ -27,6 +27,7 @@ MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
 STALE_SESSION_WARNING_SECONDS = 7 * 24 * 60 * 60
 STALE_SESSION_DANGER_SECONDS = 30 * 24 * 60 * 60
+STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
 SESSION_SWITCHER_FILTER_MODES = {
@@ -35,6 +36,7 @@ SESSION_SWITCHER_FILTER_MODES = {
     "denied",
     "restore",
     "approval-restore",
+    "approval-stale",
     "tool",
     "shell",
     "shell-inspect",
@@ -63,11 +65,16 @@ class SessionSummary:
     denied_approval_badges: list[str] = field(default_factory=list)
     last_denied_approval_summary: str = ""
     last_denied_approval_age_summary: str = ""
+    last_denied_approval_age_sort_key: int = 0
     restored_approval_count: int = 0
     restored_approval_badges: list[str] = field(default_factory=list)
     restored_approval_tool_badges: list[str] = field(default_factory=list)
     restored_pending_approval_queue_summary: str = ""
+    restored_pending_approval_age_summary: str = ""
     last_restored_approval_summary: str = ""
+    last_restored_approval_age_summary: str = ""
+    last_restored_approval_age_sort_key: int = 0
+    stale_approval_badges: list[str] = field(default_factory=list)
     pending_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     denied_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
@@ -113,6 +120,7 @@ class SessionSummary:
             f" | approval focus: {'/'.join(self.approval_focus_badges)}" if self.approval_focus_badges else ""
         )
         denied_suffix = f" | denied: {', '.join(self.denied_approval_badges)}" if self.denied_approval_badges else ""
+        denied_age_suffix = f" | denied age: {self.last_denied_approval_age_summary}" if self.last_denied_approval_age_summary else ""
         approval_restore_suffix = (
             f" | approval restore: {', '.join(self.restored_approval_badges)}"
             if self.restored_approval_badges
@@ -127,6 +135,16 @@ class SessionSummary:
             f" | approval restore queue: {self.restored_pending_approval_queue_summary}"
             if self.restored_pending_approval_queue_summary
             else ""
+        )
+        approval_restore_age_suffix = ""
+        if self.restored_pending_approval_age_summary:
+            approval_restore_age_suffix = (
+                f" | approval restore age: {self.restored_pending_approval_age_summary}"
+            )
+        elif self.last_restored_approval_age_summary:
+            approval_restore_age_suffix = f" | approval restore age: {self.last_restored_approval_age_summary}"
+        stale_approval_suffix = (
+            f" | approval stale: {', '.join(self.stale_approval_badges)}" if self.stale_approval_badges else ""
         )
         tool_hint = ""
         if self.last_tool_preview or self.last_tool_badges:
@@ -158,7 +176,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{stale_approval_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -201,8 +219,19 @@ class SessionSummary:
             lines.append(f"- approval restore tools: {', '.join(self.restored_approval_tool_badges)}")
         if self.restored_pending_approval_queue_summary:
             lines.append(f"- approval restore queue: {self.restored_pending_approval_queue_summary}")
+        if self.restored_pending_approval_age_summary:
+            lines.append(f"- approval restore age: {self.restored_pending_approval_age_summary}")
+        elif self.last_restored_approval_age_summary:
+            lines.append(f"- approval restore age: {self.last_restored_approval_age_summary}")
         if self.last_restored_approval_summary:
             lines.append(f"- last restored approval: {self.last_restored_approval_summary}")
+        if self.last_restored_approval_age_summary and (
+            not self.restored_pending_approval_age_summary
+            or self.last_restored_approval_age_summary != self.restored_pending_approval_age_summary
+        ):
+            lines.append(f"- last restored age: {self.last_restored_approval_age_summary}")
+        if self.stale_approval_badges:
+            lines.append(f"- approval stale: {', '.join(self.stale_approval_badges)}")
         if self.restore_badges:
             lines.append(f"- restore: {', '.join(self.restore_badges)}")
         if self.stale_session_summary:
@@ -307,10 +336,15 @@ def _ordered_recent_sessions(
             denied_approval_badges,
             last_denied_approval_summary,
             last_denied_approval_age_summary,
+            last_denied_approval_age_sort_key,
             restored_approval_count,
             restored_approval_badges,
             restored_approval_tool_badges,
+            restored_pending_approval_age_summary,
             last_restored_approval_summary,
+            last_restored_approval_age_summary,
+            last_restored_approval_age_sort_key,
+            stale_approval_badges,
             pending_approval_attention_sort_key,
             approval_attention_sort_key,
             denied_approval_attention_sort_key,
@@ -347,11 +381,16 @@ def _ordered_recent_sessions(
             denied_approval_badges=denied_approval_badges,
             last_denied_approval_summary=last_denied_approval_summary,
             last_denied_approval_age_summary=last_denied_approval_age_summary,
+            last_denied_approval_age_sort_key=last_denied_approval_age_sort_key,
             restored_approval_count=restored_approval_count,
             restored_approval_badges=restored_approval_badges,
             restored_approval_tool_badges=restored_approval_tool_badges,
             restored_pending_approval_queue_summary=_restored_pending_approval_queue_summary(pending_approvals),
+            restored_pending_approval_age_summary=restored_pending_approval_age_summary,
             last_restored_approval_summary=last_restored_approval_summary,
+            last_restored_approval_age_summary=last_restored_approval_age_summary,
+            last_restored_approval_age_sort_key=last_restored_approval_age_sort_key,
+            stale_approval_badges=stale_approval_badges,
             pending_approval_attention_sort_key=pending_approval_attention_sort_key,
             approval_attention_sort_key=approval_attention_sort_key,
             denied_approval_attention_sort_key=denied_approval_attention_sort_key,
@@ -460,7 +499,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -517,9 +556,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/T/H/I/Y/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/T/H/I/Y/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/H/I/Y/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/T/H/I/Y/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -595,6 +634,12 @@ def pick_session(
             selected_index = 0
             selected_session_id = ""
             continue
+        if normalized == "o":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "approval-stale")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
         if normalized == "t":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "tool")
             page_index = 0
@@ -661,14 +706,14 @@ def pick_session(
                 )
             else:
                 output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
                 )
             continue
         if current_summaries:
-            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, T, H, I, Y, S, [, ], Enter, or N.")
+            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, T, H, I, Y, S, [, ], Enter, or N.")
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/V/O/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -943,9 +988,14 @@ def _approval_activity(
     str,
     str,
     int,
+    int,
     list[str],
     list[str],
     str,
+    str,
+    str,
+    int,
+    list[str],
     tuple[int, ...],
     tuple[int, ...],
     tuple[int, ...],
@@ -1066,7 +1116,24 @@ def _approval_activity(
     restored_badges = _render_status_badges(restored_status_counts)
     restored_tool_badges = _render_tool_family_badges(restored_family_counts)
     pending_approval_age_summary = _pending_approval_age_summary(pending_approvals)
+    fresh_pending_approval_age_summary = _fresh_pending_approval_age_summary(pending_approvals)
+    restored_pending_approval_age_summary = _restored_pending_approval_age_summary(pending_approvals)
+    fresh_pending_approval_age_seconds = _fresh_pending_approval_age_seconds(pending_approvals)
+    restored_pending_approval_age_seconds = _restored_pending_approval_age_seconds(pending_approvals)
     last_denied_approval_age_summary = _approval_record_age_summary(last_denied_record)
+    last_denied_approval_age_sort_key = _approval_record_age_seconds(last_denied_record)
+    last_restored_approval_age_summary = _approval_record_age_summary(last_restored_record)
+    last_restored_approval_age_sort_key = _approval_record_age_seconds(last_restored_record)
+    stale_approval_badges = _stale_approval_badges(
+        pending_approval_age_seconds=fresh_pending_approval_age_seconds,
+        pending_approval_age_summary=fresh_pending_approval_age_summary,
+        last_denied_approval_age_seconds=last_denied_approval_age_sort_key,
+        last_denied_approval_age_summary=last_denied_approval_age_summary,
+        restored_pending_approval_age_seconds=restored_pending_approval_age_seconds,
+        restored_pending_approval_age_summary=restored_pending_approval_age_summary,
+        last_restored_approval_age_seconds=last_restored_approval_age_sort_key,
+        last_restored_approval_age_summary=last_restored_approval_age_summary,
+    )
     pending_approval_attention_sort_key = _tool_family_attention_sort_key(fresh_pending_family_counts)
     approval_attention_sort_key = _approval_attention_sort_key(
         restored_pending_family_counts,
@@ -1085,10 +1152,15 @@ def _approval_activity(
         denied_badges,
         _render_last_approval_summary(last_denied_record),
         last_denied_approval_age_summary,
+        last_denied_approval_age_sort_key,
         sum(restored_status_counts.values()),
         restored_badges,
         restored_tool_badges,
+        restored_pending_approval_age_summary,
         _render_last_approval_summary(last_restored_record),
+        last_restored_approval_age_summary,
+        last_restored_approval_age_sort_key,
+        stale_approval_badges,
         pending_approval_attention_sort_key,
         approval_attention_sort_key,
         denied_approval_attention_sort_key,
@@ -1154,6 +1226,26 @@ def _pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) ->
 def _restored_pending_approval_queue_summary(pending_approvals: list[ApprovalRequest]) -> str:
     restored_pending = [approval for approval in pending_approvals if approval.restored_from_session]
     return _approval_queue_summary(restored_pending)
+
+
+def _fresh_pending_approval_age_summary(pending_approvals: list[ApprovalRequest]) -> str:
+    fresh_pending = [approval for approval in pending_approvals if not approval.restored_from_session]
+    return _pending_approval_age_summary(fresh_pending)
+
+
+def _restored_pending_approval_age_summary(pending_approvals: list[ApprovalRequest]) -> str:
+    restored_pending = [approval for approval in pending_approvals if approval.restored_from_session]
+    return _pending_approval_age_summary(restored_pending)
+
+
+def _fresh_pending_approval_age_seconds(pending_approvals: list[ApprovalRequest]) -> int:
+    fresh_pending = [approval for approval in pending_approvals if not approval.restored_from_session]
+    return _pending_approval_age_seconds(fresh_pending) or 0
+
+
+def _restored_pending_approval_age_seconds(pending_approvals: list[ApprovalRequest]) -> int:
+    restored_pending = [approval for approval in pending_approvals if approval.restored_from_session]
+    return _pending_approval_age_seconds(restored_pending) or 0
 
 
 def _approval_command_from_args(args: object) -> str:
@@ -1411,7 +1503,7 @@ def render_recent_session_empty_state_lines(
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append(
-            "Try A to show all sessions, or P/D/R/V/T/H/I/Y to jump between pending, denied, restore, restored-approval, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, tool, shell, shell-inspect, and shell-test triage."
         )
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
@@ -1470,6 +1562,8 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
         return bool(summary.restore_badges)
     if filter_mode == "approval-restore":
         return summary.restored_approval_count > 0
+    if filter_mode == "approval-stale":
+        return bool(summary.stale_approval_badges)
     if filter_mode == "tool":
         return bool(summary.last_tool_preview or summary.last_tool_badges)
     if filter_mode == "shell":
@@ -1501,7 +1595,9 @@ def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[
             summary.denied_approval_count > 0,
             denied_key,
             fresh_denied_key,
+            summary.last_denied_approval_age_sort_key,
             restored_denied_key,
+            summary.last_restored_approval_age_sort_key,
             summary.denied_approval_count,
             summary.recent_test_failure_count > 0,
             summary.recent_test_failure_count,
@@ -1598,13 +1694,46 @@ def _pending_approval_age_summary(pending_approvals: list[ApprovalRequest]) -> s
     return f"oldest {label}"
 
 
-def _approval_record_age_summary(record: dict[str, object] | None) -> str:
+def _approval_record_age_seconds(record: dict[str, object] | None) -> int:
     if record is None:
-        return ""
+        return 0
     age_seconds = _age_seconds_from_timestamp(str(record.get("timestamp")) if record.get("timestamp") else None)
     if age_seconds is None:
+        return 0
+    return age_seconds
+
+
+def _approval_record_age_summary(record: dict[str, object] | None) -> str:
+    age_seconds = _approval_record_age_seconds(record)
+    if age_seconds <= 0:
         return ""
     return _format_age_compact(age_seconds)
+
+
+def _stale_approval_badges(
+    *,
+    pending_approval_age_seconds: int,
+    pending_approval_age_summary: str,
+    last_denied_approval_age_seconds: int,
+    last_denied_approval_age_summary: str,
+    restored_pending_approval_age_seconds: int,
+    restored_pending_approval_age_summary: str,
+    last_restored_approval_age_seconds: int,
+    last_restored_approval_age_summary: str,
+) -> list[str]:
+    badges: list[str] = []
+    if pending_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS and pending_approval_age_summary:
+        badges.append(f"pending {pending_approval_age_summary}")
+    if (
+        restored_pending_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS
+        and restored_pending_approval_age_summary
+    ):
+        badges.append(f"restore queue {restored_pending_approval_age_summary}")
+    elif last_restored_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS and last_restored_approval_age_summary:
+        badges.append(f"restored {last_restored_approval_age_summary}")
+    if last_denied_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS and last_denied_approval_age_summary:
+        badges.append(f"denied {last_denied_approval_age_summary}")
+    return badges
 
 
 def _stale_session_status(activity_timestamp: float) -> tuple[str, list[str], int]:

@@ -100,7 +100,7 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
     assert (
-        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
         in rendered
     )
     assert "Press Enter to reopen the highlighted session." in rendered
@@ -186,7 +186,7 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "No saved sessions match the active picker filter." in rendered
     assert "1 saved session still exists under this root." in rendered
     assert (
-        "Try A to show all sessions, or P/D/R/V/T/H/I/Y to jump between pending, denied, restore, restored-approval, tool, shell, shell-inspect, and shell-test triage."
+        "Try A to show all sessions, or P/D/R/V/O/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, tool, shell, shell-inspect, and shell-test triage."
         in rendered
     )
     assert "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in rendered
@@ -209,11 +209,204 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
 
     assert summary is None
     assert prompts == [
-        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/T/H/I/Y/S/[ / ] to change triage: "
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/T/H/I/Y/S/[ / ] to change triage: "
     ]
     assert any("No saved sessions match the active picker filter." in line for line in captured)
     assert any("Try A to show all sessions" in line for line in captured)
     assert any("Press Enter or N to start a fresh session" in line for line in captured)
+
+
+def test_restored_pending_approval_sessions_surface_restore_queue_age_cues(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-restored-aged")
+    _append_turn(store, "resume restored queue")
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-restored-aged",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="resume tests",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
+            )
+        ]
+    )
+
+    summaries = list_recent_sessions(tmp_path, filter_mode="approval-restore")
+
+    assert len(summaries) == 1
+    assert summaries[0].restored_pending_approval_age_summary == "3d"
+    assert "approval restore age: 3d" in summaries[0].render_line(1)
+    assert "- approval restore age: 3d" in "\n".join(
+        summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1)
+    )
+
+
+def test_restored_denied_approval_sessions_surface_last_restored_age_cues(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-restored-denied-aged")
+    event = runtime_event(
+        "steering_denied",
+        "replace_text",
+        "Denied in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-restored-denied-aged",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+        },
+    )
+    event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
+    store.append_turn(
+        TurnArtifact(
+            prompt="deny restored edit",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summaries = list_recent_sessions(tmp_path, filter_mode="approval-restore")
+
+    assert len(summaries) == 1
+    assert summaries[0].restored_pending_approval_age_summary == ""
+    assert summaries[0].last_restored_approval_age_summary == "6h"
+    assert summaries[0].last_restored_approval_age_sort_key >= 6 * 60 * 60
+    assert "approval restore age: 6h" in summaries[0].render_line(1)
+    assert "- last restored age: 6h" in "\n".join(
+        summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1)
+    )
+
+
+def test_denied_approval_sessions_surface_last_denied_age_cues(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-denied-aged")
+    event = runtime_event(
+        "steering_denied",
+        "run_shell_command",
+        "Denied in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-denied-aged",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+            "command": "pytest -q",
+        },
+    )
+    event.timestamp = (datetime.now(UTC) - timedelta(hours=9, minutes=10)).isoformat()
+    store.append_turn(
+        TurnArtifact(
+            prompt="deny rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    summaries = list_recent_sessions(tmp_path, filter_mode="denied")
+    preview = "\n".join(summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert len(summaries) == 1
+    assert summaries[0].last_denied_approval_age_summary == "9h"
+    assert summaries[0].last_denied_approval_age_sort_key >= 9 * 60 * 60
+    assert "denied age: 9h" in summaries[0].render_line(1)
+    assert "- last denied age: 9h" in preview
+
+
+def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approvals(tmp_path: Path) -> None:
+    stale_pending_store = SessionArtifactStore(tmp_path, session_id="session-stale-pending")
+    _append_turn(stale_pending_store, "resume very old pending queue")
+    stale_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-stale-pending",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+                created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+            )
+        ]
+    )
+
+    stale_denied_store = SessionArtifactStore(tmp_path, session_id="session-stale-denied")
+    stale_denied_event = runtime_event(
+        "steering_denied",
+        "run_shell_command",
+        "Denied in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-stale-denied",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+            "command": "pytest -q",
+        },
+    )
+    stale_denied_event.timestamp = (datetime.now(UTC) - timedelta(days=9)).isoformat()
+    stale_denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny old test rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[stale_denied_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    stale_restored_store = SessionArtifactStore(tmp_path, session_id="session-stale-restored")
+    _append_turn(stale_restored_store, "resume stale restored queue")
+    stale_restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-stale-restored",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=8)).isoformat(),
+            )
+        ]
+    )
+
+    fresh_pending_store = SessionArtifactStore(tmp_path, session_id="session-fresh-pending")
+    _append_turn(fresh_pending_store, "resume fresh queue")
+    fresh_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-fresh-pending",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+                created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            )
+        ]
+    )
+
+    stale_summaries = list_recent_sessions(tmp_path, filter_mode="approval-stale")
+    stale_by_id = {summary.session_id: summary for summary in stale_summaries}
+
+    assert set(stale_by_id) == {"session-stale-pending", "session-stale-denied", "session-stale-restored"}
+    assert stale_by_id["session-stale-pending"].stale_approval_badges == ["pending 45d"]
+    assert stale_by_id["session-stale-denied"].stale_approval_badges == ["denied 9d"]
+    assert stale_by_id["session-stale-restored"].stale_approval_badges == ["restore queue 8d"]
+    assert "approval stale: pending 45d" in stale_by_id["session-stale-pending"].render_line(1)
+    assert "- approval stale: denied 9d" in "\n".join(
+        stale_by_id["session-stale-denied"].render_preview(visible_index=1, overall_index=1, total_matches=3)
+    )
 
 
 def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_path: Path) -> None:
@@ -1391,6 +1584,7 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     denied_sessions = list_recent_sessions(tmp_path, filter_mode="denied")
     restore_sessions = list_recent_sessions(tmp_path, filter_mode="restore")
     approval_restore_sessions = list_recent_sessions(tmp_path, filter_mode="approval-restore")
+    approval_stale_sessions = list_recent_sessions(tmp_path, filter_mode="approval-stale")
     tool_sessions = list_recent_sessions(tmp_path, filter_mode="tool")
     shell_sessions = list_recent_sessions(tmp_path, filter_mode="shell")
     shell_inspect_sessions = list_recent_sessions(tmp_path, filter_mode="shell-inspect")
@@ -1400,6 +1594,7 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert [session.session_id for session in denied_sessions] == ["session-denied"]
     assert [session.session_id for session in restore_sessions] == ["session-restore"]
     assert [session.session_id for session in approval_restore_sessions] == ["session-denied"]
+    assert approval_stale_sessions == []
     assert [session.session_id for session in tool_sessions] == ["session-shell", "session-tool"]
     assert [session.session_id for session in shell_sessions] == ["session-shell", "session-pending"]
     assert [session.session_id for session in shell_inspect_sessions] == ["session-shell"]
@@ -1721,3 +1916,70 @@ def test_list_recent_sessions_attention_sort_prefers_older_pending_approval_with
     assert [summary.session_id for summary in ordered[:2]] == ["session-pending-older", "session-pending-newer"]
     assert ordered[0].pending_approval_age_summary == "14d"
     assert ordered[1].pending_approval_age_summary == "3d"
+
+
+def test_list_recent_sessions_attention_sort_prefers_older_denied_approval_with_same_family(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+
+    newer_denied_store = SessionArtifactStore(tmp_path, session_id="session-denied-newer")
+    newer_event = runtime_event(
+        "steering_denied",
+        "run_shell_command",
+        "Denied in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-denied-newer",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+            "command": "pytest -q",
+        },
+    )
+    newer_event.timestamp = (now - timedelta(hours=2)).isoformat()
+    newer_denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny newer test rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[newer_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    older_denied_store = SessionArtifactStore(tmp_path, session_id="session-denied-older")
+    older_event = runtime_event(
+        "steering_denied",
+        "run_shell_command",
+        "Denied in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-denied-older",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+            "command": "pytest -q",
+        },
+    )
+    older_event.timestamp = (now - timedelta(hours=11)).isoformat()
+    older_denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny older test rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[older_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    ordered = list_recent_sessions(
+        tmp_path,
+        sort_mode="attention",
+        filter_mode="denied",
+        limit=count_recent_sessions(tmp_path, filter_mode="denied", sort_mode="attention"),
+    )
+
+    assert [summary.session_id for summary in ordered[:2]] == ["session-denied-older", "session-denied-newer"]
+    assert ordered[0].last_denied_approval_age_summary == "11h"
+    assert ordered[1].last_denied_approval_age_summary == "2h"
