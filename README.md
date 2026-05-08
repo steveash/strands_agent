@@ -109,7 +109,7 @@ What exists now:
 - keyboard-driven session-switcher navigation with ↑/↓ (or J/K), Enter-to-switch, and a highlighted selection row rather than number-only switching,
 - in-app session-switcher triage controls for all/pending/denied/restore/restored-approval/tool/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting so denser recent-session summaries stay skimmable as the list grows,
 - restart-safe session-switcher restoration so reopening a session can bring back the chooser with the prior target selection preserved where possible,
-- richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers, compact restore-state badges, explicit pending-approval age cues, stale-session badges, last-event previews, bounded recent-tool streak summaries, and explicit recent shell/test outcome rollups before selection,
+- richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers, compact restore-state badges, explicit pending-approval age cues, stale-session badges, last-event previews, bounded recent-tool streak summaries, explicit recent shell/test outcome rollups, and overlap badges when one shell-heavy session appears in both the inspect and test triage lanes,
 - a selected-session preview block inside the in-app `F11` switcher so the highlighted session now exposes the same richer summary context as the launch-time picker,
 - explicit empty-filter guidance across both recent-session reopen surfaces so zero-match triage states say how many saved sessions still exist plus which keys recover all/pending/denied/restore/tool/shell/shell-inspect/shell-test views,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
@@ -118,32 +118,32 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- split shell-session triage into dedicated `shell-inspect` and `shell-test` lanes while keeping the broader `shell` view for mixed shell activity,
-- added `I` / `Y` switcher and picker shortcuts plus CLI `--pick-filter` support for the new shell lanes,
-- refreshed picker/switcher regression and smoke coverage so inspect-only rows stay separate from pending/executed test-oriented shell work.
+- added explicit `shell lanes: inspect, test` badges to recent-session rows and selected-session previews whenever one session qualifies for both dedicated shell triage lanes,
+- kept the overlap cue shared between the launch-time picker and the in-app `F11` switcher so mixed shell sessions stay obvious no matter how they are reopened,
+- refreshed regression and smoke coverage around mixed inspect-plus-test shell activity so the overlap badge stays tied to real dual-lane membership.
 
 Why this matters now:
-- It lets Steve jump directly to shell inspection history or approval/test-heavy shell sessions without manually scanning mixed shell rows.
-- It keeps the combined `shell` lane useful for broad shell recovery while adding higher-signal triage when the session list grows dense.
-- It makes the shell-policy seam easier to study operationally, because direct inspect flows and approval-gated test flows now have distinct recovery surfaces.
+- It makes shell-lane overlap obvious at a glance, so Steve does not have to infer from shell counts alone that one session is relevant to both inspect and test recovery.
+- It keeps the split shell lanes high-signal without hiding the fact that mixed shell sessions still belong in both places.
+- It sharpens the shell-policy seam operationally, because direct inspect flows plus approval/test follow-ups now advertise their dual-lane recovery footprint explicitly.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including recent-session selection, denied-approval filtering, restored approval-queue breakdowns, shell/test outcome rollups, denied-aware attention sorting, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, and the shell-command seam,
+- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including recent-session selection, denied-approval filtering, restored approval-queue breakdowns, shell/test outcome rollups, mixed shell-lane overlap badges, denied-aware attention sorting, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, and the shell-command seam,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `116 passed`
-- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py | grep -E 'picker_shell_filter=|picker_shell_inspect_filter=|picker_shell_test_filter='` now prints `picker_shell_filter= True`, `picker_shell_inspect_filter= True`, and `picker_shell_test_filter= True`,
+- automated tests: `117 passed`
+- runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py | grep -E 'picker_shell_filter=|picker_shell_inspect_filter=|picker_shell_test_filter=|picker_shell_overlap_badge='` now prints `picker_shell_filter= True`, `picker_shell_inspect_filter= True`, `picker_shell_test_filter= True`, and `picker_shell_overlap_badge= True`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
-- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py | grep -E 'switcher_shell_filter=|switcher_shell_inspect_filter=|switcher_shell_test_filter=|switcher_shell_test_only_test='` prints `switcher_shell_filter= True`, `switcher_shell_inspect_filter= True`, `switcher_shell_test_filter= True`, and `switcher_shell_test_only_test= True`,
+- runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py | grep -E 'switcher_shell_filter=|switcher_shell_inspect_filter=|switcher_shell_overlap_badge=|switcher_shell_test_filter=|switcher_shell_test_only_test='` prints `switcher_shell_filter= True`, `switcher_shell_inspect_filter= True`, `switcher_shell_overlap_badge= True`, `switcher_shell_test_filter= True`, and `switcher_shell_test_only_test= True`,
 - CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter {all,pending,denied,restore,approval-restore,tool,shell,shell-inspect,shell-test}`, `--pick-sort`, and `--resume-last`,
-- recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
+- recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, mixed shell-lane overlap badges, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
 - UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
@@ -600,10 +600,10 @@ Why this stack:
 ## Next highest-value implementation order
 
 1. keep the fake runtime path green while refining the event schema around steering/intervention events
-2. decide whether generic shell/tool activity now needs a preview-only cue, a dedicated filter, or no extra triage affordance beyond the existing row metadata
-3. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+2. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+3. decide whether approval-restore triage now needs stale-age cues or queue-age badges once revived session lists grow larger
 4. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
-5. decide whether denied/restored approval activity also needs explicit age cues or whether pending-only age plus stale-session badges is the right stopping point
+5. decide whether generic non-shell tool activity now needs a dedicated triage lane or should stay preview-only
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper

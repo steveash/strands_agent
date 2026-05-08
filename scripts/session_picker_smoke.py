@@ -54,6 +54,18 @@ def main() -> None:
                         },
                     ),
                     runtime_event(
+                        "tool_finished",
+                        "run_shell_command",
+                        "Finished shell command",
+                        data={
+                            "tool_name": "run_shell_command",
+                            "command": "git status --short",
+                            "shell_policy": "inspect",
+                            "exit_code": 0,
+                            "result_preview": "git status --short -> M README.md",
+                        },
+                    ),
+                    runtime_event(
                         "steering_confirmation_required",
                         "run_shell_command",
                         "Needs confirmation",
@@ -435,7 +447,7 @@ def main() -> None:
             "picker_shell_inspect_filter=",
             "Filter: shell-inspect | Sort: recent" in shell_inspect_picker
             and "session-inspect | 1 turn(s)" in shell_inspect_picker
-            and "session-pending | 1 turn(s)" not in shell_inspect_picker
+            and "session-pending | 1 turn(s)" in shell_inspect_picker
             and "session-tool | 1 turn(s)" not in shell_inspect_picker,
         )
         print(
@@ -445,6 +457,12 @@ def main() -> None:
             and "session-aged | 1 turn(s)" in shell_test_picker
             and "session-failed-test | 1 turn(s)" in shell_test_picker
             and "session-inspect | 1 turn(s)" not in shell_test_picker,
+        )
+        print(
+            "picker_shell_overlap_badge=",
+            "session-pending | 1 turn(s)" in shell_inspect_picker
+            and "shell lanes: inspect, test" in shell_inspect_picker
+            and "shell lanes: inspect, test" in shell_test_picker,
         )
         print(
             "picker_denied_preview_origin=",

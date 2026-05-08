@@ -1446,6 +1446,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "Filter: shell-inspect | Sort: attention" in shell_inspect_output
         assert "session-shell | 1 turn(s)" in shell_inspect_output
         assert "session-pending | 1 turn(s)" in shell_inspect_output
+        assert "shell lanes: inspect, test" in shell_inspect_output
         assert "session-restored-pending | 1 turn(s)" not in shell_inspect_output
         assert "session-failed-test | 1 turn(s)" not in shell_inspect_output
 
@@ -1455,6 +1456,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "Filter: shell-test | Sort: attention" in shell_test_output
         assert "session-pending | 1 turn(s)" in shell_test_output
         assert "session-restored-pending | 1 turn(s)" in shell_test_output
+        assert "shell lanes: inspect, test" in shell_test_output
         assert "session-shell | 1 turn(s)" not in shell_test_output
         assert "session-tool | 1 turn(s)" not in shell_test_output
 

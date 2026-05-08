@@ -452,6 +452,11 @@ async def run_smoke() -> None:
                 and "session-restored-pending | 1 turn(s)" not in shell_inspect_output
                 and "session-tool | 1 turn(s)" not in shell_inspect_output,
             )
+            print(
+                "switcher_shell_overlap_badge=",
+                "session-newer | 1 turn(s)" in shell_inspect_output
+                and "shell lanes: inspect, test" in shell_inspect_output,
+            )
             await pilot.press("y")
             await pilot.pause()
             shell_test_output = str(first_app.query_one("#output").render())

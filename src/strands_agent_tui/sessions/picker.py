@@ -77,6 +77,7 @@ class SessionSummary:
     last_tool_badges: list[str] = field(default_factory=list)
     recent_tool_previews: list[str] = field(default_factory=list)
     shell_activity_badges: list[str] = field(default_factory=list)
+    shell_lane_badges: list[str] = field(default_factory=list)
     has_shell_inspect_activity: bool = False
     has_shell_test_activity: bool = False
     last_shell_preview: str = ""
@@ -142,6 +143,9 @@ class SessionSummary:
         shell_suffix = (
             f" | shell: {', '.join(self.shell_activity_badges)}" if self.shell_activity_badges else ""
         )
+        shell_lane_suffix = (
+            f" | shell lanes: {', '.join(self.shell_lane_badges)}" if self.shell_lane_badges else ""
+        )
         failure_suffix = (
             f" | failures: {', '.join(self.failure_activity_badges)}" if self.failure_activity_badges else ""
         )
@@ -154,7 +158,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -220,6 +224,8 @@ class SessionSummary:
             lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_tool_previews, start=1))
         if self.shell_activity_badges:
             lines.append(f"- shell: {', '.join(self.shell_activity_badges)}")
+        if self.shell_lane_badges:
+            lines.append(f"- shell lanes: {', '.join(self.shell_lane_badges)}")
         if self.failure_activity_badges:
             lines.append(f"- failures: {', '.join(self.failure_activity_badges)}")
         if self.last_shell_preview:
@@ -354,6 +360,7 @@ def _ordered_recent_sessions(
             last_tool_badges=_latest_tool_badges(turns),
             recent_tool_previews=_recent_tool_previews(turns),
             shell_activity_badges=_shell_activity_badges(turns),
+            shell_lane_badges=_shell_lane_badges(has_shell_inspect_activity, has_shell_test_activity),
             has_shell_inspect_activity=has_shell_inspect_activity,
             has_shell_test_activity=has_shell_test_activity,
             last_shell_preview=_latest_shell_preview(turns),
@@ -777,6 +784,12 @@ def _shell_activity_badges(turns: list[TurnArtifact], count_window: int = MAX_SH
     if failure_count:
         badges.append(f"fail {failure_count}")
     return badges
+
+
+def _shell_lane_badges(has_inspect_activity: bool, has_test_activity: bool) -> list[str]:
+    if has_inspect_activity and has_test_activity:
+        return ["inspect", "test"]
+    return []
 
 
 def _bounded_recent_tool_events(

@@ -1124,6 +1124,9 @@ def test_list_recent_sessions_surfaces_shell_test_rollup_and_failures(tmp_path: 
     preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
 
     assert summary.shell_activity_badges == ["inspect 1", "test 1", "fail 1"]
+    assert summary.shell_lane_badges == ["inspect", "test"]
+    assert summary.has_shell_inspect_activity is True
+    assert summary.has_shell_test_activity is True
     assert summary.failure_activity_badges == ["test 1"]
     assert summary.last_shell_preview == "confirm/e1 pytest -q -> exit 1"
     assert summary.recent_shell_previews == [
@@ -1135,11 +1138,67 @@ def test_list_recent_sessions_surfaces_shell_test_rollup_and_failures(tmp_path: 
     assert summary.recent_test_failure_count == 1
     assert summary.recent_tool_failure_count == 0
     assert "shell: inspect 1, test 1, fail 1" in summary.render_line(1)
+    assert "shell lanes: inspect, test" in summary.render_line(1)
     assert "failures: test 1" in summary.render_line(1)
+    assert "- shell lanes: inspect, test" in preview
     assert "- failures: test 1" in preview
     assert "- recent shell outcomes (2):" in preview
     assert "  1. confirm/e1 pytest -q -> exit 1" in preview
     assert "  2. inspect/e0 git status --short -> M README.md" in preview
+
+
+def test_list_recent_sessions_marks_mixed_shell_lane_overlap_when_session_matches_both_shell_filters(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-shell-mixed")
+    store.append_turn(
+        TurnArtifact(
+            prompt="inspect before rerunning tests",
+            response="pending",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-mixed-shell",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+            )
+        ]
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.has_shell_inspect_activity is True
+    assert summary.has_shell_test_activity is True
+    assert summary.shell_lane_badges == ["inspect", "test"]
+    assert "shell lanes: inspect, test" in summary.render_line(1)
+    assert "- shell lanes: inspect, test" in preview
+    assert [session.session_id for session in list_recent_sessions(tmp_path, filter_mode="shell-inspect")] == [
+        "session-shell-mixed"
+    ]
+    assert [session.session_id for session in list_recent_sessions(tmp_path, filter_mode="shell-test")] == [
+        "session-shell-mixed"
+    ]
 
 
 def test_list_recent_sessions_surfaces_non_shell_failure_rollup(tmp_path: Path) -> None:
