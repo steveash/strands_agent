@@ -119,33 +119,33 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- enriched stale-approval backlog summaries across the launch-time picker and in-app `F11` switcher so each stale lane now shows its oldest matching age before paging,
-- threaded restored pending-approval age sort keys through recent-session summaries so restore-queue stale aggregates can stay structured instead of being parsed from display text,
-- refreshed picker/switcher regression coverage plus both stale-approval smoke assertions.
+- added multi-page stale-approval lane rollups across the launch-time picker and in-app `F11` switcher so each visible stale page now summarizes its own lanes and calls out what remains off-page,
+- kept the backlog-wide oldest-age lane summary intact while reusing the same structured stale-lane aggregation for both picker and switcher surfaces,
+- refreshed stale-triage regression coverage plus both picker/switcher smoke checks with explicit page-rollup assertions.
 
 Why this matters now:
-- It makes the new stale triage lane actionable at a glance: Steve can see which stale lane is oldest without paging through every saved session.
+- It keeps stale triage actionable even after the backlog spills past one page: Steve can see whether the visible page is all pending work or whether denied/restored lanes are waiting off-page.
 - It keeps the launch-time picker and in-app switcher aligned, which matters because stale triage is now a shared reopen workflow rather than a one-off surface.
-- It preserves structured age data for restored queues, which keeps future sorting and richer stale summaries easy to extend.
+- It reuses structured stale-lane data instead of parsing rendered text, so future stale triage extensions can stay deterministic.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including recent-session selection, denied-approval filtering, restored approval-queue breakdowns, shell/test outcome rollups, mixed shell-lane overlap badges, denied-aware attention sorting, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, and the shell-command seam,
+- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including recent-session selection, denied-approval filtering, restored approval-queue breakdowns, shell/test outcome rollups, mixed shell-lane overlap badges, denied-aware attention sorting, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, the shell-command seam, and multi-page stale triage summaries,
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `122 passed`
-- runnable picker stale-backlog verification: `.venv/bin/python scripts/session_picker_smoke.py | grep -E 'picker_approval_stale_filter=|picker_approval_stale_backlog='` now prints `picker_approval_stale_filter= True` and `picker_approval_stale_backlog= True`,
+- automated tests: `123 passed`
+- runnable picker stale-backlog verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_approval_stale_filter= True`, `picker_approval_stale_backlog= True`, and `picker_approval_stale_page_rollup= True`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
 - runnable live-restore denial verification: `.venv/bin/python scripts/live_restore_denied_smoke.py` prints `live_restore_denied_initial_pending= True`, `live_restore_denied_saved_pending= True`, `live_restore_denied_restored_queue= True`, `live_restore_denied_event= True`, `live_restore_denied_no_tool_event= True`, and `live_restore_denied_summary= True`,
-- runnable session-switch stale-backlog verification: `.venv/bin/python scripts/session_switcher_smoke.py | grep -E 'switcher_approval_stale_filter=|switcher_approval_stale_backlog='` prints `switcher_approval_stale_filter= True` and `switcher_approval_stale_backlog= True`,
+- runnable session-switch stale-backlog verification: `.venv/bin/python scripts/session_switcher_smoke.py` prints `switcher_approval_stale_filter= True`, `switcher_approval_stale_backlog= True`, and `switcher_approval_stale_page_rollup= True`,
 - CLI verification: `.venv/bin/python -m strands_agent_tui.app --help | grep -- '--pick-filter'` still shows `--pick-filter {all,pending,denied,restore,approval-restore,approval-stale,tool,shell,shell-inspect,shell-test}`,
-- recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, mixed shell-lane overlap badges, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
+- recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, mixed shell-lane overlap badges, multi-page stale-lane rollups, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
 - UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
@@ -633,8 +633,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- keep tightening the fake/live event schema around steering and intervention milestones
-- decide whether generic shell/tool activity now needs a preview-only cue, a dedicated filter, or no extra triage affordance beyond the existing row metadata
-- reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+- reconcile the pinned prototype path with the canonical repo so future automation does not need README indirection or split commits
+- decide whether stale-approval triage should expose a configurable threshold or separate stale-denied/restored variants
+- add richer empty-state guidance or backlog-level compaction if stale approval summaries become noisy across many lanes/pages
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
-- decide whether denied/restored approval activity also needs explicit age cues or whether pending-only age plus stale-session badges is the right stopping point
+- keep tightening the fake/live event schema around steering and intervention milestones

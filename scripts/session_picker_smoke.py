@@ -5,7 +5,15 @@ from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
 from strands_agent_tui.runtime import ApprovalRequest, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore, SessionState, TurnArtifact, latest_session, pick_session, render_session_picker
+from strands_agent_tui.sessions import (
+    MAX_RECENT_SESSIONS,
+    SessionArtifactStore,
+    SessionState,
+    TurnArtifact,
+    latest_session,
+    pick_session,
+    render_session_picker,
+)
 
 
 def append_turn(store: SessionArtifactStore, prompt: str) -> None:
@@ -616,6 +624,109 @@ def main() -> None:
             and "  8. session-denied" in paged_picker
             and "session-page-7" not in paged_picker,
         )
+
+        with TemporaryDirectory() as stale_rollup_root:
+            rollup_now = datetime.now(UTC)
+            for index in range(MAX_RECENT_SESSIONS):
+                store = SessionArtifactStore(stale_rollup_root, session_id=f"session-stale-pending-{index}")
+                activity_time = rollup_now - timedelta(minutes=index)
+                store.append_turn(
+                    TurnArtifact(
+                        prompt=f"resume stale pending queue {index}",
+                        response="ok",
+                        provider="fake-strands",
+                        mode="fake",
+                        events=[],
+                        response_metadata={"mode": "fake"},
+                        created_at=activity_time.isoformat(),
+                    )
+                )
+                store.save_pending_approvals(
+                    [
+                        ApprovalRequest(
+                            request_id=f"approval-stale-pending-{index}",
+                            tool_name="run_shell_command",
+                            reason="Needs confirmation",
+                            args={"command": "pytest -q"},
+                            source="fake_runtime",
+                            prompt="rerun tests",
+                            created_at=(rollup_now - timedelta(days=45 + index)).isoformat(),
+                        )
+                    ]
+                )
+                set_session_artifact_mtime(store, activity_time)
+
+            denied_store = SessionArtifactStore(stale_rollup_root, session_id="session-stale-denied-page-2")
+            denied_activity_time = rollup_now - timedelta(minutes=100)
+            denied_event = runtime_event(
+                "steering_denied",
+                "run_shell_command",
+                "Denied in the TUI",
+                data={
+                    "tool_name": "run_shell_command",
+                    "approval_id": "approval-stale-denied-page-2",
+                    "approval_status": "denied",
+                    "approval_source": "fake_runtime",
+                    "remaining_pending_count": 0,
+                    "command": "pytest -q",
+                },
+            )
+            denied_event.timestamp = (rollup_now - timedelta(days=14)).isoformat()
+            denied_store.append_turn(
+                TurnArtifact(
+                    prompt="deny stale page-two test rerun",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[denied_event],
+                    response_metadata={"mode": "fake"},
+                    created_at=denied_activity_time.isoformat(),
+                )
+            )
+            set_session_artifact_mtime(denied_store, denied_activity_time)
+
+            restored_store = SessionArtifactStore(stale_rollup_root, session_id="session-stale-restored-page-2")
+            restored_activity_time = rollup_now - timedelta(minutes=101)
+            restored_store.append_turn(
+                TurnArtifact(
+                    prompt="resume stale restored page-two queue",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[],
+                    response_metadata={"mode": "fake"},
+                    created_at=restored_activity_time.isoformat(),
+                )
+            )
+            restored_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-stale-restored-page-2",
+                        tool_name="write_file",
+                        reason="Needs confirmation",
+                        args={"relative_path": "notes.txt", "overwrite": True},
+                        source="fake_runtime",
+                        prompt="resume edit",
+                        restored_from_session=True,
+                        created_at=(rollup_now - timedelta(days=11)).isoformat(),
+                    )
+                ]
+            )
+            set_session_artifact_mtime(restored_store, restored_activity_time)
+
+            stale_rollup_picker = render_session_picker(stale_rollup_root, filter_mode="approval-stale")
+            stale_rollup_page_two_picker = render_session_picker(
+                stale_rollup_root,
+                filter_mode="approval-stale",
+                page_index=1,
+            )
+            print(
+                "picker_approval_stale_page_rollup=",
+                "This page stale lanes: pending 8 (oldest 52d) | more off-page: denied 1 (oldest 14d), restore queue 1 (oldest 11d)"
+                in stale_rollup_picker
+                and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: pending 8 (oldest 52d)"
+                in stale_rollup_page_two_picker,
+            )
 
         captured: list[str] = []
         inputs = iter(["p", "s", "j", "k", ""])

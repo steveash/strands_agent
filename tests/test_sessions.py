@@ -415,6 +415,115 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     ) in rendered
 
 
+def test_stale_approval_filter_summarizes_current_page_and_off_page_lanes(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+
+    for index in range(MAX_RECENT_SESSIONS):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-stale-pending-{index}")
+        activity_time = now - timedelta(minutes=index)
+        store.append_turn(
+            TurnArtifact(
+                prompt=f"resume stale pending queue {index}",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+                created_at=activity_time.isoformat(),
+            )
+        )
+        store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id=f"approval-stale-pending-{index}",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt="rerun tests",
+                    created_at=(now - timedelta(days=45 + index)).isoformat(),
+                )
+            ]
+        )
+        _set_session_artifact_mtime(store, activity_time)
+
+    denied_store = SessionArtifactStore(tmp_path, session_id="session-stale-denied-page-2")
+    denied_activity_time = now - timedelta(minutes=100)
+    denied_event = runtime_event(
+        "steering_denied",
+        "run_shell_command",
+        "Denied in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-stale-denied-page-2",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+            "command": "pytest -q",
+        },
+    )
+    denied_event.timestamp = (now - timedelta(days=14)).isoformat()
+    denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny stale page-two test rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[denied_event],
+            response_metadata={"mode": "fake"},
+            created_at=denied_activity_time.isoformat(),
+        )
+    )
+    _set_session_artifact_mtime(denied_store, denied_activity_time)
+
+    restored_store = SessionArtifactStore(tmp_path, session_id="session-stale-restored-page-2")
+    restored_activity_time = now - timedelta(minutes=101)
+    restored_store.append_turn(
+        TurnArtifact(
+            prompt="resume stale restored page-two queue",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=restored_activity_time.isoformat(),
+        )
+    )
+    restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-stale-restored-page-2",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+                created_at=(now - timedelta(days=11)).isoformat(),
+            )
+        ]
+    )
+    _set_session_artifact_mtime(restored_store, restored_activity_time)
+
+    first_page = render_session_picker(tmp_path, filter_mode="approval-stale")
+    second_page = render_session_picker(tmp_path, filter_mode="approval-stale", page_index=1)
+
+    assert (
+        "Stale approval backlog: 10 sessions | lanes: pending 8 (oldest 52d), denied 1 (oldest 14d), "
+        "restore queue 1 (oldest 11d)"
+    ) in first_page
+    assert (
+        "This page stale lanes: pending 8 (oldest 52d) | more off-page: denied 1 (oldest 14d), "
+        "restore queue 1 (oldest 11d)"
+    ) in first_page
+    assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
+    assert (
+        "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: "
+        "pending 8 (oldest 52d)"
+    ) in second_page
+
+
+
 def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")

@@ -840,12 +840,15 @@ class StrandsAgentApp(App):
                 filter_mode=self.session_switcher_filter_mode,
                 sort_mode=self.session_switcher_sort_mode,
             )
+        max_page_index = (self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS
+        normalized_page_index = min(self.session_switcher_page_index, max_page_index)
         self.session_switcher_summary_lines = render_recent_session_filter_summary_lines(
             all_summaries or [],
             filter_mode=self.session_switcher_filter_mode,
+            page_index=normalized_page_index,
+            page_size=MAX_RECENT_SESSIONS,
         )
 
-        max_page_index = (self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS
         if selected_session_id and all_summaries is not None:
             for index, summary in enumerate(all_summaries):
                 if summary.session_id == selected_session_id:

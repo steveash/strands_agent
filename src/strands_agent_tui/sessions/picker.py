@@ -465,12 +465,17 @@ def render_session_picker(
         sort_mode=sort_mode,
         offset=page_index * limit,
     )
-
-    filter_summary_lines = render_recent_session_filter_summary_lines(
+    matching_summaries = (
         list_recent_sessions(resolved_root, limit=total_matches, filter_mode=filter_mode, sort_mode=sort_mode)
         if total_matches > 0
-        else [],
+        else []
+    )
+
+    filter_summary_lines = render_recent_session_filter_summary_lines(
+        matching_summaries,
         filter_mode=filter_mode,
+        page_index=page_index,
+        page_size=limit,
     )
 
     lines = [
@@ -1507,31 +1512,38 @@ def render_recent_session_filter_summary_lines(
     summaries: list[SessionSummary],
     *,
     filter_mode: str,
+    page_index: int = 0,
+    page_size: int = MAX_RECENT_SESSIONS,
 ) -> list[str]:
     if filter_mode != "approval-stale" or not summaries:
         return []
 
-    lane_counts = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
-    lane_oldest_ages = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
-    for summary in summaries:
-        for lane in _stale_approval_lanes(summary):
-            lane_counts[lane] += 1
-        for lane, age_seconds in _stale_approval_lane_age_seconds(summary).items():
-            lane_oldest_ages[lane] = max(lane_oldest_ages[lane], age_seconds)
-
+    lane_counts, lane_oldest_ages = _summarize_stale_approval_lanes(summaries)
     session_label = "session" if len(summaries) == 1 else "sessions"
-    lane_parts = []
-    for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER:
-        if lane_counts[lane] <= 0:
-            continue
-        part = f"{lane} {lane_counts[lane]}"
-        if lane_oldest_ages[lane] > 0:
-            part += f" (oldest {_format_age_compact(lane_oldest_ages[lane])})"
-        lane_parts.append(part)
+    lane_rollup = _format_stale_approval_lane_rollup(lane_counts, lane_oldest_ages)
     line = f"Stale approval backlog: {len(summaries)} {session_label}"
-    if lane_parts:
-        line += f" | lanes: {', '.join(lane_parts)}"
-    return [line]
+    if lane_rollup:
+        line += f" | lanes: {lane_rollup}"
+
+    lines = [line]
+    if len(summaries) <= page_size:
+        return lines
+
+    page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
+    start = page_index * page_size
+    end = start + page_size
+    visible_summaries = summaries[start:end]
+    off_page_summaries = summaries[:start] + summaries[end:]
+    visible_rollup = _format_stale_approval_lane_rollup(*_summarize_stale_approval_lanes(visible_summaries))
+    if not visible_rollup:
+        return lines
+
+    page_line = f"This page stale lanes: {visible_rollup}"
+    off_page_rollup = _format_stale_approval_lane_rollup(*_summarize_stale_approval_lanes(off_page_summaries))
+    if off_page_rollup:
+        page_line += f" | more off-page: {off_page_rollup}"
+    lines.append(page_line)
+    return lines
 
 
 def render_recent_session_empty_state_lines(
@@ -1555,6 +1567,34 @@ def render_recent_session_empty_state_lines(
         lines.append("Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists.")
         lines.append("Enter switches the highlighted session once a visible row exists again.")
     return lines
+
+
+def _summarize_stale_approval_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, int], dict[str, int]]:
+    lane_counts = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
+    lane_oldest_ages = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
+    for summary in summaries:
+        for lane in _stale_approval_lanes(summary):
+            lane_counts[lane] += 1
+        for lane, age_seconds in _stale_approval_lane_age_seconds(summary).items():
+            lane_oldest_ages[lane] = max(lane_oldest_ages[lane], age_seconds)
+    return lane_counts, lane_oldest_ages
+
+
+def _format_stale_approval_lane_rollup(
+    lane_counts: dict[str, int],
+    lane_oldest_ages: dict[str, int],
+) -> str:
+    lane_parts: list[str] = []
+    for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER:
+        count = lane_counts.get(lane, 0)
+        if count <= 0:
+            continue
+        part = f"{lane} {count}"
+        oldest_age = lane_oldest_ages.get(lane, 0)
+        if oldest_age > 0:
+            part += f" (oldest {_format_age_compact(oldest_age)})"
+        lane_parts.append(part)
+    return ", ".join(lane_parts)
 
 
 def _stale_approval_lanes(summary: SessionSummary) -> set[str]:
