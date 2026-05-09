@@ -499,7 +499,7 @@ def main() -> None:
         )
         print(
             "picker_approval_stale_backlog=",
-            "Stale approval backlog: 1 session | lanes: pending 1" in approval_stale_picker,
+            "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d)" in approval_stale_picker,
         )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in pending_picker)
         print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)

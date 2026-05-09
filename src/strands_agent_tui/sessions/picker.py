@@ -72,6 +72,7 @@ class SessionSummary:
     restored_approval_tool_badges: list[str] = field(default_factory=list)
     restored_pending_approval_queue_summary: str = ""
     restored_pending_approval_age_summary: str = ""
+    restored_pending_approval_age_sort_key: int = 0
     last_restored_approval_summary: str = ""
     last_restored_approval_age_summary: str = ""
     last_restored_approval_age_sort_key: int = 0
@@ -342,6 +343,7 @@ def _ordered_recent_sessions(
             restored_approval_badges,
             restored_approval_tool_badges,
             restored_pending_approval_age_summary,
+            restored_pending_approval_age_sort_key,
             last_restored_approval_summary,
             last_restored_approval_age_summary,
             last_restored_approval_age_sort_key,
@@ -388,6 +390,7 @@ def _ordered_recent_sessions(
             restored_approval_tool_badges=restored_approval_tool_badges,
             restored_pending_approval_queue_summary=_restored_pending_approval_queue_summary(pending_approvals),
             restored_pending_approval_age_summary=restored_pending_approval_age_summary,
+            restored_pending_approval_age_sort_key=restored_pending_approval_age_sort_key,
             last_restored_approval_summary=last_restored_approval_summary,
             last_restored_approval_age_summary=last_restored_approval_age_summary,
             last_restored_approval_age_sort_key=last_restored_approval_age_sort_key,
@@ -1166,6 +1169,7 @@ def _approval_activity(
         restored_badges,
         restored_tool_badges,
         restored_pending_approval_age_summary,
+        restored_pending_approval_age_seconds,
         _render_last_approval_summary(last_restored_record),
         last_restored_approval_age_summary,
         last_restored_approval_age_sort_key,
@@ -1508,12 +1512,22 @@ def render_recent_session_filter_summary_lines(
         return []
 
     lane_counts = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
+    lane_oldest_ages = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
     for summary in summaries:
         for lane in _stale_approval_lanes(summary):
             lane_counts[lane] += 1
+        for lane, age_seconds in _stale_approval_lane_age_seconds(summary).items():
+            lane_oldest_ages[lane] = max(lane_oldest_ages[lane], age_seconds)
 
     session_label = "session" if len(summaries) == 1 else "sessions"
-    lane_parts = [f"{lane} {lane_counts[lane]}" for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER if lane_counts[lane] > 0]
+    lane_parts = []
+    for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER:
+        if lane_counts[lane] <= 0:
+            continue
+        part = f"{lane} {lane_counts[lane]}"
+        if lane_oldest_ages[lane] > 0:
+            part += f" (oldest {_format_age_compact(lane_oldest_ages[lane])})"
+        lane_parts.append(part)
     line = f"Stale approval backlog: {len(summaries)} {session_label}"
     if lane_parts:
         line += f" | lanes: {', '.join(lane_parts)}"
@@ -1555,6 +1569,23 @@ def _stale_approval_lanes(summary: SessionSummary) -> set[str]:
         elif badge.startswith("denied "):
             lanes.add("denied")
     return lanes
+
+
+def _stale_approval_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
+    lane_ages: dict[str, int] = {}
+    for lane in _stale_approval_lanes(summary):
+        age_seconds = 0
+        if lane == "pending":
+            age_seconds = summary.pending_approval_age_sort_key
+        elif lane == "denied":
+            age_seconds = summary.last_denied_approval_age_sort_key
+        elif lane == "restore queue":
+            age_seconds = summary.restored_pending_approval_age_sort_key
+        elif lane == "restored":
+            age_seconds = summary.last_restored_approval_age_sort_key
+        if age_seconds > 0:
+            lane_ages[lane] = age_seconds
+    return lane_ages
 
 
 def _toggle_picker_filter_mode(current_filter_mode: str, next_filter_mode: str) -> str:

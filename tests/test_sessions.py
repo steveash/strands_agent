@@ -238,6 +238,7 @@ def test_restored_pending_approval_sessions_surface_restore_queue_age_cues(tmp_p
 
     assert len(summaries) == 1
     assert summaries[0].restored_pending_approval_age_summary == "3d"
+    assert summaries[0].restored_pending_approval_age_sort_key >= 3 * 24 * 60 * 60
     assert "approval restore age: 3d" in summaries[0].render_line(1)
     assert "- approval restore age: 3d" in "\n".join(
         summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1)
@@ -408,7 +409,10 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     assert "- approval stale: denied 9d" in "\n".join(
         stale_by_id["session-stale-denied"].render_preview(visible_index=1, overall_index=1, total_matches=3)
     )
-    assert "Stale approval backlog: 3 sessions | lanes: pending 1, denied 1, restore queue 1" in rendered
+    assert (
+        "Stale approval backlog: 3 sessions | lanes: pending 1 (oldest 45d), denied 1 (oldest 9d), "
+        "restore queue 1 (oldest 8d)"
+    ) in rendered
 
 
 def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_path: Path) -> None:
