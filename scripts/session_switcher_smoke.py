@@ -492,6 +492,10 @@ async def run_smoke() -> None:
                 and "approval stale: pending 45d" in approval_stale_output
                 and "session-newer | 1 turn(s)" not in approval_stale_output,
             )
+            print(
+                "switcher_approval_stale_backlog=",
+                "Stale approval backlog: 1 session | lanes: pending 1" in approval_stale_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 

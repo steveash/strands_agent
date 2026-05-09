@@ -497,6 +497,10 @@ def main() -> None:
             and "approval stale: pending 45d" in approval_stale_picker
             and "session-restored-pending | 1 turn(s)" not in approval_stale_picker,
         )
+        print(
+            "picker_approval_stale_backlog=",
+            "Stale approval backlog: 1 session | lanes: pending 1" in approval_stale_picker,
+        )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in pending_picker)
         print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)
         print(

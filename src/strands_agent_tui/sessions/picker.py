@@ -30,6 +30,7 @@ STALE_SESSION_DANGER_SECONDS = 30 * 24 * 60 * 60
 STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
+STALE_APPROVAL_LANE_DISPLAY_ORDER = ("pending", "denied", "restore queue", "restored")
 SESSION_SWITCHER_FILTER_MODES = {
     "all",
     "pending",
@@ -462,6 +463,13 @@ def render_session_picker(
         offset=page_index * limit,
     )
 
+    filter_summary_lines = render_recent_session_filter_summary_lines(
+        list_recent_sessions(resolved_root, limit=total_matches, filter_mode=filter_mode, sort_mode=sort_mode)
+        if total_matches > 0
+        else [],
+        filter_mode=filter_mode,
+    )
+
     lines = [
         f"Recent sessions under {resolved_root}:",
         (
@@ -469,6 +477,7 @@ def render_session_picker(
             f"Page: {_picker_page_label(total_matches, limit, page_index)} | "
             f"Showing: {_picker_page_window_label(total_matches, limit, page_index, len(summaries))}"
         ),
+        *filter_summary_lines,
         "",
     ]
     if not summaries:
@@ -1490,6 +1499,27 @@ def sanitize_session_switcher_sort_mode(value: str) -> str:
     return value if value in SESSION_SWITCHER_SORT_MODES else "recent"
 
 
+def render_recent_session_filter_summary_lines(
+    summaries: list[SessionSummary],
+    *,
+    filter_mode: str,
+) -> list[str]:
+    if filter_mode != "approval-stale" or not summaries:
+        return []
+
+    lane_counts = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
+    for summary in summaries:
+        for lane in _stale_approval_lanes(summary):
+            lane_counts[lane] += 1
+
+    session_label = "session" if len(summaries) == 1 else "sessions"
+    lane_parts = [f"{lane} {lane_counts[lane]}" for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER if lane_counts[lane] > 0]
+    line = f"Stale approval backlog: {len(summaries)} {session_label}"
+    if lane_parts:
+        line += f" | lanes: {', '.join(lane_parts)}"
+    return [line]
+
+
 def render_recent_session_empty_state_lines(
     *,
     available_count: int,
@@ -1511,6 +1541,20 @@ def render_recent_session_empty_state_lines(
         lines.append("Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists.")
         lines.append("Enter switches the highlighted session once a visible row exists again.")
     return lines
+
+
+def _stale_approval_lanes(summary: SessionSummary) -> set[str]:
+    lanes: set[str] = set()
+    for badge in summary.stale_approval_badges:
+        if badge.startswith("restore queue "):
+            lanes.add("restore queue")
+        elif badge.startswith("restored "):
+            lanes.add("restored")
+        elif badge.startswith("pending "):
+            lanes.add("pending")
+        elif badge.startswith("denied "):
+            lanes.add("denied")
+    return lanes
 
 
 def _toggle_picker_filter_mode(current_filter_mode: str, next_filter_mode: str) -> str:

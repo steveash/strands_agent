@@ -1429,6 +1429,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         approval_stale_output = str(app.query_one("#output").render())
         assert "Filter: approval-stale | Sort: recent" in approval_stale_output
+        assert "Stale approval backlog: 1 session | lanes: pending 1" in approval_stale_output
         assert "session-aged" in approval_stale_output
         assert "approval stale: pending 45d" in approval_stale_output
         assert "session-pending | 1 turn(s)" not in approval_stale_output

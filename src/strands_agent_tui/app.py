@@ -21,6 +21,7 @@ from strands_agent_tui.sessions import (
     list_recent_sessions,
     pick_session,
     render_recent_session_empty_state_lines,
+    render_recent_session_filter_summary_lines,
     sanitize_session_switcher_filter_mode,
     sanitize_session_switcher_sort_mode,
 )
@@ -118,6 +119,7 @@ class StrandsAgentApp(App):
         self.session_switcher_sort_mode = "recent"
         self.session_switcher_page_index = 0
         self.session_switcher_total_matches = 0
+        self.session_switcher_summary_lines: list[str] = []
         self.pending_approval: ApprovalRequest | None = None
         self.runtime_status_override: str | None = None
         self.artifact_store = artifact_store or SessionArtifactStore(
@@ -310,6 +312,7 @@ class StrandsAgentApp(App):
         self.session_switcher_sort_mode = "recent"
         self.session_switcher_page_index = 0
         self.session_switcher_total_matches = 0
+        self.session_switcher_summary_lines = []
         if hasattr(self.runtime, "restore_pending_approvals"):
             self.runtime.restore_pending_approvals([])
 
@@ -476,6 +479,7 @@ class StrandsAgentApp(App):
                 f"Page: {self.session_switcher_page_label()} | "
                 f"Showing: {self.session_switcher_page_window_label()}"
             ),
+            *self.session_switcher_summary_lines,
             "",
         ]
 
@@ -776,6 +780,7 @@ class StrandsAgentApp(App):
         self.session_switcher_sort_mode = "recent"
         self.session_switcher_page_index = 0
         self.session_switcher_total_matches = 0
+        self.session_switcher_summary_lines = []
         self._persist_session_view_state()
         self._refresh_widgets()
 
@@ -824,16 +829,24 @@ class StrandsAgentApp(App):
             self.session_switcher_page_index = 0
             self.session_switcher_summaries = []
             self.session_switcher_selected_index = 0
+            self.session_switcher_summary_lines = []
             return
 
-        max_page_index = (self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS
-        if selected_session_id:
+        all_summaries: list[SessionSummary] | None = None
+        if selected_session_id or self.session_switcher_filter_mode == "approval-stale":
             all_summaries = list_recent_sessions(
                 self.config.artifacts_root,
                 limit=self.session_switcher_total_matches,
                 filter_mode=self.session_switcher_filter_mode,
                 sort_mode=self.session_switcher_sort_mode,
             )
+        self.session_switcher_summary_lines = render_recent_session_filter_summary_lines(
+            all_summaries or [],
+            filter_mode=self.session_switcher_filter_mode,
+        )
+
+        max_page_index = (self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS
+        if selected_session_id and all_summaries is not None:
             for index, summary in enumerate(all_summaries):
                 if summary.session_id == selected_session_id:
                     self.session_switcher_page_index = index // MAX_RECENT_SESSIONS

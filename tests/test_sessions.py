@@ -398,6 +398,7 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
 
     stale_summaries = list_recent_sessions(tmp_path, filter_mode="approval-stale")
     stale_by_id = {summary.session_id: summary for summary in stale_summaries}
+    rendered = render_session_picker(tmp_path, filter_mode="approval-stale")
 
     assert set(stale_by_id) == {"session-stale-pending", "session-stale-denied", "session-stale-restored"}
     assert stale_by_id["session-stale-pending"].stale_approval_badges == ["pending 45d"]
@@ -407,6 +408,7 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     assert "- approval stale: denied 9d" in "\n".join(
         stale_by_id["session-stale-denied"].render_preview(visible_index=1, overall_index=1, total_matches=3)
     )
+    assert "Stale approval backlog: 3 sessions | lanes: pending 1, denied 1, restore queue 1" in rendered
 
 
 def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_path: Path) -> None:
