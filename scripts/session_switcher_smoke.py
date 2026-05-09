@@ -713,6 +713,26 @@ async def run_smoke() -> None:
                 and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: pending 8 (oldest 52d)"
                 in stale_rollup_second_page,
             )
+            await pilot.press("x")
+            await pilot.pause()
+            stale_denied_output = str(stale_rollup_app.query_one("#output").render())
+            print(
+                "switcher_approval_stale_denied_filter=",
+                "Filter: approval-stale-denied | Sort: recent" in stale_denied_output
+                and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d)" in stale_denied_output
+                and "session-stale-denied-page-2" in stale_denied_output
+                and "session-stale-restored-page-2" not in stale_denied_output,
+            )
+            await pilot.press("u")
+            await pilot.pause()
+            stale_restored_output = str(stale_rollup_app.query_one("#output").render())
+            print(
+                "switcher_approval_stale_restored_filter=",
+                "Filter: approval-stale-restored | Sort: recent" in stale_restored_output
+                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d)" in stale_restored_output
+                and "session-stale-restored-page-2" in stale_restored_output
+                and "session-stale-denied-page-2" not in stale_restored_output,
+            )
 
     with TemporaryDirectory() as empty_hint_root:
         empty_current_store = SessionArtifactStore(empty_hint_root, session_id="session-empty-current")

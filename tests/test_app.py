@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -965,7 +966,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1516,6 +1517,170 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_supports_stale_denied_and_restored_subfilters(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    stale_pending_store = SessionArtifactStore(tmp_path, session_id="session-stale-pending")
+    stale_pending_store.append_turn(
+        TurnArtifact(
+            prompt="resume very old pending queue",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    stale_pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-stale-pending",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+                created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+            )
+        ]
+    )
+
+    stale_denied_store = SessionArtifactStore(tmp_path, session_id="session-stale-denied")
+    stale_denied_event = runtime_event(
+        "steering_denied",
+        "run_shell_command",
+        "Denied in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-stale-denied",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+            "command": "pytest -q",
+        },
+    )
+    stale_denied_event.timestamp = (datetime.now(UTC) - timedelta(days=9)).isoformat()
+    stale_denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny old test rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[stale_denied_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    stale_restored_queue_store = SessionArtifactStore(tmp_path, session_id="session-stale-restored-queue")
+    stale_restored_queue_store.append_turn(
+        TurnArtifact(
+            prompt="resume stale restored queue",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    stale_restored_queue_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-stale-restored-queue",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=11)).isoformat(),
+            )
+        ]
+    )
+
+    stale_restored_store = SessionArtifactStore(tmp_path, session_id="session-stale-restored")
+    stale_restored_event = runtime_event(
+        "steering_approved",
+        "run_shell_command",
+        "Approved in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-stale-restored",
+            "approval_status": "approved",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+            "resumed_from_approval": True,
+            "command": "pytest -q",
+        },
+    )
+    stale_restored_event.timestamp = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+    stale_restored_store.append_turn(
+        TurnArtifact(
+            prompt="approve restored old test rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[stale_restored_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    timestamp = datetime.now(UTC).timestamp()
+    for store in [current_store, stale_pending_store, stale_denied_store, stale_restored_queue_store, stale_restored_store]:
+        for path in [store.session_dir, *store.session_dir.iterdir()]:
+            os.utime(path, (timestamp, timestamp))
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+
+        await pilot.press("x")
+        await pilot.pause()
+        stale_denied_output = str(app.query_one("#output").render())
+        assert "Filter: approval-stale-denied | Sort: recent" in stale_denied_output
+        assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d)" in stale_denied_output
+        assert "session-stale-denied" in stale_denied_output
+        assert "session-stale-pending | 1 turn(s)" not in stale_denied_output
+        assert "session-stale-restored-queue | 1 turn(s)" not in stale_denied_output
+
+        await pilot.press("u")
+        await pilot.pause()
+        stale_restored_output = str(app.query_one("#output").render())
+        assert "Filter: approval-stale-restored | Sort: recent" in stale_restored_output
+        assert (
+            "Stale restored backlog: 2 sessions | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
+            in stale_restored_output
+        )
+        assert "session-stale-restored-queue" in stale_restored_output
+        assert "session-stale-restored" in stale_restored_output
+        assert "session-stale-pending | 1 turn(s)" not in stale_restored_output
+        assert "session-stale-denied | 1 turn(s)" not in stale_restored_output
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_surfaces_pending_queue_breakdown_for_multi_approval_session(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(
@@ -1724,7 +1889,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
         assert (
-            "Try A to show all sessions, or P/D/R/V/O/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
             in output
         )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output

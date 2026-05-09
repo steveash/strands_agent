@@ -223,6 +223,16 @@ class StrandsAgentApp(App):
             event.stop()
             return
 
+        if key == "x":
+            self._toggle_session_switcher_filter_mode("approval-stale-denied")
+            event.stop()
+            return
+
+        if key == "u":
+            self._toggle_session_switcher_filter_mode("approval-stale-restored")
+            event.stop()
+            return
+
         if key == "t":
             self._toggle_session_switcher_filter_mode("tool")
             event.stop()
@@ -472,7 +482,7 @@ class StrandsAgentApp(App):
             f"Artifacts root: {self.artifact_store.root}",
             (
                 "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
             ),
             (
                 f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode} | "
@@ -833,7 +843,7 @@ class StrandsAgentApp(App):
             return
 
         all_summaries: list[SessionSummary] | None = None
-        if selected_session_id or self.session_switcher_filter_mode == "approval-stale":
+        if selected_session_id or self.session_switcher_filter_mode.startswith("approval-stale"):
             all_summaries = list_recent_sessions(
                 self.config.artifacts_root,
                 limit=self.session_switcher_total_matches,
@@ -1053,7 +1063,20 @@ def parse_args() -> AppConfig:
     )
     parser.add_argument(
         "--pick-filter",
-        choices=["all", "pending", "denied", "restore", "approval-restore", "approval-stale", "tool", "shell", "shell-inspect", "shell-test"],
+        choices=[
+            "all",
+            "pending",
+            "denied",
+            "restore",
+            "approval-restore",
+            "approval-stale",
+            "approval-stale-denied",
+            "approval-stale-restored",
+            "tool",
+            "shell",
+            "shell-inspect",
+            "shell-test",
+        ],
         help="Set the initial recent-session picker filter when using --pick-session.",
     )
     parser.add_argument(

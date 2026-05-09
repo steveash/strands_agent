@@ -31,6 +31,16 @@ STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
 STALE_APPROVAL_LANE_DISPLAY_ORDER = ("pending", "denied", "restore queue", "restored")
+STALE_APPROVAL_FILTER_LANES = {
+    "approval-stale": frozenset(STALE_APPROVAL_LANE_DISPLAY_ORDER),
+    "approval-stale-denied": frozenset({"denied"}),
+    "approval-stale-restored": frozenset({"restore queue", "restored"}),
+}
+STALE_APPROVAL_FILTER_SUMMARY_LABELS = {
+    "approval-stale": "Stale approval backlog",
+    "approval-stale-denied": "Stale denied backlog",
+    "approval-stale-restored": "Stale restored backlog",
+}
 SESSION_SWITCHER_FILTER_MODES = {
     "all",
     "pending",
@@ -38,6 +48,8 @@ SESSION_SWITCHER_FILTER_MODES = {
     "restore",
     "approval-restore",
     "approval-stale",
+    "approval-stale-denied",
+    "approval-stale-restored",
     "tool",
     "shell",
     "shell-inspect",
@@ -516,7 +528,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -573,9 +585,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/T/H/I/Y/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/T/H/I/Y/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -657,6 +669,18 @@ def pick_session(
             selected_index = 0
             selected_session_id = ""
             continue
+        if normalized == "x":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "approval-stale-denied")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
+        if normalized == "u":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "approval-stale-restored")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
         if normalized == "t":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "tool")
             page_index = 0
@@ -723,14 +747,16 @@ def pick_session(
                 )
             else:
                 output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
                 )
             continue
         if current_summaries:
-            output_fn(f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, T, H, I, Y, S, [, ], Enter, or N.")
+            output_fn(
+                f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, X, U, T, H, I, Y, S, [, ], Enter, or N."
+            )
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/O/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -1515,13 +1541,14 @@ def render_recent_session_filter_summary_lines(
     page_index: int = 0,
     page_size: int = MAX_RECENT_SESSIONS,
 ) -> list[str]:
-    if filter_mode != "approval-stale" or not summaries:
+    stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
+    if stale_filter_lanes is None or not summaries:
         return []
 
-    lane_counts, lane_oldest_ages = _summarize_stale_approval_lanes(summaries)
+    lane_counts, lane_oldest_ages = _summarize_stale_approval_lanes(summaries, lanes=stale_filter_lanes)
     session_label = "session" if len(summaries) == 1 else "sessions"
     lane_rollup = _format_stale_approval_lane_rollup(lane_counts, lane_oldest_ages)
-    line = f"Stale approval backlog: {len(summaries)} {session_label}"
+    line = f"{_stale_approval_summary_label(filter_mode)}: {len(summaries)} {session_label}"
     if lane_rollup:
         line += f" | lanes: {lane_rollup}"
 
@@ -1534,12 +1561,16 @@ def render_recent_session_filter_summary_lines(
     end = start + page_size
     visible_summaries = summaries[start:end]
     off_page_summaries = summaries[:start] + summaries[end:]
-    visible_rollup = _format_stale_approval_lane_rollup(*_summarize_stale_approval_lanes(visible_summaries))
+    visible_rollup = _format_stale_approval_lane_rollup(
+        *_summarize_stale_approval_lanes(visible_summaries, lanes=stale_filter_lanes)
+    )
     if not visible_rollup:
         return lines
 
     page_line = f"This page stale lanes: {visible_rollup}"
-    off_page_rollup = _format_stale_approval_lane_rollup(*_summarize_stale_approval_lanes(off_page_summaries))
+    off_page_rollup = _format_stale_approval_lane_rollup(
+        *_summarize_stale_approval_lanes(off_page_summaries, lanes=stale_filter_lanes)
+    )
     if off_page_rollup:
         page_line += f" | more off-page: {off_page_rollup}"
     lines.append(page_line)
@@ -1559,7 +1590,7 @@ def render_recent_session_empty_state_lines(
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append(
-            "Try A to show all sessions, or P/D/R/V/O/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
         )
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
@@ -1569,13 +1600,33 @@ def render_recent_session_empty_state_lines(
     return lines
 
 
-def _summarize_stale_approval_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, int], dict[str, int]]:
+def _is_stale_approval_filter_mode(filter_mode: str) -> bool:
+    return filter_mode in STALE_APPROVAL_FILTER_LANES
+
+
+def _stale_approval_filter_lanes(filter_mode: str) -> frozenset[str] | None:
+    return STALE_APPROVAL_FILTER_LANES.get(filter_mode)
+
+
+def _stale_approval_summary_label(filter_mode: str) -> str:
+    return STALE_APPROVAL_FILTER_SUMMARY_LABELS.get(filter_mode, "Stale approval backlog")
+
+
+def _summarize_stale_approval_lanes(
+    summaries: list[SessionSummary],
+    *,
+    lanes: frozenset[str] | None = None,
+) -> tuple[dict[str, int], dict[str, int]]:
     lane_counts = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
     lane_oldest_ages = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
     for summary in summaries:
         for lane in _stale_approval_lanes(summary):
+            if lanes is not None and lane not in lanes:
+                continue
             lane_counts[lane] += 1
         for lane, age_seconds in _stale_approval_lane_age_seconds(summary).items():
+            if lanes is not None and lane not in lanes:
+                continue
             lane_oldest_ages[lane] = max(lane_oldest_ages[lane], age_seconds)
     return lane_counts, lane_oldest_ages
 
@@ -1677,8 +1728,9 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
         return bool(summary.restore_badges)
     if filter_mode == "approval-restore":
         return summary.restored_approval_count > 0
-    if filter_mode == "approval-stale":
-        return bool(summary.stale_approval_badges)
+    stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
+    if stale_filter_lanes is not None:
+        return bool(_stale_approval_lanes(summary) & stale_filter_lanes)
     if filter_mode == "tool":
         return bool(summary.last_tool_preview or summary.last_tool_badges)
     if filter_mode == "shell":
