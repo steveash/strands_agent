@@ -713,6 +713,16 @@ async def run_smoke() -> None:
                 and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: pending 8 (oldest 52d)"
                 in stale_rollup_second_page,
             )
+            await pilot.press("q")
+            await pilot.pause()
+            stale_pending_output = str(stale_rollup_app.query_one("#output").render())
+            print(
+                "switcher_approval_stale_pending_filter=",
+                "Filter: approval-stale-pending | Sort: recent" in stale_pending_output
+                and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d)" in stale_pending_output
+                and "session-stale-pending-0" in stale_pending_output
+                and "session-stale-denied-page-2" not in stale_pending_output,
+            )
             await pilot.press("x")
             await pilot.pause()
             stale_denied_output = str(stale_rollup_app.query_one("#output").render())

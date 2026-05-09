@@ -223,6 +223,11 @@ class StrandsAgentApp(App):
             event.stop()
             return
 
+        if key == "q":
+            self._toggle_session_switcher_filter_mode("approval-stale-pending")
+            event.stop()
+            return
+
         if key == "x":
             self._toggle_session_switcher_filter_mode("approval-stale-denied")
             event.stop()
@@ -482,7 +487,7 @@ class StrandsAgentApp(App):
             f"Artifacts root: {self.artifact_store.root}",
             (
                 "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
             ),
             (
                 f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode} | "
@@ -1070,6 +1075,7 @@ def parse_args() -> AppConfig:
             "restore",
             "approval-restore",
             "approval-stale",
+            "approval-stale-pending",
             "approval-stale-denied",
             "approval-stale-restored",
             "tool",

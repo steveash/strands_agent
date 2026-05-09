@@ -715,6 +715,7 @@ def main() -> None:
             set_session_artifact_mtime(restored_store, restored_activity_time)
 
             stale_rollup_picker = render_session_picker(stale_rollup_root, filter_mode="approval-stale")
+            stale_pending_picker = render_session_picker(stale_rollup_root, filter_mode="approval-stale-pending")
             stale_denied_picker = render_session_picker(stale_rollup_root, filter_mode="approval-stale-denied")
             stale_restored_picker = render_session_picker(stale_rollup_root, filter_mode="approval-stale-restored")
             stale_rollup_page_two_picker = render_session_picker(
@@ -728,6 +729,13 @@ def main() -> None:
                 in stale_rollup_picker
                 and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: pending 8 (oldest 52d)"
                 in stale_rollup_page_two_picker,
+            )
+            print(
+                "picker_approval_stale_pending_filter=",
+                "Filter: approval-stale-pending | Sort: recent" in stale_pending_picker
+                and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d)" in stale_pending_picker
+                and "session-stale-pending-0" in stale_pending_picker
+                and "session-stale-denied-page-2" not in stale_pending_picker,
             )
             print(
                 "picker_approval_stale_denied_filter=",

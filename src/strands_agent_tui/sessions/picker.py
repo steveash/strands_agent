@@ -33,11 +33,13 @@ APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
 STALE_APPROVAL_LANE_DISPLAY_ORDER = ("pending", "denied", "restore queue", "restored")
 STALE_APPROVAL_FILTER_LANES = {
     "approval-stale": frozenset(STALE_APPROVAL_LANE_DISPLAY_ORDER),
+    "approval-stale-pending": frozenset({"pending"}),
     "approval-stale-denied": frozenset({"denied"}),
     "approval-stale-restored": frozenset({"restore queue", "restored"}),
 }
 STALE_APPROVAL_FILTER_SUMMARY_LABELS = {
     "approval-stale": "Stale approval backlog",
+    "approval-stale-pending": "Stale pending backlog",
     "approval-stale-denied": "Stale denied backlog",
     "approval-stale-restored": "Stale restored backlog",
 }
@@ -48,6 +50,7 @@ SESSION_SWITCHER_FILTER_MODES = {
     "restore",
     "approval-restore",
     "approval-stale",
+    "approval-stale-pending",
     "approval-stale-denied",
     "approval-stale-restored",
     "tool",
@@ -528,7 +531,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -585,9 +588,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -665,6 +668,12 @@ def pick_session(
             continue
         if normalized == "o":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "approval-stale")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
+        if normalized == "q":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "approval-stale-pending")
             page_index = 0
             selected_index = 0
             selected_session_id = ""
@@ -747,16 +756,16 @@ def pick_session(
                 )
             else:
                 output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
                 )
             continue
         if current_summaries:
             output_fn(
-                f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, X, U, T, H, I, Y, S, [, ], Enter, or N."
+                f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, Q, X, U, T, H, I, Y, S, [, ], Enter, or N."
             )
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/O/X/U/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -1590,7 +1599,7 @@ def render_recent_session_empty_state_lines(
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append(
-            "Try A to show all sessions, or P/D/R/V/O/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
         )
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")

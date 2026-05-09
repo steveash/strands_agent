@@ -966,7 +966,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1517,7 +1517,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_session_switcher_supports_stale_denied_and_restored_subfilters(tmp_path: Path) -> None:
+async def test_session_switcher_supports_stale_pending_denied_and_restored_subfilters(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(
         TurnArtifact(
@@ -1656,6 +1656,15 @@ async def test_session_switcher_supports_stale_denied_and_restored_subfilters(tm
         await pilot.pause()
         await pilot.press("f11")
         await pilot.pause()
+
+        await pilot.press("q")
+        await pilot.pause()
+        stale_pending_output = str(app.query_one("#output").render())
+        assert "Filter: approval-stale-pending | Sort: recent" in stale_pending_output
+        assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d)" in stale_pending_output
+        assert "session-stale-pending" in stale_pending_output
+        assert "session-stale-denied | 1 turn(s)" not in stale_pending_output
+        assert "session-stale-restored-queue | 1 turn(s)" not in stale_pending_output
 
         await pilot.press("x")
         await pilot.pause()
@@ -1889,7 +1898,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
         assert (
-            "Try A to show all sessions, or P/D/R/V/O/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
             in output
         )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output
