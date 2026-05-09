@@ -222,6 +222,43 @@ def _steering_decision_status(decision: SteeringDecision) -> str:
     return "not_needed"
 
 
+def _steering_stage(decision: SteeringDecision) -> str:
+    if decision.requires_confirmation:
+        return "requested"
+    if not decision.allowed:
+        return "blocked"
+    return "decision"
+
+
+def _approval_command_from_args(args: dict[str, object]) -> str:
+    return str(args.get("command", "") or "").strip()
+
+
+def _approval_shell_command_family(tool_name: str, args: dict[str, object]) -> str:
+    if tool_name != "run_shell_command":
+        return ""
+    command = _approval_command_from_args(args)
+    if not command:
+        return ""
+    try:
+        return resolve_shell_command(command).family
+    except ValueError:
+        return ""
+
+
+def _approval_tool_family(tool_name: str, args: dict[str, object]) -> str:
+    if tool_name == "run_shell_command":
+        shell_command_family = _approval_shell_command_family(tool_name, args)
+        if shell_command_family.startswith("pytest"):
+            return "test"
+        return "shell"
+    if tool_name in {"write_file", "replace_text"}:
+        return "edit"
+    if tool_name:
+        return "tool"
+    return "tool"
+
+
 def _summarize_tool_value(value: object, limit: int = 120) -> str:
     text = repr(value)
     if len(text) > limit:
@@ -380,22 +417,79 @@ def _approval_event_context(
     pending_count: int | None = None,
     remaining_pending_count: int | None = None,
     resumed_from_approval: bool | None = None,
+    stage: str | None = None,
 ) -> dict[str, object]:
     data: dict[str, object] = {
         "approval_id": request.request_id,
         "approval_status": status,
         "approval_source": request.source,
         "approval_restored": request.restored_from_session,
+        "approval_tool_family": _approval_tool_family(request.tool_name, request.args),
         "requires_confirmation": True,
         **request.args,
     }
+    shell_command_family = _approval_shell_command_family(request.tool_name, request.args)
+    if shell_command_family:
+        data["shell_command_family"] = shell_command_family
     if pending_count is not None:
         data["pending_count"] = pending_count
     if remaining_pending_count is not None:
         data["remaining_pending_count"] = remaining_pending_count
     if resumed_from_approval is not None:
         data["resumed_from_approval"] = resumed_from_approval
+    if stage is not None:
+        data["steering_stage"] = stage
     return data
+
+
+def _build_approval_follow_up_prompt(
+    request: ApprovalRequest,
+    *,
+    approve: bool,
+    tool_result: str | None = None,
+) -> str:
+    if approve:
+        return (
+            f"User approved pending tool `{request.tool_name}` in the TUI. "
+            f"The tool executed with args {request.args!r} and returned:\n{tool_result or '<no result>'}\n"
+            "Continue the original task from there and summarize the change concisely."
+        )
+    return (
+        f"User denied pending tool `{request.tool_name}` in the TUI. "
+        "Do not execute that mutation. Continue with the safest useful next step."
+    )
+
+
+def _approval_follow_up_event(
+    request: ApprovalRequest,
+    *,
+    approve: bool,
+    follow_up_prompt: str,
+    remaining_pending_count: int,
+    tool_result: str | None = None,
+) -> RuntimeEvent:
+    data = {
+        "tool_name": request.tool_name,
+        "agent_continuation": True,
+        "follow_up_mode": "approved_tool_result" if approve else "denied_tool_request",
+        "follow_up_prompt_length": len(follow_up_prompt),
+        "follow_up_prompt_preview": _truncate_preview(follow_up_prompt, 120),
+        **_approval_event_context(
+            request,
+            status="approved" if approve else "denied",
+            remaining_pending_count=remaining_pending_count,
+            resumed_from_approval=approve,
+            stage="continued",
+        ),
+    }
+    if tool_result:
+        data["tool_result_preview"] = _truncate_preview(tool_result, 120)
+    return runtime_event(
+        kind="approval_follow_up_prepared",
+        title=request.tool_name,
+        detail="Prepared the synthetic continuation prompt for the agent after resolving the approval request.",
+        data=data,
+    )
 
 
 def _build_workspace_actions(workspace_root: str | Path) -> dict[str, Callable[..., str]]:
@@ -525,7 +619,13 @@ class FakeStrandsRuntime:
                 kind="steering_decision",
                 title="fake-policy",
                 detail="Fake runtime is using the default conservative steering posture.",
-                data={"allow_overwrite": False, "source": "fake_runtime"},
+                data={
+                    "allow_overwrite": False,
+                    "source": "fake_runtime",
+                    "approval_status": "not_needed",
+                    "steering_stage": "decision",
+                    "decision_reason": "Fake runtime is using the default conservative steering posture.",
+                },
             ),
         ]
 
@@ -707,6 +807,7 @@ class FakeStrandsRuntime:
                             pending_approval,
                             status="pending",
                             pending_count=self._approval_queue.pending_count(),
+                            stage="requested",
                         ),
                     },
                 )
@@ -748,6 +849,7 @@ class FakeStrandsRuntime:
     def resolve_pending_approval(self, approval_id: str, approve: bool) -> AgentResponse:
         pending = self._approval_queue.pop(approval_id)
         events: list[RuntimeEvent] = []
+        tool_result: str | None = None
 
         if approve:
             events.append(
@@ -763,6 +865,7 @@ class FakeStrandsRuntime:
                             status="approved",
                             remaining_pending_count=self._approval_queue.pending_count(),
                             resumed_from_approval=True,
+                            stage="approved",
                         ),
                     },
                 )
@@ -780,6 +883,7 @@ class FakeStrandsRuntime:
                             status="approved",
                             remaining_pending_count=self._approval_queue.pending_count(),
                             resumed_from_approval=True,
+                            stage="approved",
                         ),
                     },
                 )
@@ -798,6 +902,7 @@ class FakeStrandsRuntime:
                             status="approved",
                             remaining_pending_count=self._approval_queue.pending_count(),
                             resumed_from_approval=True,
+                            stage="approved",
                         ),
                     },
                 )
@@ -817,11 +922,27 @@ class FakeStrandsRuntime:
                             status="denied",
                             remaining_pending_count=self._approval_queue.pending_count(),
                             resumed_from_approval=False,
+                            stage="denied",
                         ),
                     },
                 )
             )
             text = f"(fake-strands) Skipped {pending.request.tool_name} at user request."
+
+        follow_up_prompt = _build_approval_follow_up_prompt(
+            pending.request,
+            approve=approve,
+            tool_result=tool_result,
+        )
+        events.append(
+            _approval_follow_up_event(
+                pending.request,
+                approve=approve,
+                follow_up_prompt=follow_up_prompt,
+                remaining_pending_count=self._approval_queue.pending_count(),
+                tool_result=tool_result,
+            )
+        )
 
         next_pending = self._approval_queue.current()
         if next_pending is not None:
@@ -840,6 +961,7 @@ class FakeStrandsRuntime:
                             next_pending,
                             status="pending",
                             pending_count=self._approval_queue.pending_count(),
+                            stage="requested",
                         ),
                     },
                 )
@@ -856,6 +978,8 @@ class FakeStrandsRuntime:
                     "mode": "fake",
                     "pending_approval": next_pending is not None,
                     "pending_count": self._approval_queue.pending_count(),
+                    "approval_action": "approved" if approve else "denied",
+                    "steering_stage": "continued",
                 },
             )
         )
@@ -981,6 +1105,7 @@ def build_workspace_tools(
                             status="approved",
                             remaining_pending_count=approval_queue.pending_count(),
                             resumed_from_approval=True,
+                            stage="approved",
                         ),
                     ),
                 )
@@ -1002,6 +1127,7 @@ def build_workspace_tools(
                                     request,
                                     status="pending",
                                     pending_count=approval_queue.pending_count(),
+                                    stage="requested",
                                 ),
                                 **decision.details,
                             },
@@ -1027,6 +1153,7 @@ def build_workspace_tools(
                             "category": decision.category,
                             "decision_reason": decision.reason,
                             "approval_status": _steering_decision_status(decision),
+                            "steering_stage": _steering_stage(decision),
                             **decision.details,
                         },
                     )
@@ -1195,6 +1322,7 @@ class StrandsSDKRuntime:
                     status="approved",
                     remaining_pending_count=self._approval_queue.pending_count(),
                     resumed_from_approval=True,
+                    stage="approved",
                 ),
             )
 
@@ -1290,17 +1418,19 @@ class StrandsSDKRuntime:
                                 status="approved",
                                 remaining_pending_count=self._approval_queue.pending_count(),
                                 resumed_from_approval=True,
+                                stage="approved",
                             ),
                         },
                     )
                 )
                 tool_result = pending.execute()
-                follow_up_prompt = (
-                    f"User approved pending tool `{pending.request.tool_name}` in the TUI. "
-                    f"The tool executed with args {pending.request.args!r} and returned:\n{tool_result}\n"
-                    "Continue the original task from there and summarize the change concisely."
+                follow_up_prompt = _build_approval_follow_up_prompt(
+                    pending.request,
+                    approve=True,
+                    tool_result=tool_result,
                 )
             else:
+                tool_result = None
                 events.append(
                     runtime_event(
                         kind="steering_denied",
@@ -1314,15 +1444,25 @@ class StrandsSDKRuntime:
                                 status="denied",
                                 remaining_pending_count=self._approval_queue.pending_count(),
                                 resumed_from_approval=False,
+                                stage="denied",
                             ),
                         },
                     )
                 )
-                follow_up_prompt = (
-                    f"User denied pending tool `{pending.request.tool_name}` in the TUI. "
-                    "Do not execute that mutation. Continue with the safest useful next step."
+                follow_up_prompt = _build_approval_follow_up_prompt(
+                    pending.request,
+                    approve=False,
                 )
 
+            events.append(
+                _approval_follow_up_event(
+                    pending.request,
+                    approve=approve,
+                    follow_up_prompt=follow_up_prompt,
+                    remaining_pending_count=self._approval_queue.pending_count(),
+                    tool_result=tool_result,
+                )
+            )
             self._active_prompt = follow_up_prompt
             result = agent(follow_up_prompt)
             text = str(result)
@@ -1348,6 +1488,7 @@ class StrandsSDKRuntime:
                     "pending_approval": next_pending is not None,
                     "pending_count": self._approval_queue.pending_count(),
                     "approval_action": "approved" if approve else "denied",
+                    "steering_stage": "continued",
                 },
             )
         )

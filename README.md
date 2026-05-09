@@ -94,6 +94,7 @@ What exists now:
 - persisted `session_state.json` plus legacy-compatible `pending_approvals.json` so queued confirmations, lightweight TUI view state, and partially typed prompt drafts can be restored after restart instead of disappearing with process memory,
 - approval-aware fake runtime flows that can demonstrate multiple queued approvals in sequence without needing live credentials,
 - live-runtime tool wiring that can queue confirm-needed mutations, wait for explicit approval, execute the approved tool, and then continue the Strands conversation with a follow-up prompt,
+- approval lifecycle events that now carry shared `steering_stage`, `approval_tool_family`, and synthetic continuation metadata so fake/live approval recovery can be inspected with the same mental model,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, and compact structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
@@ -118,14 +119,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added explicit `shell lanes: inspect, test` badges to recent-session rows and selected-session previews whenever one session qualifies for both dedicated shell triage lanes,
-- kept the overlap cue shared between the launch-time picker and the in-app `F11` switcher so mixed shell sessions stay obvious no matter how they are reopened,
-- refreshed regression and smoke coverage around mixed inspect-plus-test shell activity so the overlap badge stays tied to real dual-lane membership.
+- added shared approval lifecycle schema fields across fake and live runtimes, including `steering_stage` plus `approval_tool_family` / `shell_command_family` context on approval events,
+- introduced explicit `approval_follow_up_prepared` events so the synthetic continuation prompt after approve/deny is visible in the timeline before the agent resumes,
+- refreshed runtime regression coverage for approve/deny continuation flows, restored live approvals, and shell/test approval metadata parity.
 
 Why this matters now:
-- It makes shell-lane overlap obvious at a glance, so Steve does not have to infer from shell counts alone that one session is relevant to both inspect and test recovery.
-- It keeps the split shell lanes high-signal without hiding the fact that mixed shell sessions still belong in both places.
-- It sharpens the shell-policy seam operationally, because direct inspect flows plus approval/test follow-ups now advertise their dual-lane recovery footprint explicitly.
+- It makes the Strands resume seam inspectable: Steve can now see not just that an approval was resolved, but how the runtime packaged the continuation back into the agent loop.
+- It keeps fake and live runtimes aligned, which is crucial for learning Strands behavior locally before burning live credentials.
+- It sharpens the steering seam from policy-only metadata into lifecycle metadata, which is the piece Steve needs to understand intervention, restoration, and follow-up behavior deeply.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -136,11 +137,12 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `117 passed`
+- automated tests: `122 passed`
 - runnable picker verification: `.venv/bin/python scripts/session_picker_smoke.py | grep -E 'picker_shell_filter=|picker_shell_inspect_filter=|picker_shell_test_filter=|picker_shell_overlap_badge='` now prints `picker_shell_filter= True`, `picker_shell_inspect_filter= True`, `picker_shell_test_filter= True`, and `picker_shell_overlap_badge= True`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
+- runnable live-restore denial verification: `.venv/bin/python scripts/live_restore_denied_smoke.py` prints `live_restore_denied_initial_pending= True`, `live_restore_denied_saved_pending= True`, `live_restore_denied_restored_queue= True`, `live_restore_denied_event= True`, `live_restore_denied_no_tool_event= True`, and `live_restore_denied_summary= True`,
 - runnable session-switch verification: `.venv/bin/python scripts/session_switcher_smoke.py | grep -E 'switcher_shell_filter=|switcher_shell_inspect_filter=|switcher_shell_overlap_badge=|switcher_shell_test_filter=|switcher_shell_test_only_test='` prints `switcher_shell_filter= True`, `switcher_shell_inspect_filter= True`, `switcher_shell_overlap_badge= True`, `switcher_shell_test_filter= True`, and `switcher_shell_test_only_test= True`,
 - CLI verification: `strands-agent --help` now shows `--runtime`, `--model`, `--workspace`, `--session-dir`, `--pick-session`, `--pick-filter {all,pending,denied,restore,approval-restore,tool,shell,shell-inspect,shell-test}`, `--pick-sort`, and `--resume-last`,
 - recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, mixed shell-lane overlap badges, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
@@ -149,7 +151,7 @@ Current evidence:
 - UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
 - steering verification by test: default policy now auto-allows read-only shell inspection, still requires confirmation for shell test runs plus overwrite and multi-occurrence edit requests, rejects unsupported shell commands earlier, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied.
 - local unblock note: a bare `pytest -q` against the host Python still fails when the shell is not using the repo `.venv` because `strands` and `textual` are not installed globally; rerunning with `.venv/bin/pytest -q` succeeds and remains the supported verification path.
-- git publish attempt: local commit and annotated tag were created successfully, but `git push origin main` plus the forced tag push were blocked in this cron run by gateway exec approval policy (`security=allowlist`, `ask=on-miss`), so publishing still needs an interactive/allowlisted follow-up.
+- git publish status: `git push origin main` and `git push --force origin refs/tags/strands-agent-2026-05-09` both succeeded for this run.
 
 ## First five phases
 
