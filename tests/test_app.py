@@ -131,7 +131,17 @@ def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.Mo
     monkeypatch.setattr(
         sys,
         "argv",
-        ["strands-agent", "--runtime", "live", "--model", "gpt-4.1-mini", "--workspace", "/tmp/demo"],
+        [
+            "strands-agent",
+            "--runtime",
+            "live",
+            "--model",
+            "gpt-4.1-mini",
+            "--workspace",
+            "/tmp/demo",
+            "--stale-approval-days",
+            "14",
+        ],
     )
 
     config = parse_args()
@@ -139,6 +149,7 @@ def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.Mo
     assert config.runtime_mode == "live"
     assert config.openai_model == "gpt-4.1-mini"
     assert config.workspace_root == "/tmp/demo"
+    assert config.stale_approval_warning_days == 14
 
 
 def test_parse_args_loads_existing_session_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -1687,6 +1698,77 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         assert "session-stale-restored" in stale_restored_output
         assert "session-stale-pending | 1 turn(s)" not in stale_restored_output
         assert "session-stale-denied | 1 turn(s)" not in stale_restored_output
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_respects_custom_stale_threshold(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    custom_store = SessionArtifactStore(tmp_path, session_id="session-custom-threshold")
+    custom_store.append_turn(
+        TurnArtifact(
+            prompt="resume moderately old pending queue",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    custom_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-custom-threshold",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+                created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            )
+        ]
+    )
+
+    timestamp = datetime.now(UTC).timestamp()
+    for store in [current_store, custom_store]:
+        for path in [store.session_dir, *store.session_dir.iterdir()]:
+            os.utime(path, (timestamp, timestamp))
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            stale_approval_warning_days=1,
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("o")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+
+        assert "Filter: approval-stale | Sort: recent" in output
+        assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in output
+        assert "session-custom-threshold" in output
 
 
 @pytest.mark.asyncio

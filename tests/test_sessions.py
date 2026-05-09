@@ -635,6 +635,41 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     ) in stale_restored_rendered
 
 
+def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path) -> None:
+    custom_threshold_store = SessionArtifactStore(tmp_path, session_id="session-custom-threshold")
+    _append_turn(custom_threshold_store, "resume moderately old pending queue")
+    custom_threshold_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-custom-threshold",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+                created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            )
+        ]
+    )
+
+    default_summaries = list_recent_sessions(tmp_path, filter_mode="approval-stale")
+    custom_summaries = list_recent_sessions(
+        tmp_path,
+        filter_mode="approval-stale",
+        stale_approval_warning_seconds=24 * 60 * 60,
+    )
+    custom_rendered = render_session_picker(
+        tmp_path,
+        filter_mode="approval-stale",
+        stale_approval_warning_seconds=24 * 60 * 60,
+    )
+
+    assert default_summaries == []
+    assert [summary.session_id for summary in custom_summaries] == ["session-custom-threshold"]
+    assert custom_summaries[0].stale_approval_badges == ["pending 2d"]
+    assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_rendered
+
+
 
 def test_pick_session_supports_filter_sort_and_preview_navigation_commands(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")

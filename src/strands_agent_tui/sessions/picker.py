@@ -291,6 +291,7 @@ def list_recent_sessions(
     filter_mode: str = "all",
     sort_mode: str = "recent",
     offset: int = 0,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> list[SessionSummary]:
     resolved_root = Path(root).expanduser().resolve()
     if limit < 1:
@@ -309,6 +310,7 @@ def list_recent_sessions(
         filter_mode=filter_mode,
         sort_mode=sort_mode,
         offset=offset,
+        stale_approval_warning_seconds=stale_approval_warning_seconds,
     )
 
 
@@ -317,6 +319,7 @@ def count_recent_sessions(
     *,
     filter_mode: str = "all",
     sort_mode: str = "recent",
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> int:
     resolved_root = Path(root).expanduser().resolve()
     if not resolved_root.exists() or not resolved_root.is_dir():
@@ -324,7 +327,15 @@ def count_recent_sessions(
 
     filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
     sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
-    return len(_ordered_recent_sessions(resolved_root, limit=None, filter_mode=filter_mode, sort_mode=sort_mode))
+    return len(
+        _ordered_recent_sessions(
+            resolved_root,
+            limit=None,
+            filter_mode=filter_mode,
+            sort_mode=sort_mode,
+            stale_approval_warning_seconds=stale_approval_warning_seconds,
+        )
+    )
 
 
 def _ordered_recent_sessions(
@@ -334,6 +345,7 @@ def _ordered_recent_sessions(
     filter_mode: str,
     sort_mode: str,
     offset: int = 0,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> list[SessionSummary]:
     session_dirs = [path for path in resolved_root.iterdir() if path.is_dir()]
 
@@ -366,7 +378,11 @@ def _ordered_recent_sessions(
             pending_approval_attention_sort_key,
             approval_attention_sort_key,
             denied_approval_attention_sort_key,
-        ) = _approval_activity(turns, pending_approvals)
+        ) = _approval_activity(
+            turns,
+            pending_approvals,
+            stale_approval_warning_seconds=stale_approval_warning_seconds,
+        )
         last_prompt_preview = ""
         if turns:
             last_prompt_preview = _truncate(turns[-1].prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
@@ -450,8 +466,12 @@ def _ordered_recent_sessions(
     return [summary for _, _, summary in ordered]
 
 
-def latest_session(root: str | Path) -> SessionSummary | None:
-    sessions = list_recent_sessions(root, limit=1)
+def latest_session(
+    root: str | Path,
+    *,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
+) -> SessionSummary | None:
+    sessions = list_recent_sessions(root, limit=1, stale_approval_warning_seconds=stale_approval_warning_seconds)
     return sessions[0] if sessions else None
 
 
@@ -463,15 +483,21 @@ def render_session_picker(
     sort_mode: str = "recent",
     page_index: int = 0,
     selected_index: int = 0,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> str:
     filter_mode = sanitize_session_switcher_filter_mode(filter_mode)
     sort_mode = sanitize_session_switcher_sort_mode(sort_mode)
     resolved_root = Path(root).expanduser().resolve()
-    available_count = count_recent_sessions(resolved_root)
+    available_count = count_recent_sessions(resolved_root, stale_approval_warning_seconds=stale_approval_warning_seconds)
     if not available_count:
         return f"No saved sessions found under {resolved_root}."
 
-    total_matches = count_recent_sessions(resolved_root, filter_mode=filter_mode, sort_mode=sort_mode)
+    total_matches = count_recent_sessions(
+        resolved_root,
+        filter_mode=filter_mode,
+        sort_mode=sort_mode,
+        stale_approval_warning_seconds=stale_approval_warning_seconds,
+    )
     page_index = _normalize_picker_page_index(total_matches, limit, page_index)
     summaries = list_recent_sessions(
         root,
@@ -479,9 +505,16 @@ def render_session_picker(
         filter_mode=filter_mode,
         sort_mode=sort_mode,
         offset=page_index * limit,
+        stale_approval_warning_seconds=stale_approval_warning_seconds,
     )
     matching_summaries = (
-        list_recent_sessions(resolved_root, limit=total_matches, filter_mode=filter_mode, sort_mode=sort_mode)
+        list_recent_sessions(
+            resolved_root,
+            limit=total_matches,
+            filter_mode=filter_mode,
+            sort_mode=sort_mode,
+            stale_approval_warning_seconds=stale_approval_warning_seconds,
+        )
         if total_matches > 0
         else []
     )
@@ -544,6 +577,7 @@ def pick_session(
     *,
     filter_mode: str | None = None,
     sort_mode: str | None = None,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
     input_fn: Callable[[str], str] | None = None,
     output_fn: Callable[[str], None] | None = None,
 ) -> SessionSummary | None:
@@ -556,14 +590,31 @@ def pick_session(
         filter_mode=filter_mode,
         sort_mode=sort_mode,
     )
-    summaries = list_recent_sessions(resolved_root, limit=limit)
+    summaries = list_recent_sessions(
+        resolved_root,
+        limit=limit,
+        stale_approval_warning_seconds=stale_approval_warning_seconds,
+    )
     if not summaries:
-        output_fn(render_session_picker(resolved_root, limit=limit, filter_mode=filter_mode, sort_mode=sort_mode))
+        output_fn(
+            render_session_picker(
+                resolved_root,
+                limit=limit,
+                filter_mode=filter_mode,
+                sort_mode=sort_mode,
+                stale_approval_warning_seconds=stale_approval_warning_seconds,
+            )
+        )
         output_fn("Starting a new session instead.")
         return None
 
     while True:
-        total_matches = count_recent_sessions(resolved_root, filter_mode=filter_mode, sort_mode=sort_mode)
+        total_matches = count_recent_sessions(
+            resolved_root,
+            filter_mode=filter_mode,
+            sort_mode=sort_mode,
+            stale_approval_warning_seconds=stale_approval_warning_seconds,
+        )
         page_index = _normalize_picker_page_index(total_matches, limit, page_index)
         current_summaries = list_recent_sessions(
             resolved_root,
@@ -571,6 +622,7 @@ def pick_session(
             filter_mode=filter_mode,
             sort_mode=sort_mode,
             offset=page_index * limit,
+            stale_approval_warning_seconds=stale_approval_warning_seconds,
         )
         selected_index = _picker_selected_index_for_visible_page(
             current_summaries,
@@ -585,6 +637,7 @@ def pick_session(
                 sort_mode=sort_mode,
                 page_index=page_index,
                 selected_index=selected_index,
+                stale_approval_warning_seconds=stale_approval_warning_seconds,
             )
         )
         prompt = (
@@ -1029,6 +1082,8 @@ def _render_tool_event_summary(event) -> str:
 def _approval_activity(
     turns: list[TurnArtifact],
     pending_approvals,
+    *,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> tuple[
     list[str],
     list[str],
@@ -1185,6 +1240,7 @@ def _approval_activity(
         restored_pending_approval_age_summary=restored_pending_approval_age_summary,
         last_restored_approval_age_seconds=last_restored_approval_age_sort_key,
         last_restored_approval_age_summary=last_restored_approval_age_summary,
+        stale_approval_warning_seconds=stale_approval_warning_seconds,
     )
     pending_approval_attention_sort_key = _tool_family_attention_sort_key(fresh_pending_family_counts)
     approval_attention_sort_key = _approval_attention_sort_key(
@@ -1896,18 +1952,21 @@ def _stale_approval_badges(
     restored_pending_approval_age_summary: str,
     last_restored_approval_age_seconds: int,
     last_restored_approval_age_summary: str,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> list[str]:
     badges: list[str] = []
-    if pending_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS and pending_approval_age_summary:
+    if pending_approval_age_seconds >= stale_approval_warning_seconds and pending_approval_age_summary:
         badges.append(f"pending {pending_approval_age_summary}")
     if (
-        restored_pending_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS
+        restored_pending_approval_age_seconds >= stale_approval_warning_seconds
         and restored_pending_approval_age_summary
     ):
         badges.append(f"restore queue {restored_pending_approval_age_summary}")
-    elif last_restored_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS and last_restored_approval_age_summary:
+    elif (
+        last_restored_approval_age_seconds >= stale_approval_warning_seconds and last_restored_approval_age_summary
+    ):
         badges.append(f"restored {last_restored_approval_age_summary}")
-    if last_denied_approval_age_seconds >= STALE_APPROVAL_WARNING_SECONDS and last_denied_approval_age_summary:
+    if last_denied_approval_age_seconds >= stale_approval_warning_seconds and last_denied_approval_age_summary:
         badges.append(f"denied {last_denied_approval_age_summary}")
     return badges
 

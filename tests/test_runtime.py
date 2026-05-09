@@ -517,6 +517,18 @@ def test_app_config_loads_overwrite_policy_flag(monkeypatch: pytest.MonkeyPatch,
     assert config.allow_overwrite is True
 
 
+def test_app_config_loads_stale_approval_warning_days(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("STRANDS_AGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setenv("STRANDS_AGENT_STALE_APPROVAL_DAYS", "14")
+
+    from strands_agent_tui.config import load_config
+
+    config = load_config()
+
+    assert config.stale_approval_warning_days == 14
+    assert config.stale_approval_warning_seconds == 14 * 24 * 60 * 60
+
+
 def test_event_kind_categories_cover_runtime_tool_failure_and_persistence() -> None:
     assert categorize_event_kind("prompt_received") == "runtime"
     assert categorize_event_kind("tool_started") == "tool"

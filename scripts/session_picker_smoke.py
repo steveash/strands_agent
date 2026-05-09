@@ -752,6 +752,33 @@ def main() -> None:
                 and "session-stale-denied-page-2" not in stale_restored_picker,
             )
 
+        with TemporaryDirectory() as custom_stale_root:
+            custom_store = SessionArtifactStore(custom_stale_root, session_id="session-custom-threshold")
+            append_turn(custom_store, "resume moderately old pending queue")
+            custom_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-custom-threshold",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="rerun tests",
+                        created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+                    )
+                ]
+            )
+            custom_stale_picker = render_session_picker(
+                custom_stale_root,
+                filter_mode="approval-stale",
+                stale_approval_warning_seconds=24 * 60 * 60,
+            )
+            print(
+                "picker_custom_stale_threshold=",
+                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_stale_picker
+                and "session-custom-threshold" in custom_stale_picker,
+            )
+
         captured: list[str] = []
         inputs = iter(["p", "s", "j", "k", ""])
         summary = pick_session(

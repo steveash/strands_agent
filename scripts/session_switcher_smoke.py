@@ -744,6 +744,52 @@ async def run_smoke() -> None:
                 and "session-stale-denied-page-2" not in stale_restored_output,
             )
 
+    with TemporaryDirectory() as custom_stale_root:
+        custom_current_store = SessionArtifactStore(custom_stale_root, session_id="session-custom-current")
+        append_turn(custom_current_store, "current prompt", "current response")
+
+        custom_store = SessionArtifactStore(custom_stale_root, session_id="session-custom-threshold")
+        append_turn(custom_store, "resume moderately old pending queue", "ok")
+        custom_store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id="approval-custom-threshold",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt="rerun tests",
+                    created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+                )
+            ]
+        )
+
+        custom_stale_app = StrandsAgentApp(
+            runtime=FakeStrandsRuntime(),
+            config=AppConfig(
+                runtime_mode="fake",
+                openai_model="gpt-4o-mini",
+                workspace_root=".",
+                artifacts_root=custom_stale_root,
+                stale_approval_warning_days=1,
+                session_id="session-custom-current",
+            ),
+            artifact_store=custom_current_store,
+        )
+
+        async with custom_stale_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("f11")
+            await pilot.pause()
+            await pilot.press("o")
+            await pilot.pause()
+            custom_stale_output = str(custom_stale_app.query_one("#output").render())
+            print(
+                "switcher_custom_stale_threshold=",
+                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_stale_output
+                and "session-custom-threshold" in custom_stale_output,
+            )
+
     with TemporaryDirectory() as empty_hint_root:
         empty_current_store = SessionArtifactStore(empty_hint_root, session_id="session-empty-current")
         append_turn(empty_current_store, "plain current session", "plain current response")

@@ -27,6 +27,16 @@ from strands_agent_tui.sessions import (
 )
 
 
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 class StrandsAgentApp(App):
     TITLE = "strands_agent"
     SUB_TITLE = "Strands-powered coding agent TUI prototype"
@@ -839,6 +849,7 @@ class StrandsAgentApp(App):
             self.config.artifacts_root,
             filter_mode=self.session_switcher_filter_mode,
             sort_mode=self.session_switcher_sort_mode,
+            stale_approval_warning_seconds=self.config.stale_approval_warning_seconds,
         )
         if self.session_switcher_total_matches == 0:
             self.session_switcher_page_index = 0
@@ -854,6 +865,7 @@ class StrandsAgentApp(App):
                 limit=self.session_switcher_total_matches,
                 filter_mode=self.session_switcher_filter_mode,
                 sort_mode=self.session_switcher_sort_mode,
+                stale_approval_warning_seconds=self.config.stale_approval_warning_seconds,
             )
         max_page_index = (self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS
         normalized_page_index = min(self.session_switcher_page_index, max_page_index)
@@ -879,6 +891,7 @@ class StrandsAgentApp(App):
             filter_mode=self.session_switcher_filter_mode,
             sort_mode=self.session_switcher_sort_mode,
             offset=self.session_switcher_page_index * MAX_RECENT_SESSIONS,
+            stale_approval_warning_seconds=self.config.stale_approval_warning_seconds,
         )
         self.session_switcher_selected_index = self._default_session_switcher_index(selected_session_id)
 
@@ -1095,6 +1108,11 @@ def parse_args() -> AppConfig:
         action="store_true",
         help="Resume the most recent saved session from the configured artifacts root.",
     )
+    parser.add_argument(
+        "--stale-approval-days",
+        type=_positive_int_arg,
+        help="Override how many days old an approval must be before stale triage surfaces it.",
+    )
     args = parser.parse_args()
 
     session_flags = [bool(args.session_dir), bool(args.pick_session), bool(args.resume_last)]
@@ -1107,6 +1125,7 @@ def parse_args() -> AppConfig:
         runtime_mode=args.runtime,
         openai_model=args.model,
         workspace_root=args.workspace,
+        stale_approval_warning_days=args.stale_approval_days,
     )
 
     selected_session_dir = None
@@ -1122,6 +1141,7 @@ def parse_args() -> AppConfig:
             config.artifacts_root,
             filter_mode=args.pick_filter,
             sort_mode=args.pick_sort,
+            stale_approval_warning_seconds=config.stale_approval_warning_seconds,
         )
         if summary is not None:
             selected_session_dir = summary.session_dir

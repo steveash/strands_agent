@@ -119,12 +119,12 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added a dedicated `approval-stale-pending` recent-session subfilter across the launch-time picker, in-app `F11` switcher, and `--pick-filter` CLI so stale follow-up work can isolate aging pending approval queues separately from the newer denied/restored stale lanes,
-- reused the same structured stale-lane aggregation so the new pending-only backlog summary and scoped page rollups stay aligned with the broader stale triage views,
-- refreshed stale-triage regression coverage plus both picker/switcher smoke checks with explicit stale-pending assertions alongside the existing denied/restored checks.
+- made stale-approval triage configurable via `STRANDS_AGENT_STALE_APPROVAL_DAYS` plus a new `--stale-approval-days` CLI override, wiring the threshold through the launch-time picker and in-app `F11` switcher so teams can tune when pending/denied/restored approvals become stale,
+- kept stale-lane rollups and subfilters on the same structured path, so changing the threshold updates the broad `approval-stale` view and the pending/denied/restored stale lanes consistently,
+- refreshed config/app/session regression coverage plus both picker/switcher smoke checks with explicit custom-threshold assertions.
 
 Why this matters now:
-- It lets Steve isolate old pending approval queues directly instead of inferring them from the broader stale backlog, which is useful when the next action is to approve or deny aging work rather than investigate a historical outcome.
+- It lets stale triage fit different team cadences instead of hard-coding one global definition of “old”.
 - It keeps the launch-time picker and in-app switcher aligned, which matters because stale triage is now a shared reopen workflow rather than a one-off surface.
 - It reuses structured stale-lane data instead of parsing rendered text, so future stale triage extensions can stay deterministic.
 
@@ -137,14 +137,14 @@ How we know the prototype is working right now:
 - the CLI help still renders correctly for launch controls.
 
 Current evidence:
-- automated tests: `125 passed`
-- runnable picker stale-backlog verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_approval_stale_filter= True`, `picker_approval_stale_backlog= True`, `picker_approval_stale_page_rollup= True`, `picker_approval_stale_pending_filter= True`, `picker_approval_stale_denied_filter= True`, and `picker_approval_stale_restored_filter= True`,
+- automated tests: `128 passed`
+- runnable picker stale-backlog verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_approval_stale_filter= True`, `picker_approval_stale_backlog= True`, `picker_approval_stale_page_rollup= True`, `picker_approval_stale_pending_filter= True`, `picker_approval_stale_denied_filter= True`, `picker_approval_stale_restored_filter= True`, and `picker_custom_stale_threshold= True`,
 - runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
 - runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
 - runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
 - runnable live-restore denial verification: `.venv/bin/python scripts/live_restore_denied_smoke.py` prints `live_restore_denied_initial_pending= True`, `live_restore_denied_saved_pending= True`, `live_restore_denied_restored_queue= True`, `live_restore_denied_event= True`, `live_restore_denied_no_tool_event= True`, and `live_restore_denied_summary= True`,
-- runnable session-switch stale-backlog verification: `.venv/bin/python scripts/session_switcher_smoke.py` prints `switcher_approval_stale_filter= True`, `switcher_approval_stale_backlog= True`, `switcher_approval_stale_page_rollup= True`, `switcher_approval_stale_pending_filter= True`, `switcher_approval_stale_denied_filter= True`, and `switcher_approval_stale_restored_filter= True`,
-- CLI verification: `.venv/bin/python -m strands_agent_tui.app --help | grep -- '--pick-filter'` now shows `--pick-filter {all,pending,denied,restore,approval-restore,approval-stale,approval-stale-pending,approval-stale-denied,approval-stale-restored,tool,shell,shell-inspect,shell-test}`,
+- runnable session-switch stale-backlog verification: `.venv/bin/python scripts/session_switcher_smoke.py` prints `switcher_approval_stale_filter= True`, `switcher_approval_stale_backlog= True`, `switcher_approval_stale_page_rollup= True`, `switcher_approval_stale_pending_filter= True`, `switcher_approval_stale_denied_filter= True`, `switcher_approval_stale_restored_filter= True`, and `switcher_custom_stale_threshold= True`,
+- CLI verification: `.venv/bin/python -m strands_agent_tui.app --help | grep -E -- '--pick-filter|--stale-approval-days'` now shows both the existing `--pick-filter` choices and the new `--stale-approval-days STALE_APPROVAL_DAYS` override,
 - recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, mixed shell-lane overlap badges, stale-pending/stale-denied/stale-restored subfilters, multi-page stale-lane rollups, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
 - live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
 - artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
@@ -634,7 +634,7 @@ Future daily iterations should:
 ## Next iteration ideas
 
 - reconcile the pinned prototype path with the canonical repo so future automation does not need README indirection or split commits
-- decide whether stale-approval triage should expose a configurable threshold or a dedicated stale-pending variant alongside the new denied/restored splits
+- decide whether the stale-approval threshold should surface inside picker/switcher UI copy so operators can see the active cutoff without relying on CLI/env context
 - add richer empty-state guidance or backlog-level compaction if stale approval summaries become noisy across many lanes/pages
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - keep tightening the fake/live event schema around steering and intervention milestones
