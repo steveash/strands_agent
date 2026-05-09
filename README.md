@@ -151,7 +151,7 @@ Current evidence:
 - UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
 - steering verification by test: default policy now auto-allows read-only shell inspection, still requires confirmation for shell test runs plus overwrite and multi-occurrence edit requests, rejects unsupported shell commands earlier, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied.
 - local unblock note: a bare `pytest -q` against the host Python still fails when the shell is not using the repo `.venv` because `strands` and `textual` are not installed globally; rerunning with `.venv/bin/pytest -q` succeeds and remains the supported verification path.
-- git publish status: `git push origin main` and `git push --force origin refs/tags/strands-agent-2026-05-09` both succeeded for this run.
+- git publish status: `git push origin main` succeeded for this run.
 
 ## First five phases
 
