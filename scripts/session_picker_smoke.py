@@ -766,6 +766,9 @@ def main() -> None:
                 and "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_picker
                 and "| approval stale age: 45d | stale focus: pending" in stale_pending_picker
                 and "| approval stale: pending 45d | stale focus: pending" not in stale_pending_picker
+                and "- stale focus: pending" in stale_pending_picker
+                and "- approval stale age: 45d" in stale_pending_picker
+                and "- approval stale: pending 45d" not in stale_pending_picker
                 and "stale focus: pending" in stale_pending_picker
                 and "session-stale-pending-0" in stale_pending_picker
                 and "session-stale-denied-page-2" not in stale_pending_picker,
@@ -777,6 +780,9 @@ def main() -> None:
                 and "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_picker
                 and "| approval stale age: 14d | stale focus: denied" in stale_denied_picker
                 and "| approval stale: denied 14d | stale focus: denied" not in stale_denied_picker
+                and "- stale focus: denied" in stale_denied_picker
+                and "- approval stale age: 14d" in stale_denied_picker
+                and "- approval stale: denied 14d" not in stale_denied_picker
                 and "stale focus: denied" in stale_denied_picker
                 and "session-stale-denied-page-2" in stale_denied_picker
                 and "session-stale-restored-page-2" not in stale_denied_picker,
@@ -789,6 +795,16 @@ def main() -> None:
                 in stale_restored_picker
                 and "| approval stale age: 11d | stale focus: restore queue" in stale_restored_picker
                 and "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_picker
+                and (
+                    "- stale focus: restore queue" in stale_restored_picker
+                    or "- stale focus: restored" in stale_restored_picker
+                )
+                and (
+                    "- approval stale age: 11d" in stale_restored_picker
+                    or "- approval stale age: 10d" in stale_restored_picker
+                )
+                and "- approval stale: restore queue 11d" not in stale_restored_picker
+                and "- approval stale: restored 10d" not in stale_restored_picker
                 and "stale focus: restore queue" in stale_restored_picker
                 and "session-stale-restored-page-2" in stale_restored_picker
                 and "session-stale-denied-page-2" not in stale_restored_picker,

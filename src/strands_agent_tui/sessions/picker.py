@@ -285,8 +285,7 @@ class SessionSummary:
             or self.last_restored_approval_age_summary != self.restored_pending_approval_age_summary
         ):
             lines.append(f"- last restored age: {self.last_restored_approval_age_summary}")
-        if self.stale_approval_badges:
-            lines.append(f"- approval stale: {', '.join(self.stale_approval_badges)}")
+        lines.extend(_render_stale_approval_preview_lines(self, filter_mode))
         if self.intervention_badges:
             lines.append(f"- intervention: {', '.join(self.intervention_badges)}")
         if self.last_intervention_preview:
@@ -1984,24 +1983,60 @@ def _render_stale_approval_row_suffix(
     *,
     stale_focus_lanes: list[str] | None = None,
 ) -> str:
-    if not summary.stale_approval_badges:
-        return ""
-    default_suffix = f" | approval stale: {', '.join(summary.stale_approval_badges)}"
-    if filter_mode == "approval-stale":
+    default_suffix = _default_stale_approval_row_suffix(summary)
+    if not default_suffix or filter_mode == "approval-stale":
         return default_suffix
 
-    focus_lanes = stale_focus_lanes if stale_focus_lanes is not None else _stale_approval_focus_lanes(summary, filter_mode)
-    if len(focus_lanes) != 1:
-        return default_suffix
-
-    focus_badges = _stale_approval_focus_badges(summary, focus_lanes[0])
-    if len(focus_badges) != 1:
-        return default_suffix
-
-    age_label = _stale_approval_badge_age_label(focus_badges[0])
+    age_label = _focused_stale_approval_age_label(summary, filter_mode, stale_focus_lanes=stale_focus_lanes)
     if not age_label:
         return default_suffix
     return f" | approval stale age: {age_label}"
+
+
+def _render_stale_approval_preview_lines(summary: SessionSummary, filter_mode: str) -> list[str]:
+    default_line = _default_stale_approval_preview_line(summary)
+    if not default_line:
+        return []
+    if filter_mode == "approval-stale":
+        return [default_line]
+
+    focus_lanes = _stale_approval_focus_lanes(summary, filter_mode)
+    focus_lines = [f"- stale focus: {', '.join(focus_lanes)}"] if focus_lanes else []
+    age_label = _focused_stale_approval_age_label(summary, filter_mode, stale_focus_lanes=focus_lanes)
+    if not age_label:
+        return [*focus_lines, default_line]
+    return [*focus_lines, f"- approval stale age: {age_label}"]
+
+
+def _default_stale_approval_row_suffix(summary: SessionSummary) -> str:
+    if not summary.stale_approval_badges:
+        return ""
+    return f" | approval stale: {', '.join(summary.stale_approval_badges)}"
+
+
+def _default_stale_approval_preview_line(summary: SessionSummary) -> str:
+    if not summary.stale_approval_badges:
+        return ""
+    return f"- approval stale: {', '.join(summary.stale_approval_badges)}"
+
+
+def _focused_stale_approval_age_label(
+    summary: SessionSummary,
+    filter_mode: str,
+    *,
+    stale_focus_lanes: list[str] | None = None,
+) -> str:
+    if not summary.stale_approval_badges:
+        return ""
+    focus_lanes = stale_focus_lanes if stale_focus_lanes is not None else _stale_approval_focus_lanes(summary, filter_mode)
+    if len(focus_lanes) != 1:
+        return ""
+
+    focus_badges = _stale_approval_focus_badges(summary, focus_lanes[0])
+    if len(focus_badges) != 1:
+        return ""
+
+    return _stale_approval_badge_age_label(focus_badges[0])
 
 
 def _stale_approval_focus_lanes(summary: SessionSummary, filter_mode: str) -> list[str]:
