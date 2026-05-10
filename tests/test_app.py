@@ -1701,6 +1701,8 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         assert "Filter: approval-stale-pending | Sort: recent" in stale_pending_output
         assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d)" in stale_pending_output
         assert "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_output
+        assert "| approval stale age: 45d | stale focus: pending" in stale_pending_output
+        assert "| approval stale: pending 45d | stale focus: pending" not in stale_pending_output
         assert "stale focus: pending" in stale_pending_output
         assert "session-stale-pending" in stale_pending_output
         assert "session-stale-denied | 1 turn(s)" not in stale_pending_output
@@ -1712,6 +1714,8 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         assert "Filter: approval-stale-denied | Sort: recent" in stale_denied_output
         assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d)" in stale_denied_output
         assert "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_output
+        assert "| approval stale age: 9d | stale focus: denied" in stale_denied_output
+        assert "| approval stale: denied 9d | stale focus: denied" not in stale_denied_output
         assert "stale focus: denied" in stale_denied_output
         assert "session-stale-denied" in stale_denied_output
         assert "session-stale-pending | 1 turn(s)" not in stale_denied_output
@@ -1726,6 +1730,10 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
             in stale_restored_output
         )
         assert "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old" in stale_restored_output
+        assert "| approval stale age: 11d | stale focus: restore queue" in stale_restored_output
+        assert "| approval stale age: 10d | stale focus: restored" in stale_restored_output
+        assert "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_output
+        assert "| approval stale: restored 10d | stale focus: restored" not in stale_restored_output
         assert "stale focus: restore queue" in stale_restored_output
         assert "stale focus: restored" in stale_restored_output
         assert "session-stale-restored-queue" in stale_restored_output

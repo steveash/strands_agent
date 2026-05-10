@@ -764,6 +764,8 @@ def main() -> None:
                 "Filter: approval-stale-pending | Sort: recent" in stale_pending_picker
                 and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d)" in stale_pending_picker
                 and "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_picker
+                and "| approval stale age: 45d | stale focus: pending" in stale_pending_picker
+                and "| approval stale: pending 45d | stale focus: pending" not in stale_pending_picker
                 and "stale focus: pending" in stale_pending_picker
                 and "session-stale-pending-0" in stale_pending_picker
                 and "session-stale-denied-page-2" not in stale_pending_picker,
@@ -773,6 +775,8 @@ def main() -> None:
                 "Filter: approval-stale-denied | Sort: recent" in stale_denied_picker
                 and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d)" in stale_denied_picker
                 and "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_picker
+                and "| approval stale age: 14d | stale focus: denied" in stale_denied_picker
+                and "| approval stale: denied 14d | stale focus: denied" not in stale_denied_picker
                 and "stale focus: denied" in stale_denied_picker
                 and "session-stale-denied-page-2" in stale_denied_picker
                 and "session-stale-restored-page-2" not in stale_denied_picker,
@@ -783,6 +787,8 @@ def main() -> None:
                 and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d)" in stale_restored_picker
                 and "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
                 in stale_restored_picker
+                and "| approval stale age: 11d | stale focus: restore queue" in stale_restored_picker
+                and "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_picker
                 and "stale focus: restore queue" in stale_restored_picker
                 and "session-stale-restored-page-2" in stale_restored_picker
                 and "session-stale-denied-page-2" not in stale_restored_picker,
