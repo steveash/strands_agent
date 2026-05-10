@@ -509,6 +509,10 @@ def main() -> None:
             "picker_approval_stale_backlog=",
             "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d)" in approval_stale_picker,
         )
+        print(
+            "picker_stale_cutoff_copy=",
+            "Stale cutoff: approvals >= 7d old" in approval_stale_picker,
+        )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in pending_picker)
         print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)
         print(
@@ -777,6 +781,10 @@ def main() -> None:
                 "picker_custom_stale_threshold=",
                 "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_stale_picker
                 and "session-custom-threshold" in custom_stale_picker,
+            )
+            print(
+                "picker_custom_stale_cutoff_copy=",
+                "Stale cutoff: approvals >= 1d old" in custom_stale_picker,
             )
 
         captured: list[str] = []

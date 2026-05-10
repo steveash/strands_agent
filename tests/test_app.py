@@ -1441,6 +1441,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         approval_stale_output = str(app.query_one("#output").render())
         assert "Filter: approval-stale | Sort: recent" in approval_stale_output
+        assert "Stale cutoff: approvals >= 7d old" in approval_stale_output
         assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d)" in approval_stale_output
         assert "session-aged" in approval_stale_output
         assert "approval stale: pending 45d" in approval_stale_output
@@ -1767,6 +1768,7 @@ async def test_session_switcher_respects_custom_stale_threshold(tmp_path: Path) 
         output = str(app.query_one("#output").render())
 
         assert "Filter: approval-stale | Sort: recent" in output
+        assert "Stale cutoff: approvals >= 1d old" in output
         assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in output
         assert "session-custom-threshold" in output
 

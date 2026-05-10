@@ -61,6 +61,10 @@ SESSION_SWITCHER_FILTER_MODES = {
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
 
 
+def format_stale_approval_cutoff(stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS) -> str:
+    return f"approvals >= {_format_age_compact(max(stale_approval_warning_seconds, 1))} old"
+
+
 @dataclass(slots=True)
 class SessionSummary:
     session_id: str
@@ -526,10 +530,16 @@ def render_session_picker(
         page_size=limit,
     )
 
+    stale_cutoff_suffix = (
+        f" | Stale cutoff: {format_stale_approval_cutoff(stale_approval_warning_seconds)}"
+        if _is_stale_approval_filter_mode(filter_mode)
+        else ""
+    )
+
     lines = [
         f"Recent sessions under {resolved_root}:",
         (
-            f"Filter: {filter_mode} | Sort: {sort_mode} | "
+            f"Filter: {filter_mode} | Sort: {sort_mode}{stale_cutoff_suffix} | "
             f"Page: {_picker_page_label(total_matches, limit, page_index)} | "
             f"Showing: {_picker_page_window_label(total_matches, limit, page_index, len(summaries))}"
         ),

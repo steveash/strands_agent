@@ -496,6 +496,10 @@ async def run_smoke() -> None:
                 "switcher_approval_stale_backlog=",
                 "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d)" in approval_stale_output,
             )
+            print(
+                "switcher_stale_cutoff_copy=",
+                "Stale cutoff: approvals >= 7d old" in approval_stale_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 
@@ -788,6 +792,10 @@ async def run_smoke() -> None:
                 "switcher_custom_stale_threshold=",
                 "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_stale_output
                 and "session-custom-threshold" in custom_stale_output,
+            )
+            print(
+                "switcher_custom_stale_cutoff_copy=",
+                "Stale cutoff: approvals >= 1d old" in custom_stale_output,
             )
 
     with TemporaryDirectory() as empty_hint_root:

@@ -653,6 +653,7 @@ def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path)
     )
 
     default_summaries = list_recent_sessions(tmp_path, filter_mode="approval-stale")
+    default_rendered = render_session_picker(tmp_path, filter_mode="approval-stale")
     custom_summaries = list_recent_sessions(
         tmp_path,
         filter_mode="approval-stale",
@@ -665,8 +666,10 @@ def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path)
     )
 
     assert default_summaries == []
+    assert "Stale cutoff: approvals >= 7d old" in default_rendered
     assert [summary.session_id for summary in custom_summaries] == ["session-custom-threshold"]
     assert custom_summaries[0].stale_approval_badges == ["pending 2d"]
+    assert "Stale cutoff: approvals >= 1d old" in custom_rendered
     assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_rendered
 
 

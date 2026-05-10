@@ -17,6 +17,7 @@ from strands_agent_tui.sessions import (
     SessionSummary,
     TurnArtifact,
     count_recent_sessions,
+    format_stale_approval_cutoff,
     latest_session,
     list_recent_sessions,
     pick_session,
@@ -491,6 +492,11 @@ class StrandsAgentApp(App):
         return f"replay {self.history_focus_index + 1}/{len(self.history)}"
 
     def render_session_switcher(self) -> str:
+        stale_cutoff_suffix = (
+            f" | Stale cutoff: {format_stale_approval_cutoff(self.config.stale_approval_warning_seconds)}"
+            if self.session_switcher_filter_mode.startswith("approval-stale")
+            else ""
+        )
         lines = [
             "Session Switcher",
             f"Current session: {self.artifact_store.session_id}",
@@ -500,7 +506,7 @@ class StrandsAgentApp(App):
                 "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
             ),
             (
-                f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode} | "
+                f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode}{stale_cutoff_suffix} | "
                 f"Page: {self.session_switcher_page_label()} | "
                 f"Showing: {self.session_switcher_page_window_label()}"
             ),
