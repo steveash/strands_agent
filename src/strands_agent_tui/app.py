@@ -552,6 +552,8 @@ class StrandsAgentApp(App):
                         + self.session_switcher_selected_index
                         + 1,
                         total_matches=self.session_switcher_total_matches,
+                        filter_mode=self.session_switcher_filter_mode,
+                        stale_approval_warning_seconds=self.config.stale_approval_warning_seconds,
                     ),
                 ]
             )
@@ -886,6 +888,7 @@ class StrandsAgentApp(App):
             filter_mode=self.session_switcher_filter_mode,
             page_index=normalized_page_index,
             page_size=MAX_RECENT_SESSIONS,
+            stale_approval_warning_seconds=self.config.stale_approval_warning_seconds,
         )
 
         if selected_session_id and all_summaries is not None:

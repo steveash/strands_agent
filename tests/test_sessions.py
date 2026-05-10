@@ -484,13 +484,27 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     assert stale_by_id["session-stale-denied"].stale_approval_badges == ["denied 9d"]
     assert stale_by_id["session-stale-restored"].stale_approval_badges == ["restore queue 8d"]
     assert "approval stale: pending 45d" in stale_by_id["session-stale-pending"].render_line(1)
-    assert "- approval stale: denied 9d" in "\n".join(
-        stale_by_id["session-stale-denied"].render_preview(visible_index=1, overall_index=1, total_matches=3)
+    stale_denied_preview = "\n".join(
+        stale_by_id["session-stale-denied"].render_preview(
+            visible_index=1,
+            overall_index=1,
+            total_matches=3,
+            filter_mode="approval-stale",
+        )
+    )
+    assert "- approval stale: denied 9d" in stale_denied_preview
+    assert (
+        "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
+        in stale_denied_preview
     )
     assert (
         "Stale approval backlog: 3 sessions | lanes: pending 1 (oldest 45d), denied 1 (oldest 9d), "
         "restore queue 1 (oldest 8d)"
     ) in rendered
+    assert (
+        "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
+        in rendered
+    )
 
 
 def test_stale_approval_filter_summarizes_current_page_and_off_page_lanes(tmp_path: Path) -> None:
@@ -599,6 +613,8 @@ def test_stale_approval_filter_summarizes_current_page_and_off_page_lanes(tmp_pa
         "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: "
         "pending 8 (oldest 52d)"
     ) in second_page
+    assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old" in first_page
+    assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old" in second_page
 
 
 def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lanes(tmp_path: Path) -> None:
@@ -705,12 +721,18 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     assert "session-stale-denied" not in stale_pending_rendered
     assert "session-stale-restored-queue" not in stale_pending_rendered
     assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d)" in stale_pending_rendered
+    assert "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_rendered
     assert "session-stale-pending" not in stale_denied_rendered
     assert "session-stale-pending" not in stale_restored_rendered
     assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d)" in stale_denied_rendered
+    assert "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_rendered
     assert (
         "Stale restored backlog: 2 sessions | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
     ) in stale_restored_rendered
+    assert (
+        "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
+        in stale_restored_rendered
+    )
 
 
 def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path) -> None:
@@ -749,6 +771,7 @@ def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path)
     assert custom_summaries[0].stale_approval_badges == ["pending 2d"]
     assert "Stale cutoff: approvals >= 1d old" in custom_rendered
     assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_rendered
+    assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old" in custom_rendered
 
 
 

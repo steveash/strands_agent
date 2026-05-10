@@ -210,7 +210,15 @@ class SessionSummary:
             f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{stale_approval_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
-    def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
+    def render_preview(
+        self,
+        *,
+        visible_index: int,
+        overall_index: int,
+        total_matches: int,
+        filter_mode: str = "all",
+        stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
+    ) -> list[str]:
         lines = [
             "Selected preview:",
             (
@@ -219,6 +227,12 @@ class SessionSummary:
             ),
             f"- artifact dir: {self.session_dir}",
         ]
+        if _is_stale_approval_filter_mode(filter_mode):
+            lines.append(
+                "- stale lane focus: "
+                f"{_stale_approval_filter_focus_label(filter_mode)} | "
+                f"cutoff: {format_stale_approval_cutoff(stale_approval_warning_seconds)}"
+            )
         if self.attention_reason_summary:
             lines.append(f"- attention reason: {self.attention_reason_summary}")
         if self.pending_approval_count > 0:
@@ -552,6 +566,7 @@ def render_session_picker(
         filter_mode=filter_mode,
         page_index=page_index,
         page_size=limit,
+        stale_approval_warning_seconds=stale_approval_warning_seconds,
     )
 
     stale_cutoff_suffix = (
@@ -592,6 +607,8 @@ def render_session_picker(
                     visible_index=selected_index + 1,
                     overall_index=page_index * limit + selected_index + 1,
                     total_matches=total_matches,
+                    filter_mode=filter_mode,
+                    stale_approval_warning_seconds=stale_approval_warning_seconds,
                 ),
             ]
         )
@@ -1791,6 +1808,7 @@ def render_recent_session_filter_summary_lines(
     filter_mode: str,
     page_index: int = 0,
     page_size: int = MAX_RECENT_SESSIONS,
+    stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> list[str]:
     stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
     if stale_filter_lanes is None or not summaries:
@@ -1803,7 +1821,13 @@ def render_recent_session_filter_summary_lines(
     if lane_rollup:
         line += f" | lanes: {lane_rollup}"
 
-    lines = [line]
+    lines = [
+        line,
+        (
+            f"Stale lane focus: {_stale_approval_filter_focus_label(filter_mode)} | "
+            f"cutoff: {format_stale_approval_cutoff(stale_approval_warning_seconds)}"
+        ),
+    ]
     if len(summaries) <= page_size:
         return lines
 
@@ -1861,6 +1885,14 @@ def _stale_approval_filter_lanes(filter_mode: str) -> frozenset[str] | None:
 
 def _stale_approval_summary_label(filter_mode: str) -> str:
     return STALE_APPROVAL_FILTER_SUMMARY_LABELS.get(filter_mode, "Stale approval backlog")
+
+
+def _stale_approval_filter_focus_label(filter_mode: str) -> str:
+    lanes = _stale_approval_filter_lanes(filter_mode)
+    if not lanes:
+        return "none"
+    ordered_lanes = [lane for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER if lane in lanes]
+    return ", ".join(ordered_lanes)
 
 
 def _summarize_stale_approval_lanes(

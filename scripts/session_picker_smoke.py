@@ -527,6 +527,13 @@ def main() -> None:
             "picker_stale_cutoff_copy=",
             "Stale cutoff: approvals >= 7d old" in approval_stale_picker,
         )
+        print(
+            "picker_stale_lane_focus=",
+            "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
+            in approval_stale_picker
+            and "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
+            in approval_stale_picker,
+        )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in pending_picker)
         print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)
         print(
@@ -752,6 +759,7 @@ def main() -> None:
                 "picker_approval_stale_pending_filter=",
                 "Filter: approval-stale-pending | Sort: recent" in stale_pending_picker
                 and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d)" in stale_pending_picker
+                and "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_picker
                 and "session-stale-pending-0" in stale_pending_picker
                 and "session-stale-denied-page-2" not in stale_pending_picker,
             )
@@ -759,6 +767,7 @@ def main() -> None:
                 "picker_approval_stale_denied_filter=",
                 "Filter: approval-stale-denied | Sort: recent" in stale_denied_picker
                 and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d)" in stale_denied_picker
+                and "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_picker
                 and "session-stale-denied-page-2" in stale_denied_picker
                 and "session-stale-restored-page-2" not in stale_denied_picker,
             )
@@ -766,6 +775,8 @@ def main() -> None:
                 "picker_approval_stale_restored_filter=",
                 "Filter: approval-stale-restored | Sort: recent" in stale_restored_picker
                 and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d)" in stale_restored_picker
+                and "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
+                in stale_restored_picker
                 and "session-stale-restored-page-2" in stale_restored_picker
                 and "session-stale-denied-page-2" not in stale_restored_picker,
             )
@@ -799,6 +810,11 @@ def main() -> None:
             print(
                 "picker_custom_stale_cutoff_copy=",
                 "Stale cutoff: approvals >= 1d old" in custom_stale_picker,
+            )
+            print(
+                "picker_custom_stale_lane_focus=",
+                "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old"
+                in custom_stale_picker,
             )
 
         captured: list[str] = []

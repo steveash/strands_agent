@@ -500,6 +500,13 @@ async def run_smoke() -> None:
                 "switcher_stale_cutoff_copy=",
                 "Stale cutoff: approvals >= 7d old" in approval_stale_output,
             )
+            print(
+                "switcher_stale_lane_focus=",
+                "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
+                in approval_stale_output
+                and "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
+                in approval_stale_output,
+            )
             await pilot.press("up")
             await pilot.pause()
 
@@ -724,6 +731,7 @@ async def run_smoke() -> None:
                 "switcher_approval_stale_pending_filter=",
                 "Filter: approval-stale-pending | Sort: recent" in stale_pending_output
                 and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d)" in stale_pending_output
+                and "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_output
                 and "session-stale-pending-0" in stale_pending_output
                 and "session-stale-denied-page-2" not in stale_pending_output,
             )
@@ -734,6 +742,7 @@ async def run_smoke() -> None:
                 "switcher_approval_stale_denied_filter=",
                 "Filter: approval-stale-denied | Sort: recent" in stale_denied_output
                 and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d)" in stale_denied_output
+                and "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_output
                 and "session-stale-denied-page-2" in stale_denied_output
                 and "session-stale-restored-page-2" not in stale_denied_output,
             )
@@ -744,6 +753,8 @@ async def run_smoke() -> None:
                 "switcher_approval_stale_restored_filter=",
                 "Filter: approval-stale-restored | Sort: recent" in stale_restored_output
                 and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d)" in stale_restored_output
+                and "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
+                in stale_restored_output
                 and "session-stale-restored-page-2" in stale_restored_output
                 and "session-stale-denied-page-2" not in stale_restored_output,
             )
@@ -796,6 +807,11 @@ async def run_smoke() -> None:
             print(
                 "switcher_custom_stale_cutoff_copy=",
                 "Stale cutoff: approvals >= 1d old" in custom_stale_output,
+            )
+            print(
+                "switcher_custom_stale_lane_focus=",
+                "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old"
+                in custom_stale_output,
             )
 
     with TemporaryDirectory() as empty_hint_root:
