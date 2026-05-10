@@ -529,14 +529,15 @@ def test_app_config_loads_stale_approval_warning_days(monkeypatch: pytest.Monkey
     assert config.stale_approval_warning_seconds == 14 * 24 * 60 * 60
 
 
-def test_event_kind_categories_cover_runtime_tool_failure_and_persistence() -> None:
+def test_event_kind_categories_cover_runtime_tool_failure_persistence_and_intervention() -> None:
     assert categorize_event_kind("prompt_received") == "runtime"
     assert categorize_event_kind("tool_started") == "tool"
     assert categorize_event_kind("tool_failed") == "failure"
     assert categorize_event_kind("runtime_error") == "failure"
     assert categorize_event_kind("artifact_saved") == "persistence"
-    assert categorize_event_kind("steering_blocked") == "runtime"
-    assert categorize_event_kind("steering_confirmation_required") == "runtime"
+    assert categorize_event_kind("steering_blocked") == "intervention"
+    assert categorize_event_kind("steering_confirmation_required") == "intervention"
+    assert categorize_event_kind("approval_follow_up_prepared") == "intervention"
 
 
 def test_build_workspace_tools_requires_confirmation_for_overwrite_by_default(tmp_path: Path) -> None:

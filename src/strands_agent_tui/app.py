@@ -48,6 +48,7 @@ class StrandsAgentApp(App):
         Binding("f3", "set_event_filter('tool')", "Tool events"),
         Binding("f4", "set_event_filter('failure')", "Failure events"),
         Binding("f5", "set_event_filter('persistence')", "Persistence events"),
+        Binding("f12", "set_event_filter('intervention')", "Intervention events"),
         Binding("f6", "history_older", "Older turn"),
         Binding("f7", "history_newer", "Newer turn"),
         Binding("f8", "history_live", "Live view"),
@@ -251,6 +252,11 @@ class StrandsAgentApp(App):
 
         if key == "t":
             self._toggle_session_switcher_filter_mode("tool")
+            event.stop()
+            return
+
+        if key == "g":
+            self._toggle_session_switcher_filter_mode("intervention")
             event.stop()
             return
 
@@ -503,7 +509,7 @@ class StrandsAgentApp(App):
             f"Artifacts root: {self.artifact_store.root}",
             (
                 "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
             ),
             (
                 f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode}{stale_cutoff_suffix} | "
@@ -563,7 +569,7 @@ class StrandsAgentApp(App):
         lines = [
             "Event Timeline",
             f"Filter: {self.event_filter} ({len(filtered_events)}/{len(self.events)} events)",
-            "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence",
+            "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence, F12 intervention",
             "",
         ]
         for index, item in enumerate(filtered_events[-12:], start=max(len(filtered_events) - 11, 1)):
@@ -1033,7 +1039,7 @@ class StrandsAgentApp(App):
         self._sync_session_state(emit_pending_events=False)
 
     def _sanitize_event_filter(self, value: str) -> str:
-        return value if value in {"all", "runtime", "tool", "failure", "persistence"} else "all"
+        return value if value in {"all", "runtime", "tool", "failure", "persistence", "intervention"} else "all"
 
     def _normalize_history_focus_index(self, value: int | None) -> int | None:
         if value is None or not self.history:
@@ -1098,6 +1104,7 @@ def parse_args() -> AppConfig:
             "approval-stale-denied",
             "approval-stale-restored",
             "tool",
+            "intervention",
             "shell",
             "shell-inspect",
             "shell-test",

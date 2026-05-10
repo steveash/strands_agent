@@ -195,6 +195,10 @@ def runtime_event(
 
 
 def categorize_event_kind(kind: str) -> str:
+    if kind.startswith("steering_") or kind.startswith("approval_"):
+        return "intervention"
+    if kind in {"approval_input_blocked", "session_switch_blocked"}:
+        return "intervention"
     if kind == "tool_failed":
         return "failure"
     if kind.startswith("tool_"):

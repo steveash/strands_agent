@@ -73,7 +73,7 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert "Events: 6" in rendered_status
         assert "Approval: none" in rendered_status
         assert "Filter: all (6/6 events)" in rendered_events
-        assert "(runtime) kind=steering_decision | fake-policy" in rendered_events
+        assert "(intervention) kind=steering_decision | fake-policy" in rendered_events
         assert "(tool) kind=tool_started | list_files" in rendered_events
         assert "data: source='fake_runtime', tool_name='list_files'" in rendered_events
         assert "(tool) kind=tool_finished | list_files" in rendered_events
@@ -399,6 +399,13 @@ async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -
         assert "Filter: tool (2/6 events)" in tool_events
         assert "kind=tool_started | list_files" in tool_events
         assert "kind=artifact_saved" not in tool_events
+
+        await pilot.press("f12")
+        await pilot.pause()
+        intervention_events = str(app.query_one("#events").render())
+        assert "Filter: intervention (1/6 events)" in intervention_events
+        assert "kind=steering_decision | fake-policy" in intervention_events
+        assert "kind=artifact_saved" not in intervention_events
 
         await pilot.press("f5")
         await pilot.pause()
@@ -977,7 +984,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1482,6 +1489,16 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "attention: restore" in restore_output
         assert "session-pending | 1 turn(s)" not in restore_output
 
+        await pilot.press("g")
+        await pilot.pause()
+        intervention_output = str(app.query_one("#output").render())
+        assert "Filter: intervention | Sort: attention" in intervention_output
+        assert "session-pending | 1 turn(s)" in intervention_output
+        assert "session-denied | 1 turn(s)" in intervention_output
+        assert "intervention: pending 1" in intervention_output
+        assert "intervention: denied 1, restored 1" in intervention_output
+        assert "session-shell | 1 turn(s)" not in intervention_output
+
         await pilot.press("h")
         await pilot.pause()
         shell_output = str(app.query_one("#output").render())
@@ -1982,7 +1999,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
         assert (
-            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, intervention, shell, shell-inspect, and shell-test triage."
             in output
         )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output

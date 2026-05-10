@@ -22,6 +22,8 @@ MAX_PROMPT_PREVIEW = 60
 MAX_EVENT_PREVIEW = 50
 MAX_TOOL_PREVIEW = 72
 MAX_TOOL_STREAK_PREVIEWS = 3
+MAX_INTERVENTION_PREVIEWS = 3
+MAX_INTERVENTION_ROLLUP_EVENTS = 6
 MAX_SHELL_STREAK_PREVIEWS = 3
 MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
@@ -54,6 +56,7 @@ SESSION_SWITCHER_FILTER_MODES = {
     "approval-stale-denied",
     "approval-stale-restored",
     "tool",
+    "intervention",
     "shell",
     "shell-inspect",
     "shell-test",
@@ -96,6 +99,10 @@ class SessionSummary:
     last_restored_approval_age_summary: str = ""
     last_restored_approval_age_sort_key: int = 0
     stale_approval_badges: list[str] = field(default_factory=list)
+    intervention_badges: list[str] = field(default_factory=list)
+    last_intervention_preview: str = ""
+    recent_intervention_previews: list[str] = field(default_factory=list)
+    has_intervention_activity: bool = False
     pending_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
     denied_approval_attention_sort_key: tuple[int, ...] = field(default_factory=tuple)
@@ -167,6 +174,9 @@ class SessionSummary:
         stale_approval_suffix = (
             f" | approval stale: {', '.join(self.stale_approval_badges)}" if self.stale_approval_badges else ""
         )
+        intervention_suffix = (
+            f" | intervention: {', '.join(self.intervention_badges)}" if self.intervention_badges else ""
+        )
         tool_hint = ""
         if self.last_tool_preview or self.last_tool_badges:
             badge_prefix = "/".join(self.last_tool_badges)
@@ -197,7 +207,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{stale_approval_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{stale_approval_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(self, *, visible_index: int, overall_index: int, total_matches: int) -> list[str]:
@@ -253,6 +263,16 @@ class SessionSummary:
             lines.append(f"- last restored age: {self.last_restored_approval_age_summary}")
         if self.stale_approval_badges:
             lines.append(f"- approval stale: {', '.join(self.stale_approval_badges)}")
+        if self.intervention_badges:
+            lines.append(f"- intervention: {', '.join(self.intervention_badges)}")
+        if self.last_intervention_preview:
+            lines.append(f"- last intervention: {self.last_intervention_preview}")
+        if self.recent_intervention_previews:
+            lines.append(f"- recent interventions ({len(self.recent_intervention_previews)}):")
+            lines.extend(
+                f"  {index}. {preview}"
+                for index, preview in enumerate(self.recent_intervention_previews, start=1)
+            )
         if self.restore_badges:
             lines.append(f"- restore: {', '.join(self.restore_badges)}")
         if self.stale_session_summary:
@@ -430,6 +450,10 @@ def _ordered_recent_sessions(
             last_restored_approval_age_summary=last_restored_approval_age_summary,
             last_restored_approval_age_sort_key=last_restored_approval_age_sort_key,
             stale_approval_badges=stale_approval_badges,
+            intervention_badges=_intervention_activity_badges(turns, pending_approvals),
+            last_intervention_preview=_latest_intervention_preview(turns, pending_approvals),
+            recent_intervention_previews=_recent_intervention_previews(turns, pending_approvals),
+            has_intervention_activity=_has_intervention_activity(turns, pending_approvals),
             pending_approval_attention_sort_key=pending_approval_attention_sort_key,
             approval_attention_sort_key=approval_attention_sort_key,
             denied_approval_attention_sort_key=denied_approval_attention_sort_key,
@@ -574,7 +598,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -651,9 +675,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -759,6 +783,12 @@ def pick_session(
             selected_index = 0
             selected_session_id = ""
             continue
+        if normalized == "g":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "intervention")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
         if normalized == "h":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "shell")
             page_index = 0
@@ -828,7 +858,7 @@ def pick_session(
             )
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -900,6 +930,152 @@ def _iter_recent_tool_events(turns: list[TurnArtifact], *, tool_name: str | None
 
 def _latest_tool_event(turns: list[TurnArtifact]):
     return next(_iter_recent_tool_events(turns), None)
+
+
+def _latest_intervention_preview(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> str:
+    event = _latest_intervention_event(turns)
+    if event is not None:
+        return _render_intervention_event_summary(event)
+    return _queued_intervention_preview(pending_approvals)
+
+
+def _recent_intervention_previews(
+    turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest], limit: int = MAX_INTERVENTION_PREVIEWS
+) -> list[str]:
+    previews: list[str] = []
+    for event in _iter_recent_intervention_events(turns):
+        rendered = _render_intervention_event_summary(event)
+        if rendered:
+            previews.append(rendered)
+        if len(previews) >= limit:
+            break
+    if previews:
+        return previews
+    for approval in pending_approvals[:limit]:
+        preview = _queued_intervention_preview([approval])
+        if preview:
+            previews.append(preview)
+    return previews
+
+
+def _iter_recent_intervention_events(turns: list[TurnArtifact]):
+    for turn in reversed(turns):
+        for event in reversed(turn.events):
+            if _is_intervention_event(event):
+                yield event
+
+
+def _latest_intervention_event(turns: list[TurnArtifact]):
+    return next(_iter_recent_intervention_events(turns), None)
+
+
+def _intervention_activity_badges(
+    turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest], count_window: int = MAX_INTERVENTION_ROLLUP_EVENTS
+) -> list[str]:
+    events = list(_bounded_recent_intervention_events(turns, limit=count_window))
+    counts = {label: 0 for label in ("pending", "blocked", "approved", "denied")}
+    restored_count = 0
+    for event in events:
+        label = _intervention_event_label(event)
+        if label in counts:
+            counts[label] += 1
+        if bool(event.data.get("approval_restored", False)):
+            restored_count += 1
+
+    if pending_approvals:
+        counts["pending"] = max(counts["pending"], len(pending_approvals))
+        restored_count = max(
+            restored_count,
+            sum(1 for approval in pending_approvals if approval.restored_from_session),
+        )
+
+    if not any(counts.values()) and restored_count == 0:
+        return []
+
+    badges: list[str] = []
+    for label in ("pending", "blocked", "approved", "denied"):
+        count = counts.get(label, 0)
+        if count:
+            badges.append(f"{label} {count}")
+    if restored_count:
+        badges.append(f"restored {restored_count}")
+    return badges
+
+
+def _bounded_recent_intervention_events(turns: list[TurnArtifact], *, limit: int) -> list[object]:
+    events = []
+    for event in _iter_recent_intervention_events(turns):
+        events.append(event)
+        if len(events) >= limit:
+            break
+    return events
+
+
+def _has_intervention_activity(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> bool:
+    if pending_approvals:
+        return True
+    return _latest_intervention_event(turns) is not None
+
+
+def _is_intervention_event(event) -> bool:
+    return event.kind in {
+        "steering_confirmation_required",
+        "steering_blocked",
+        "steering_approved",
+        "steering_denied",
+        "approval_follow_up_prepared",
+    }
+
+
+def _intervention_event_label(event) -> str:
+    if event.kind == "steering_confirmation_required":
+        return "pending"
+    if event.kind == "steering_blocked":
+        return "blocked"
+    if event.kind == "steering_approved":
+        return "approved"
+    if event.kind == "steering_denied":
+        return "denied"
+    if event.kind == "approval_follow_up_prepared":
+        return "continued"
+    return event.kind.replace("_", " ")
+
+
+def _render_intervention_event_summary(event) -> str:
+    label = _intervention_event_label(event)
+    family = str(event.data.get("approval_tool_family", "") or "").strip()
+    tool_name = str(event.data.get("tool_name", "") or event.title or "").strip()
+    bits = [label]
+    if bool(event.data.get("approval_restored", False)):
+        bits.append("restored")
+    if family:
+        bits.append(family)
+    if tool_name:
+        bits.append(tool_name)
+    preview = " ".join(bits).strip()
+    tool_result = str(event.data.get("tool_result_preview", "") or "").strip()
+    if tool_result:
+        preview = f"{preview}: {tool_result}" if preview else tool_result
+    return _truncate(preview or (event.title or event.kind), MAX_TOOL_PREVIEW)
+
+
+def _queued_intervention_preview(pending_approvals: list[ApprovalRequest]) -> str:
+    if not pending_approvals:
+        return ""
+    approval = pending_approvals[0]
+    family = _approval_tool_family_for_values(
+        tool_name=str(approval.tool_name or ""),
+        command=_approval_command_from_args(approval.args),
+        shell_command_family="",
+    )
+    bits = ["pending"]
+    if approval.restored_from_session:
+        bits.append("restored")
+    if family:
+        bits.append(family)
+    if approval.tool_name:
+        bits.append(approval.tool_name)
+    return _truncate(" ".join(bits), MAX_TOOL_PREVIEW)
 
 
 def _latest_shell_preview(turns: list[TurnArtifact]) -> str:
@@ -1665,7 +1841,7 @@ def render_recent_session_empty_state_lines(
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append(
-            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, intervention, shell, shell-inspect, and shell-test triage."
         )
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
@@ -1808,6 +1984,8 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
         return bool(_stale_approval_lanes(summary) & stale_filter_lanes)
     if filter_mode == "tool":
         return bool(summary.last_tool_preview or summary.last_tool_badges)
+    if filter_mode == "intervention":
+        return summary.has_intervention_activity
     if filter_mode == "shell":
         return summary.has_shell_inspect_activity or summary.has_shell_test_activity
     if filter_mode == "shell-inspect":

@@ -100,7 +100,7 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
     assert (
-        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
         in rendered
     )
     assert "Press Enter to reopen the highlighted session." in rendered
@@ -186,7 +186,7 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "No saved sessions match the active picker filter." in rendered
     assert "1 saved session still exists under this root." in rendered
     assert (
-        "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, shell, shell-inspect, and shell-test triage."
+        "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, intervention, shell, shell-inspect, and shell-test triage."
         in rendered
     )
     assert "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in rendered
@@ -209,11 +209,89 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
 
     assert summary is None
     assert prompts == [
-        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to change triage: "
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to change triage: "
     ]
     assert any("No saved sessions match the active picker filter." in line for line in captured)
     assert any("Try A to show all sessions" in line for line in captured)
     assert any("Press Enter or N to start a fresh session" in line for line in captured)
+
+
+def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Path) -> None:
+    plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
+    _append_turn(plain_store, "plain work")
+
+    blocked_store = SessionArtifactStore(tmp_path, session_id="session-blocked")
+    blocked_store.append_turn(
+        TurnArtifact(
+            prompt="touch protected file",
+            response="blocked",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_blocked",
+                    "write_file",
+                    "Protected file mutations are blocked.",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_tool_family": "edit",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    approved_store = SessionArtifactStore(tmp_path, session_id="session-approved")
+    approved_store.append_turn(
+        TurnArtifact(
+            prompt="approve the queued edit",
+            response="approved",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_approved",
+                    "write_file",
+                    "Approved in the TUI",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0001",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "approval_tool_family": "edit",
+                    },
+                ),
+                runtime_event(
+                    "approval_follow_up_prepared",
+                    "write_file",
+                    "Prepared continuation prompt.",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0001",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "approval_tool_family": "edit",
+                        "tool_result_preview": "Simulated overwrite of notes.txt.",
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    intervention_summaries = list_recent_sessions(tmp_path, filter_mode="intervention")
+    intervention_by_id = {summary.session_id: summary for summary in intervention_summaries}
+    rendered = render_session_picker(tmp_path, filter_mode="intervention")
+
+    assert set(intervention_by_id) == {"session-blocked", "session-approved"}
+    assert intervention_by_id["session-blocked"].intervention_badges == ["blocked 1"]
+    assert intervention_by_id["session-approved"].intervention_badges == ["approved 1"]
+    assert intervention_by_id["session-approved"].last_intervention_preview == "continued edit write_file: Simulated overwrite of notes.txt."
+    assert "Filter: intervention | Sort: recent" in rendered
+    assert "intervention: blocked 1" in rendered
+    assert "intervention: approved 1" in rendered
+    assert "session-plain" not in rendered
 
 
 def test_restored_pending_approval_sessions_surface_restore_queue_age_cues(tmp_path: Path) -> None:

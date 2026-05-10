@@ -338,6 +338,7 @@ def main() -> None:
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
         approval_stale_picker = render_session_picker(temp_dir, filter_mode="approval-stale")
         shell_picker = render_session_picker(temp_dir, filter_mode="shell")
+        intervention_picker = render_session_picker(temp_dir, filter_mode="intervention")
         shell_inspect_picker = render_session_picker(temp_dir, filter_mode="shell-inspect")
         shell_test_picker = render_session_picker(temp_dir, filter_mode="shell-test")
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
@@ -452,6 +453,19 @@ def main() -> None:
             and "session-pending | 1 turn(s)" in shell_picker
             and "shell: inspect 1" in shell_picker
             and "session-tool | 1 turn(s)" not in shell_picker,
+        )
+        print(
+            "picker_intervention_filter=",
+            "Filter: intervention | Sort: recent" in intervention_picker
+            and "session-pending | 1 turn(s)" in intervention_picker
+            and "session-denied | 1 turn(s)" in intervention_picker
+            and "intervention: pending 1" in intervention_picker
+            and "session-plain | 1 turn(s)" not in intervention_picker,
+        )
+        print(
+            "picker_intervention_preview=",
+            "- last intervention:" in intervention_picker
+            and "- recent interventions (" in intervention_picker,
         )
         print(
             "picker_shell_inspect_filter=",
