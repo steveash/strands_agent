@@ -538,7 +538,7 @@ class StrandsAgentApp(App):
             current_suffix = " (current)" if summary.session_id == self.artifact_store.session_id else ""
             marker = ">" if index - 1 == self.session_switcher_selected_index else " "
             lines.append(
-                f"{marker} {summary.render_line(index, include_attention_reason=self.session_switcher_sort_mode == 'attention')}{current_suffix}"
+                f"{marker} {summary.render_line(index, include_attention_reason=self.session_switcher_sort_mode == 'attention', filter_mode=self.session_switcher_filter_mode)}{current_suffix}"
             )
 
         selected_summary = self._current_session_switcher_summary()

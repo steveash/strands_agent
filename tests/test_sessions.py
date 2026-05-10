@@ -484,6 +484,7 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     assert stale_by_id["session-stale-denied"].stale_approval_badges == ["denied 9d"]
     assert stale_by_id["session-stale-restored"].stale_approval_badges == ["restore queue 8d"]
     assert "approval stale: pending 45d" in stale_by_id["session-stale-pending"].render_line(1)
+    assert "stale focus: pending" in stale_by_id["session-stale-pending"].render_line(1, filter_mode="approval-stale")
     stale_denied_preview = "\n".join(
         stale_by_id["session-stale-denied"].render_preview(
             visible_index=1,
@@ -722,10 +723,12 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     assert "session-stale-restored-queue" not in stale_pending_rendered
     assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d)" in stale_pending_rendered
     assert "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_rendered
+    assert "stale focus: pending" in stale_pending_rendered
     assert "session-stale-pending" not in stale_denied_rendered
     assert "session-stale-pending" not in stale_restored_rendered
     assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d)" in stale_denied_rendered
     assert "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_rendered
+    assert "stale focus: denied" in stale_denied_rendered
     assert (
         "Stale restored backlog: 2 sessions | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
     ) in stale_restored_rendered
@@ -733,6 +736,8 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
         "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
         in stale_restored_rendered
     )
+    assert "stale focus: restore queue" in stale_restored_rendered
+    assert "stale focus: restored" in stale_restored_rendered
 
 
 def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path) -> None:

@@ -129,7 +129,13 @@ class SessionSummary:
     restore_badges: list[str] = field(default_factory=list)
     draft_prompt_preview: str = ""
 
-    def render_line(self, index: int, *, include_attention_reason: bool = False) -> str:
+    def render_line(
+        self,
+        index: int,
+        *,
+        include_attention_reason: bool = False,
+        filter_mode: str = "all",
+    ) -> str:
         prompt_suffix = f" | last prompt: {self.last_prompt_preview}" if self.last_prompt_preview else ""
         pending_suffix = ""
         if self.pending_approval_count == 1 and self.pending_approval_tool:
@@ -174,6 +180,8 @@ class SessionSummary:
         stale_approval_suffix = (
             f" | approval stale: {', '.join(self.stale_approval_badges)}" if self.stale_approval_badges else ""
         )
+        stale_focus_lanes = _stale_approval_focus_lanes(self, filter_mode)
+        stale_focus_suffix = f" | stale focus: {', '.join(stale_focus_lanes)}" if stale_focus_lanes else ""
         intervention_suffix = (
             f" | intervention: {', '.join(self.intervention_badges)}" if self.intervention_badges else ""
         )
@@ -207,7 +215,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{stale_approval_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(
@@ -598,7 +606,7 @@ def render_session_picker(
         for index, summary in enumerate(summaries, start=1):
             marker = ">" if index - 1 == selected_index else " "
             lines.append(
-                f"{marker} {summary.render_line(index, include_attention_reason=sort_mode == 'attention')}"
+                f"{marker} {summary.render_line(index, include_attention_reason=sort_mode == 'attention', filter_mode=filter_mode)}"
             )
         lines.extend(
             [
@@ -1943,6 +1951,14 @@ def _stale_approval_lanes(summary: SessionSummary) -> set[str]:
         elif badge.startswith("denied "):
             lanes.add("denied")
     return lanes
+
+
+def _stale_approval_focus_lanes(summary: SessionSummary, filter_mode: str) -> list[str]:
+    lanes = _stale_approval_filter_lanes(filter_mode)
+    if not lanes:
+        return []
+    summary_lanes = _stale_approval_lanes(summary)
+    return [lane for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER if lane in lanes and lane in summary_lanes]
 
 
 def _stale_approval_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
