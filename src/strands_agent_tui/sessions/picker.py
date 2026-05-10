@@ -1323,6 +1323,7 @@ def _approval_activity(
     last_record: dict[str, object] | None = None
     last_denied_record: dict[str, object] | None = None
     last_restored_record: dict[str, object] | None = None
+    last_restored_outcome_record: dict[str, object] | None = None
     order = 0
 
     for turn in turns:
@@ -1352,6 +1353,8 @@ def _approval_activity(
                 last_denied_record = record
             if bool(record.get("approval_restored", False)):
                 last_restored_record = record
+                if status != "pending":
+                    last_restored_outcome_record = record
 
     for approval in pending_approvals:
         command = str(approval.args.get("command", "") or "").strip() if isinstance(approval.args, dict) else ""
@@ -1424,6 +1427,11 @@ def _approval_activity(
                 restored_denied_family_counts[family] = restored_denied_family_counts.get(family, 0) + 1
             if last_restored_record is None or int(record.get("order", 0)) >= int(last_restored_record.get("order", 0)):
                 last_restored_record = record
+            if status != "pending" and (
+                last_restored_outcome_record is None
+                or int(record.get("order", 0)) >= int(last_restored_outcome_record.get("order", 0))
+            ):
+                last_restored_outcome_record = record
         if status == "denied" and (
             last_denied_record is None or int(record.get("order", 0)) >= int(last_denied_record.get("order", 0))
         ):
@@ -1443,6 +1451,8 @@ def _approval_activity(
     last_denied_approval_age_sort_key = _approval_record_age_seconds(last_denied_record)
     last_restored_approval_age_summary = _approval_record_age_summary(last_restored_record)
     last_restored_approval_age_sort_key = _approval_record_age_seconds(last_restored_record)
+    last_restored_outcome_age_summary = _approval_record_age_summary(last_restored_outcome_record)
+    last_restored_outcome_age_sort_key = _approval_record_age_seconds(last_restored_outcome_record)
     stale_approval_badges = _stale_approval_badges(
         pending_approval_age_seconds=fresh_pending_approval_age_seconds,
         pending_approval_age_summary=fresh_pending_approval_age_summary,
@@ -1450,8 +1460,8 @@ def _approval_activity(
         last_denied_approval_age_summary=last_denied_approval_age_summary,
         restored_pending_approval_age_seconds=restored_pending_approval_age_seconds,
         restored_pending_approval_age_summary=restored_pending_approval_age_summary,
-        last_restored_approval_age_seconds=last_restored_approval_age_sort_key,
-        last_restored_approval_age_summary=last_restored_approval_age_summary,
+        last_restored_approval_age_seconds=last_restored_outcome_age_sort_key,
+        last_restored_approval_age_summary=last_restored_outcome_age_summary,
         stale_approval_warning_seconds=stale_approval_warning_seconds,
     )
     pending_approval_attention_sort_key = _tool_family_attention_sort_key(fresh_pending_family_counts)
@@ -1969,6 +1979,26 @@ def _stale_approval_badge_age_label(badge: str) -> str:
     return badge.removeprefix(f"{lane} ").strip()
 
 
+def _stale_approval_badge_age_seconds(badge: str) -> int:
+    age_label = _stale_approval_badge_age_label(badge)
+    if not age_label:
+        return 0
+    unit = age_label[-1]
+    value = age_label[:-1]
+    if not value.isdigit():
+        return 0
+    amount = int(value)
+    if unit == "d":
+        return amount * 24 * 60 * 60
+    if unit == "h":
+        return amount * 60 * 60
+    if unit == "m":
+        return amount * 60
+    if unit == "s":
+        return amount
+    return 0
+
+
 def _stale_approval_focus_badges(summary: SessionSummary, focus_lane: str) -> list[str]:
     return [
         badge
@@ -1987,10 +2017,12 @@ def _render_stale_approval_row_suffix(
     if not default_suffix or filter_mode == "approval-stale":
         return default_suffix
 
-    age_label = _focused_stale_approval_age_label(summary, filter_mode, stale_focus_lanes=stale_focus_lanes)
-    if not age_label:
+    focus_badges = _focused_stale_approval_badges(summary, filter_mode, stale_focus_lanes=stale_focus_lanes)
+    if not focus_badges:
         return default_suffix
-    return f" | approval stale age: {age_label}"
+    if len(focus_badges) == 1:
+        return f" | approval stale age: {_stale_approval_badge_age_label(focus_badges[0])}"
+    return f" | approval stale ages: {'; '.join(focus_badges)}"
 
 
 def _render_stale_approval_preview_lines(summary: SessionSummary, filter_mode: str) -> list[str]:
@@ -2002,10 +2034,12 @@ def _render_stale_approval_preview_lines(summary: SessionSummary, filter_mode: s
 
     focus_lanes = _stale_approval_focus_lanes(summary, filter_mode)
     focus_lines = [f"- stale focus: {', '.join(focus_lanes)}"] if focus_lanes else []
-    age_label = _focused_stale_approval_age_label(summary, filter_mode, stale_focus_lanes=focus_lanes)
-    if not age_label:
+    focus_badges = _focused_stale_approval_badges(summary, filter_mode, stale_focus_lanes=focus_lanes)
+    if not focus_badges:
         return [*focus_lines, default_line]
-    return [*focus_lines, f"- approval stale age: {age_label}"]
+    if len(focus_badges) == 1:
+        return [*focus_lines, f"- approval stale age: {_stale_approval_badge_age_label(focus_badges[0])}"]
+    return [*focus_lines, f"- approval stale ages: {'; '.join(focus_badges)}"]
 
 
 def _default_stale_approval_row_suffix(summary: SessionSummary) -> str:
@@ -2020,23 +2054,22 @@ def _default_stale_approval_preview_line(summary: SessionSummary) -> str:
     return f"- approval stale: {', '.join(summary.stale_approval_badges)}"
 
 
-def _focused_stale_approval_age_label(
+def _focused_stale_approval_badges(
     summary: SessionSummary,
     filter_mode: str,
     *,
     stale_focus_lanes: list[str] | None = None,
-) -> str:
+) -> list[str]:
     if not summary.stale_approval_badges:
-        return ""
+        return []
     focus_lanes = stale_focus_lanes if stale_focus_lanes is not None else _stale_approval_focus_lanes(summary, filter_mode)
-    if len(focus_lanes) != 1:
-        return ""
+    if not focus_lanes:
+        return []
 
-    focus_badges = _stale_approval_focus_badges(summary, focus_lanes[0])
-    if len(focus_badges) != 1:
-        return ""
-
-    return _stale_approval_badge_age_label(focus_badges[0])
+    focus_badges: list[str] = []
+    for lane in focus_lanes:
+        focus_badges.extend(_stale_approval_focus_badges(summary, lane))
+    return focus_badges
 
 
 def _stale_approval_focus_lanes(summary: SessionSummary, filter_mode: str) -> list[str]:
@@ -2049,18 +2082,11 @@ def _stale_approval_focus_lanes(summary: SessionSummary, filter_mode: str) -> li
 
 def _stale_approval_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
     lane_ages: dict[str, int] = {}
-    for lane in _stale_approval_lanes(summary):
-        age_seconds = 0
-        if lane == "pending":
-            age_seconds = summary.pending_approval_age_sort_key
-        elif lane == "denied":
-            age_seconds = summary.last_denied_approval_age_sort_key
-        elif lane == "restore queue":
-            age_seconds = summary.restored_pending_approval_age_sort_key
-        elif lane == "restored":
-            age_seconds = summary.last_restored_approval_age_sort_key
-        if age_seconds > 0:
-            lane_ages[lane] = age_seconds
+    for badge in summary.stale_approval_badges:
+        lane = _stale_approval_badge_lane(badge)
+        if not lane:
+            continue
+        lane_ages[lane] = max(lane_ages.get(lane, 0), _stale_approval_badge_age_seconds(badge))
     return lane_ages
 
 
@@ -2284,7 +2310,7 @@ def _stale_approval_badges(
         and restored_pending_approval_age_summary
     ):
         badges.append(f"restore queue {restored_pending_approval_age_summary}")
-    elif (
+    if (
         last_restored_approval_age_seconds >= stale_approval_warning_seconds and last_restored_approval_age_summary
     ):
         badges.append(f"restored {last_restored_approval_age_summary}")

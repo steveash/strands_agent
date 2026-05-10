@@ -741,6 +741,33 @@ def main() -> None:
                     )
                 ]
             )
+            restored_event = runtime_event(
+                "steering_approved",
+                "run_shell_command",
+                "Approved in the TUI",
+                data={
+                    "tool_name": "run_shell_command",
+                    "approval_id": "approval-stale-restored-page-2-approved",
+                    "approval_status": "approved",
+                    "approval_source": "fake_runtime",
+                    "approval_restored": True,
+                    "remaining_pending_count": 0,
+                    "resumed_from_approval": True,
+                    "command": "pytest -q",
+                },
+            )
+            restored_event.timestamp = (rollup_now - timedelta(days=10)).isoformat()
+            restored_store.append_turn(
+                TurnArtifact(
+                    prompt="approve stale restored page-two test rerun",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[restored_event],
+                    response_metadata={"mode": "fake"},
+                    created_at=restored_activity_time.isoformat(),
+                )
+            )
             set_session_artifact_mtime(restored_store, restored_activity_time)
 
             stale_rollup_picker = render_session_picker(stale_rollup_root, filter_mode="approval-stale")
@@ -754,9 +781,9 @@ def main() -> None:
             )
             print(
                 "picker_approval_stale_page_rollup=",
-                "This page stale lanes: pending 8 (oldest 52d) | more off-page: denied 1 (oldest 14d), restore queue 1 (oldest 11d)"
+                "This page stale lanes: pending 8 (oldest 52d) | more off-page: denied 1 (oldest 14d), restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
                 in stale_rollup_picker
-                and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: pending 8 (oldest 52d)"
+                and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d), restored 1 (oldest 10d) | more off-page: pending 8 (oldest 52d)"
                 in stale_rollup_page_two_picker,
             )
             print(
@@ -790,21 +817,15 @@ def main() -> None:
             print(
                 "picker_approval_stale_restored_filter=",
                 "Filter: approval-stale-restored | Sort: recent" in stale_restored_picker
-                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d)" in stale_restored_picker
+                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)" in stale_restored_picker
                 and "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
                 in stale_restored_picker
-                and "| approval stale age: 11d | stale focus: restore queue" in stale_restored_picker
-                and "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_picker
-                and (
-                    "- stale focus: restore queue" in stale_restored_picker
-                    or "- stale focus: restored" in stale_restored_picker
-                )
-                and (
-                    "- approval stale age: 11d" in stale_restored_picker
-                    or "- approval stale age: 10d" in stale_restored_picker
-                )
-                and "- approval stale: restore queue 11d" not in stale_restored_picker
-                and "- approval stale: restored 10d" not in stale_restored_picker
+                and "| approval stale ages: restore queue 11d; restored 10d | stale focus: restore queue, restored"
+                in stale_restored_picker
+                and "| approval stale: restore queue 11d, restored 10d | stale focus: restore queue, restored" not in stale_restored_picker
+                and "- stale focus: restore queue, restored" in stale_restored_picker
+                and "- approval stale ages: restore queue 11d; restored 10d" in stale_restored_picker
+                and "- approval stale: restore queue 11d, restored 10d" not in stale_restored_picker
                 and "stale focus: restore queue" in stale_restored_picker
                 and "session-stale-restored-page-2" in stale_restored_picker
                 and "session-stale-denied-page-2" not in stale_restored_picker,

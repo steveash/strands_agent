@@ -458,6 +458,32 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
             )
         ]
     )
+    stale_restored_event = runtime_event(
+        "steering_approved",
+        "run_shell_command",
+        "Approved in the TUI",
+        data={
+            "tool_name": "run_shell_command",
+            "approval_id": "approval-stale-restored",
+            "approval_status": "approved",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+            "resumed_from_approval": True,
+            "command": "pytest -q",
+        },
+    )
+    stale_restored_event.timestamp = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+    stale_restored_store.append_turn(
+        TurnArtifact(
+            prompt="approve restored stale test rerun",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[stale_restored_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
 
     fresh_pending_store = SessionArtifactStore(tmp_path, session_id="session-fresh-pending")
     _append_turn(fresh_pending_store, "resume fresh queue")
@@ -482,9 +508,10 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     assert set(stale_by_id) == {"session-stale-pending", "session-stale-denied", "session-stale-restored"}
     assert stale_by_id["session-stale-pending"].stale_approval_badges == ["pending 45d"]
     assert stale_by_id["session-stale-denied"].stale_approval_badges == ["denied 9d"]
-    assert stale_by_id["session-stale-restored"].stale_approval_badges == ["restore queue 8d"]
+    assert stale_by_id["session-stale-restored"].stale_approval_badges == ["restore queue 8d", "restored 10d"]
     assert "approval stale: pending 45d" in stale_by_id["session-stale-pending"].render_line(1)
     assert "stale focus: pending" in stale_by_id["session-stale-pending"].render_line(1, filter_mode="approval-stale")
+    assert "approval stale: restore queue 8d, restored 10d" in stale_by_id["session-stale-restored"].render_line(1)
     stale_denied_preview = "\n".join(
         stale_by_id["session-stale-denied"].render_preview(
             visible_index=1,
@@ -498,9 +525,18 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
         "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
         in stale_denied_preview
     )
+    stale_restored_preview = "\n".join(
+        stale_by_id["session-stale-restored"].render_preview(
+            visible_index=1,
+            overall_index=1,
+            total_matches=3,
+            filter_mode="approval-stale",
+        )
+    )
+    assert "- approval stale: restore queue 8d, restored 10d" in stale_restored_preview
     assert (
         "Stale approval backlog: 3 sessions | lanes: pending 1 (oldest 45d), denied 1 (oldest 9d), "
-        "restore queue 1 (oldest 8d)"
+        "restore queue 1 (oldest 8d), restored 1 (oldest 10d)"
     ) in rendered
     assert (
         "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
@@ -679,6 +715,21 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     )
 
     stale_restored_store = SessionArtifactStore(tmp_path, session_id="session-stale-restored")
+    _append_turn(stale_restored_store, "resume mixed stale restored queue")
+    stale_restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-stale-restored-pending",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+            )
+        ]
+    )
     stale_restored_event = runtime_event(
         "steering_approved",
         "run_shell_command",
@@ -694,7 +745,7 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
             "command": "pytest -q",
         },
     )
-    stale_restored_event.timestamp = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+    stale_restored_event.timestamp = (datetime.now(UTC) - timedelta(days=9)).isoformat()
     stale_restored_store.append_turn(
         TurnArtifact(
             prompt="approve restored old test rerun",
@@ -709,6 +760,7 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     stale_pending_summaries = list_recent_sessions(tmp_path, filter_mode="approval-stale-pending")
     stale_denied_summaries = list_recent_sessions(tmp_path, filter_mode="approval-stale-denied")
     stale_restored_summaries = list_recent_sessions(tmp_path, filter_mode="approval-stale-restored")
+    stale_restored_by_id = {summary.session_id: summary for summary in stale_restored_summaries}
     stale_pending_rendered = render_session_picker(tmp_path, filter_mode="approval-stale-pending")
     stale_denied_rendered = render_session_picker(tmp_path, filter_mode="approval-stale-denied")
     stale_restored_rendered = render_session_picker(tmp_path, filter_mode="approval-stale-restored")
@@ -719,6 +771,22 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
         "session-stale-restored-queue",
         "session-stale-restored",
     }
+    mixed_stale_restored_preview = "\n".join(
+        stale_restored_by_id["session-stale-restored"].render_preview(
+            visible_index=1,
+            overall_index=1,
+            total_matches=2,
+            filter_mode="approval-stale-restored",
+        )
+    )
+    queue_stale_restored_preview = "\n".join(
+        stale_restored_by_id["session-stale-restored-queue"].render_preview(
+            visible_index=2,
+            overall_index=2,
+            total_matches=2,
+            filter_mode="approval-stale-restored",
+        )
+    )
     assert "session-stale-denied" not in stale_pending_rendered
     assert "session-stale-restored-queue" not in stale_pending_rendered
     assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d)" in stale_pending_rendered
@@ -740,25 +808,26 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     assert "- approval stale: denied 9d" not in stale_denied_rendered
     assert "stale focus: denied" in stale_denied_rendered
     assert (
-        "Stale restored backlog: 2 sessions | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
+        "Stale restored backlog: 2 sessions | lanes: restore queue 2 (oldest 11d), restored 1 (oldest 9d)"
     ) in stale_restored_rendered
     assert (
         "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
         in stale_restored_rendered
     )
     assert "| approval stale age: 11d | stale focus: restore queue" in stale_restored_rendered
-    assert "| approval stale age: 10d | stale focus: restored" in stale_restored_rendered
-    assert "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_rendered
-    assert "| approval stale: restored 10d | stale focus: restored" not in stale_restored_rendered
     assert (
-        "- stale focus: restore queue" in stale_restored_rendered
-        or "- stale focus: restored" in stale_restored_rendered
+        "| approval stale ages: restore queue 10d; restored 9d | stale focus: restore queue, restored"
+        in stale_restored_rendered
     )
-    assert "- approval stale age: 11d" in stale_restored_rendered or "- approval stale age: 10d" in stale_restored_rendered
-    assert "- approval stale: restore queue 11d" not in stale_restored_rendered
-    assert "- approval stale: restored 10d" not in stale_restored_rendered
+    assert "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_rendered
+    assert "| approval stale: restore queue 10d, restored 9d | stale focus: restore queue, restored" not in stale_restored_rendered
     assert "stale focus: restore queue" in stale_restored_rendered
-    assert "stale focus: restored" in stale_restored_rendered
+    assert "- stale focus: restore queue" in queue_stale_restored_preview
+    assert "- approval stale age: 11d" in queue_stale_restored_preview
+    assert "- approval stale: restore queue 11d" not in queue_stale_restored_preview
+    assert "- stale focus: restore queue, restored" in mixed_stale_restored_preview
+    assert "- approval stale ages: restore queue 10d; restored 9d" in mixed_stale_restored_preview
+    assert "- approval stale: restore queue 10d, restored 9d" not in mixed_stale_restored_preview
 
 
 def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path) -> None:

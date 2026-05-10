@@ -1646,6 +1646,30 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
     )
 
     stale_restored_store = SessionArtifactStore(tmp_path, session_id="session-stale-restored")
+    stale_restored_store.append_turn(
+        TurnArtifact(
+            prompt="resume mixed stale restored queue",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    stale_restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-stale-restored-pending",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+            )
+        ]
+    )
     stale_restored_event = runtime_event(
         "steering_approved",
         "run_shell_command",
@@ -1661,7 +1685,7 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
             "command": "pytest -q",
         },
     )
-    stale_restored_event.timestamp = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+    stale_restored_event.timestamp = (datetime.now(UTC) - timedelta(days=9)).isoformat()
     stale_restored_store.append_turn(
         TurnArtifact(
             prompt="approve restored old test rerun",
@@ -1732,24 +1756,32 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         stale_restored_output = str(app.query_one("#output").render())
         assert "Filter: approval-stale-restored | Sort: recent" in stale_restored_output
         assert (
-            "Stale restored backlog: 2 sessions | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
+            "Stale restored backlog: 2 sessions | lanes: restore queue 2 (oldest 11d), restored 1 (oldest 9d)"
             in stale_restored_output
         )
         assert "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old" in stale_restored_output
         assert "| approval stale age: 11d | stale focus: restore queue" in stale_restored_output
-        assert "| approval stale age: 10d | stale focus: restored" in stale_restored_output
+        assert (
+            "| approval stale ages: restore queue 10d; restored 9d | stale focus: restore queue, restored"
+            in stale_restored_output
+        )
         assert "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_output
-        assert "| approval stale: restored 10d | stale focus: restored" not in stale_restored_output
-        assert "- stale focus: restore queue" in stale_restored_output or "- stale focus: restored" in stale_restored_output
-        assert "- approval stale age: 11d" in stale_restored_output or "- approval stale age: 10d" in stale_restored_output
+        assert "| approval stale: restore queue 10d, restored 9d | stale focus: restore queue, restored" not in stale_restored_output
+        assert "- stale focus: restore queue" in stale_restored_output
+        assert "- approval stale age: 11d" in stale_restored_output
         assert "- approval stale: restore queue 11d" not in stale_restored_output
-        assert "- approval stale: restored 10d" not in stale_restored_output
         assert "stale focus: restore queue" in stale_restored_output
-        assert "stale focus: restored" in stale_restored_output
         assert "session-stale-restored-queue" in stale_restored_output
         assert "session-stale-restored" in stale_restored_output
         assert "session-stale-pending | 1 turn(s)" not in stale_restored_output
         assert "session-stale-denied | 1 turn(s)" not in stale_restored_output
+
+        await pilot.press("down")
+        await pilot.pause()
+        mixed_stale_restored_output = str(app.query_one("#output").render())
+        assert "- stale focus: restore queue, restored" in mixed_stale_restored_output
+        assert "- approval stale ages: restore queue 10d; restored 9d" in mixed_stale_restored_output
+        assert "- approval stale: restore queue 10d, restored 9d" not in mixed_stale_restored_output
 
 
 @pytest.mark.asyncio
