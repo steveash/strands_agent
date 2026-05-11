@@ -317,10 +317,14 @@ def test_restored_pending_approval_sessions_surface_restore_queue_age_cues(tmp_p
     assert len(summaries) == 1
     assert summaries[0].restored_pending_approval_age_summary == "3d"
     assert summaries[0].restored_pending_approval_age_sort_key >= 3 * 24 * 60 * 60
-    assert "approval restore age: 3d" in summaries[0].render_line(1)
-    assert "- approval restore age: 3d" in "\n".join(
-        summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1)
+    restored_line = summaries[0].render_line(1, filter_mode="approval-restore")
+    assert "approval restore age: 3d" in restored_line
+    assert "restore focus: restore queue" in restored_line
+    preview = "\n".join(
+        summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
     )
+    assert "- restore focus: restore queue" in preview
+    assert "- approval restore age: 3d" in preview
 
 
 def test_restored_denied_approval_sessions_surface_last_restored_age_cues(tmp_path: Path) -> None:
@@ -356,10 +360,15 @@ def test_restored_denied_approval_sessions_surface_last_restored_age_cues(tmp_pa
     assert summaries[0].restored_pending_approval_age_summary == ""
     assert summaries[0].last_restored_approval_age_summary == "6h"
     assert summaries[0].last_restored_approval_age_sort_key >= 6 * 60 * 60
-    assert "approval restore age: 6h" in summaries[0].render_line(1)
-    assert "- last restored age: 6h" in "\n".join(
-        summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1)
+    restored_line = summaries[0].render_line(1, filter_mode="approval-restore")
+    assert "approval restore age: 6h" in restored_line
+    assert "restore focus: restored" in restored_line
+    preview = "\n".join(
+        summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
     )
+    assert "- restore focus: restored" in preview
+    assert "- approval restore age: 6h" in preview
+    assert "- last restored age: 6h" not in preview
 
 
 def test_denied_approval_sessions_surface_last_denied_age_cues(tmp_path: Path) -> None:
@@ -1158,7 +1167,9 @@ def test_list_recent_sessions_surfaces_pending_approval_age_and_stale_session_cu
     _set_session_artifact_mtime(store, stale_turn_time)
 
     summary = list_recent_sessions(tmp_path)[0]
-    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+    preview = "\n".join(
+        summary.render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
+    )
 
     assert summary.pending_approval_age_summary == "45d"
     assert summary.stale_session_badges == ["warning 10d"]
@@ -1202,7 +1213,9 @@ def test_list_recent_sessions_surfaces_pending_queue_first_vs_rest_breakdown(tmp
     )
 
     summary = list_recent_sessions(tmp_path)[0]
-    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+    preview = "\n".join(
+        summary.render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
+    )
 
     assert summary.pending_approval_count == 3
     assert summary.pending_approval_queue_summary == "first test; rest edit 1, tool 1"
@@ -1301,7 +1314,9 @@ def test_list_recent_sessions_surfaces_approval_rollup_and_last_summary(tmp_path
     )
 
     summary = list_recent_sessions(tmp_path)[0]
-    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+    preview = "\n".join(
+        summary.render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
+    )
 
     assert summary.approval_status_badges == ["pending 1", "approved 1"]
     assert summary.last_approval_summary == "pending run_shell_command via fake_runtime | queued 1"
@@ -1607,7 +1622,9 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     )
 
     summary = list_recent_sessions(tmp_path)[0]
-    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+    preview = "\n".join(
+        summary.render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
+    )
     rendered = render_session_picker(tmp_path, filter_mode="approval-restore")
 
     assert summary.restored_approval_count == 2
@@ -1623,14 +1640,19 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     )
     restored_line = summary.render_line(1, filter_mode="approval-restore")
     assert "approval restore tools: test 1, edit 1" in restored_line
+    assert "approval restore ages: restore queue 3d; restored 6h" in restored_line
+    assert "restore focus: restore queue, restored" in restored_line
     assert "restored current: pending run_shell_command via fake_runtime; queued 1" in restored_line
     assert "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0" in restored_line
+    assert "restored outcome age: 6h" not in restored_line
     assert "- attention reason: restored pending test approval queue; tests sort ahead of restored edits" in preview
     assert "- approval restore: pending 1, denied 1" in preview
     assert "- approval restore tools: test 1, edit 1" in preview
+    assert "- restore focus: restore queue, restored" in preview
+    assert "- approval restore ages: restore queue 3d; restored 6h" in preview
     assert "- restored current approval: pending run_shell_command via fake_runtime | queued 1" in preview
     assert "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0" in preview
-    assert "- latest restored outcome age: 6h" in preview
+    assert "- latest restored outcome age: 6h" not in preview
     assert (
         "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session"
         in rendered

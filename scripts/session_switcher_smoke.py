@@ -376,7 +376,9 @@ async def run_smoke() -> None:
             print(
                 "switcher_restored_approval_age=",
                 "approval restore age: 3d" in approval_restore_text
-                and "approval restore age: 6h" in approval_restore_text,
+                and "approval restore age: 6h" in approval_restore_text
+                and "restore focus: restore queue" in approval_restore_text
+                and "restore focus: restored" in approval_restore_text,
             )
             print(
                 "switcher_last_restored_approval_preview=",
@@ -1153,7 +1155,9 @@ async def run_smoke() -> None:
                 )
                 print(
                     "switcher_approval_restore_overlap_preview_split=",
-                    "restored current: pending run_shell_command via fake_runtime; queued 1"
+                    "approval restore ages: restore queue 3d; restored 6h" in mixed_overlap_output
+                    and "restore focus: restore queue, restored" in mixed_overlap_output
+                    and "restored current: pending run_shell_command via fake_runtime; queued 1"
                     in mixed_overlap_output
                     and "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0"
                     in mixed_overlap_output
@@ -1161,7 +1165,7 @@ async def run_smoke() -> None:
                     in mixed_overlap_output
                     and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
                     in mixed_overlap_output
-                    and "- latest restored outcome age: 6h" in mixed_overlap_output,
+                    and "- latest restored outcome age: 6h" not in mixed_overlap_output,
                 )
 
         with TemporaryDirectory() as approval_restore_rollup_root:

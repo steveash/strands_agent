@@ -183,16 +183,13 @@ class SessionSummary:
             if self.restored_pending_approval_queue_summary
             else ""
         )
-        approval_restore_age_suffix = ""
-        if self.restored_pending_approval_age_summary:
-            approval_restore_age_suffix = (
-                f" | approval restore age: {self.restored_pending_approval_age_summary}"
-            )
-        elif self.last_restored_approval_age_summary:
-            approval_restore_age_suffix = f" | approval restore age: {self.last_restored_approval_age_summary}"
+        approval_restore_age_suffix, restore_focus_suffix, suppress_restored_outcome_age_suffix = (
+            _render_approval_restore_row_age_suffixes(self, filter_mode)
+        )
         restored_current_suffix, restored_outcome_suffix, restored_outcome_age_suffix = _render_restored_row_suffixes(
             self,
             filter_mode,
+            suppress_outcome_age=suppress_restored_outcome_age_suffix,
         )
         stale_focus_lanes = _stale_approval_focus_lanes(self, filter_mode)
         stale_approval_suffix = _render_stale_approval_row_suffix(
@@ -237,7 +234,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{restored_current_suffix}{restored_outcome_suffix}{restored_outcome_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{workspace_lane_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{restore_focus_suffix}{restored_current_suffix}{restored_outcome_suffix}{restored_outcome_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{workspace_lane_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(
@@ -294,10 +291,11 @@ class SessionSummary:
             lines.append(f"- approval restore tools: {', '.join(self.restored_approval_tool_badges)}")
         if self.restored_pending_approval_queue_summary:
             lines.append(f"- approval restore queue: {self.restored_pending_approval_queue_summary}")
-        if self.restored_pending_approval_age_summary:
-            lines.append(f"- approval restore age: {self.restored_pending_approval_age_summary}")
-        elif self.last_restored_approval_age_summary:
-            lines.append(f"- approval restore age: {self.last_restored_approval_age_summary}")
+        approval_restore_preview_lines, suppress_restored_preview_age = _render_approval_restore_preview_lines(
+            self,
+            filter_mode,
+        )
+        lines.extend(approval_restore_preview_lines)
         if self.last_restored_outcome_summary and self.last_restored_outcome_summary != self.last_restored_approval_summary:
             lines.append(f"- restored current approval: {self.last_restored_approval_summary}")
         elif self.last_restored_approval_summary:
@@ -306,12 +304,12 @@ class SessionSummary:
             lines.append(f"- latest restored outcome: {self.last_restored_outcome_summary}")
         restored_outcome_age_summary = _restored_outcome_preview_age_summary(self)
         restored_outcome_age_label = _restored_outcome_preview_age_label(self)
-        if restored_outcome_age_summary and (
+        if not suppress_restored_preview_age and restored_outcome_age_summary and (
             not self.restored_pending_approval_age_summary
             or restored_outcome_age_summary != self.restored_pending_approval_age_summary
         ):
             lines.append(f"- {restored_outcome_age_label}: {restored_outcome_age_summary}")
-        elif self.last_restored_approval_age_summary and (
+        elif not suppress_restored_preview_age and self.last_restored_approval_age_summary and (
             not self.restored_pending_approval_age_summary
             or self.last_restored_approval_age_summary != self.restored_pending_approval_age_summary
         ):
@@ -2274,7 +2272,97 @@ def _inline_approval_summary(summary: str) -> str:
     return summary.replace(" | ", "; ")
 
 
-def _render_restored_row_suffixes(summary: SessionSummary, filter_mode: str) -> tuple[str, str, str]:
+def _approval_restore_focus_lanes(summary: SessionSummary, filter_mode: str) -> list[str]:
+    if filter_mode != "approval-restore":
+        return []
+    lanes = _approval_restore_lanes(summary)
+    return [lane for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER if lane in lanes]
+
+
+def _approval_restore_age_label(badge: str) -> str:
+    for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER:
+        prefix = f"{lane} "
+        if badge.startswith(prefix):
+            return badge.removeprefix(prefix).strip()
+    return badge
+
+
+def _approval_restore_restored_age_summary(summary: SessionSummary) -> str:
+    return _restored_outcome_preview_age_summary(summary) or summary.last_restored_approval_age_summary
+
+
+def _approval_restore_age_badges(
+    summary: SessionSummary,
+    filter_mode: str,
+    *,
+    focus_lanes: list[str] | None = None,
+) -> list[str]:
+    if filter_mode != "approval-restore":
+        return []
+
+    lanes = focus_lanes if focus_lanes is not None else _approval_restore_focus_lanes(summary, filter_mode)
+    badges: list[str] = []
+    if "restore queue" in lanes and summary.restored_pending_approval_age_summary:
+        badges.append(f"restore queue {summary.restored_pending_approval_age_summary}")
+    if "restored" in lanes:
+        restored_age_summary = _approval_restore_restored_age_summary(summary)
+        if restored_age_summary:
+            badges.append(f"restored {restored_age_summary}")
+    return badges
+
+
+def _render_approval_restore_row_age_suffixes(
+    summary: SessionSummary,
+    filter_mode: str,
+) -> tuple[str, str, bool]:
+    default_age_suffix = ""
+    if summary.restored_pending_approval_age_summary:
+        default_age_suffix = f" | approval restore age: {summary.restored_pending_approval_age_summary}"
+    elif summary.last_restored_approval_age_summary:
+        default_age_suffix = f" | approval restore age: {summary.last_restored_approval_age_summary}"
+
+    focus_lanes = _approval_restore_focus_lanes(summary, filter_mode)
+    focus_suffix = f" | restore focus: {', '.join(focus_lanes)}" if focus_lanes else ""
+    age_badges = _approval_restore_age_badges(summary, filter_mode, focus_lanes=focus_lanes)
+    if not age_badges:
+        return default_age_suffix, focus_suffix, False
+
+    if len(age_badges) == 1:
+        age_suffix = f" | approval restore age: {_approval_restore_age_label(age_badges[0])}"
+    else:
+        age_suffix = f" | approval restore ages: {'; '.join(age_badges)}"
+    return age_suffix, focus_suffix, "restored" in focus_lanes
+
+
+def _render_approval_restore_preview_lines(
+    summary: SessionSummary,
+    filter_mode: str,
+) -> tuple[list[str], bool]:
+    default_lines: list[str] = []
+    if summary.restored_pending_approval_age_summary:
+        default_lines.append(f"- approval restore age: {summary.restored_pending_approval_age_summary}")
+    elif summary.last_restored_approval_age_summary:
+        default_lines.append(f"- approval restore age: {summary.last_restored_approval_age_summary}")
+
+    focus_lanes = _approval_restore_focus_lanes(summary, filter_mode)
+    focus_lines = [f"- restore focus: {', '.join(focus_lanes)}"] if focus_lanes else []
+    age_badges = _approval_restore_age_badges(summary, filter_mode, focus_lanes=focus_lanes)
+    if not age_badges:
+        return [*focus_lines, *default_lines], False
+
+    if len(age_badges) == 1:
+        age_lines = [f"- approval restore age: {_approval_restore_age_label(age_badges[0])}"]
+    else:
+        age_lines = [f"- approval restore ages: {'; '.join(age_badges)}"]
+    return [*focus_lines, *age_lines], "restored" in focus_lanes
+
+
+def _render_restored_row_suffixes(
+    summary: SessionSummary,
+    filter_mode: str,
+    *,
+    suppress_outcome_age: bool = False,
+) -> tuple[str, str, str]:
     if filter_mode not in {"approval-restore", "approval-stale-restored"}:
         return "", "", ""
 
@@ -2293,7 +2381,7 @@ def _render_restored_row_suffixes(summary: SessionSummary, filter_mode: str) -> 
     outcome_age_suffix = ""
     if has_separate_outcome:
         outcome_suffix = f" | restored outcome: {_inline_approval_summary(summary.last_restored_outcome_summary)}"
-        if summary.last_restored_outcome_age_summary and (
+        if not suppress_outcome_age and summary.last_restored_outcome_age_summary and (
             not summary.restored_pending_approval_age_summary
             or summary.last_restored_outcome_age_summary != summary.restored_pending_approval_age_summary
         ):

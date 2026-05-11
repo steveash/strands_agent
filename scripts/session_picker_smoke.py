@@ -703,7 +703,10 @@ def main() -> None:
         )
         print(
             "picker_restored_approval_age=",
-            "approval restore age: 3d" in approval_restore_picker and "approval restore age: 6h" in approval_restore_picker,
+            "approval restore age: 3d" in approval_restore_picker
+            and "approval restore age: 6h" in approval_restore_picker
+            and "restore focus: restore queue" in approval_restore_picker
+            and "restore focus: restored" in approval_restore_picker,
         )
         print(
             "picker_restored_approval_preview_split=",
@@ -833,14 +836,16 @@ def main() -> None:
         )
         print(
             "picker_approval_restore_overlap_preview_split=",
-            "restored current: pending run_shell_command via fake_runtime; queued 1" in mixed_restored_split_picker
+            "approval restore ages: restore queue 3d; restored 6h" in mixed_restored_split_picker
+            and "restore focus: restore queue, restored" in mixed_restored_split_picker
+            and "restored current: pending run_shell_command via fake_runtime; queued 1" in mixed_restored_split_picker
             and "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0"
             in mixed_restored_split_picker
             and "- restored current approval: pending run_shell_command via fake_runtime | queued 1"
             in mixed_restored_split_picker
             and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
             in mixed_restored_split_picker
-            and "- latest restored outcome age: 6h" in mixed_restored_split_picker,
+            and "- latest restored outcome age: 6h" not in mixed_restored_split_picker,
         )
         print(
             "picker_approval_restore_page_rollup=",
