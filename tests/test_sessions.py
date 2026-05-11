@@ -1638,6 +1638,131 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     assert "Restore lane focus: restore queue, restored" in rendered
 
 
+def test_render_session_picker_reports_approval_restore_page_rollups_when_backlog_spans_pages(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+
+    for index in range(MAX_RECENT_SESSIONS):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-restored-queue-{index}")
+        activity_time = now - timedelta(hours=index + 1)
+        store.append_turn(
+            TurnArtifact(
+                prompt=f"resume restored queue {index}",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+                created_at=activity_time.isoformat(),
+            )
+        )
+        store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id=f"approval-restored-queue-{index}",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt=f"rerun restored queue {index}",
+                    restored_from_session=True,
+                    created_at=(now - timedelta(days=11 + index)).isoformat(),
+                )
+            ]
+        )
+        _set_session_artifact_mtime(store, activity_time)
+
+    restored_only_store = SessionArtifactStore(tmp_path, session_id="session-restored-outcome-page-2")
+    restored_only_activity_time = now - timedelta(hours=10)
+    restored_only_event = runtime_event(
+        "steering_approved",
+        "replace_text",
+        "Approved in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-restored-outcome-page-2",
+            "approval_status": "approved",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+            "resumed_from_approval": True,
+        },
+    )
+    restored_only_event.timestamp = (now - timedelta(hours=8)).isoformat()
+    restored_only_store.append_turn(
+        TurnArtifact(
+            prompt="review restored outcome only",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[restored_only_event],
+            response_metadata={"mode": "fake"},
+            created_at=restored_only_activity_time.isoformat(),
+        )
+    )
+    _set_session_artifact_mtime(restored_only_store, restored_only_activity_time)
+
+    mixed_store = SessionArtifactStore(tmp_path, session_id="session-restored-overlap-page-2")
+    mixed_activity_time = now - timedelta(hours=11)
+    mixed_event = runtime_event(
+        "steering_denied",
+        "write_file",
+        "Denied in the TUI",
+        data={
+            "tool_name": "write_file",
+            "approval_id": "approval-restored-overlap-page-2-outcome",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+        },
+    )
+    mixed_event.timestamp = (now - timedelta(hours=6)).isoformat()
+    mixed_store.append_turn(
+        TurnArtifact(
+            prompt="review mixed restored overlap",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[mixed_event],
+            response_metadata={"mode": "fake"},
+            created_at=mixed_activity_time.isoformat(),
+        )
+    )
+    mixed_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-restored-overlap-page-2-pending",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun mixed restored tests",
+                restored_from_session=True,
+                created_at=(now - timedelta(days=3)).isoformat(),
+            )
+        ]
+    )
+    _set_session_artifact_mtime(mixed_store, mixed_activity_time)
+
+    first_page = render_session_picker(tmp_path, filter_mode="approval-restore")
+    second_page = render_session_picker(tmp_path, filter_mode="approval-restore", page_index=1)
+
+    assert (
+        "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 (oldest 8h) | overlap: mixed 1 session"
+        in first_page
+    )
+    assert "Restore lane focus: restore queue, restored" in first_page
+    assert (
+        "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
+        in first_page
+    )
+    assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
+    assert (
+        "This page restore lanes: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | more off-page: restore queue 8 (oldest 18d) | overlap here/off-page: mixed 1 session / none"
+        in second_page
+    )
+
+
 def test_list_recent_sessions_surfaces_restored_pending_queue_breakdown(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-restored-pending-mixed")
     _append_turn(store, "reopen restored approval queue")

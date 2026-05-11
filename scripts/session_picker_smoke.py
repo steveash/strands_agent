@@ -469,6 +469,130 @@ def main() -> None:
                 filter_mode="approval-restore",
             )
 
+        with TemporaryDirectory() as approval_restore_rollup_root:
+            approval_restore_now = datetime.now(UTC)
+            for index in range(MAX_RECENT_SESSIONS):
+                queue_store = SessionArtifactStore(
+                    approval_restore_rollup_root,
+                    session_id=f"session-restored-queue-{index}",
+                )
+                queue_activity_time = approval_restore_now - timedelta(hours=index + 1)
+                queue_store.append_turn(
+                    TurnArtifact(
+                        prompt=f"resume restored queue {index}",
+                        response="ok",
+                        provider="fake-strands",
+                        mode="fake",
+                        events=[],
+                        response_metadata={"mode": "fake"},
+                        created_at=queue_activity_time.isoformat(),
+                    )
+                )
+                queue_store.save_pending_approvals(
+                    [
+                        ApprovalRequest(
+                            request_id=f"approval-restored-queue-{index}",
+                            tool_name="run_shell_command",
+                            reason="Needs confirmation",
+                            args={"command": "pytest -q"},
+                            source="fake_runtime",
+                            prompt=f"rerun restored queue {index}",
+                            restored_from_session=True,
+                            created_at=(approval_restore_now - timedelta(days=11 + index)).isoformat(),
+                        )
+                    ]
+                )
+                set_session_artifact_mtime(queue_store, queue_activity_time)
+
+            restored_only_store = SessionArtifactStore(
+                approval_restore_rollup_root,
+                session_id="session-restored-outcome-page-2",
+            )
+            restored_only_activity_time = approval_restore_now - timedelta(hours=10)
+            restored_only_event = runtime_event(
+                "steering_approved",
+                "replace_text",
+                "Approved in the TUI",
+                data={
+                    "tool_name": "replace_text",
+                    "approval_id": "approval-restored-outcome-page-2",
+                    "approval_status": "approved",
+                    "approval_source": "fake_runtime",
+                    "approval_restored": True,
+                    "remaining_pending_count": 0,
+                    "resumed_from_approval": True,
+                },
+            )
+            restored_only_event.timestamp = (approval_restore_now - timedelta(hours=8)).isoformat()
+            restored_only_store.append_turn(
+                TurnArtifact(
+                    prompt="review restored outcome only",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[restored_only_event],
+                    response_metadata={"mode": "fake"},
+                    created_at=restored_only_activity_time.isoformat(),
+                )
+            )
+            set_session_artifact_mtime(restored_only_store, restored_only_activity_time)
+
+            mixed_rollup_store = SessionArtifactStore(
+                approval_restore_rollup_root,
+                session_id="session-restored-overlap-page-2",
+            )
+            mixed_rollup_activity_time = approval_restore_now - timedelta(hours=11)
+            mixed_rollup_event = runtime_event(
+                "steering_denied",
+                "write_file",
+                "Denied in the TUI",
+                data={
+                    "tool_name": "write_file",
+                    "approval_id": "approval-restored-overlap-page-2-outcome",
+                    "approval_status": "denied",
+                    "approval_source": "fake_runtime",
+                    "approval_restored": True,
+                    "remaining_pending_count": 0,
+                },
+            )
+            mixed_rollup_event.timestamp = (approval_restore_now - timedelta(hours=6)).isoformat()
+            mixed_rollup_store.append_turn(
+                TurnArtifact(
+                    prompt="review mixed restored overlap",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[mixed_rollup_event],
+                    response_metadata={"mode": "fake"},
+                    created_at=mixed_rollup_activity_time.isoformat(),
+                )
+            )
+            mixed_rollup_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-restored-overlap-page-2-pending",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="rerun mixed restored tests",
+                        restored_from_session=True,
+                        created_at=(approval_restore_now - timedelta(days=3)).isoformat(),
+                    )
+                ]
+            )
+            set_session_artifact_mtime(mixed_rollup_store, mixed_rollup_activity_time)
+
+            approval_restore_rollup_picker = render_session_picker(
+                approval_restore_rollup_root,
+                filter_mode="approval-restore",
+            )
+            approval_restore_rollup_page_two_picker = render_session_picker(
+                approval_restore_rollup_root,
+                filter_mode="approval-restore",
+                page_index=1,
+            )
+
         for index in range(8):
             store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index}")
             append_turn(store, f"page prompt {index}")
@@ -717,6 +841,15 @@ def main() -> None:
             and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
             in mixed_restored_split_picker
             and "- latest restored outcome age: 6h" in mixed_restored_split_picker,
+        )
+        print(
+            "picker_approval_restore_page_rollup=",
+            "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 (oldest 8h) | overlap: mixed 1 session"
+            in approval_restore_rollup_picker
+            and "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
+            in approval_restore_rollup_picker
+            and "This page restore lanes: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | more off-page: restore queue 8 (oldest 18d) | overlap here/off-page: mixed 1 session / none"
+            in approval_restore_rollup_page_two_picker,
         )
         print(
             "picker_denied_test_attention=",

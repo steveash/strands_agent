@@ -883,7 +883,7 @@ class StrandsAgentApp(App):
             return
 
         all_summaries: list[SessionSummary] | None = None
-        if selected_session_id or self.session_switcher_filter_mode.startswith("approval-stale"):
+        if selected_session_id or self.session_switcher_filter_mode == "approval-restore" or self.session_switcher_filter_mode.startswith("approval-stale"):
             all_summaries = list_recent_sessions(
                 self.config.artifacts_root,
                 limit=self.session_switcher_total_matches,

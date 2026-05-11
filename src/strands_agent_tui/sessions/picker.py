@@ -1996,9 +1996,38 @@ def render_recent_session_filter_summary_lines(
         if lane_rollup:
             line += f" | lanes: {lane_rollup}"
         if mixed_count > 0:
-            mixed_label = "session" if mixed_count == 1 else "sessions"
-            line += f" | overlap: mixed {mixed_count} {mixed_label}"
-        return [line, "Restore lane focus: restore queue, restored"]
+            line += f" | overlap: {_format_mixed_overlap_count(mixed_count)}"
+
+        lines = [line, "Restore lane focus: restore queue, restored"]
+        if len(summaries) <= page_size:
+            return lines
+
+        page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
+        start = page_index * page_size
+        end = start + page_size
+        visible_summaries = summaries[start:end]
+        off_page_summaries = summaries[:start] + summaries[end:]
+
+        visible_lane_counts, visible_lane_oldest_ages, visible_mixed_count = _summarize_approval_restore_lanes(
+            visible_summaries
+        )
+        visible_rollup = _format_approval_restore_lane_rollup(visible_lane_counts, visible_lane_oldest_ages)
+        if not visible_rollup:
+            return lines
+
+        page_line = f"This page restore lanes: {visible_rollup}"
+        off_page_lane_counts, off_page_lane_oldest_ages, off_page_mixed_count = _summarize_approval_restore_lanes(
+            off_page_summaries
+        )
+        off_page_rollup = _format_approval_restore_lane_rollup(off_page_lane_counts, off_page_lane_oldest_ages)
+        if off_page_rollup:
+            page_line += f" | more off-page: {off_page_rollup}"
+        if visible_mixed_count > 0 or off_page_mixed_count > 0:
+            visible_overlap = _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else "none"
+            off_page_overlap = _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else "none"
+            page_line += f" | overlap here/off-page: {visible_overlap} / {off_page_overlap}"
+        lines.append(page_line)
+        return lines
 
     stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
     if stale_filter_lanes is None or not summaries:
@@ -2129,6 +2158,11 @@ def _format_approval_restore_lane_rollup(
             part += f" (oldest {_format_age_compact(oldest_age)})"
         lane_parts.append(part)
     return ", ".join(lane_parts)
+
+
+def _format_mixed_overlap_count(mixed_count: int) -> str:
+    mixed_label = "session" if mixed_count == 1 else "sessions"
+    return f"mixed {mixed_count} {mixed_label}"
 
 
 def _stale_approval_summary_label(filter_mode: str) -> str:
