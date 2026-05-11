@@ -1483,7 +1483,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "stale focus: pending" in approval_stale_output
         assert (
             "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
-            in approval_stale_output
+            not in approval_stale_output
         )
         assert "session-pending | 1 turn(s)" not in approval_stale_output
         assert "session-restored-pending | 1 turn(s)" not in approval_stale_output

@@ -254,7 +254,7 @@ class SessionSummary:
             ),
             f"- artifact dir: {self.session_dir}",
         ]
-        if _is_stale_approval_filter_mode(filter_mode):
+        if _should_render_stale_cutoff_preview_line(filter_mode):
             lines.append(
                 "- stale lane focus: "
                 f"{_stale_approval_filter_focus_label(filter_mode)} | "
@@ -2094,6 +2094,10 @@ def render_recent_session_empty_state_lines(
 
 def _is_stale_approval_filter_mode(filter_mode: str) -> bool:
     return filter_mode in STALE_APPROVAL_FILTER_LANES
+
+
+def _should_render_stale_cutoff_preview_line(filter_mode: str) -> bool:
+    return _is_stale_approval_filter_mode(filter_mode) and filter_mode != "approval-stale"
 
 
 def _stale_approval_filter_lanes(filter_mode: str) -> frozenset[str] | None:
