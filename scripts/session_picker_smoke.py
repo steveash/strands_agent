@@ -337,6 +337,8 @@ def main() -> None:
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
         approval_stale_picker = render_session_picker(temp_dir, filter_mode="approval-stale")
+        workspace_inspect_picker = render_session_picker(temp_dir, filter_mode="workspace-inspect")
+        workspace_edit_picker = render_session_picker(temp_dir, filter_mode="workspace-edit")
         shell_picker = render_session_picker(temp_dir, filter_mode="shell")
         intervention_picker = render_session_picker(temp_dir, filter_mode="intervention")
         shell_inspect_picker = render_session_picker(temp_dir, filter_mode="shell-inspect")
@@ -496,6 +498,22 @@ def main() -> None:
             in approval_restore_picker
             and "Restore lane focus: restore queue, restored" in approval_restore_picker
             and "session-restore | 1 turn(s)" not in approval_restore_picker,
+        )
+        print(
+            "picker_workspace_inspect_filter=",
+            "Filter: workspace-inspect | Sort: recent" in workspace_inspect_picker
+            and "session-tool | 1 turn(s)" in workspace_inspect_picker
+            and "workspace lanes: inspect" in workspace_inspect_picker
+            and "session-inspect | 1 turn(s)" not in workspace_inspect_picker,
+        )
+        print(
+            "picker_workspace_edit_filter=",
+            "Filter: workspace-edit | Sort: recent" in workspace_edit_picker
+            and "session-pending-edit | 1 turn(s)" in workspace_edit_picker
+            and "session-restored-edit-pending | 1 turn(s)" in workspace_edit_picker
+            and "session-denied | 1 turn(s)" in workspace_edit_picker
+            and "workspace lanes: edit" in workspace_edit_picker
+            and "session-inspect | 1 turn(s)" not in workspace_edit_picker,
         )
         print(
             "picker_shell_filter=",

@@ -57,12 +57,16 @@ SESSION_SWITCHER_FILTER_MODES = {
     "approval-stale-denied",
     "approval-stale-restored",
     "tool",
+    "workspace-inspect",
+    "workspace-edit",
     "intervention",
     "shell",
     "shell-inspect",
     "shell-test",
 }
 SESSION_SWITCHER_SORT_MODES = {"recent", "attention"}
+WORKSPACE_INSPECT_TOOL_NAMES = frozenset({"summarize_workspace", "list_files", "read_file", "search_files"})
+WORKSPACE_EDIT_TOOL_NAMES = frozenset({"write_file", "replace_text"})
 
 
 def format_stale_approval_cutoff(stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS) -> str:
@@ -115,6 +119,11 @@ class SessionSummary:
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
     recent_tool_previews: list[str] = field(default_factory=list)
+    workspace_lane_badges: list[str] = field(default_factory=list)
+    has_workspace_inspect_activity: bool = False
+    has_workspace_edit_activity: bool = False
+    last_workspace_preview: str = ""
+    recent_workspace_previews: list[str] = field(default_factory=list)
     shell_activity_badges: list[str] = field(default_factory=list)
     shell_lane_badges: list[str] = field(default_factory=list)
     has_shell_inspect_activity: bool = False
@@ -207,6 +216,9 @@ class SessionSummary:
         tool_streak_suffix = ""
         if len(self.recent_tool_previews) > 1:
             tool_streak_suffix = f" | tool streak: {len(self.recent_tool_previews)} recent"
+        workspace_lane_suffix = (
+            f" | workspace lanes: {', '.join(self.workspace_lane_badges)}" if self.workspace_lane_badges else ""
+        )
         shell_suffix = (
             f" | shell: {', '.join(self.shell_activity_badges)}" if self.shell_activity_badges else ""
         )
@@ -225,7 +237,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{restored_current_suffix}{restored_outcome_suffix}{restored_outcome_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{restored_current_suffix}{restored_outcome_suffix}{restored_outcome_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{workspace_lane_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(
@@ -334,6 +346,15 @@ class SessionSummary:
         if self.recent_tool_previews:
             lines.append(f"- recent tools ({len(self.recent_tool_previews)}):")
             lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_tool_previews, start=1))
+        if self.workspace_lane_badges:
+            lines.append(f"- workspace lanes: {', '.join(self.workspace_lane_badges)}")
+        if self.last_workspace_preview:
+            lines.append(f"- last workspace tool: {self.last_workspace_preview}")
+        if self.recent_workspace_previews:
+            lines.append(f"- recent workspace tools ({len(self.recent_workspace_previews)}):")
+            lines.extend(
+                f"  {index}. {preview}" for index, preview in enumerate(self.recent_workspace_previews, start=1)
+            )
         if self.shell_activity_badges:
             lines.append(f"- shell: {', '.join(self.shell_activity_badges)}")
         if self.shell_lane_badges:
@@ -464,6 +485,10 @@ def _ordered_recent_sessions(
         recent_failure_count = _recent_tool_failure_count(turns)
         recent_shell_failure_count = _recent_shell_failure_count(turns)
         recent_test_failure_count, recent_tool_failure_count = _recent_failure_activity_counts(turns)
+        has_workspace_inspect_activity, has_workspace_edit_activity = _workspace_activity_presence(
+            turns,
+            pending_approvals,
+        )
         has_shell_inspect_activity, has_shell_test_activity = _shell_activity_presence(turns, pending_approvals)
         summary = SessionSummary(
             session_id=store.session_id,
@@ -509,6 +534,14 @@ def _ordered_recent_sessions(
             last_tool_preview=_latest_tool_preview(turns),
             last_tool_badges=_latest_tool_badges(turns),
             recent_tool_previews=_recent_tool_previews(turns),
+            workspace_lane_badges=_workspace_lane_badges(
+                has_workspace_inspect_activity,
+                has_workspace_edit_activity,
+            ),
+            has_workspace_inspect_activity=has_workspace_inspect_activity,
+            has_workspace_edit_activity=has_workspace_edit_activity,
+            last_workspace_preview=_latest_workspace_preview(turns),
+            recent_workspace_previews=_recent_workspace_previews(turns),
             shell_activity_badges=_shell_activity_badges(turns),
             shell_lane_badges=_shell_lane_badges(has_shell_inspect_activity, has_shell_test_activity),
             has_shell_inspect_activity=has_shell_inspect_activity,
@@ -649,7 +682,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
+            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -726,9 +759,9 @@ def pick_session(
             )
         )
         prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to triage/page: "
+            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to change triage: "
+            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to change triage: "
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -834,6 +867,18 @@ def pick_session(
             selected_index = 0
             selected_session_id = ""
             continue
+        if normalized == "w":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "workspace-inspect")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
+        if normalized == "e":
+            filter_mode = _toggle_picker_filter_mode(filter_mode, "workspace-edit")
+            page_index = 0
+            selected_index = 0
+            selected_session_id = ""
+            continue
         if normalized == "g":
             filter_mode = _toggle_picker_filter_mode(filter_mode, "intervention")
             page_index = 0
@@ -900,16 +945,16 @@ def pick_session(
                 )
             else:
                 output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/Q/X/U/T/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
+                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
                 )
             continue
         if current_summaries:
             output_fn(
-                f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, Q, X, U, T, H, I, Y, S, [, ], Enter, or N."
+                f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N."
             )
         else:
             output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+                "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
             )
 
 
@@ -981,6 +1026,43 @@ def _iter_recent_tool_events(turns: list[TurnArtifact], *, tool_name: str | None
 
 def _latest_tool_event(turns: list[TurnArtifact]):
     return next(_iter_recent_tool_events(turns), None)
+
+
+def _workspace_tool_lane(tool_name: str) -> str:
+    if tool_name in WORKSPACE_INSPECT_TOOL_NAMES:
+        return "inspect"
+    if tool_name in WORKSPACE_EDIT_TOOL_NAMES:
+        return "edit"
+    return ""
+
+
+def _iter_recent_workspace_tool_events(turns: list[TurnArtifact], *, lane: str | None = None):
+    for event in _iter_recent_tool_events(turns):
+        tool_name = str(event.data.get("tool_name", "") or event.title or "")
+        tool_lane = _workspace_tool_lane(tool_name)
+        if not tool_lane:
+            continue
+        if lane is not None and tool_lane != lane:
+            continue
+        yield event
+
+
+def _latest_workspace_preview(turns: list[TurnArtifact], *, lane: str | None = None) -> str:
+    event = next(_iter_recent_workspace_tool_events(turns, lane=lane), None)
+    if event is None:
+        return ""
+    return _render_tool_event_summary(event)
+
+
+def _recent_workspace_previews(turns: list[TurnArtifact], limit: int = MAX_TOOL_STREAK_PREVIEWS) -> list[str]:
+    previews: list[str] = []
+    for event in _iter_recent_workspace_tool_events(turns):
+        rendered = _render_tool_event_summary(event)
+        if rendered:
+            previews.append(rendered)
+        if len(previews) >= limit:
+            break
+    return previews
 
 
 def _latest_intervention_preview(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> str:
@@ -1179,6 +1261,15 @@ def _shell_lane_badges(has_inspect_activity: bool, has_test_activity: bool) -> l
     return []
 
 
+def _workspace_lane_badges(has_inspect_activity: bool, has_edit_activity: bool) -> list[str]:
+    badges: list[str] = []
+    if has_inspect_activity:
+        badges.append("inspect")
+    if has_edit_activity:
+        badges.append("edit")
+    return badges
+
+
 def _bounded_recent_tool_events(
     turns: list[TurnArtifact],
     *,
@@ -1231,6 +1322,37 @@ def _shell_activity_presence(turns: list[TurnArtifact], pending_approvals: list[
                 return has_inspect_activity, True
 
     return has_inspect_activity, has_test_activity
+
+
+def _workspace_activity_presence(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> tuple[bool, bool]:
+    has_inspect_activity = False
+    has_edit_activity = False
+
+    for event in _iter_recent_workspace_tool_events(turns):
+        tool_name = str(event.data.get("tool_name", "") or event.title or "")
+        tool_lane = _workspace_tool_lane(tool_name)
+        if tool_lane == "inspect":
+            has_inspect_activity = True
+        elif tool_lane == "edit":
+            has_edit_activity = True
+        if has_inspect_activity and has_edit_activity:
+            return has_inspect_activity, has_edit_activity
+
+    if any(str(approval.tool_name or "") in WORKSPACE_EDIT_TOOL_NAMES for approval in pending_approvals):
+        has_edit_activity = True
+
+    if has_edit_activity:
+        return has_inspect_activity, has_edit_activity
+
+    for turn in turns:
+        for event in turn.events:
+            tool_name = str(event.data.get("tool_name", "") or event.title or "")
+            if tool_name in WORKSPACE_EDIT_TOOL_NAMES and (
+                str(event.data.get("approval_status", "") or "").strip() or _is_intervention_event(event)
+            ):
+                return has_inspect_activity, True
+
+    return has_inspect_activity, has_edit_activity
 
 
 def _recent_failure_activity_counts(
@@ -1933,7 +2055,7 @@ def render_recent_session_empty_state_lines(
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
         lines.append(
-            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, intervention, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage."
         )
     if surface == "picker":
         lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
@@ -2295,6 +2417,10 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
         return bool(_stale_approval_lanes(summary) & stale_filter_lanes)
     if filter_mode == "tool":
         return bool(summary.last_tool_preview or summary.last_tool_badges)
+    if filter_mode == "workspace-inspect":
+        return summary.has_workspace_inspect_activity
+    if filter_mode == "workspace-edit":
+        return summary.has_workspace_edit_activity
     if filter_mode == "intervention":
         return summary.has_intervention_activity
     if filter_mode == "shell":

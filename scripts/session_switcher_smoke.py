@@ -458,6 +458,44 @@ async def run_smoke() -> None:
                     for line in all_attention_output.splitlines()
                 ),
             )
+            await pilot.press("t")
+            await pilot.pause()
+            tool_output = str(first_app.query_one("#output").render())
+            print("switcher_tool_filter=", "Filter: tool | Sort: attention" in tool_output)
+            print(
+                "switcher_tool_filter_only_tool=",
+                "session-tool | 1 turn(s)" in tool_output
+                and "session-newer | 1 turn(s)" in tool_output
+                and "session-restore | 1 turn(s)" not in tool_output,
+            )
+            await pilot.press("w")
+            await pilot.pause()
+            workspace_inspect_output = str(first_app.query_one("#output").render())
+            print(
+                "switcher_workspace_inspect_filter=",
+                "Filter: workspace-inspect | Sort: attention" in workspace_inspect_output
+            )
+            print(
+                "switcher_workspace_inspect_only_workspace=",
+                "session-tool | 1 turn(s)" in workspace_inspect_output
+                and "workspace lanes: inspect" in workspace_inspect_output
+                and "session-inspect | 1 turn(s)" not in workspace_inspect_output,
+            )
+            await pilot.press("e")
+            await pilot.pause()
+            workspace_edit_output = str(first_app.query_one("#output").render())
+            print(
+                "switcher_workspace_edit_filter=",
+                "Filter: workspace-edit | Sort: attention" in workspace_edit_output
+            )
+            print(
+                "switcher_workspace_edit_only_workspace=",
+                "session-pending-edit | 1 turn(s)" in workspace_edit_output
+                and "session-restored-edit-pending | 1 turn(s)" in workspace_edit_output
+                and "session-denied | 1 turn(s)" in workspace_edit_output
+                and "workspace lanes: edit" in workspace_edit_output
+                and "session-inspect | 1 turn(s)" not in workspace_edit_output,
+            )
             await pilot.press("h")
             await pilot.pause()
             shell_attention_output = str(first_app.query_one("#output").render())

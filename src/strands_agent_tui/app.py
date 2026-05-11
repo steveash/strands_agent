@@ -255,6 +255,16 @@ class StrandsAgentApp(App):
             event.stop()
             return
 
+        if key == "w":
+            self._toggle_session_switcher_filter_mode("workspace-inspect")
+            event.stop()
+            return
+
+        if key == "e":
+            self._toggle_session_switcher_filter_mode("workspace-edit")
+            event.stop()
+            return
+
         if key == "g":
             self._toggle_session_switcher_filter_mode("intervention")
             event.stop()
@@ -509,7 +519,7 @@ class StrandsAgentApp(App):
             f"Artifacts root: {self.artifact_store.root}",
             (
                 "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
             ),
             (
                 f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode}{stale_cutoff_suffix} | "
@@ -1107,6 +1117,8 @@ def parse_args() -> AppConfig:
             "approval-stale-denied",
             "approval-stale-restored",
             "tool",
+            "workspace-inspect",
+            "workspace-edit",
             "intervention",
             "shell",
             "shell-inspect",

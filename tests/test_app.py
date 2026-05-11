@@ -984,7 +984,7 @@ async def test_session_switcher_lists_recent_sessions_in_app(tmp_path: Path) -> 
         assert "2. session-older" in output
         assert (
             "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+            "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
         ) in output
         assert "Filter: all | Sort: recent" in output
         assert "View: session switcher" in status
@@ -1367,6 +1367,25 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
     )
     restore_store.save_session_state(SessionState(draft_prompt="draft restore"))
 
+    tool_store = SessionArtifactStore(tmp_path, session_id="session-tool")
+    tool_store.append_turn(
+        TurnArtifact(
+            prompt="inspect workspace tool state",
+            response="tool response",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
     shell_store = SessionArtifactStore(tmp_path, session_id="session-shell")
     shell_store.append_turn(
         TurnArtifact(
@@ -1509,6 +1528,32 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "intervention: pending 1" in intervention_output
         assert "intervention: denied 1, restored 1" in intervention_output
         assert "session-shell | 1 turn(s)" not in intervention_output
+
+        await pilot.press("t")
+        await pilot.pause()
+        tool_output = str(app.query_one("#output").render())
+        assert "Filter: tool | Sort: attention" in tool_output
+        assert "session-tool | 1 turn(s)" in tool_output
+        assert "session-shell | 1 turn(s)" in tool_output
+        assert "session-restore | 1 turn(s)" not in tool_output
+
+        await pilot.press("w")
+        await pilot.pause()
+        workspace_inspect_output = str(app.query_one("#output").render())
+        assert "Filter: workspace-inspect | Sort: attention" in workspace_inspect_output
+        assert "session-tool | 1 turn(s)" in workspace_inspect_output
+        assert "workspace lanes: inspect" in workspace_inspect_output
+        assert "session-shell | 1 turn(s)" not in workspace_inspect_output
+
+        await pilot.press("e")
+        await pilot.pause()
+        workspace_edit_output = str(app.query_one("#output").render())
+        assert "Filter: workspace-edit | Sort: attention" in workspace_edit_output
+        assert "session-pending-edit | 1 turn(s)" in workspace_edit_output
+        assert "session-restored-edit-pending | 1 turn(s)" in workspace_edit_output
+        assert "session-denied | 1 turn(s)" in workspace_edit_output
+        assert "workspace lanes: edit" in workspace_edit_output
+        assert "session-shell | 1 turn(s)" not in workspace_edit_output
 
         await pilot.press("h")
         await pilot.pause()
@@ -2169,7 +2214,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
         assert "No saved sessions match the active switcher filter." in output
         assert "1 saved session still exists under this root." in output
         assert (
-            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, intervention, shell, shell-inspect, and shell-test triage."
+            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage."
             in output
         )
         assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output

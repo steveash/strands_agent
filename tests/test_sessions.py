@@ -100,7 +100,7 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
     assert (
-        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
         in rendered
     )
     assert "Press Enter to reopen the highlighted session." in rendered
@@ -186,7 +186,7 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "No saved sessions match the active picker filter." in rendered
     assert "1 saved session still exists under this root." in rendered
     assert (
-        "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, intervention, shell, shell-inspect, and shell-test triage."
+        "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage."
         in rendered
     )
     assert "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in rendered
@@ -209,7 +209,7 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
 
     assert summary is None
     assert prompts == [
-        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/G/H/I/Y/S/[ / ] to change triage: "
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to change triage: "
     ]
     assert any("No saved sessions match the active picker filter." in line for line in captured)
     assert any("Try A to show all sessions" in line for line in captured)
@@ -1977,7 +1977,7 @@ def test_list_recent_sessions_surfaces_recent_tool_streak_preview(tmp_path: Path
     assert "  3. .: src/" in preview
 
 
-def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_restore_or_tool_triage(tmp_path: Path) -> None:
+def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_restore_tool_and_workspace_triage(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain")
 
@@ -2025,6 +2025,21 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
     _append_turn(restore_store, "resume triage")
     restore_store.save_session_state(SessionState(draft_prompt="queued follow-up"))
+
+    pending_edit_store = SessionArtifactStore(tmp_path, session_id="session-pending-edit")
+    _append_turn(pending_edit_store, "queue edit")
+    pending_edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-0010c",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit",
+            )
+        ]
+    )
 
     tool_store = SessionArtifactStore(tmp_path, session_id="session-tool")
     tool_store.append_turn(
@@ -2079,11 +2094,13 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     approval_stale_denied_sessions = list_recent_sessions(tmp_path, filter_mode="approval-stale-denied")
     approval_stale_restored_sessions = list_recent_sessions(tmp_path, filter_mode="approval-stale-restored")
     tool_sessions = list_recent_sessions(tmp_path, filter_mode="tool")
+    workspace_inspect_sessions = list_recent_sessions(tmp_path, filter_mode="workspace-inspect")
+    workspace_edit_sessions = list_recent_sessions(tmp_path, filter_mode="workspace-edit")
     shell_sessions = list_recent_sessions(tmp_path, filter_mode="shell")
     shell_inspect_sessions = list_recent_sessions(tmp_path, filter_mode="shell-inspect")
     shell_test_sessions = list_recent_sessions(tmp_path, filter_mode="shell-test")
 
-    assert [session.session_id for session in pending_sessions] == ["session-pending"]
+    assert [session.session_id for session in pending_sessions] == ["session-pending-edit", "session-pending"]
     assert [session.session_id for session in denied_sessions] == ["session-denied"]
     assert [session.session_id for session in restore_sessions] == ["session-restore"]
     assert [session.session_id for session in approval_restore_sessions] == ["session-denied"]
@@ -2092,6 +2109,10 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert approval_stale_denied_sessions == []
     assert approval_stale_restored_sessions == []
     assert [session.session_id for session in tool_sessions] == ["session-shell", "session-tool"]
+    assert [session.session_id for session in workspace_inspect_sessions] == ["session-tool"]
+    assert [session.session_id for session in workspace_edit_sessions] == ["session-pending-edit", "session-denied"]
+    assert "workspace lanes: inspect" in workspace_inspect_sessions[0].render_line(1)
+    assert "workspace lanes: edit" in workspace_edit_sessions[0].render_line(1)
     assert [session.session_id for session in shell_sessions] == ["session-shell", "session-pending"]
     assert [session.session_id for session in shell_inspect_sessions] == ["session-shell"]
     assert [session.session_id for session in shell_test_sessions] == ["session-pending"]
