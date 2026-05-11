@@ -1464,6 +1464,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "approval restore tools: edit 1" in approval_restore_output
         assert "restore focus: restore queue" in approval_restore_output
         assert "restore focus: restored" in approval_restore_output
+        assert "- restore focus: restore queue" not in approval_restore_output
+        assert "- restore focus: restored" not in approval_restore_output
         assert "last restored approval:" in approval_restore_output or "restored current approval:" in approval_restore_output
         assert "attention:" not in approval_restore_output
 

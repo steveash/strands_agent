@@ -323,7 +323,7 @@ def test_restored_pending_approval_sessions_surface_restore_queue_age_cues(tmp_p
     preview = "\n".join(
         summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
     )
-    assert "- restore focus: restore queue" in preview
+    assert "- restore focus: restore queue" not in preview
     assert "- approval restore age: 3d" in preview
 
 
@@ -366,7 +366,7 @@ def test_restored_denied_approval_sessions_surface_last_restored_age_cues(tmp_pa
     preview = "\n".join(
         summaries[0].render_preview(visible_index=1, overall_index=1, total_matches=1, filter_mode="approval-restore")
     )
-    assert "- restore focus: restored" in preview
+    assert "- restore focus: restored" not in preview
     assert "- approval restore age: 6h" in preview
     assert "- last restored age: 6h" not in preview
 
@@ -1661,7 +1661,7 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     assert "- attention reason: restored pending test approval queue; tests sort ahead of restored edits" in preview
     assert "- approval restore: pending 1, denied 1" in preview
     assert "- approval restore tools: test 1, edit 1" in preview
-    assert "- restore focus: restore queue, restored" in preview
+    assert "- restore focus: restore queue, restored" not in preview
     assert "- approval restore ages: restore queue 3d; restored 6h" in preview
     assert "- restored current approval: pending run_shell_command via fake_runtime | queued 1" in preview
     assert "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0" in preview

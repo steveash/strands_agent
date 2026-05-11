@@ -719,6 +719,11 @@ def main() -> None:
             ),
         )
         print(
+            "picker_restore_preview_compact=",
+            "- restore focus: restore queue" not in approval_restore_picker
+            and "- restore focus: restored" not in approval_restore_picker,
+        )
+        print(
             "picker_approval_stale_filter=",
             "Filter: approval-stale | Sort: recent" in approval_stale_picker
             and "session-aged | 1 turn(s)" in approval_stale_picker

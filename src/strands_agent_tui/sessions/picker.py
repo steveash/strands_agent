@@ -2338,6 +2338,10 @@ def _render_approval_restore_row_age_suffixes(
     return age_suffix, focus_suffix, "restored" in focus_lanes
 
 
+def _should_render_approval_restore_focus_preview_line(filter_mode: str) -> bool:
+    return filter_mode != "approval-restore"
+
+
 def _render_approval_restore_preview_lines(
     summary: SessionSummary,
     filter_mode: str,
@@ -2349,7 +2353,11 @@ def _render_approval_restore_preview_lines(
         default_lines.append(f"- approval restore age: {summary.last_restored_approval_age_summary}")
 
     focus_lanes = _approval_restore_focus_lanes(summary, filter_mode)
-    focus_lines = [f"- restore focus: {', '.join(focus_lanes)}"] if focus_lanes else []
+    focus_lines = (
+        [f"- restore focus: {', '.join(focus_lanes)}"]
+        if focus_lanes and _should_render_approval_restore_focus_preview_line(filter_mode)
+        else []
+    )
     age_badges = _approval_restore_age_badges(summary, filter_mode, focus_lanes=focus_lanes)
     if not age_badges:
         return [*focus_lines, *default_lines], False

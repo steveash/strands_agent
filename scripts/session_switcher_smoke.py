@@ -395,6 +395,11 @@ async def run_smoke() -> None:
                     in approval_restore_text
                 ),
             )
+            print(
+                "switcher_restore_preview_compact=",
+                "- restore focus: restore queue" not in approval_restore_text
+                and "- restore focus: restored" not in approval_restore_text,
+            )
             await pilot.press("s")
             await pilot.pause()
             attention_output = first_app.query_one("#output").render()
