@@ -98,6 +98,9 @@ class SessionSummary:
     last_restored_approval_summary: str = ""
     last_restored_approval_age_summary: str = ""
     last_restored_approval_age_sort_key: int = 0
+    last_restored_outcome_summary: str = ""
+    last_restored_outcome_age_summary: str = ""
+    last_restored_outcome_age_sort_key: int = 0
     stale_approval_badges: list[str] = field(default_factory=list)
     intervention_badges: list[str] = field(default_factory=list)
     last_intervention_preview: str = ""
@@ -177,6 +180,10 @@ class SessionSummary:
             )
         elif self.last_restored_approval_age_summary:
             approval_restore_age_suffix = f" | approval restore age: {self.last_restored_approval_age_summary}"
+        restored_current_suffix, restored_outcome_suffix, restored_outcome_age_suffix = _render_restored_row_suffixes(
+            self,
+            filter_mode,
+        )
         stale_focus_lanes = _stale_approval_focus_lanes(self, filter_mode)
         stale_approval_suffix = _render_stale_approval_row_suffix(
             self,
@@ -217,7 +224,7 @@ class SessionSummary:
         restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
+            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{restored_current_suffix}{restored_outcome_suffix}{restored_outcome_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
         )
 
     def render_preview(
@@ -278,9 +285,20 @@ class SessionSummary:
             lines.append(f"- approval restore age: {self.restored_pending_approval_age_summary}")
         elif self.last_restored_approval_age_summary:
             lines.append(f"- approval restore age: {self.last_restored_approval_age_summary}")
-        if self.last_restored_approval_summary:
+        if self.last_restored_outcome_summary and self.last_restored_outcome_summary != self.last_restored_approval_summary:
+            lines.append(f"- restored current approval: {self.last_restored_approval_summary}")
+        elif self.last_restored_approval_summary:
             lines.append(f"- last restored approval: {self.last_restored_approval_summary}")
-        if self.last_restored_approval_age_summary and (
+        if self.last_restored_outcome_summary and self.last_restored_outcome_summary != self.last_restored_approval_summary:
+            lines.append(f"- latest restored outcome: {self.last_restored_outcome_summary}")
+        restored_outcome_age_summary = _restored_outcome_preview_age_summary(self)
+        restored_outcome_age_label = _restored_outcome_preview_age_label(self)
+        if restored_outcome_age_summary and (
+            not self.restored_pending_approval_age_summary
+            or restored_outcome_age_summary != self.restored_pending_approval_age_summary
+        ):
+            lines.append(f"- {restored_outcome_age_label}: {restored_outcome_age_summary}")
+        elif self.last_restored_approval_age_summary and (
             not self.restored_pending_approval_age_summary
             or self.last_restored_approval_age_summary != self.restored_pending_approval_age_summary
         ):
@@ -421,6 +439,9 @@ def _ordered_recent_sessions(
             last_restored_approval_summary,
             last_restored_approval_age_summary,
             last_restored_approval_age_sort_key,
+            last_restored_outcome_summary,
+            last_restored_outcome_age_summary,
+            last_restored_outcome_age_sort_key,
             stale_approval_badges,
             pending_approval_attention_sort_key,
             approval_attention_sort_key,
@@ -472,6 +493,9 @@ def _ordered_recent_sessions(
             last_restored_approval_summary=last_restored_approval_summary,
             last_restored_approval_age_summary=last_restored_approval_age_summary,
             last_restored_approval_age_sort_key=last_restored_approval_age_sort_key,
+            last_restored_outcome_summary=last_restored_outcome_summary,
+            last_restored_outcome_age_summary=last_restored_outcome_age_summary,
+            last_restored_outcome_age_sort_key=last_restored_outcome_age_sort_key,
             stale_approval_badges=stale_approval_badges,
             intervention_badges=_intervention_activity_badges(turns, pending_approvals),
             last_intervention_preview=_latest_intervention_preview(turns, pending_approvals),
@@ -1314,6 +1338,9 @@ def _approval_activity(
     str,
     str,
     int,
+    str,
+    str,
+    int,
     list[str],
     tuple[int, ...],
     tuple[int, ...],
@@ -1348,13 +1375,13 @@ def _approval_activity(
                 "order": order,
             }
             latest_by_request_id[approval_id] = record
-            last_record = record
+            last_record = dict(record)
             if status == "denied":
-                last_denied_record = record
+                last_denied_record = dict(record)
             if bool(record.get("approval_restored", False)):
-                last_restored_record = record
+                last_restored_record = dict(record)
                 if status != "pending":
-                    last_restored_outcome_record = record
+                    last_restored_outcome_record = dict(record)
 
     for approval in pending_approvals:
         command = str(approval.args.get("command", "") or "").strip() if isinstance(approval.args, dict) else ""
@@ -1365,7 +1392,7 @@ def _approval_activity(
             except ValueError:
                 shell_command_family = ""
         existing_record = latest_by_request_id.get(approval.request_id)
-        if existing_record is not None:
+        if existing_record is not None and str(existing_record.get("status", "") or "") == "pending":
             if command and not str(existing_record.get("command", "") or "").strip():
                 existing_record["command"] = command
             if shell_command_family and not str(existing_record.get("shell_command_family", "") or "").strip():
@@ -1378,6 +1405,7 @@ def _approval_activity(
             if approval.restored_from_session:
                 existing_record["approval_restored"] = True
             continue
+        order += 1
         record = {
             "approval_id": approval.request_id,
             "status": "pending",
@@ -1392,16 +1420,21 @@ def _approval_activity(
             "timestamp": approval.created_at,
             "order": order,
         }
-        latest_by_request_id[approval.request_id] = record
+        record_key = approval.request_id
+        if existing_record is not None:
+            record_key = f"{approval.request_id}#pending"
+        latest_by_request_id[record_key] = record
         if last_record is None:
-            last_record = record
+            last_record = dict(record)
 
     if pending_approvals:
         preferred_pending = latest_by_request_id.get(pending_approvals[0].request_id)
+        if preferred_pending is not None and str(preferred_pending.get("status", "") or "") != "pending":
+            preferred_pending = latest_by_request_id.get(f"{pending_approvals[0].request_id}#pending")
         if preferred_pending is not None:
-            last_record = preferred_pending
+            last_record = dict(preferred_pending)
             if bool(preferred_pending.get("approval_restored", False)):
-                last_restored_record = preferred_pending
+                last_restored_record = dict(preferred_pending)
 
     status_counts: dict[str, int] = {}
     fresh_pending_family_counts: dict[str, int] = {}
@@ -1426,16 +1459,16 @@ def _approval_activity(
             elif status == "denied":
                 restored_denied_family_counts[family] = restored_denied_family_counts.get(family, 0) + 1
             if last_restored_record is None or int(record.get("order", 0)) >= int(last_restored_record.get("order", 0)):
-                last_restored_record = record
+                last_restored_record = dict(record)
             if status != "pending" and (
                 last_restored_outcome_record is None
                 or int(record.get("order", 0)) >= int(last_restored_outcome_record.get("order", 0))
             ):
-                last_restored_outcome_record = record
+                last_restored_outcome_record = dict(record)
         if status == "denied" and (
             last_denied_record is None or int(record.get("order", 0)) >= int(last_denied_record.get("order", 0))
         ):
-            last_denied_record = record
+            last_denied_record = dict(record)
 
     badges = _render_status_badges(status_counts)
     pending_badges = _render_tool_family_badges(fresh_pending_family_counts)
@@ -1491,6 +1524,9 @@ def _approval_activity(
         _render_last_approval_summary(last_restored_record),
         last_restored_approval_age_summary,
         last_restored_approval_age_sort_key,
+        _render_last_approval_summary(last_restored_outcome_record),
+        last_restored_outcome_age_summary,
+        last_restored_outcome_age_sort_key,
         stale_approval_badges,
         pending_approval_attention_sort_key,
         approval_attention_sort_key,
@@ -2005,6 +2041,50 @@ def _stale_approval_focus_badges(summary: SessionSummary, focus_lane: str) -> li
         for badge in summary.stale_approval_badges
         if _stale_approval_badge_lane(badge) == focus_lane
     ]
+
+
+def _inline_approval_summary(summary: str) -> str:
+    return summary.replace(" | ", "; ")
+
+
+def _render_restored_row_suffixes(summary: SessionSummary, filter_mode: str) -> tuple[str, str, str]:
+    if filter_mode not in {"approval-restore", "approval-stale-restored"}:
+        return "", "", ""
+
+    has_separate_outcome = bool(
+        summary.last_restored_outcome_summary
+        and summary.last_restored_outcome_summary != summary.last_restored_approval_summary
+    )
+    if not summary.restored_pending_approval_queue_summary and not has_separate_outcome:
+        return "", "", ""
+
+    current_suffix = ""
+    if summary.last_restored_approval_summary:
+        current_suffix = f" | restored current: {_inline_approval_summary(summary.last_restored_approval_summary)}"
+
+    outcome_suffix = ""
+    outcome_age_suffix = ""
+    if has_separate_outcome:
+        outcome_suffix = f" | restored outcome: {_inline_approval_summary(summary.last_restored_outcome_summary)}"
+        if summary.last_restored_outcome_age_summary and (
+            not summary.restored_pending_approval_age_summary
+            or summary.last_restored_outcome_age_summary != summary.restored_pending_approval_age_summary
+        ):
+            outcome_age_suffix = f" | restored outcome age: {summary.last_restored_outcome_age_summary}"
+
+    return current_suffix, outcome_suffix, outcome_age_suffix
+
+
+def _restored_outcome_preview_age_summary(summary: SessionSummary) -> str:
+    if summary.last_restored_outcome_summary and summary.last_restored_outcome_summary != summary.last_restored_approval_summary:
+        return summary.last_restored_outcome_age_summary
+    return ""
+
+
+def _restored_outcome_preview_age_label(summary: SessionSummary) -> str:
+    if summary.last_restored_outcome_summary and summary.last_restored_outcome_summary != summary.last_restored_approval_summary:
+        return "latest restored outcome age"
+    return "last restored age"
 
 
 def _render_stale_approval_row_suffix(

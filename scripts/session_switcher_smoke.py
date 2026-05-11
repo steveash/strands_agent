@@ -377,7 +377,18 @@ async def run_smoke() -> None:
             )
             print(
                 "switcher_last_restored_approval_preview=",
-                "last restored approval:" in approval_restore_text,
+                "last restored approval:" in approval_restore_text
+                or "restored current approval:" in approval_restore_text,
+            )
+            print(
+                "switcher_restored_approval_preview_split=",
+                "- last restored approval:" in approval_restore_text
+                or (
+                    "- restored current approval: pending run_shell_command via fake_runtime | queued 1"
+                    in approval_restore_text
+                    and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
+                    in approval_restore_text
+                ),
             )
             await pilot.press("s")
             await pilot.pause()
@@ -801,9 +812,18 @@ async def run_smoke() -> None:
                 in stale_restored_output
                 and "| approval stale ages: restore queue 11d; restored 10d | stale focus: restore queue, restored"
                 in stale_restored_output
+                and "restored current: pending write_file via fake_runtime; queued 1" in stale_restored_output
+                and "restored outcome: approved run_shell_command via fake_runtime; resumed; remaining 0"
+                in stale_restored_output
+                and "restored outcome age: 10d" in stale_restored_output
                 and "| approval stale: restore queue 11d, restored 10d | stale focus: restore queue, restored" not in stale_restored_output
                 and "- stale focus: restore queue, restored" in stale_restored_output
                 and "- approval stale ages: restore queue 11d; restored 10d" in stale_restored_output
+                and "- restored current approval: pending write_file via fake_runtime | queued 1"
+                in stale_restored_output
+                and "- latest restored outcome: approved run_shell_command via fake_runtime | resumed | remaining 0"
+                in stale_restored_output
+                and "- latest restored outcome age: 10d" in stale_restored_output
                 and "- approval stale: restore queue 11d, restored 10d" not in stale_restored_output
                 and "stale focus: restore queue" in stale_restored_output
                 and "session-stale-restored-page-2" in stale_restored_output

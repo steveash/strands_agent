@@ -819,6 +819,14 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
         "| approval stale ages: restore queue 10d; restored 9d | stale focus: restore queue, restored"
         in stale_restored_rendered
     )
+    assert (
+        "restored current: pending write_file via fake_runtime; queued 1" in stale_restored_rendered
+    )
+    assert (
+        "restored outcome: approved run_shell_command via fake_runtime; resumed; remaining 0"
+        in stale_restored_rendered
+    )
+    assert "restored outcome age: 9d" in stale_restored_rendered
     assert "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_rendered
     assert "| approval stale: restore queue 10d, restored 9d | stale focus: restore queue, restored" not in stale_restored_rendered
     assert "stale focus: restore queue" in stale_restored_rendered
@@ -827,6 +835,12 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     assert "- approval stale: restore queue 11d" not in queue_stale_restored_preview
     assert "- stale focus: restore queue, restored" in mixed_stale_restored_preview
     assert "- approval stale ages: restore queue 10d; restored 9d" in mixed_stale_restored_preview
+    assert "- restored current approval: pending write_file via fake_runtime | queued 1" in mixed_stale_restored_preview
+    assert (
+        "- latest restored outcome: approved run_shell_command via fake_runtime | resumed | remaining 0"
+        in mixed_stale_restored_preview
+    )
+    assert "- latest restored outcome age: 9d" in mixed_stale_restored_preview
     assert "- approval stale: restore queue 10d, restored 9d" not in mixed_stale_restored_preview
 
 
@@ -1598,15 +1612,20 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     assert summary.restored_approval_badges == ["pending 1", "denied 1"]
     assert summary.restored_approval_tool_badges == ["test 1", "edit 1"]
     assert summary.last_restored_approval_summary == "pending run_shell_command via fake_runtime | queued 1"
+    assert summary.last_restored_outcome_summary == "denied replace_text via fake_runtime | restored queue | remaining 0"
     assert (
         summary.attention_reason_summary
         == "restored pending test approval queue; tests sort ahead of restored edits"
     )
-    assert "approval restore tools: test 1, edit 1" in summary.render_line(1)
+    restored_line = summary.render_line(1, filter_mode="approval-restore")
+    assert "approval restore tools: test 1, edit 1" in restored_line
+    assert "restored current: pending run_shell_command via fake_runtime; queued 1" in restored_line
+    assert "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0" in restored_line
     assert "- attention reason: restored pending test approval queue; tests sort ahead of restored edits" in preview
     assert "- approval restore: pending 1, denied 1" in preview
     assert "- approval restore tools: test 1, edit 1" in preview
-    assert "- last restored approval: pending run_shell_command via fake_runtime | queued 1" in preview
+    assert "- restored current approval: pending run_shell_command via fake_runtime | queued 1" in preview
+    assert "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0" in preview
 
 
 def test_list_recent_sessions_surfaces_restored_pending_queue_breakdown(tmp_path: Path) -> None:

@@ -1441,7 +1441,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-pending | 1 turn(s)" not in approval_restore_output
         assert "approval restore tools: test 1" in approval_restore_output
         assert "approval restore tools: edit 1" in approval_restore_output
-        assert "last restored approval:" in approval_restore_output
+        assert "last restored approval:" in approval_restore_output or "restored current approval:" in approval_restore_output
         assert "attention:" not in approval_restore_output
 
         await pilot.press("o")
@@ -1765,6 +1765,12 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
             "| approval stale ages: restore queue 10d; restored 9d | stale focus: restore queue, restored"
             in stale_restored_output
         )
+        assert "restored current: pending write_file via fake_runtime; queued 1" in stale_restored_output
+        assert (
+            "restored outcome: approved run_shell_command via fake_runtime; resumed; remaining 0"
+            in stale_restored_output
+        )
+        assert "restored outcome age: 9d" in stale_restored_output
         assert "| approval stale: restore queue 11d | stale focus: restore queue" not in stale_restored_output
         assert "| approval stale: restore queue 10d, restored 9d | stale focus: restore queue, restored" not in stale_restored_output
         assert "- stale focus: restore queue" in stale_restored_output
@@ -1781,6 +1787,12 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         mixed_stale_restored_output = str(app.query_one("#output").render())
         assert "- stale focus: restore queue, restored" in mixed_stale_restored_output
         assert "- approval stale ages: restore queue 10d; restored 9d" in mixed_stale_restored_output
+        assert "- restored current approval: pending write_file via fake_runtime | queued 1" in mixed_stale_restored_output
+        assert (
+            "- latest restored outcome: approved run_shell_command via fake_runtime | resumed | remaining 0"
+            in mixed_stale_restored_output
+        )
+        assert "- latest restored outcome age: 9d" in mixed_stale_restored_output
         assert "- approval stale: restore queue 10d, restored 9d" not in mixed_stale_restored_output
 
 
