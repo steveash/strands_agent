@@ -2409,7 +2409,7 @@ def _render_stale_approval_row_suffix(
     stale_focus_lanes: list[str] | None = None,
 ) -> str:
     default_suffix = _default_stale_approval_row_suffix(summary)
-    if not default_suffix or filter_mode == "approval-stale":
+    if not default_suffix:
         return default_suffix
 
     focus_badges = _focused_stale_approval_badges(summary, filter_mode, stale_focus_lanes=stale_focus_lanes)
@@ -2424,8 +2424,6 @@ def _render_stale_approval_preview_lines(summary: SessionSummary, filter_mode: s
     default_line = _default_stale_approval_preview_line(summary)
     if not default_line:
         return []
-    if filter_mode == "approval-stale":
-        return [default_line]
 
     focus_lanes = _stale_approval_focus_lanes(summary, filter_mode)
     focus_lines = [f"- stale focus: {', '.join(focus_lanes)}"] if focus_lanes else []

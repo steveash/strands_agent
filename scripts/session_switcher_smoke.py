@@ -544,7 +544,8 @@ async def run_smoke() -> None:
                 "switcher_approval_stale_filter=",
                 "Filter: approval-stale | Sort: attention" in approval_stale_output
                 and "session-aged | 1 turn(s)" in approval_stale_output
-                and "approval stale: pending 45d" in approval_stale_output
+                and "| approval stale age: 45d | stale focus: pending" in approval_stale_output
+                and "approval stale: pending 45d" not in approval_stale_output
                 and "session-newer | 1 turn(s)" not in approval_stale_output,
             )
             print(

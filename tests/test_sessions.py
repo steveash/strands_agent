@@ -519,8 +519,15 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     assert stale_by_id["session-stale-denied"].stale_approval_badges == ["denied 9d"]
     assert stale_by_id["session-stale-restored"].stale_approval_badges == ["restore queue 8d", "restored 10d"]
     assert "approval stale: pending 45d" in stale_by_id["session-stale-pending"].render_line(1)
-    assert "stale focus: pending" in stale_by_id["session-stale-pending"].render_line(1, filter_mode="approval-stale")
+    assert "| approval stale age: 45d | stale focus: pending" in stale_by_id["session-stale-pending"].render_line(
+        1,
+        filter_mode="approval-stale",
+    )
     assert "approval stale: restore queue 8d, restored 10d" in stale_by_id["session-stale-restored"].render_line(1)
+    assert (
+        "| approval stale ages: restore queue 8d; restored 10d | stale focus: restore queue, restored"
+        in stale_by_id["session-stale-restored"].render_line(1, filter_mode="approval-stale")
+    )
     stale_denied_preview = "\n".join(
         stale_by_id["session-stale-denied"].render_preview(
             visible_index=1,
@@ -529,7 +536,9 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
             filter_mode="approval-stale",
         )
     )
-    assert "- approval stale: denied 9d" in stale_denied_preview
+    assert "- stale focus: denied" in stale_denied_preview
+    assert "- approval stale age: 9d" in stale_denied_preview
+    assert "- approval stale: denied 9d" not in stale_denied_preview
     assert (
         "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
         in stale_denied_preview
@@ -542,7 +551,9 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
             filter_mode="approval-stale",
         )
     )
-    assert "- approval stale: restore queue 8d, restored 10d" in stale_restored_preview
+    assert "- stale focus: restore queue, restored" in stale_restored_preview
+    assert "- approval stale ages: restore queue 8d; restored 10d" in stale_restored_preview
+    assert "- approval stale: restore queue 8d, restored 10d" not in stale_restored_preview
     assert (
         "Stale approval backlog: 3 sessions | lanes: pending 1 (oldest 45d), denied 1 (oldest 9d), "
         "restore queue 1 (oldest 8d), restored 1 (oldest 10d)"
