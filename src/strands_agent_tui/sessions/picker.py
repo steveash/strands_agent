@@ -32,6 +32,7 @@ STALE_SESSION_DANGER_SECONDS = 30 * 24 * 60 * 60
 STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
+APPROVAL_RESTORE_LANE_DISPLAY_ORDER = ("restore queue", "restored")
 STALE_APPROVAL_LANE_DISPLAY_ORDER = ("pending", "denied", "restore queue", "restored")
 STALE_APPROVAL_FILTER_LANES = {
     "approval-stale": frozenset(STALE_APPROVAL_LANE_DISPLAY_ORDER),
@@ -1865,6 +1866,18 @@ def render_recent_session_filter_summary_lines(
     page_size: int = MAX_RECENT_SESSIONS,
     stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
 ) -> list[str]:
+    if filter_mode == "approval-restore" and summaries:
+        lane_counts, lane_oldest_ages, mixed_count = _summarize_approval_restore_lanes(summaries)
+        session_label = "session" if len(summaries) == 1 else "sessions"
+        lane_rollup = _format_approval_restore_lane_rollup(lane_counts, lane_oldest_ages)
+        line = f"Approval restore backlog: {len(summaries)} {session_label}"
+        if lane_rollup:
+            line += f" | lanes: {lane_rollup}"
+        if mixed_count > 0:
+            mixed_label = "session" if mixed_count == 1 else "sessions"
+            line += f" | overlap: mixed {mixed_count} {mixed_label}"
+        return [line, "Restore lane focus: restore queue, restored"]
+
     stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
     if stale_filter_lanes is None or not summaries:
         return []
@@ -1936,6 +1949,64 @@ def _is_stale_approval_filter_mode(filter_mode: str) -> bool:
 
 def _stale_approval_filter_lanes(filter_mode: str) -> frozenset[str] | None:
     return STALE_APPROVAL_FILTER_LANES.get(filter_mode)
+
+
+def _approval_restore_lanes(summary: SessionSummary) -> set[str]:
+    lanes: set[str] = set()
+    for badge in summary.restored_approval_badges:
+        if badge.startswith("pending "):
+            lanes.add("restore queue")
+        elif badge:
+            lanes.add("restored")
+    return lanes
+
+
+def _approval_restore_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
+    lanes = _approval_restore_lanes(summary)
+    lane_ages: dict[str, int] = {}
+    if "restore queue" in lanes and summary.restored_pending_approval_age_sort_key > 0:
+        lane_ages["restore queue"] = summary.restored_pending_approval_age_sort_key
+    if "restored" in lanes:
+        restored_age_seconds = summary.last_restored_outcome_age_sort_key
+        if restored_age_seconds <= 0 and "restore queue" not in lanes:
+            restored_age_seconds = summary.last_restored_approval_age_sort_key
+        if restored_age_seconds > 0:
+            lane_ages["restored"] = restored_age_seconds
+    return lane_ages
+
+
+def _summarize_approval_restore_lanes(
+    summaries: list[SessionSummary],
+) -> tuple[dict[str, int], dict[str, int], int]:
+    lane_counts = {lane: 0 for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER}
+    lane_oldest_ages = {lane: 0 for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER}
+    mixed_count = 0
+    for summary in summaries:
+        lanes = _approval_restore_lanes(summary)
+        if len(lanes) > 1:
+            mixed_count += 1
+        for lane in lanes:
+            lane_counts[lane] += 1
+        for lane, age_seconds in _approval_restore_lane_age_seconds(summary).items():
+            lane_oldest_ages[lane] = max(lane_oldest_ages[lane], age_seconds)
+    return lane_counts, lane_oldest_ages, mixed_count
+
+
+def _format_approval_restore_lane_rollup(
+    lane_counts: dict[str, int],
+    lane_oldest_ages: dict[str, int],
+) -> str:
+    lane_parts: list[str] = []
+    for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER:
+        count = lane_counts.get(lane, 0)
+        if count <= 0:
+            continue
+        part = f"{lane} {count}"
+        oldest_age = lane_oldest_ages.get(lane, 0)
+        if oldest_age > 0:
+            part += f" (oldest {_format_age_compact(oldest_age)})"
+        lane_parts.append(part)
+    return ", ".join(lane_parts)
 
 
 def _stale_approval_summary_label(filter_mode: str) -> str:

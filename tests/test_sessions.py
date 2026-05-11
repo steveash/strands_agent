@@ -1566,28 +1566,28 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
 
 def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-restored-breakdown")
+    denied_event = runtime_event(
+        "steering_denied",
+        "replace_text",
+        "Denied in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-9300",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+            "relative_path": "notes.txt",
+        },
+    )
+    denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
     store.append_turn(
         TurnArtifact(
             prompt="restore denied edit and pending test",
             response="triaged restored approvals",
             provider="fake-strands",
             mode="fake",
-            events=[
-                runtime_event(
-                    "steering_denied",
-                    "replace_text",
-                    "Denied in the TUI",
-                    data={
-                        "tool_name": "replace_text",
-                        "approval_id": "approval-9300",
-                        "approval_status": "denied",
-                        "approval_source": "fake_runtime",
-                        "approval_restored": True,
-                        "remaining_pending_count": 0,
-                        "relative_path": "notes.txt",
-                    },
-                )
-            ],
+            events=[denied_event],
             response_metadata={"mode": "fake"},
         )
     )
@@ -1601,18 +1601,22 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
                 source="fake_runtime",
                 prompt="rerun restored tests",
                 restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
             )
         ]
     )
 
     summary = list_recent_sessions(tmp_path)[0]
     preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+    rendered = render_session_picker(tmp_path, filter_mode="approval-restore")
 
     assert summary.restored_approval_count == 2
     assert summary.restored_approval_badges == ["pending 1", "denied 1"]
     assert summary.restored_approval_tool_badges == ["test 1", "edit 1"]
     assert summary.last_restored_approval_summary == "pending run_shell_command via fake_runtime | queued 1"
     assert summary.last_restored_outcome_summary == "denied replace_text via fake_runtime | restored queue | remaining 0"
+    assert summary.restored_pending_approval_age_summary == "3d"
+    assert summary.last_restored_outcome_age_summary == "6h"
     assert (
         summary.attention_reason_summary
         == "restored pending test approval queue; tests sort ahead of restored edits"
@@ -1626,6 +1630,12 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     assert "- approval restore tools: test 1, edit 1" in preview
     assert "- restored current approval: pending run_shell_command via fake_runtime | queued 1" in preview
     assert "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0" in preview
+    assert "- latest restored outcome age: 6h" in preview
+    assert (
+        "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session"
+        in rendered
+    )
+    assert "Restore lane focus: restore queue, restored" in rendered
 
 
 def test_list_recent_sessions_surfaces_restored_pending_queue_breakdown(tmp_path: Path) -> None:

@@ -1439,6 +1439,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-denied" in approval_restore_output
         assert "session-restore | 1 turn(s)" not in approval_restore_output
         assert "session-pending | 1 turn(s)" not in approval_restore_output
+        assert "Approval restore backlog: 3 sessions | lanes: restore queue 2, restored 1" in approval_restore_output
+        assert "Restore lane focus: restore queue, restored" in approval_restore_output
         assert "approval restore tools: test 1" in approval_restore_output
         assert "approval restore tools: edit 1" in approval_restore_output
         assert "last restored approval:" in approval_restore_output or "restored current approval:" in approval_restore_output
@@ -2038,6 +2040,92 @@ async def test_session_switcher_surfaces_restored_pending_queue_breakdown_for_mu
         assert "approval restore queue: first test; rest edit 1, tool 1" in output
         assert "- approval restore queue: first test; rest edit 1, tool 1" in output
         assert "- approval restore tools: test 1, edit 1, tool 1" in output
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_surfaces_mixed_restore_overlap_summary_and_preview_split(
+    tmp_path: Path,
+) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    mixed_store = SessionArtifactStore(tmp_path, session_id="session-restored-overlap")
+    denied_event = runtime_event(
+        "steering_denied",
+        "replace_text",
+        "Denied in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-overlap-1",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+        },
+    )
+    denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
+    mixed_store.append_turn(
+        TurnArtifact(
+            prompt="restore denied edit and pending test",
+            response="restored overlap response",
+            provider="fake-strands",
+            mode="fake",
+            events=[denied_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    mixed_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-overlap-2",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun restored tests",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
+            )
+        ]
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("v")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+
+        assert "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session" in output
+        assert "Restore lane focus: restore queue, restored" in output
+        assert "restored current: pending run_shell_command via fake_runtime; queued 1" in output
+        assert "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0" in output
+        assert "- restored current approval: pending run_shell_command via fake_runtime | queued 1" in output
+        assert "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0" in output
+        assert "- latest restored outcome age: 6h" in output
 
 
 @pytest.mark.asyncio

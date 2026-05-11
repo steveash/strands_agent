@@ -419,6 +419,54 @@ def main() -> None:
             )
             mixed_restored_picker = render_session_picker(mixed_restored_root, filter_mode="approval-restore")
 
+        with TemporaryDirectory() as mixed_restored_split_root:
+            mixed_restored_split_store = SessionArtifactStore(
+                mixed_restored_split_root,
+                session_id="session-restored-overlap",
+            )
+            denied_event = runtime_event(
+                "steering_denied",
+                "replace_text",
+                "Denied in the TUI",
+                data={
+                    "tool_name": "replace_text",
+                    "approval_id": "approval-overlap-1",
+                    "approval_status": "denied",
+                    "approval_source": "fake_runtime",
+                    "approval_restored": True,
+                    "remaining_pending_count": 0,
+                },
+            )
+            denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
+            mixed_restored_split_store.append_turn(
+                TurnArtifact(
+                    prompt="restore denied edit and pending test",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[denied_event],
+                    response_metadata={"mode": "fake"},
+                )
+            )
+            mixed_restored_split_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-overlap-2",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="rerun restored tests",
+                        restored_from_session=True,
+                        created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
+                    )
+                ]
+            )
+            mixed_restored_split_picker = render_session_picker(
+                mixed_restored_split_root,
+                filter_mode="approval-restore",
+            )
+
         for index in range(8):
             store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index}")
             append_turn(store, f"page prompt {index}")
@@ -444,6 +492,9 @@ def main() -> None:
             and "session-restored-pending" in approval_restore_picker
             and "session-restored-edit-pending" in approval_restore_picker
             and "session-denied" in approval_restore_picker
+            and "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d), restored 1 (oldest 6h)"
+            in approval_restore_picker
+            and "Restore lane focus: restore queue, restored" in approval_restore_picker
             and "session-restore | 1 turn(s)" not in approval_restore_picker,
         )
         print(
@@ -631,6 +682,23 @@ def main() -> None:
             "picker_restored_pending_queue_breakdown=",
             "approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker
             and "- approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker,
+        )
+        print(
+            "picker_approval_restore_overlap_summary=",
+            "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session"
+            in mixed_restored_split_picker
+            and "Restore lane focus: restore queue, restored" in mixed_restored_split_picker,
+        )
+        print(
+            "picker_approval_restore_overlap_preview_split=",
+            "restored current: pending run_shell_command via fake_runtime; queued 1" in mixed_restored_split_picker
+            and "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0"
+            in mixed_restored_split_picker
+            and "- restored current approval: pending run_shell_command via fake_runtime | queued 1"
+            in mixed_restored_split_picker
+            and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
+            in mixed_restored_split_picker
+            and "- latest restored outcome age: 6h" in mixed_restored_split_picker,
         )
         print(
             "picker_denied_test_attention=",

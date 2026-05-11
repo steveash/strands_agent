@@ -363,6 +363,9 @@ async def run_smoke() -> None:
                 "session-denied | 1 turn(s)" in approval_restore_text
                 and "session-restored-pending | 1 turn(s)" in approval_restore_text
                 and "session-restored-edit-pending | 1 turn(s)" in approval_restore_text
+                and "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d), restored 1 (oldest 6h)"
+                in approval_restore_text
+                and "Restore lane focus: restore queue, restored" in approval_restore_text
                 and "session-newer | 1 turn(s)" not in approval_restore_text,
             )
             print(
@@ -1037,6 +1040,91 @@ async def run_smoke() -> None:
                 "approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_output
                 and "- approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_output,
             )
+
+        with TemporaryDirectory() as mixed_restore_overlap_root:
+            mixed_current_store = SessionArtifactStore(mixed_restore_overlap_root, session_id="session-current")
+            append_turn(mixed_current_store, "current prompt", "current response")
+
+            mixed_overlap_store = SessionArtifactStore(
+                mixed_restore_overlap_root,
+                session_id="session-restored-overlap",
+            )
+            denied_event = runtime_event(
+                "steering_denied",
+                "replace_text",
+                "Denied in the TUI",
+                data={
+                    "tool_name": "replace_text",
+                    "approval_id": "approval-overlap-1",
+                    "approval_status": "denied",
+                    "approval_source": "fake_runtime",
+                    "approval_restored": True,
+                    "remaining_pending_count": 0,
+                },
+            )
+            denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
+            mixed_overlap_store.append_turn(
+                TurnArtifact(
+                    prompt="restore denied edit and pending test",
+                    response="restored overlap response",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[denied_event],
+                    response_metadata={"mode": "fake"},
+                )
+            )
+            mixed_overlap_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-overlap-2",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="rerun restored tests",
+                        restored_from_session=True,
+                        created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
+                    )
+                ]
+            )
+
+            mixed_overlap_app = StrandsAgentApp(
+                runtime=FakeStrandsRuntime(),
+                config=AppConfig(
+                    runtime_mode="fake",
+                    openai_model="gpt-4o-mini",
+                    workspace_root=".",
+                    artifacts_root=mixed_restore_overlap_root,
+                    session_id="session-current",
+                ),
+                artifact_store=mixed_current_store,
+            )
+
+            async with mixed_overlap_app.run_test() as pilot:
+                await pilot.pause()
+                await pilot.press("f11")
+                await pilot.pause()
+                await pilot.press("v")
+                await pilot.pause()
+                mixed_overlap_output = str(mixed_overlap_app.query_one("#output").render())
+                print(
+                    "switcher_approval_restore_overlap_summary=",
+                    "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session"
+                    in mixed_overlap_output
+                    and "Restore lane focus: restore queue, restored" in mixed_overlap_output,
+                )
+                print(
+                    "switcher_approval_restore_overlap_preview_split=",
+                    "restored current: pending run_shell_command via fake_runtime; queued 1"
+                    in mixed_overlap_output
+                    and "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0"
+                    in mixed_overlap_output
+                    and "- restored current approval: pending run_shell_command via fake_runtime | queued 1"
+                    in mixed_overlap_output
+                    and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
+                    in mixed_overlap_output
+                    and "- latest restored outcome age: 6h" in mixed_overlap_output,
+                )
 
 
 def main() -> None:
