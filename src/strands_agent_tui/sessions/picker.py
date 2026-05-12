@@ -15,9 +15,13 @@ from .artifacts import (
     save_session_picker_state,
 )
 from .summary_utils import (
+    render_backlog_summary_line,
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
+    render_filter_focus_line,
     render_lane_focus_suffix,
+    render_lane_label_list,
+    render_page_lane_summary_line,
 )
 from ..runtime import ApprovalRequest
 from ..tools.workspace import resolve_shell_command
@@ -1995,15 +1999,16 @@ def render_recent_session_filter_summary_lines(
 ) -> list[str]:
     if filter_mode == "approval-restore" and summaries:
         lane_counts, lane_oldest_ages, mixed_count = _summarize_approval_restore_lanes(summaries)
-        session_label = "session" if len(summaries) == 1 else "sessions"
         lane_rollup = _format_approval_restore_lane_rollup(lane_counts, lane_oldest_ages)
-        line = f"Approval restore backlog: {len(summaries)} {session_label}"
-        if lane_rollup:
-            line += f" | lanes: {lane_rollup}"
-        if mixed_count > 0:
-            line += f" | overlap: {_format_mixed_overlap_count(mixed_count)}"
-
-        lines = [line, "Restore lane focus: restore queue, restored"]
+        lines = [
+            render_backlog_summary_line(
+                "Approval restore backlog",
+                len(summaries),
+                lane_rollup=lane_rollup,
+                overlap_summary=_format_mixed_overlap_count(mixed_count) if mixed_count > 0 else "",
+            ),
+            render_filter_focus_line("Restore lane focus", APPROVAL_RESTORE_LANE_DISPLAY_ORDER),
+        ]
         if len(summaries) <= page_size:
             return lines
 
@@ -2020,31 +2025,40 @@ def render_recent_session_filter_summary_lines(
         if not visible_rollup:
             return lines
 
-        page_line = f"This page restore lanes: {visible_rollup}"
         off_page_lane_counts, off_page_lane_oldest_ages, off_page_mixed_count = _summarize_approval_restore_lanes(
             off_page_summaries
         )
         off_page_rollup = _format_approval_restore_lane_rollup(off_page_lane_counts, off_page_lane_oldest_ages)
-        if off_page_rollup:
-            page_line += f" | more off-page: {off_page_rollup}"
-        if visible_mixed_count > 0 or off_page_mixed_count > 0:
-            visible_overlap = _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else "none"
-            off_page_overlap = _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else "none"
-            page_line += f" | overlap here/off-page: {visible_overlap} / {off_page_overlap}"
-        lines.append(page_line)
+        lines.append(
+            render_page_lane_summary_line(
+                "restore lanes",
+                visible_rollup,
+                off_page_rollup=off_page_rollup,
+                visible_overlap_summary=(
+                    _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else ""
+                ),
+                off_page_overlap_summary=(
+                    _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else ""
+                ),
+            )
+        )
         return lines
 
     if filter_mode in {"workspace-inspect", "workspace-edit"} and summaries:
         lane_counts, mixed_count = _summarize_workspace_lanes(summaries)
-        session_label = "session" if len(summaries) == 1 else "sessions"
         lane_rollup = _format_simple_lane_rollup(lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
-        line = f"Workspace backlog: {len(summaries)} {session_label}"
-        if lane_rollup:
-            line += f" | lanes: {lane_rollup}"
-        if mixed_count > 0:
-            line += f" | overlap: {_format_mixed_overlap_count(mixed_count)}"
-
-        lines = [line, f"Workspace focus: {_workspace_filter_focus_label(filter_mode)}"]
+        lines = [
+            render_backlog_summary_line(
+                "Workspace backlog",
+                len(summaries),
+                lane_rollup=lane_rollup,
+                overlap_summary=_format_mixed_overlap_count(mixed_count) if mixed_count > 0 else "",
+            ),
+            render_filter_focus_line(
+                "Workspace focus",
+                ["edit"] if filter_mode == "workspace-edit" else ["inspect"],
+            ),
+        ]
         if len(summaries) <= page_size:
             return lines
 
@@ -2058,29 +2072,40 @@ def render_recent_session_filter_summary_lines(
         if not visible_rollup:
             return lines
 
-        page_line = f"This page workspace lanes: {visible_rollup}"
         off_page_lane_counts, off_page_mixed_count = _summarize_workspace_lanes(off_page_summaries)
         off_page_rollup = _format_simple_lane_rollup(off_page_lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
-        if off_page_rollup:
-            page_line += f" | more off-page: {off_page_rollup}"
-        if visible_mixed_count > 0 or off_page_mixed_count > 0:
-            visible_overlap = _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else "none"
-            off_page_overlap = _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else "none"
-            page_line += f" | overlap here/off-page: {visible_overlap} / {off_page_overlap}"
-        lines.append(page_line)
+        lines.append(
+            render_page_lane_summary_line(
+                "workspace lanes",
+                visible_rollup,
+                off_page_rollup=off_page_rollup,
+                visible_overlap_summary=(
+                    _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else ""
+                ),
+                off_page_overlap_summary=(
+                    _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else ""
+                ),
+            )
+        )
         return lines
 
     if filter_mode in {"shell", "shell-inspect", "shell-test"} and summaries:
         lane_counts, mixed_count = _summarize_shell_lanes(summaries)
-        session_label = "session" if len(summaries) == 1 else "sessions"
         lane_rollup = _format_simple_lane_rollup(lane_counts, SHELL_LANE_DISPLAY_ORDER)
-        line = f"Shell backlog: {len(summaries)} {session_label}"
-        if lane_rollup:
-            line += f" | lanes: {lane_rollup}"
-        if mixed_count > 0:
-            line += f" | overlap: {_format_mixed_overlap_count(mixed_count)}"
-
-        lines = [line, f"Shell focus: {_shell_filter_focus_label(filter_mode)}"]
+        shell_focus_lanes = (
+            ["inspect"]
+            if filter_mode == "shell-inspect"
+            else ["test"] if filter_mode == "shell-test" else list(SHELL_LANE_DISPLAY_ORDER)
+        )
+        lines = [
+            render_backlog_summary_line(
+                "Shell backlog",
+                len(summaries),
+                lane_rollup=lane_rollup,
+                overlap_summary=_format_mixed_overlap_count(mixed_count) if mixed_count > 0 else "",
+            ),
+            render_filter_focus_line("Shell focus", shell_focus_lanes),
+        ]
         if len(summaries) <= page_size:
             return lines
 
@@ -2094,16 +2119,21 @@ def render_recent_session_filter_summary_lines(
         if not visible_rollup:
             return lines
 
-        page_line = f"This page shell lanes: {visible_rollup}"
         off_page_lane_counts, off_page_mixed_count = _summarize_shell_lanes(off_page_summaries)
         off_page_rollup = _format_simple_lane_rollup(off_page_lane_counts, SHELL_LANE_DISPLAY_ORDER)
-        if off_page_rollup:
-            page_line += f" | more off-page: {off_page_rollup}"
-        if visible_mixed_count > 0 or off_page_mixed_count > 0:
-            visible_overlap = _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else "none"
-            off_page_overlap = _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else "none"
-            page_line += f" | overlap here/off-page: {visible_overlap} / {off_page_overlap}"
-        lines.append(page_line)
+        lines.append(
+            render_page_lane_summary_line(
+                "shell lanes",
+                visible_rollup,
+                off_page_rollup=off_page_rollup,
+                visible_overlap_summary=(
+                    _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else ""
+                ),
+                off_page_overlap_summary=(
+                    _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else ""
+                ),
+            )
+        )
         return lines
 
     stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
@@ -2111,17 +2141,18 @@ def render_recent_session_filter_summary_lines(
         return []
 
     lane_counts, lane_oldest_ages = _summarize_stale_approval_lanes(summaries, lanes=stale_filter_lanes)
-    session_label = "session" if len(summaries) == 1 else "sessions"
     lane_rollup = _format_stale_approval_lane_rollup(lane_counts, lane_oldest_ages)
-    line = f"{_stale_approval_summary_label(filter_mode)}: {len(summaries)} {session_label}"
-    if lane_rollup:
-        line += f" | lanes: {lane_rollup}"
-
+    stale_focus_lanes = [lane for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER if lane in stale_filter_lanes]
     lines = [
-        line,
-        (
-            f"Stale lane focus: {_stale_approval_filter_focus_label(filter_mode)} | "
-            f"cutoff: {format_stale_approval_cutoff(stale_approval_warning_seconds)}"
+        render_backlog_summary_line(
+            _stale_approval_summary_label(filter_mode),
+            len(summaries),
+            lane_rollup=lane_rollup,
+        ),
+        render_filter_focus_line(
+            "Stale lane focus",
+            stale_focus_lanes,
+            cutoff=format_stale_approval_cutoff(stale_approval_warning_seconds),
         ),
     ]
     if len(summaries) <= page_size:
@@ -2138,13 +2169,16 @@ def render_recent_session_filter_summary_lines(
     if not visible_rollup:
         return lines
 
-    page_line = f"This page stale lanes: {visible_rollup}"
     off_page_rollup = _format_stale_approval_lane_rollup(
         *_summarize_stale_approval_lanes(off_page_summaries, lanes=stale_filter_lanes)
     )
-    if off_page_rollup:
-        page_line += f" | more off-page: {off_page_rollup}"
-    lines.append(page_line)
+    lines.append(
+        render_page_lane_summary_line(
+            "stale lanes",
+            visible_rollup,
+            off_page_rollup=off_page_rollup,
+        )
+    )
     return lines
 
 
@@ -2315,7 +2349,7 @@ def _stale_approval_filter_focus_label(filter_mode: str) -> str:
     if not lanes:
         return "none"
     ordered_lanes = [lane for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER if lane in lanes]
-    return ", ".join(ordered_lanes)
+    return render_lane_label_list(ordered_lanes)
 
 
 def _summarize_stale_approval_lanes(

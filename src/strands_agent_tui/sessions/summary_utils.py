@@ -3,10 +3,15 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 
+def render_lane_label_list(lanes: Sequence[str]) -> str:
+    return ", ".join(lanes)
+
+
 def render_lane_focus_suffix(label: str, lanes: Sequence[str]) -> str:
-    if not lanes:
+    lane_labels = render_lane_label_list(lanes)
+    if not lane_labels:
         return ""
-    return f" | {label}: {', '.join(lanes)}"
+    return f" | {label}: {lane_labels}"
 
 
 def render_lane_focus_preview_lines(
@@ -15,9 +20,58 @@ def render_lane_focus_preview_lines(
     *,
     include: bool = True,
 ) -> list[str]:
-    if not include or not lanes:
+    lane_labels = render_lane_label_list(lanes)
+    if not include or not lane_labels:
         return []
-    return [f"- {label}: {', '.join(lanes)}"]
+    return [f"- {label}: {lane_labels}"]
+
+
+def render_filter_focus_line(
+    label: str,
+    lanes: Sequence[str],
+    *,
+    cutoff: str = "",
+) -> str:
+    lane_labels = render_lane_label_list(lanes) or "none"
+    line = f"{label}: {lane_labels}"
+    if cutoff:
+        line += f" | cutoff: {cutoff}"
+    return line
+
+
+def render_backlog_summary_line(
+    label: str,
+    count: int,
+    *,
+    lane_rollup: str = "",
+    overlap_summary: str = "",
+) -> str:
+    session_label = "session" if count == 1 else "sessions"
+    line = f"{label}: {count} {session_label}"
+    if lane_rollup:
+        line += f" | lanes: {lane_rollup}"
+    if overlap_summary:
+        line += f" | overlap: {overlap_summary}"
+    return line
+
+
+def render_page_lane_summary_line(
+    label: str,
+    visible_rollup: str,
+    *,
+    off_page_rollup: str = "",
+    visible_overlap_summary: str = "",
+    off_page_overlap_summary: str = "",
+) -> str:
+    line = f"This page {label}: {visible_rollup}"
+    if off_page_rollup:
+        line += f" | more off-page: {off_page_rollup}"
+    if visible_overlap_summary or off_page_overlap_summary:
+        line += (
+            " | overlap here/off-page: "
+            f"{visible_overlap_summary or 'none'} / {off_page_overlap_summary or 'none'}"
+        )
+    return line
 
 
 def render_compact_badge_row_suffix(

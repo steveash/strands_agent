@@ -1,8 +1,11 @@
 from strands_agent_tui.sessions.summary_utils import (
+    render_backlog_summary_line,
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
+    render_filter_focus_line,
     render_lane_focus_preview_lines,
     render_lane_focus_suffix,
+    render_page_lane_summary_line,
 )
 
 
@@ -13,6 +16,36 @@ def test_render_lane_focus_helpers_share_row_and_preview_wording() -> None:
     assert render_lane_focus_preview_lines("restore focus", lanes) == [
         "- restore focus: restore queue, restored"
     ]
+
+
+def test_render_backlog_summary_helpers_share_lane_rollup_and_focus_wording() -> None:
+    assert render_backlog_summary_line(
+        "Approval restore backlog",
+        10,
+        lane_rollup="restore queue 9 (oldest 18d), restored 2 (oldest 8h)",
+        overlap_summary="mixed 1 session",
+    ) == (
+        "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 "
+        "(oldest 8h) | overlap: mixed 1 session"
+    )
+    assert render_filter_focus_line("Restore lane focus", ["restore queue", "restored"]) == (
+        "Restore lane focus: restore queue, restored"
+    )
+    assert render_filter_focus_line(
+        "Stale lane focus",
+        ["pending", "denied"],
+        cutoff="approvals >= 7d old",
+    ) == "Stale lane focus: pending, denied | cutoff: approvals >= 7d old"
+    assert render_page_lane_summary_line(
+        "restore lanes",
+        "restore queue 8 (oldest 18d)",
+        off_page_rollup="restore queue 1 (oldest 3d), restored 2 (oldest 8h)",
+        visible_overlap_summary="none",
+        off_page_overlap_summary="mixed 1 session",
+    ) == (
+        "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 "
+        "(oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
+    )
 
 
 def test_render_compact_badge_helpers_render_single_focus_badge_consistently() -> None:
