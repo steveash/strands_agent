@@ -14,6 +14,11 @@ from .artifacts import (
     load_session_picker_state,
     save_session_picker_state,
 )
+from .summary_utils import (
+    render_compact_badge_preview_lines,
+    render_compact_badge_row_suffix,
+    render_lane_focus_suffix,
+)
 from ..runtime import ApprovalRequest
 from ..tools.workspace import resolve_shell_command
 
@@ -197,7 +202,7 @@ class SessionSummary:
             filter_mode,
             stale_focus_lanes=stale_focus_lanes,
         )
-        stale_focus_suffix = f" | stale focus: {', '.join(stale_focus_lanes)}" if stale_focus_lanes else ""
+        stale_focus_suffix = render_lane_focus_suffix("stale focus", stale_focus_lanes)
         intervention_suffix = (
             f" | intervention: {', '.join(self.intervention_badges)}" if self.intervention_badges else ""
         )
@@ -2326,15 +2331,15 @@ def _render_approval_restore_row_age_suffixes(
         default_age_suffix = f" | approval restore age: {summary.last_restored_approval_age_summary}"
 
     focus_lanes = _approval_restore_focus_lanes(summary, filter_mode)
-    focus_suffix = f" | restore focus: {', '.join(focus_lanes)}" if focus_lanes else ""
+    focus_suffix = render_lane_focus_suffix("restore focus", focus_lanes)
     age_badges = _approval_restore_age_badges(summary, filter_mode, focus_lanes=focus_lanes)
-    if not age_badges:
-        return default_age_suffix, focus_suffix, False
-
-    if len(age_badges) == 1:
-        age_suffix = f" | approval restore age: {_approval_restore_age_label(age_badges[0])}"
-    else:
-        age_suffix = f" | approval restore ages: {'; '.join(age_badges)}"
+    age_suffix = render_compact_badge_row_suffix(
+        default_suffix=default_age_suffix,
+        focused_badges=age_badges,
+        singular_label="approval restore age",
+        plural_label="approval restore ages",
+        singular_value_transform=_approval_restore_age_label,
+    )
     return age_suffix, focus_suffix, "restored" in focus_lanes
 
 
@@ -2353,20 +2358,18 @@ def _render_approval_restore_preview_lines(
         default_lines.append(f"- approval restore age: {summary.last_restored_approval_age_summary}")
 
     focus_lanes = _approval_restore_focus_lanes(summary, filter_mode)
-    focus_lines = (
-        [f"- restore focus: {', '.join(focus_lanes)}"]
-        if focus_lanes and _should_render_approval_restore_focus_preview_line(filter_mode)
-        else []
-    )
     age_badges = _approval_restore_age_badges(summary, filter_mode, focus_lanes=focus_lanes)
-    if not age_badges:
-        return [*focus_lines, *default_lines], False
-
-    if len(age_badges) == 1:
-        age_lines = [f"- approval restore age: {_approval_restore_age_label(age_badges[0])}"]
-    else:
-        age_lines = [f"- approval restore ages: {'; '.join(age_badges)}"]
-    return [*focus_lines, *age_lines], "restored" in focus_lanes
+    lines = render_compact_badge_preview_lines(
+        default_lines=default_lines,
+        focused_badges=age_badges,
+        focus_lanes=focus_lanes,
+        focus_label="restore focus",
+        include_focus_line=_should_render_approval_restore_focus_preview_line(filter_mode),
+        singular_label="approval restore age",
+        plural_label="approval restore ages",
+        singular_value_transform=_approval_restore_age_label,
+    )
+    return lines, "restored" in focus_lanes
 
 
 def _render_restored_row_suffixes(
@@ -2421,15 +2424,14 @@ def _render_stale_approval_row_suffix(
     stale_focus_lanes: list[str] | None = None,
 ) -> str:
     default_suffix = _default_stale_approval_row_suffix(summary)
-    if not default_suffix:
-        return default_suffix
-
     focus_badges = _focused_stale_approval_badges(summary, filter_mode, stale_focus_lanes=stale_focus_lanes)
-    if not focus_badges:
-        return default_suffix
-    if len(focus_badges) == 1:
-        return f" | approval stale age: {_stale_approval_badge_age_label(focus_badges[0])}"
-    return f" | approval stale ages: {'; '.join(focus_badges)}"
+    return render_compact_badge_row_suffix(
+        default_suffix=default_suffix,
+        focused_badges=focus_badges,
+        singular_label="approval stale age",
+        plural_label="approval stale ages",
+        singular_value_transform=_stale_approval_badge_age_label,
+    )
 
 
 def _render_stale_approval_preview_lines(summary: SessionSummary, filter_mode: str) -> list[str]:
@@ -2438,13 +2440,17 @@ def _render_stale_approval_preview_lines(summary: SessionSummary, filter_mode: s
         return []
 
     focus_lanes = _stale_approval_focus_lanes(summary, filter_mode)
-    focus_lines = [f"- stale focus: {', '.join(focus_lanes)}"] if focus_lanes else []
     focus_badges = _focused_stale_approval_badges(summary, filter_mode, stale_focus_lanes=focus_lanes)
-    if not focus_badges:
-        return [*focus_lines, default_line]
-    if len(focus_badges) == 1:
-        return [*focus_lines, f"- approval stale age: {_stale_approval_badge_age_label(focus_badges[0])}"]
-    return [*focus_lines, f"- approval stale ages: {'; '.join(focus_badges)}"]
+    return render_compact_badge_preview_lines(
+        default_lines=[default_line],
+        focused_badges=focus_badges,
+        focus_lanes=focus_lanes,
+        focus_label="stale focus",
+        include_focus_line=True,
+        singular_label="approval stale age",
+        plural_label="approval stale ages",
+        singular_value_transform=_stale_approval_badge_age_label,
+    )
 
 
 def _default_stale_approval_row_suffix(summary: SessionSummary) -> str:
