@@ -9,6 +9,11 @@ from strands_agent_tui.sessions.summary_utils import (
     render_lane_focus_suffix,
     render_lane_label_list,
     render_page_lane_summary_line,
+    render_picker_empty_filter_adjust_guidance,
+    render_picker_empty_filter_prompt,
+    render_picker_empty_filter_visible_guidance,
+    render_recent_session_empty_state_lines,
+    render_recent_session_filter_jump_line,
 )
 
 
@@ -175,3 +180,69 @@ def test_render_compact_badge_row_suffix_falls_back_to_default_when_unfocused() 
         plural_label="approval stale ages",
         singular_value_transform=lambda badge: badge,
     ) == " | approval stale age: 45d"
+
+
+@pytest.mark.parametrize(
+    ("surface", "filter_mode", "available_count", "expected"),
+    [
+        (
+            "picker",
+            "pending",
+            1,
+            [
+                "No saved sessions match the active picker filter.",
+                "1 saved session still exists under this root.",
+                "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage.",
+                "Press Enter or N to start a fresh session while keeping this picker context for the next reopen.",
+            ],
+        ),
+        (
+            "switcher",
+            "pending",
+            2,
+            [
+                "No saved sessions match the active switcher filter.",
+                "2 saved sessions still exist under this root.",
+                "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage.",
+                "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists.",
+                "Enter switches the highlighted session once a visible row exists again.",
+            ],
+        ),
+        (
+            "picker",
+            "all",
+            0,
+            [
+                "No saved sessions match the active picker filter.",
+                "0 saved sessions still exist under this root.",
+                "Press Enter or N to start a fresh session while keeping this picker context for the next reopen.",
+            ],
+        ),
+    ],
+)
+def test_render_recent_session_empty_state_lines_share_picker_and_switcher_guidance(
+    surface: str,
+    filter_mode: str,
+    available_count: int,
+    expected: list[str],
+) -> None:
+    assert render_recent_session_empty_state_lines(
+        available_count=available_count,
+        filter_mode=filter_mode,
+        surface=surface,
+    ) == expected
+
+
+def test_render_picker_empty_filter_guidance_helpers_share_key_hints() -> None:
+    assert render_recent_session_filter_jump_line() == (
+        "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage."
+    )
+    assert render_picker_empty_filter_prompt() == (
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to change triage: "
+    )
+    assert render_picker_empty_filter_visible_guidance() == (
+        "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
+    )
+    assert render_picker_empty_filter_adjust_guidance() == (
+        "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+    )

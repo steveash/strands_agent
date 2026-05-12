@@ -22,6 +22,10 @@ from .summary_utils import (
     render_lane_focus_suffix,
     render_lane_label_list,
     render_page_lane_summary_line,
+    render_picker_empty_filter_adjust_guidance,
+    render_picker_empty_filter_prompt,
+    render_picker_empty_filter_visible_guidance,
+    render_recent_session_empty_state_lines as render_recent_session_empty_state_lines_helper,
 )
 from ..runtime import ApprovalRequest
 from ..tools.workspace import resolve_shell_command
@@ -770,7 +774,7 @@ def pick_session(
         prompt = (
             "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page: "
             if current_summaries
-            else "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to change triage: "
+            else render_picker_empty_filter_prompt()
         )
         selection = input_fn(prompt).strip()
         if not selection:
@@ -953,18 +957,14 @@ def pick_session(
                     f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list, press Enter to reopen highlighted, or N for a new session."
                 )
             else:
-                output_fn(
-                    "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
-                )
+                output_fn(render_picker_empty_filter_visible_guidance())
             continue
         if current_summaries:
             output_fn(
                 f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N."
             )
         else:
-            output_fn(
-                "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
-            )
+            output_fn(render_picker_empty_filter_adjust_guidance())
 
 
 def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:
@@ -2188,21 +2188,11 @@ def render_recent_session_empty_state_lines(
     filter_mode: str,
     surface: str = "picker",
 ) -> list[str]:
-    surface = "switcher" if surface == "switcher" else "picker"
-    lines = [f"No saved sessions match the active {surface} filter."]
-    session_label = "session" if available_count == 1 else "sessions"
-    verb = "exists" if available_count == 1 else "exist"
-    lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
-    if filter_mode != "all":
-        lines.append(
-            "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage."
-        )
-    if surface == "picker":
-        lines.append("Press Enter or N to start a fresh session while keeping this picker context for the next reopen.")
-    else:
-        lines.append("Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists.")
-        lines.append("Enter switches the highlighted session once a visible row exists again.")
-    return lines
+    return render_recent_session_empty_state_lines_helper(
+        available_count=available_count,
+        filter_mode=filter_mode,
+        surface=surface,
+    )
 
 
 def _is_stale_approval_filter_mode(filter_mode: str) -> bool:

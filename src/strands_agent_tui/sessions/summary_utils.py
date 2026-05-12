@@ -3,6 +3,16 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 
+RECENT_SESSION_TRIAGE_JUMP_KEYS = "P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y"
+RECENT_SESSION_TRIAGE_CHANGE_KEYS = "A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ]"
+RECENT_SESSION_TRIAGE_KEEP_KEYS = "P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ]"
+RECENT_SESSION_TRIAGE_LABELS = (
+    "pending, denied, restore, restored-approval, stale-approval, stale-pending, "
+    "stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, "
+    "shell, shell-inspect, and shell-test triage."
+)
+
+
 def render_lane_label_list(lanes: Sequence[str]) -> str:
     return ", ".join(lanes)
 
@@ -112,3 +122,56 @@ def render_compact_badge_preview_lines(
             value = singular_value_transform(value)
         return [*focus_lines, f"- {singular_label}: {value}"]
     return [*focus_lines, f"- {plural_label}: {'; '.join(focused_badges)}"]
+
+
+def render_recent_session_filter_jump_line() -> str:
+    return (
+        "Try A to show all sessions, or "
+        f"{RECENT_SESSION_TRIAGE_JUMP_KEYS} to jump between {RECENT_SESSION_TRIAGE_LABELS}"
+    )
+
+
+def render_recent_session_empty_state_lines(
+    *,
+    available_count: int,
+    filter_mode: str,
+    surface: str = "picker",
+) -> list[str]:
+    surface = "switcher" if surface == "switcher" else "picker"
+    lines = [f"No saved sessions match the active {surface} filter."]
+    session_label = "session" if available_count == 1 else "sessions"
+    verb = "exists" if available_count == 1 else "exist"
+    lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
+    if filter_mode != "all":
+        lines.append(render_recent_session_filter_jump_line())
+    if surface == "picker":
+        lines.append(
+            "Press Enter or N to start a fresh session while keeping this picker context for the next reopen."
+        )
+    else:
+        lines.append(
+            "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists."
+        )
+        lines.append("Enter switches the highlighted session once a visible row exists again.")
+    return lines
+
+
+def render_picker_empty_filter_prompt() -> str:
+    return (
+        "No sessions match this filter. Press Enter or N for a new session, or use "
+        f"{RECENT_SESSION_TRIAGE_CHANGE_KEYS} to change triage: "
+    )
+
+
+def render_picker_empty_filter_visible_guidance() -> str:
+    return (
+        "No sessions are visible with the active filter. Press A to show all sessions, or "
+        f"{RECENT_SESSION_TRIAGE_KEEP_KEYS} to keep triaging; Enter or N starts a new session."
+    )
+
+
+def render_picker_empty_filter_adjust_guidance() -> str:
+    return (
+        "No sessions match the active filter. Use "
+        f"{RECENT_SESSION_TRIAGE_CHANGE_KEYS} to adjust triage, or press Enter/N to start a new session."
+    )
