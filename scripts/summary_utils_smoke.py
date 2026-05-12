@@ -4,11 +4,16 @@ from strands_agent_tui.sessions.summary_utils import (
     render_compact_badge_row_suffix,
     render_filter_focus_line,
     render_page_lane_summary_line,
+    render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
     render_picker_empty_filter_visible_guidance,
+    render_picker_invalid_key_guidance,
+    render_picker_invalid_selection_message,
+    render_picker_selection_prompt,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
+    render_switcher_controls_line,
 )
 
 
@@ -106,6 +111,22 @@ def main() -> None:
         == "No sessions are visible with the active filter. Press A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to keep triaging; Enter or N starts a new session."
         and render_picker_empty_filter_adjust_guidance()
         == "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session.",
+    )
+    print(
+        "summary_control_legends=",
+        render_picker_controls_line()
+        == "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
+        and render_switcher_controls_line()
+        == "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel",
+    )
+    print(
+        "summary_picker_selection_guidance=",
+        render_picker_selection_prompt()
+        == "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page: "
+        and render_picker_invalid_selection_message("9", 3)
+        == "Invalid selection: '9'. Choose 1-3 from the visible list, press Enter to reopen highlighted, or N for a new session."
+        and render_picker_invalid_key_guidance(3)
+        == "Invalid selection. Use 1-3, J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N.",
     )
 
 

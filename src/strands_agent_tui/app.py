@@ -26,6 +26,7 @@ from strands_agent_tui.sessions import (
     sanitize_session_switcher_filter_mode,
     sanitize_session_switcher_sort_mode,
 )
+from strands_agent_tui.sessions.summary_utils import render_switcher_controls_line
 
 
 def _positive_int_arg(value: str) -> int:
@@ -517,10 +518,7 @@ class StrandsAgentApp(App):
             "Session Switcher",
             f"Current session: {self.artifact_store.session_id}",
             f"Artifacts root: {self.artifact_store.root}",
-            (
-                "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
-                "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
-            ),
+            render_switcher_controls_line(),
             (
                 f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode}{stale_cutoff_suffix} | "
                 f"Page: {self.session_switcher_page_label()} | "

@@ -382,6 +382,28 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
     assert any("Press Enter or N to start a fresh session" in line for line in captured)
 
 
+def test_pick_session_invalid_key_guidance_uses_visible_row_count(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-demo")
+    _append_turn(store, "review demo")
+
+    responses = iter(["z", "n"])
+    prompts: list[str] = []
+    captured: list[str] = []
+
+    summary = pick_session(
+        tmp_path,
+        input_fn=lambda prompt: prompts.append(prompt) or next(responses),
+        output_fn=captured.append,
+    )
+
+    assert summary is None
+    assert prompts[0] == (
+        "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page: "
+    )
+    assert "Invalid selection. Use 1-1, J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N." in captured
+    assert not any("Invalid selection. Use 1-8" in line for line in captured)
+
+
 def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Path) -> None:
     plain_store = SessionArtifactStore(tmp_path, session_id="session-plain")
     _append_turn(plain_store, "plain work")

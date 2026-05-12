@@ -22,9 +22,13 @@ from .summary_utils import (
     render_lane_focus_suffix,
     render_lane_label_list,
     render_page_lane_summary_line,
+    render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
     render_picker_empty_filter_visible_guidance,
+    render_picker_invalid_key_guidance,
+    render_picker_invalid_selection_message,
+    render_picker_selection_prompt,
     render_recent_session_empty_state_lines as render_recent_session_empty_state_lines_helper,
 )
 from ..runtime import ApprovalRequest
@@ -695,7 +699,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session",
+            render_picker_controls_line(),
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -771,11 +775,7 @@ def pick_session(
                 stale_approval_warning_seconds=stale_approval_warning_seconds,
             )
         )
-        prompt = (
-            "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page: "
-            if current_summaries
-            else render_picker_empty_filter_prompt()
-        )
+        prompt = render_picker_selection_prompt() if current_summaries else render_picker_empty_filter_prompt()
         selection = input_fn(prompt).strip()
         if not selection:
             if current_summaries:
@@ -953,16 +953,12 @@ def pick_session(
                 )
                 return current_summaries[selected_index]
             if current_summaries:
-                output_fn(
-                    f"Invalid selection: {selection!r}. Choose 1-{len(current_summaries)} from the visible list, press Enter to reopen highlighted, or N for a new session."
-                )
+                output_fn(render_picker_invalid_selection_message(selection, len(current_summaries)))
             else:
                 output_fn(render_picker_empty_filter_visible_guidance())
             continue
         if current_summaries:
-            output_fn(
-                f"Invalid selection. Use 1-{limit}, J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N."
-            )
+            output_fn(render_picker_invalid_key_guidance(len(current_summaries)))
         else:
             output_fn(render_picker_empty_filter_adjust_guidance())
 

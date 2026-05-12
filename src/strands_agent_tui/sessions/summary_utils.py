@@ -5,7 +5,9 @@ from collections.abc import Callable, Sequence
 
 RECENT_SESSION_TRIAGE_JUMP_KEYS = "P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y"
 RECENT_SESSION_TRIAGE_CHANGE_KEYS = "A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ]"
+RECENT_SESSION_PICKER_PROMPT_KEYS = "J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ]"
 RECENT_SESSION_TRIAGE_KEEP_KEYS = "P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ]"
+RECENT_SESSION_PICKER_SELECTION_KEYS = "J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N"
 RECENT_SESSION_TRIAGE_LABELS = (
     "pending, denied, restore, restored-approval, stale-approval, stale-pending, "
     "stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, "
@@ -154,6 +156,42 @@ def render_recent_session_empty_state_lines(
         )
         lines.append("Enter switches the highlighted session once a visible row exists again.")
     return lines
+
+
+def render_picker_controls_line() -> str:
+    return (
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, "
+        "O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, "
+        "E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, "
+        "N new session"
+    )
+
+
+def render_switcher_controls_line() -> str:
+    return (
+        "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
+        "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, "
+        "X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, "
+        "I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+    )
+
+
+def render_picker_selection_prompt() -> str:
+    return (
+        "Select visible session number, press Enter to reopen highlighted, N for new session, or use "
+        f"{RECENT_SESSION_PICKER_PROMPT_KEYS} to triage/page: "
+    )
+
+
+def render_picker_invalid_selection_message(selection: str, visible_count: int) -> str:
+    return (
+        f"Invalid selection: {selection!r}. Choose 1-{visible_count} from the visible list, "
+        "press Enter to reopen highlighted, or N for a new session."
+    )
+
+
+def render_picker_invalid_key_guidance(visible_count: int) -> str:
+    return f"Invalid selection. Use 1-{visible_count}, {RECENT_SESSION_PICKER_SELECTION_KEYS}."
 
 
 def render_picker_empty_filter_prompt() -> str:

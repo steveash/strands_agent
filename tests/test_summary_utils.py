@@ -9,11 +9,16 @@ from strands_agent_tui.sessions.summary_utils import (
     render_lane_focus_suffix,
     render_lane_label_list,
     render_page_lane_summary_line,
+    render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
     render_picker_empty_filter_visible_guidance,
+    render_picker_invalid_key_guidance,
+    render_picker_invalid_selection_message,
+    render_picker_selection_prompt,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
+    render_switcher_controls_line,
 )
 
 
@@ -245,4 +250,25 @@ def test_render_picker_empty_filter_guidance_helpers_share_key_hints() -> None:
     )
     assert render_picker_empty_filter_adjust_guidance() == (
         "No sessions match the active filter. Use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to adjust triage, or press Enter/N to start a new session."
+    )
+
+
+def test_render_recent_session_control_legend_helpers_share_picker_and_switcher_key_maps() -> None:
+    assert render_picker_controls_line() == (
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
+    )
+    assert render_switcher_controls_line() == (
+        "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+    )
+
+
+def test_render_picker_selection_and_invalid_guidance_helpers_share_visible_range() -> None:
+    assert render_picker_selection_prompt() == (
+        "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page: "
+    )
+    assert render_picker_invalid_selection_message("9", 3) == (
+        "Invalid selection: '9'. Choose 1-3 from the visible list, press Enter to reopen highlighted, or N for a new session."
+    )
+    assert render_picker_invalid_key_guidance(3) == (
+        "Invalid selection. Use 1-3, J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N."
     )
