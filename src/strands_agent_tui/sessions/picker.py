@@ -38,6 +38,8 @@ STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
 APPROVAL_RESTORE_LANE_DISPLAY_ORDER = ("restore queue", "restored")
+WORKSPACE_LANE_DISPLAY_ORDER = ("inspect", "edit")
+SHELL_LANE_DISPLAY_ORDER = ("inspect", "test")
 STALE_APPROVAL_LANE_DISPLAY_ORDER = ("pending", "denied", "restore queue", "restored")
 STALE_APPROVAL_FILTER_LANES = {
     "approval-stale": frozenset(STALE_APPROVAL_LANE_DISPLAY_ORDER),
@@ -2032,6 +2034,78 @@ def render_recent_session_filter_summary_lines(
         lines.append(page_line)
         return lines
 
+    if filter_mode in {"workspace-inspect", "workspace-edit"} and summaries:
+        lane_counts, mixed_count = _summarize_workspace_lanes(summaries)
+        session_label = "session" if len(summaries) == 1 else "sessions"
+        lane_rollup = _format_simple_lane_rollup(lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
+        line = f"Workspace backlog: {len(summaries)} {session_label}"
+        if lane_rollup:
+            line += f" | lanes: {lane_rollup}"
+        if mixed_count > 0:
+            line += f" | overlap: {_format_mixed_overlap_count(mixed_count)}"
+
+        lines = [line, f"Workspace focus: {_workspace_filter_focus_label(filter_mode)}"]
+        if len(summaries) <= page_size:
+            return lines
+
+        page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
+        start = page_index * page_size
+        end = start + page_size
+        visible_summaries = summaries[start:end]
+        off_page_summaries = summaries[:start] + summaries[end:]
+        visible_lane_counts, visible_mixed_count = _summarize_workspace_lanes(visible_summaries)
+        visible_rollup = _format_simple_lane_rollup(visible_lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
+        if not visible_rollup:
+            return lines
+
+        page_line = f"This page workspace lanes: {visible_rollup}"
+        off_page_lane_counts, off_page_mixed_count = _summarize_workspace_lanes(off_page_summaries)
+        off_page_rollup = _format_simple_lane_rollup(off_page_lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
+        if off_page_rollup:
+            page_line += f" | more off-page: {off_page_rollup}"
+        if visible_mixed_count > 0 or off_page_mixed_count > 0:
+            visible_overlap = _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else "none"
+            off_page_overlap = _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else "none"
+            page_line += f" | overlap here/off-page: {visible_overlap} / {off_page_overlap}"
+        lines.append(page_line)
+        return lines
+
+    if filter_mode in {"shell", "shell-inspect", "shell-test"} and summaries:
+        lane_counts, mixed_count = _summarize_shell_lanes(summaries)
+        session_label = "session" if len(summaries) == 1 else "sessions"
+        lane_rollup = _format_simple_lane_rollup(lane_counts, SHELL_LANE_DISPLAY_ORDER)
+        line = f"Shell backlog: {len(summaries)} {session_label}"
+        if lane_rollup:
+            line += f" | lanes: {lane_rollup}"
+        if mixed_count > 0:
+            line += f" | overlap: {_format_mixed_overlap_count(mixed_count)}"
+
+        lines = [line, f"Shell focus: {_shell_filter_focus_label(filter_mode)}"]
+        if len(summaries) <= page_size:
+            return lines
+
+        page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
+        start = page_index * page_size
+        end = start + page_size
+        visible_summaries = summaries[start:end]
+        off_page_summaries = summaries[:start] + summaries[end:]
+        visible_lane_counts, visible_mixed_count = _summarize_shell_lanes(visible_summaries)
+        visible_rollup = _format_simple_lane_rollup(visible_lane_counts, SHELL_LANE_DISPLAY_ORDER)
+        if not visible_rollup:
+            return lines
+
+        page_line = f"This page shell lanes: {visible_rollup}"
+        off_page_lane_counts, off_page_mixed_count = _summarize_shell_lanes(off_page_summaries)
+        off_page_rollup = _format_simple_lane_rollup(off_page_lane_counts, SHELL_LANE_DISPLAY_ORDER)
+        if off_page_rollup:
+            page_line += f" | more off-page: {off_page_rollup}"
+        if visible_mixed_count > 0 or off_page_mixed_count > 0:
+            visible_overlap = _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else "none"
+            off_page_overlap = _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else "none"
+            page_line += f" | overlap here/off-page: {visible_overlap} / {off_page_overlap}"
+        lines.append(page_line)
+        return lines
+
     stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
     if stale_filter_lanes is None or not summaries:
         return []
@@ -2099,6 +2173,66 @@ def render_recent_session_empty_state_lines(
 
 def _is_stale_approval_filter_mode(filter_mode: str) -> bool:
     return filter_mode in STALE_APPROVAL_FILTER_LANES
+
+
+def _workspace_lanes(summary: SessionSummary) -> set[str]:
+    lanes: set[str] = set()
+    if summary.has_workspace_inspect_activity:
+        lanes.add("inspect")
+    if summary.has_workspace_edit_activity:
+        lanes.add("edit")
+    return lanes
+
+
+def _workspace_filter_focus_label(filter_mode: str) -> str:
+    if filter_mode == "workspace-edit":
+        return "edit"
+    return "inspect"
+
+
+def _summarize_workspace_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, int], int]:
+    lane_counts = {lane: 0 for lane in WORKSPACE_LANE_DISPLAY_ORDER}
+    mixed_count = 0
+    for summary in summaries:
+        lanes = _workspace_lanes(summary)
+        if len(lanes) > 1:
+            mixed_count += 1
+        for lane in lanes:
+            lane_counts[lane] += 1
+    return lane_counts, mixed_count
+
+
+def _shell_lanes(summary: SessionSummary) -> set[str]:
+    lanes: set[str] = set()
+    if summary.has_shell_inspect_activity:
+        lanes.add("inspect")
+    if summary.has_shell_test_activity:
+        lanes.add("test")
+    return lanes
+
+
+def _shell_filter_focus_label(filter_mode: str) -> str:
+    if filter_mode == "shell-inspect":
+        return "inspect"
+    if filter_mode == "shell-test":
+        return "test"
+    return "inspect, test"
+
+
+def _summarize_shell_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, int], int]:
+    lane_counts = {lane: 0 for lane in SHELL_LANE_DISPLAY_ORDER}
+    mixed_count = 0
+    for summary in summaries:
+        lanes = _shell_lanes(summary)
+        if len(lanes) > 1:
+            mixed_count += 1
+        for lane in lanes:
+            lane_counts[lane] += 1
+    return lane_counts, mixed_count
+
+
+def _format_simple_lane_rollup(lane_counts: dict[str, int], display_order: tuple[str, ...]) -> str:
+    return ", ".join(f"{lane} {lane_counts[lane]}" for lane in display_order if lane_counts.get(lane, 0) > 0)
 
 
 def _should_render_stale_cutoff_preview_line(filter_mode: str) -> bool:

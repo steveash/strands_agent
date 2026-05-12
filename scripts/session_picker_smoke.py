@@ -626,6 +626,8 @@ def main() -> None:
         print(
             "picker_workspace_inspect_filter=",
             "Filter: workspace-inspect | Sort: recent" in workspace_inspect_picker
+            and "Workspace backlog: 1 session | lanes: inspect 1" in workspace_inspect_picker
+            and "Workspace focus: inspect" in workspace_inspect_picker
             and "session-tool | 1 turn(s)" in workspace_inspect_picker
             and "workspace lanes: inspect" in workspace_inspect_picker
             and "session-inspect | 1 turn(s)" not in workspace_inspect_picker,
@@ -633,6 +635,8 @@ def main() -> None:
         print(
             "picker_workspace_edit_filter=",
             "Filter: workspace-edit | Sort: recent" in workspace_edit_picker
+            and "Workspace backlog: 5 sessions | lanes: edit 5" in workspace_edit_picker
+            and "Workspace focus: edit" in workspace_edit_picker
             and "session-pending-edit | 1 turn(s)" in workspace_edit_picker
             and "session-restored-edit-pending | 1 turn(s)" in workspace_edit_picker
             and "session-denied | 1 turn(s)" in workspace_edit_picker
@@ -642,6 +646,8 @@ def main() -> None:
         print(
             "picker_shell_filter=",
             "Filter: shell | Sort: recent" in shell_picker
+            and "Shell backlog: 6 sessions | lanes: inspect 2, test 5 | overlap: mixed 1 session" in shell_picker
+            and "Shell focus: inspect, test" in shell_picker
             and "session-inspect | 1 turn(s)" in shell_picker
             and "session-pending | 1 turn(s)" in shell_picker
             and "shell: inspect 1" in shell_picker
@@ -663,6 +669,8 @@ def main() -> None:
         print(
             "picker_shell_inspect_filter=",
             "Filter: shell-inspect | Sort: recent" in shell_inspect_picker
+            and "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session" in shell_inspect_picker
+            and "Shell focus: inspect" in shell_inspect_picker
             and "session-inspect | 1 turn(s)" in shell_inspect_picker
             and "session-pending | 1 turn(s)" in shell_inspect_picker
             and "session-tool | 1 turn(s)" not in shell_inspect_picker,
@@ -670,6 +678,8 @@ def main() -> None:
         print(
             "picker_shell_test_filter=",
             "Filter: shell-test | Sort: recent" in shell_test_picker
+            and "Shell backlog: 5 sessions | lanes: inspect 1, test 5 | overlap: mixed 1 session" in shell_test_picker
+            and "Shell focus: test" in shell_test_picker
             and "session-pending | 1 turn(s)" in shell_test_picker
             and "session-aged | 1 turn(s)" in shell_test_picker
             and "session-failed-test | 1 turn(s)" in shell_test_picker

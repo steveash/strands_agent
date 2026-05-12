@@ -481,10 +481,14 @@ async def run_smoke() -> None:
             print(
                 "switcher_workspace_inspect_filter=",
                 "Filter: workspace-inspect | Sort: attention" in workspace_inspect_output
+                and "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session"
+                in workspace_inspect_output
+                and "Workspace focus: inspect" in workspace_inspect_output
             )
             print(
                 "switcher_workspace_inspect_only_workspace=",
                 "session-tool | 1 turn(s)" in workspace_inspect_output
+                and "session-newer | 1 turn(s)" in workspace_inspect_output
                 and "workspace lanes: inspect" in workspace_inspect_output
                 and "session-inspect | 1 turn(s)" not in workspace_inspect_output,
             )
@@ -494,10 +498,14 @@ async def run_smoke() -> None:
             print(
                 "switcher_workspace_edit_filter=",
                 "Filter: workspace-edit | Sort: attention" in workspace_edit_output
+                and "Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 | overlap: mixed 1 session"
+                in workspace_edit_output
+                and "Workspace focus: edit" in workspace_edit_output
             )
             print(
                 "switcher_workspace_edit_only_workspace=",
-                "session-pending-edit | 1 turn(s)" in workspace_edit_output
+                "session-newer | 1 turn(s)" in workspace_edit_output
+                and "session-pending-edit | 1 turn(s)" in workspace_edit_output
                 and "session-restored-edit-pending | 1 turn(s)" in workspace_edit_output
                 and "session-denied | 1 turn(s)" in workspace_edit_output
                 and "workspace lanes: edit" in workspace_edit_output
@@ -506,7 +514,13 @@ async def run_smoke() -> None:
             await pilot.press("h")
             await pilot.pause()
             shell_attention_output = str(first_app.query_one("#output").render())
-            print("switcher_shell_filter=", "Filter: shell | Sort: attention" in shell_attention_output)
+            print(
+                "switcher_shell_filter=",
+                "Filter: shell | Sort: attention" in shell_attention_output
+                and "Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session"
+                in shell_attention_output
+                and "Shell focus: inspect, test" in shell_attention_output
+            )
             print(
                 "switcher_shell_filter_only_shell=",
                 "session-newer | 1 turn(s)" in shell_attention_output
@@ -517,10 +531,17 @@ async def run_smoke() -> None:
             await pilot.press("i")
             await pilot.pause()
             shell_inspect_output = str(first_app.query_one("#output").render())
-            print("switcher_shell_inspect_filter=", "Filter: shell-inspect | Sort: attention" in shell_inspect_output)
+            print(
+                "switcher_shell_inspect_filter=",
+                "Filter: shell-inspect | Sort: attention" in shell_inspect_output
+                and "Shell backlog: 1 session | lanes: inspect 1, test 1 | overlap: mixed 1 session"
+                in shell_inspect_output
+                and "Shell focus: inspect" in shell_inspect_output
+            )
             print(
                 "switcher_shell_inspect_only_inspect=",
                 "session-newer | 1 turn(s)" in shell_inspect_output
+                and "session-aged | 1 turn(s)" not in shell_inspect_output
                 and "session-failed-test | 1 turn(s)" not in shell_inspect_output
                 and "session-restored-pending | 1 turn(s)" not in shell_inspect_output
                 and "session-tool | 1 turn(s)" not in shell_inspect_output,
@@ -533,7 +554,13 @@ async def run_smoke() -> None:
             await pilot.press("y")
             await pilot.pause()
             shell_test_output = str(first_app.query_one("#output").render())
-            print("switcher_shell_test_filter=", "Filter: shell-test | Sort: attention" in shell_test_output)
+            print(
+                "switcher_shell_test_filter=",
+                "Filter: shell-test | Sort: attention" in shell_test_output
+                and "Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session"
+                in shell_test_output
+                and "Shell focus: test" in shell_test_output
+            )
             print(
                 "switcher_shell_test_only_test=",
                 "session-newer | 1 turn(s)" in shell_test_output

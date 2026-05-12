@@ -193,6 +193,172 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
     assert "1. session-demo" not in rendered
 
 
+def test_render_session_picker_surfaces_workspace_rollups_and_overlap(tmp_path: Path) -> None:
+    inspect_store = SessionArtifactStore(tmp_path, session_id="session-workspace-inspect")
+    inspect_store.append_turn(
+        TurnArtifact(
+            prompt="inspect files",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    mixed_store = SessionArtifactStore(tmp_path, session_id="session-workspace-mixed")
+    mixed_store.append_turn(
+        TurnArtifact(
+            prompt="inspect before editing",
+            response="pending",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "read_file",
+                    "Finished reading file",
+                    data={"tool_name": "read_file", "result_preview": "README.md lines 1-20"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    mixed_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-workspace-mixed",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="apply the edit",
+            )
+        ]
+    )
+
+    edit_store = SessionArtifactStore(tmp_path, session_id="session-workspace-edit")
+    _append_turn(edit_store, "queue edit")
+    edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-workspace-edit",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "old_text": "old", "new_text": "new"},
+                source="fake_runtime",
+                prompt="queue replace_text",
+            )
+        ]
+    )
+
+    inspect_rendered = render_session_picker(tmp_path, filter_mode="workspace-inspect")
+    edit_rendered = render_session_picker(tmp_path, filter_mode="workspace-edit")
+
+    assert "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session" in inspect_rendered
+    assert "Workspace focus: inspect" in inspect_rendered
+    assert "Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session" in edit_rendered
+    assert "Workspace focus: edit" in edit_rendered
+
+
+
+def test_render_session_picker_surfaces_shell_rollups_and_overlap(tmp_path: Path) -> None:
+    inspect_store = SessionArtifactStore(tmp_path, session_id="session-shell-inspect")
+    inspect_store.append_turn(
+        TurnArtifact(
+            prompt="inspect shell state",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    mixed_store = SessionArtifactStore(tmp_path, session_id="session-shell-mixed-rollup")
+    mixed_store.append_turn(
+        TurnArtifact(
+            prompt="inspect before rerunning tests",
+            response="pending",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git diff --stat",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git diff --stat -> README.md | 2 +-",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    mixed_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-shell-mixed-rollup",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+            )
+        ]
+    )
+
+    test_store = SessionArtifactStore(tmp_path, session_id="session-shell-test")
+    _append_turn(test_store, "queue shell test")
+    test_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-shell-test",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests",
+            )
+        ]
+    )
+
+    shell_rendered = render_session_picker(tmp_path, filter_mode="shell")
+    inspect_rendered = render_session_picker(tmp_path, filter_mode="shell-inspect")
+    test_rendered = render_session_picker(tmp_path, filter_mode="shell-test")
+
+    assert "Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session" in shell_rendered
+    assert "Shell focus: inspect, test" in shell_rendered
+    assert "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session" in inspect_rendered
+    assert "Shell focus: inspect" in inspect_rendered
+    assert "Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session" in test_rendered
+    assert "Shell focus: test" in test_rendered
+
+
 def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_paths(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-demo")
     _append_turn(store, "review demo")

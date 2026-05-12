@@ -1546,6 +1546,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         workspace_inspect_output = str(app.query_one("#output").render())
         assert "Filter: workspace-inspect | Sort: attention" in workspace_inspect_output
+        assert "Workspace backlog: 1 session | lanes: inspect 1" in workspace_inspect_output
+        assert "Workspace focus: inspect" in workspace_inspect_output
         assert "session-tool | 1 turn(s)" in workspace_inspect_output
         assert "workspace lanes: inspect" in workspace_inspect_output
         assert "session-shell | 1 turn(s)" not in workspace_inspect_output
@@ -1554,6 +1556,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         workspace_edit_output = str(app.query_one("#output").render())
         assert "Filter: workspace-edit | Sort: attention" in workspace_edit_output
+        assert "Workspace backlog: 3 sessions | lanes: edit 3" in workspace_edit_output
+        assert "Workspace focus: edit" in workspace_edit_output
         assert "session-pending-edit | 1 turn(s)" in workspace_edit_output
         assert "session-restored-edit-pending | 1 turn(s)" in workspace_edit_output
         assert "session-denied | 1 turn(s)" in workspace_edit_output
@@ -1564,6 +1568,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         shell_output = str(app.query_one("#output").render())
         assert "Filter: shell | Sort: attention" in shell_output
+        assert "Shell backlog: 4 sessions | lanes: inspect 2, test 3 | overlap: mixed 1 session" in shell_output
+        assert "Shell focus: inspect, test" in shell_output
         assert "session-shell | 1 turn(s)" in shell_output
         assert "session-pending | 1 turn(s)" in shell_output
         assert "session-restore | 1 turn(s)" not in shell_output
@@ -1573,6 +1579,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         shell_inspect_output = str(app.query_one("#output").render())
         assert "Filter: shell-inspect | Sort: attention" in shell_inspect_output
+        assert "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session" in shell_inspect_output
+        assert "Shell focus: inspect" in shell_inspect_output
         assert "session-shell | 1 turn(s)" in shell_inspect_output
         assert "session-pending | 1 turn(s)" in shell_inspect_output
         assert "shell lanes: inspect, test" in shell_inspect_output
@@ -1583,6 +1591,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         shell_test_output = str(app.query_one("#output").render())
         assert "Filter: shell-test | Sort: attention" in shell_test_output
+        assert "Shell backlog: 3 sessions | lanes: inspect 1, test 3 | overlap: mixed 1 session" in shell_test_output
+        assert "Shell focus: test" in shell_test_output
         assert "session-pending | 1 turn(s)" in shell_test_output
         assert "session-restored-pending | 1 turn(s)" in shell_test_output
         assert "shell lanes: inspect, test" in shell_test_output

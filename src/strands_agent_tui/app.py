@@ -883,7 +883,15 @@ class StrandsAgentApp(App):
             return
 
         all_summaries: list[SessionSummary] | None = None
-        if selected_session_id or self.session_switcher_filter_mode == "approval-restore" or self.session_switcher_filter_mode.startswith("approval-stale"):
+        filter_mode_needs_rollup = self.session_switcher_filter_mode in {
+            "approval-restore",
+            "workspace-inspect",
+            "workspace-edit",
+            "shell",
+            "shell-inspect",
+            "shell-test",
+        } or self.session_switcher_filter_mode.startswith("approval-stale")
+        if selected_session_id or filter_mode_needs_rollup:
             all_summaries = list_recent_sessions(
                 self.config.artifacts_root,
                 limit=self.session_switcher_total_matches,
