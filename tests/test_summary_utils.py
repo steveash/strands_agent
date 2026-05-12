@@ -8,7 +8,9 @@ from strands_agent_tui.sessions.summary_utils import (
     render_lane_focus_preview_lines,
     render_lane_focus_suffix,
     render_lane_label_list,
+    render_page_label,
     render_page_lane_summary_line,
+    render_page_window_label,
     render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
@@ -18,6 +20,8 @@ from strands_agent_tui.sessions.summary_utils import (
     render_picker_selection_prompt,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
+    render_recent_session_page_banner,
+    render_selected_session_preview_header_lines,
     render_switcher_controls_line,
 )
 
@@ -114,6 +118,39 @@ def test_render_page_lane_summary_line_handles_optional_rollups_and_overlap(
         visible_overlap_summary=visible_overlap_summary,
         off_page_overlap_summary=off_page_overlap_summary,
     ) == expected
+
+
+def test_render_recent_session_page_banner_helpers_share_page_math() -> None:
+    assert render_page_label(10, 8, 1) == "2/2"
+    assert render_page_label(0, 8, 0) == "0/0"
+    assert render_page_window_label(10, 8, 1, 2) == "9-10 of 10"
+    assert render_page_window_label(0, 8, 0, 0) == "0 of 0"
+    assert render_recent_session_page_banner(
+        filter_mode="approval-stale",
+        sort_mode="attention",
+        total_matches=10,
+        page_size=8,
+        page_index=1,
+        visible_count=2,
+        stale_cutoff_suffix=" | Stale cutoff: approvals >= 7d old",
+    ) == (
+        "Filter: approval-stale | Sort: attention | Stale cutoff: approvals >= 7d old | "
+        "Page: 2/2 | Showing: 9-10 of 10"
+    )
+
+
+def test_render_selected_session_preview_header_lines_share_slot_and_artifact_copy() -> None:
+    assert render_selected_session_preview_header_lines(
+        visible_index=2,
+        overall_index=10,
+        total_matches=11,
+        session_id="session-01",
+        session_dir="/tmp/sessions/session-01",
+    ) == [
+        "Selected preview:",
+        "- slot 2 on this page | overall 10 of 11 | session session-01",
+        "- artifact dir: /tmp/sessions/session-01",
+    ]
 
 
 def test_render_compact_badge_helpers_render_single_focus_badge_consistently() -> None:

@@ -67,6 +67,43 @@ def render_backlog_summary_line(
     return line
 
 
+def render_page_label(total_matches: int, page_size: int, page_index: int) -> str:
+    if total_matches <= 0 or page_size <= 0:
+        return "0/0"
+    total_pages = ((total_matches - 1) // page_size) + 1
+    return f"{page_index + 1}/{total_pages}"
+
+
+def render_page_window_label(
+    total_matches: int,
+    page_size: int,
+    page_index: int,
+    visible_count: int,
+) -> str:
+    if total_matches <= 0 or page_size <= 0 or visible_count <= 0:
+        return "0 of 0"
+    start = page_index * page_size + 1
+    end = start + visible_count - 1
+    return f"{start}-{end} of {total_matches}"
+
+
+def render_recent_session_page_banner(
+    *,
+    filter_mode: str,
+    sort_mode: str,
+    total_matches: int,
+    page_size: int,
+    page_index: int,
+    visible_count: int,
+    stale_cutoff_suffix: str = "",
+) -> str:
+    return (
+        f"Filter: {filter_mode} | Sort: {sort_mode}{stale_cutoff_suffix} | "
+        f"Page: {render_page_label(total_matches, page_size, page_index)} | "
+        f"Showing: {render_page_window_label(total_matches, page_size, page_index, visible_count)}"
+    )
+
+
 def render_page_lane_summary_line(
     label: str,
     visible_rollup: str,
@@ -156,6 +193,21 @@ def render_recent_session_empty_state_lines(
         )
         lines.append("Enter switches the highlighted session once a visible row exists again.")
     return lines
+
+
+def render_selected_session_preview_header_lines(
+    *,
+    visible_index: int,
+    overall_index: int,
+    total_matches: int,
+    session_id: str,
+    session_dir: object,
+) -> list[str]:
+    return [
+        "Selected preview:",
+        f"- slot {visible_index} on this page | overall {overall_index} of {total_matches} | session {session_id}",
+        f"- artifact dir: {session_dir}",
+    ]
 
 
 def render_picker_controls_line() -> str:

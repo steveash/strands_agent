@@ -26,7 +26,12 @@ from strands_agent_tui.sessions import (
     sanitize_session_switcher_filter_mode,
     sanitize_session_switcher_sort_mode,
 )
-from strands_agent_tui.sessions.summary_utils import render_switcher_controls_line
+from strands_agent_tui.sessions.summary_utils import (
+    render_page_label,
+    render_page_window_label,
+    render_recent_session_page_banner,
+    render_switcher_controls_line,
+)
 
 
 def _positive_int_arg(value: str) -> int:
@@ -519,10 +524,14 @@ class StrandsAgentApp(App):
             f"Current session: {self.artifact_store.session_id}",
             f"Artifacts root: {self.artifact_store.root}",
             render_switcher_controls_line(),
-            (
-                f"Filter: {self.session_switcher_filter_mode} | Sort: {self.session_switcher_sort_mode}{stale_cutoff_suffix} | "
-                f"Page: {self.session_switcher_page_label()} | "
-                f"Showing: {self.session_switcher_page_window_label()}"
+            render_recent_session_page_banner(
+                filter_mode=self.session_switcher_filter_mode,
+                sort_mode=self.session_switcher_sort_mode,
+                total_matches=self.session_switcher_total_matches,
+                page_size=MAX_RECENT_SESSIONS,
+                page_index=self.session_switcher_page_index,
+                visible_count=len(self.session_switcher_summaries),
+                stale_cutoff_suffix=stale_cutoff_suffix,
             ),
             *self.session_switcher_summary_lines,
             "",
@@ -977,17 +986,19 @@ class StrandsAgentApp(App):
         return (self.session_switcher_page_index + 1) * MAX_RECENT_SESSIONS < self.session_switcher_total_matches
 
     def session_switcher_page_label(self) -> str:
-        if self.session_switcher_total_matches <= 0:
-            return "0/0"
-        total_pages = ((self.session_switcher_total_matches - 1) // MAX_RECENT_SESSIONS) + 1
-        return f"{self.session_switcher_page_index + 1}/{total_pages}"
+        return render_page_label(
+            self.session_switcher_total_matches,
+            MAX_RECENT_SESSIONS,
+            self.session_switcher_page_index,
+        )
 
     def session_switcher_page_window_label(self) -> str:
-        if self.session_switcher_total_matches <= 0 or not self.session_switcher_summaries:
-            return "0 of 0"
-        start = self.session_switcher_page_index * MAX_RECENT_SESSIONS + 1
-        end = start + len(self.session_switcher_summaries) - 1
-        return f"{start}-{end} of {self.session_switcher_total_matches}"
+        return render_page_window_label(
+            self.session_switcher_total_matches,
+            MAX_RECENT_SESSIONS,
+            self.session_switcher_page_index,
+            len(self.session_switcher_summaries),
+        )
 
     def _current_session_switcher_summary(self) -> SessionSummary | None:
         if not self.session_switcher_summaries:

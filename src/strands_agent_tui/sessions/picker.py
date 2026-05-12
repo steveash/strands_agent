@@ -21,7 +21,9 @@ from .summary_utils import (
     render_filter_focus_line,
     render_lane_focus_suffix,
     render_lane_label_list,
+    render_page_label,
     render_page_lane_summary_line,
+    render_page_window_label,
     render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
@@ -30,6 +32,8 @@ from .summary_utils import (
     render_picker_invalid_selection_message,
     render_picker_selection_prompt,
     render_recent_session_empty_state_lines as render_recent_session_empty_state_lines_helper,
+    render_recent_session_page_banner,
+    render_selected_session_preview_header_lines,
 )
 from ..runtime import ApprovalRequest
 from ..tools.workspace import resolve_shell_command
@@ -265,14 +269,13 @@ class SessionSummary:
         filter_mode: str = "all",
         stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
     ) -> list[str]:
-        lines = [
-            "Selected preview:",
-            (
-                f"- slot {visible_index} on this page | overall {overall_index} of {total_matches} | "
-                f"session {self.session_id}"
-            ),
-            f"- artifact dir: {self.session_dir}",
-        ]
+        lines = render_selected_session_preview_header_lines(
+            visible_index=visible_index,
+            overall_index=overall_index,
+            total_matches=total_matches,
+            session_id=self.session_id,
+            session_dir=self.session_dir,
+        )
         if _should_render_stale_cutoff_preview_line(filter_mode):
             lines.append(
                 "- stale lane focus: "
@@ -661,10 +664,14 @@ def render_session_picker(
 
     lines = [
         f"Recent sessions under {resolved_root}:",
-        (
-            f"Filter: {filter_mode} | Sort: {sort_mode}{stale_cutoff_suffix} | "
-            f"Page: {_picker_page_label(total_matches, limit, page_index)} | "
-            f"Showing: {_picker_page_window_label(total_matches, limit, page_index, len(summaries))}"
+        render_recent_session_page_banner(
+            filter_mode=filter_mode,
+            sort_mode=sort_mode,
+            total_matches=total_matches,
+            page_size=limit,
+            page_index=page_index,
+            visible_count=len(summaries),
+            stale_cutoff_suffix=stale_cutoff_suffix,
         ),
         *filter_summary_lines,
         "",
@@ -2681,18 +2688,11 @@ def _normalize_picker_page_index(total_matches: int, limit: int, page_index: int
 
 
 def _picker_page_label(total_matches: int, limit: int, page_index: int) -> str:
-    if total_matches <= 0:
-        return "0/0"
-    total_pages = ((total_matches - 1) // limit) + 1
-    return f"{page_index + 1}/{total_pages}"
+    return render_page_label(total_matches, limit, page_index)
 
 
 def _picker_page_window_label(total_matches: int, limit: int, page_index: int, visible_count: int) -> str:
-    if total_matches <= 0 or visible_count <= 0:
-        return "0 of 0"
-    start = page_index * limit + 1
-    end = start + visible_count - 1
-    return f"{start}-{end} of {total_matches}"
+    return render_page_window_label(total_matches, limit, page_index, visible_count)
 
 
 def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
