@@ -16,6 +16,7 @@ from .artifacts import (
 )
 from .summary_utils import (
     render_backlog_summary_line,
+    render_badged_preview_line,
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
     render_filter_focus_line,
@@ -32,6 +33,8 @@ from .summary_utils import (
     render_picker_invalid_key_guidance,
     render_picker_invalid_selection_message,
     render_picker_selection_prompt,
+    render_preview_badges_line,
+    render_preview_detail_line,
     render_recent_session_empty_state_lines as render_recent_session_empty_state_lines_helper,
     render_recent_session_page_banner,
     render_selected_session_preview_header_lines,
@@ -290,98 +293,66 @@ class SessionSummary:
             if self.pending_approval_count > 1:
                 pending_line = f"{self.pending_approval_count} approvals | first: {pending_line}"
             lines.append(f"- pending: {pending_line}")
-        if self.pending_approval_queue_summary:
-            lines.append(f"- pending queue: {self.pending_approval_queue_summary}")
-        if self.pending_approval_age_summary:
-            lines.append(f"- pending age: {self.pending_approval_age_summary}")
-        if self.pending_approval_badges:
-            lines.append(f"- pending tools: {', '.join(self.pending_approval_badges)}")
-        if self.approval_status_badges:
-            lines.append(f"- approvals: {', '.join(self.approval_status_badges)}")
-        if self.approval_focus_badges:
-            lines.append(f"- approval focus: {'/'.join(self.approval_focus_badges)}")
-        if self.last_approval_summary:
-            lines.append(f"- last approval: {self.last_approval_summary}")
-        if self.denied_approval_badges:
-            lines.append(f"- denied: {', '.join(self.denied_approval_badges)}")
-        if self.last_denied_approval_summary:
-            lines.append(f"- last denied approval: {self.last_denied_approval_summary}")
-        if self.last_denied_approval_age_summary:
-            lines.append(f"- last denied age: {self.last_denied_approval_age_summary}")
-        if self.restored_approval_badges:
-            lines.append(f"- approval restore: {', '.join(self.restored_approval_badges)}")
-        if self.restored_approval_tool_badges:
-            lines.append(f"- approval restore tools: {', '.join(self.restored_approval_tool_badges)}")
-        if self.restored_pending_approval_queue_summary:
-            lines.append(f"- approval restore queue: {self.restored_pending_approval_queue_summary}")
+        lines.extend(render_preview_detail_line("pending queue", self.pending_approval_queue_summary))
+        lines.extend(render_preview_detail_line("pending age", self.pending_approval_age_summary))
+        lines.extend(render_preview_badges_line("pending tools", self.pending_approval_badges))
+        lines.extend(render_preview_badges_line("approvals", self.approval_status_badges))
+        lines.extend(render_preview_detail_line("approval focus", "/".join(self.approval_focus_badges)))
+        lines.extend(render_preview_detail_line("last approval", self.last_approval_summary))
+        lines.extend(render_preview_badges_line("denied", self.denied_approval_badges))
+        lines.extend(render_preview_detail_line("last denied approval", self.last_denied_approval_summary))
+        lines.extend(render_preview_detail_line("last denied age", self.last_denied_approval_age_summary))
+        lines.extend(render_preview_badges_line("approval restore", self.restored_approval_badges))
+        lines.extend(render_preview_badges_line("approval restore tools", self.restored_approval_tool_badges))
+        lines.extend(render_preview_detail_line("approval restore queue", self.restored_pending_approval_queue_summary))
         approval_restore_preview_lines, suppress_restored_preview_age = _render_approval_restore_preview_lines(
             self,
             filter_mode,
         )
         lines.extend(approval_restore_preview_lines)
         if self.last_restored_outcome_summary and self.last_restored_outcome_summary != self.last_restored_approval_summary:
-            lines.append(f"- restored current approval: {self.last_restored_approval_summary}")
-        elif self.last_restored_approval_summary:
-            lines.append(f"- last restored approval: {self.last_restored_approval_summary}")
+            lines.extend(render_preview_detail_line("restored current approval", self.last_restored_approval_summary))
+        else:
+            lines.extend(render_preview_detail_line("last restored approval", self.last_restored_approval_summary))
         if self.last_restored_outcome_summary and self.last_restored_outcome_summary != self.last_restored_approval_summary:
-            lines.append(f"- latest restored outcome: {self.last_restored_outcome_summary}")
+            lines.extend(render_preview_detail_line("latest restored outcome", self.last_restored_outcome_summary))
         restored_outcome_age_summary = _restored_outcome_preview_age_summary(self)
         restored_outcome_age_label = _restored_outcome_preview_age_label(self)
         if not suppress_restored_preview_age and restored_outcome_age_summary and (
             not self.restored_pending_approval_age_summary
             or restored_outcome_age_summary != self.restored_pending_approval_age_summary
         ):
-            lines.append(f"- {restored_outcome_age_label}: {restored_outcome_age_summary}")
+            lines.extend(render_preview_detail_line(restored_outcome_age_label, restored_outcome_age_summary))
         elif not suppress_restored_preview_age and self.last_restored_approval_age_summary and (
             not self.restored_pending_approval_age_summary
             or self.last_restored_approval_age_summary != self.restored_pending_approval_age_summary
         ):
-            lines.append(f"- last restored age: {self.last_restored_approval_age_summary}")
+            lines.extend(render_preview_detail_line("last restored age", self.last_restored_approval_age_summary))
         lines.extend(_render_stale_approval_preview_lines(self, filter_mode))
-        if self.intervention_badges:
-            lines.append(f"- intervention: {', '.join(self.intervention_badges)}")
-        if self.last_intervention_preview:
-            lines.append(f"- last intervention: {self.last_intervention_preview}")
+        lines.extend(render_preview_badges_line("intervention", self.intervention_badges))
+        lines.extend(render_preview_detail_line("last intervention", self.last_intervention_preview))
         lines.extend(
             render_numbered_preview_section_lines("recent interventions", self.recent_intervention_previews)
         )
-        if self.restore_badges:
-            lines.append(f"- restore: {', '.join(self.restore_badges)}")
-        if self.stale_session_summary:
-            lines.append(f"- session age: {self.stale_session_summary}")
-        if self.draft_prompt_preview:
-            lines.append(f"- draft: {self.draft_prompt_preview}")
-        if self.last_prompt_preview:
-            lines.append(f"- last prompt: {self.last_prompt_preview}")
-        if self.last_tool_preview or self.last_tool_badges:
-            badge_prefix = "/".join(self.last_tool_badges)
-            if badge_prefix and self.last_tool_preview:
-                lines.append(f"- last tool: {badge_prefix} {self.last_tool_preview}")
-            elif badge_prefix:
-                lines.append(f"- last tool: {badge_prefix}")
-            else:
-                lines.append(f"- last tool: {self.last_tool_preview}")
+        lines.extend(render_preview_badges_line("restore", self.restore_badges))
+        lines.extend(render_preview_detail_line("session age", self.stale_session_summary))
+        lines.extend(render_preview_detail_line("draft", self.draft_prompt_preview))
+        lines.extend(render_preview_detail_line("last prompt", self.last_prompt_preview))
+        lines.extend(render_badged_preview_line("last tool", self.last_tool_preview, self.last_tool_badges))
         lines.extend(render_numbered_preview_section_lines("recent tools", self.recent_tool_previews))
-        if self.workspace_lane_badges:
-            lines.append(f"- workspace lanes: {', '.join(self.workspace_lane_badges)}")
-        if self.last_workspace_preview:
-            lines.append(f"- last workspace tool: {self.last_workspace_preview}")
+        lines.extend(render_preview_badges_line("workspace lanes", self.workspace_lane_badges))
+        lines.extend(render_preview_detail_line("last workspace tool", self.last_workspace_preview))
         lines.extend(
             render_numbered_preview_section_lines("recent workspace tools", self.recent_workspace_previews)
         )
-        if self.shell_activity_badges:
-            lines.append(f"- shell: {', '.join(self.shell_activity_badges)}")
-        if self.shell_lane_badges:
-            lines.append(f"- shell lanes: {', '.join(self.shell_lane_badges)}")
-        if self.failure_activity_badges:
-            lines.append(f"- failures: {', '.join(self.failure_activity_badges)}")
-        if self.last_shell_preview:
-            lines.append(f"- last shell: {self.last_shell_preview}")
+        lines.extend(render_preview_badges_line("shell", self.shell_activity_badges))
+        lines.extend(render_preview_badges_line("shell lanes", self.shell_lane_badges))
+        lines.extend(render_preview_badges_line("failures", self.failure_activity_badges))
+        lines.extend(render_preview_detail_line("last shell", self.last_shell_preview))
         lines.extend(
             render_numbered_preview_section_lines("recent shell outcomes", self.recent_shell_previews)
         )
-        if self.last_event_preview:
-            lines.append(f"- last event: {self.last_event_preview}")
+        lines.extend(render_preview_detail_line("last event", self.last_event_preview))
         return lines
 
 

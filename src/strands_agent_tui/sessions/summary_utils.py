@@ -219,6 +219,39 @@ def render_numbered_preview_section_lines(label: str, items: Sequence[str]) -> l
     ]
 
 
+def render_preview_detail_line(label: str, value: str) -> list[str]:
+    if not value:
+        return []
+    return [f"- {label}: {value}"]
+
+
+def render_preview_badges_line(
+    label: str,
+    values: Sequence[str],
+    *,
+    separator: str = ", ",
+) -> list[str]:
+    if not values:
+        return []
+    return render_preview_detail_line(label, separator.join(values))
+
+
+def render_badged_preview_line(
+    label: str,
+    value: str,
+    badges: Sequence[str],
+    *,
+    badge_separator: str = "/",
+    badge_value_separator: str = " ",
+) -> list[str]:
+    badge_prefix = badge_separator.join(badges)
+    if badge_prefix and value:
+        rendered_value = f"{badge_prefix}{badge_value_separator}{value}"
+    else:
+        rendered_value = badge_prefix or value
+    return render_preview_detail_line(label, rendered_value)
+
+
 def render_picker_controls_line() -> str:
     return (
         "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, "

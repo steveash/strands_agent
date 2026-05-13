@@ -2,6 +2,7 @@ import pytest
 
 from strands_agent_tui.sessions.summary_utils import (
     render_backlog_summary_line,
+    render_badged_preview_line,
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
     render_filter_focus_line,
@@ -19,6 +20,8 @@ from strands_agent_tui.sessions.summary_utils import (
     render_picker_invalid_key_guidance,
     render_picker_invalid_selection_message,
     render_picker_selection_prompt,
+    render_preview_badges_line,
+    render_preview_detail_line,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
     render_recent_session_page_banner,
@@ -186,6 +189,47 @@ def test_render_numbered_preview_section_lines_share_recent_preview_section_copy
         "  1. confirm/e1 pytest -q -> exit 1",
     ]
     assert render_numbered_preview_section_lines("recent tools", []) == []
+
+
+def test_render_preview_detail_helpers_share_single_line_selected_preview_copy() -> None:
+    assert render_preview_detail_line("pending queue", "first test; rest edit 1, tool 1") == [
+        "- pending queue: first test; rest edit 1, tool 1"
+    ]
+    assert render_preview_detail_line("pending age", "45d") == ["- pending age: 45d"]
+    assert render_preview_detail_line("last denied age", "9h") == ["- last denied age: 9h"]
+    assert render_preview_detail_line("approval restore queue", "first test; rest edit 1, tool 1") == [
+        "- approval restore queue: first test; rest edit 1, tool 1"
+    ]
+    assert render_preview_detail_line("last intervention", "approved queued edit") == [
+        "- last intervention: approved queued edit"
+    ]
+    assert render_preview_detail_line("last prompt", "review demo") == ["- last prompt: review demo"]
+    assert render_preview_detail_line("last workspace tool", "inspect read README.md") == [
+        "- last workspace tool: inspect read README.md"
+    ]
+    assert render_preview_detail_line("last shell", "inspect/e0 git status --short -> M README.md") == [
+        "- last shell: inspect/e0 git status --short -> M README.md"
+    ]
+    assert render_preview_detail_line("last prompt", "") == []
+
+
+def test_render_preview_badges_and_badged_value_helpers_share_single_line_preview_copy() -> None:
+    assert render_preview_badges_line("pending tools", ["test", "edit"]) == ["- pending tools: test, edit"]
+    assert render_preview_badges_line("approval focus", ["approved", "restored"], separator="/") == [
+        "- approval focus: approved/restored"
+    ]
+    assert render_badged_preview_line(
+        "last tool",
+        "git status --short -> M README.md",
+        ["inspect", "e0"],
+    ) == ["- last tool: inspect/e0 git status --short -> M README.md"]
+    assert render_badged_preview_line("last tool", "", ["inspect", "e0"]) == [
+        "- last tool: inspect/e0"
+    ]
+    assert render_badged_preview_line("last tool", "git status --short", []) == [
+        "- last tool: git status --short"
+    ]
+    assert render_badged_preview_line("last tool", "", []) == []
 
 
 def test_render_compact_badge_helpers_render_single_focus_badge_consistently() -> None:
