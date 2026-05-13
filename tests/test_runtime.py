@@ -100,6 +100,12 @@ def test_fake_runtime_returns_pending_approval_for_risky_mutation_prompt() -> No
     assert result.events[4].data["approval_status"] == "pending"
     assert result.events[4].data["approval_source"] == "fake_runtime"
     assert result.events[4].data["approval_tool_family"] == "edit"
+    assert result.events[4].data["approval_queue_position"] == 1
+    assert result.events[4].data["approval_queue_total"] == 2
+    assert result.events[4].data["approval_queue_after_current"] == 1
+    assert result.events[4].data["approval_queue_has_more"] is True
+    assert result.events[4].data["next_pending_tool"] == "replace_text"
+    assert result.events[4].data["approval_age_summary"]
     assert result.events[4].data["steering_stage"] == "requested"
     assert result.events[4].data["pending_count"] == 2
     assert "Approval required before continuing" in result.text
@@ -120,6 +126,9 @@ def test_fake_runtime_returns_pending_approval_for_shell_command_prompt() -> Non
     assert result.pending_approval.args["command"] == "pytest -q"
     assert result.events[2].data["approval_tool_family"] == "test"
     assert result.events[2].data["shell_command_family"] == "pytest"
+    assert result.events[2].data["approval_queue_total"] == 1
+    assert result.events[2].data["approval_queue_after_current"] == 0
+    assert result.events[2].data["approval_queue_has_more"] is False
     assert result.events[2].data["steering_stage"] == "requested"
 
 
@@ -163,6 +172,10 @@ def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_
     assert approved.pending_approval is not None
     assert approved.pending_approval.tool_name == "replace_text"
     assert approved.events[0].data["approval_status"] == "approved"
+    assert approved.events[0].data["approval_queue_total"] == 2
+    assert approved.events[0].data["approval_queue_after_current"] == 1
+    assert approved.events[0].data["approval_queue_has_more"] is True
+    assert approved.events[0].data["next_pending_tool"] == "replace_text"
     assert approved.events[0].data["steering_stage"] == "approved"
     assert approved.events[1].data["approval_id"] == approval.request_id
     assert approved.events[1].data["resumed_from_approval"] is True
@@ -170,9 +183,14 @@ def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_
     assert approved.events[3].data["follow_up_mode"] == "approved_tool_result"
     assert approved.events[3].data["agent_continuation"] is True
     assert approved.events[3].data["tool_result_preview"] == "Simulated overwrite of notes.txt."
+    assert approved.events[3].data["approval_queue_total"] == 2
+    assert approved.events[3].data["approval_queue_after_current"] == 1
+    assert approved.events[3].data["next_pending_tool"] == "replace_text"
     assert approved.events[3].data["steering_stage"] == "continued"
     assert approved.events[4].data["approval_id"] == approved.pending_approval.request_id
     assert approved.events[4].data["approval_status"] == "pending"
+    assert approved.events[4].data["approval_queue_total"] == 1
+    assert approved.events[4].data["approval_queue_after_current"] == 0
     assert approved.events[4].data["steering_stage"] == "requested"
     assert "Approved write_file" in approved.text
 
@@ -191,11 +209,16 @@ def test_fake_runtime_denial_resolution_clears_last_pending_request() -> None:
         "response_completed",
     ]
     assert denied.events[0].data["approval_status"] == "denied"
+    assert denied.events[0].data["approval_queue_total"] == 1
+    assert denied.events[0].data["approval_queue_after_current"] == 0
+    assert denied.events[0].data["approval_queue_has_more"] is False
     assert denied.events[0].data["steering_stage"] == "denied"
     assert denied.events[0].data["remaining_pending_count"] == 0
     assert denied.events[1].data["follow_up_mode"] == "denied_tool_request"
     assert denied.events[1].data["agent_continuation"] is True
     assert denied.events[1].data["approval_tool_family"] == "edit"
+    assert denied.events[1].data["approval_queue_total"] == 1
+    assert denied.events[1].data["approval_queue_after_current"] == 0
     assert denied.pending_approval is None
     assert "Skipped write_file" in denied.text
 
@@ -259,6 +282,8 @@ def test_live_runtime_can_restore_pending_approvals_without_requeuing(monkeypatc
     ]
     assert result.events[0].data["approval_status"] == "approved"
     assert result.events[0].data["approval_restored"] is True
+    assert result.events[0].data["approval_queue_total"] == 1
+    assert result.events[0].data["approval_queue_after_current"] == 0
     assert result.events[0].data["steering_stage"] == "approved"
     assert result.events[1].data["approval_id"] == "approval-0007"
     assert result.events[1].data["approval_restored"] is True
@@ -268,6 +293,8 @@ def test_live_runtime_can_restore_pending_approvals_without_requeuing(monkeypatc
     assert result.events[2].data["remaining_pending_count"] == 0
     assert result.events[3].data["follow_up_mode"] == "approved_tool_result"
     assert result.events[3].data["approval_restored"] is True
+    assert result.events[3].data["approval_queue_total"] == 1
+    assert result.events[3].data["approval_queue_after_current"] == 0
     assert result.events[3].data["steering_stage"] == "continued"
     assert result.pending_approval is None
     assert "continued:" in result.text
@@ -318,6 +345,8 @@ def test_live_runtime_can_restore_shell_pending_approval(monkeypatch: pytest.Mon
     assert result.events[2].data["approval_status"] == "approved"
     assert result.events[2].data["approval_restored"] is True
     assert result.events[3].data["approval_tool_family"] == "shell"
+    assert result.events[3].data["approval_queue_total"] == 1
+    assert result.events[3].data["approval_queue_after_current"] == 0
     assert result.events[3].data["follow_up_mode"] == "approved_tool_result"
 
 
@@ -361,10 +390,14 @@ def test_live_runtime_can_restore_pending_approvals_and_deny_without_execution(
     assert result.events[0].data["approval_status"] == "denied"
     assert result.events[0].data["approval_source"] == "live_runtime"
     assert result.events[0].data["approval_restored"] is True
+    assert result.events[0].data["approval_queue_total"] == 1
+    assert result.events[0].data["approval_queue_after_current"] == 0
     assert result.events[0].data["remaining_pending_count"] == 0
     assert result.events[0].data["resumed_from_approval"] is False
     assert result.events[1].data["follow_up_mode"] == "denied_tool_request"
     assert result.events[1].data["approval_restored"] is True
+    assert result.events[1].data["approval_queue_total"] == 1
+    assert result.events[1].data["approval_queue_after_current"] == 0
     assert result.pending_approval is None
     assert "continued:" in result.text
 

@@ -430,15 +430,38 @@ class StrandsAgentApp(App):
     def render_context_banner(self) -> str:
         return f"Workspace: {self.config.workspace_path} | Session: {self.artifact_store.session_id}"
 
+    def _pending_approval_queue(self) -> list[ApprovalRequest]:
+        if hasattr(self.runtime, "pending_approvals"):
+            try:
+                pending = list(self.runtime.pending_approvals())
+            except Exception:
+                pending = []
+            if pending:
+                return pending
+        return [self.pending_approval] if self.pending_approval is not None else []
+
     def render_approval_banner(self) -> str:
         if self.pending_approval is None:
             return "Approval: none pending | F9 approve current request | F10 deny current request"
+        pending_queue = self._pending_approval_queue()
+        queue_total = max(len(pending_queue), 1)
+        queue_bits = [f"queue: 1/{queue_total}"]
+        if len(pending_queue) > 1:
+            next_pending = pending_queue[1]
+            extra_count = len(pending_queue) - 2
+            next_summary = next_pending.tool_name
+            if extra_count > 0:
+                next_summary += f" (+{extra_count} more)"
+            queue_bits.append(f"next: {next_summary}")
+        age_summary = self.pending_approval.age_summary()
+        if age_summary:
+            queue_bits.append(f"age: {age_summary}")
         args_preview = ", ".join(
             f"{key}={value!r}" for key, value in sorted(self.pending_approval.args.items())
         ) or "no args"
         return (
             f"Approval pending: {self.pending_approval.tool_name} ({self.pending_approval.request_id}) | "
-            f"{self.pending_approval.reason} | args: {args_preview} | F9 approve | F10 deny"
+            f"{' | '.join(queue_bits)} | {self.pending_approval.reason} | args: {args_preview} | F9 approve | F10 deny"
         )
 
     def render_status_summary(
@@ -450,7 +473,12 @@ class StrandsAgentApp(App):
         runtime_value = runtime_label or self.runtime_status_override or provider or self.runtime.__class__.__name__
         mode_value = mode or self.config.runtime_mode
         overwrite_policy = "on" if self.config.allow_overwrite else "off"
-        approval_state = f"pending:{self.pending_approval.tool_name}" if self.pending_approval else "none"
+        pending_queue = self._pending_approval_queue() if self.pending_approval else []
+        approval_state = "none"
+        if self.pending_approval:
+            approval_state = f"pending:{self.pending_approval.tool_name}"
+            if pending_queue:
+                approval_state += f"(1/{len(pending_queue)})"
         return (
             f"Runtime: {runtime_value} | Mode: {mode_value} | "
             f"Model: {self.config.openai_model} | Overwrite: {overwrite_policy} | "

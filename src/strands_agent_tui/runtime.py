@@ -63,6 +63,12 @@ class ApprovalRequest:
             "created_at": self.created_at,
         }
 
+    def age_seconds(self) -> int | None:
+        return _approval_age_seconds(self)
+
+    def age_summary(self) -> str:
+        return _approval_age_summary(self)
+
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> "ApprovalRequest":
         return cls(
@@ -420,15 +426,26 @@ def _approval_event_context(
     status: str,
     pending_count: int | None = None,
     remaining_pending_count: int | None = None,
+    next_pending_request: ApprovalRequest | None = None,
     resumed_from_approval: bool | None = None,
     stage: str | None = None,
 ) -> dict[str, object]:
+    queue_total, queue_after_current = _approval_queue_metrics(
+        pending_count=pending_count,
+        remaining_pending_count=remaining_pending_count,
+    )
     data: dict[str, object] = {
         "approval_id": request.request_id,
         "approval_status": status,
         "approval_source": request.source,
         "approval_restored": request.restored_from_session,
         "approval_tool_family": _approval_tool_family(request.tool_name, request.args),
+        "approval_age_seconds": _approval_age_seconds(request),
+        "approval_age_summary": _approval_age_summary(request),
+        "approval_queue_position": 1,
+        "approval_queue_total": queue_total,
+        "approval_queue_after_current": queue_after_current,
+        "approval_queue_has_more": queue_after_current > 0,
         "requires_confirmation": True,
         **request.args,
     }
@@ -439,11 +456,66 @@ def _approval_event_context(
         data["pending_count"] = pending_count
     if remaining_pending_count is not None:
         data["remaining_pending_count"] = remaining_pending_count
+    if next_pending_request is not None:
+        data["next_pending_approval_id"] = next_pending_request.request_id
+        data["next_pending_tool"] = next_pending_request.tool_name
     if resumed_from_approval is not None:
         data["resumed_from_approval"] = resumed_from_approval
     if stage is not None:
         data["steering_stage"] = stage
     return data
+
+
+def _approval_queue_metrics(*, pending_count: int | None, remaining_pending_count: int | None) -> tuple[int, int]:
+    if pending_count is not None:
+        queue_total = max(int(pending_count), 1)
+        return queue_total, max(queue_total - 1, 0)
+    if remaining_pending_count is not None:
+        after_current = max(int(remaining_pending_count), 0)
+        return after_current + 1, after_current
+    return 1, 0
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _format_age_compact(age_seconds: int) -> str:
+    if age_seconds < 60:
+        return f"{age_seconds}s"
+    if age_seconds < 60 * 60:
+        return f"{age_seconds // 60}m"
+    if age_seconds < 24 * 60 * 60:
+        return f"{age_seconds // (60 * 60)}h"
+    return f"{age_seconds // (24 * 60 * 60)}d"
+
+
+def _approval_age_seconds(request: ApprovalRequest) -> int | None:
+    created_at = _parse_iso_datetime(request.created_at)
+    if created_at is None:
+        return None
+    delta = datetime.now(UTC) - created_at
+    return max(int(delta.total_seconds()), 0)
+
+
+def _approval_age_summary(request: ApprovalRequest) -> str:
+    age_seconds = _approval_age_seconds(request)
+    if age_seconds is None:
+        return ""
+    return _format_age_compact(age_seconds)
 
 
 def _build_approval_follow_up_prompt(
@@ -470,6 +542,7 @@ def _approval_follow_up_event(
     approve: bool,
     follow_up_prompt: str,
     remaining_pending_count: int,
+    next_pending_request: ApprovalRequest | None = None,
     tool_result: str | None = None,
 ) -> RuntimeEvent:
     data = {
@@ -482,6 +555,7 @@ def _approval_follow_up_event(
             request,
             status="approved" if approve else "denied",
             remaining_pending_count=remaining_pending_count,
+            next_pending_request=next_pending_request,
             resumed_from_approval=approve,
             stage="continued",
         ),
@@ -796,6 +870,8 @@ class FakeStrandsRuntime:
 
         pending_approval = self._approval_queue.current()
         if pending_approval is not None:
+            pending_snapshot = self._approval_queue.snapshot()
+            next_pending = pending_snapshot[1] if len(pending_snapshot) > 1 else None
             events.append(
                 runtime_event(
                     kind="steering_confirmation_required",
@@ -811,6 +887,7 @@ class FakeStrandsRuntime:
                             pending_approval,
                             status="pending",
                             pending_count=self._approval_queue.pending_count(),
+                            next_pending_request=next_pending,
                             stage="requested",
                         ),
                     },
@@ -868,6 +945,7 @@ class FakeStrandsRuntime:
                             pending.request,
                             status="approved",
                             remaining_pending_count=self._approval_queue.pending_count(),
+                            next_pending_request=self._approval_queue.current(),
                             resumed_from_approval=True,
                             stage="approved",
                         ),
@@ -886,6 +964,7 @@ class FakeStrandsRuntime:
                             pending.request,
                             status="approved",
                             remaining_pending_count=self._approval_queue.pending_count(),
+                            next_pending_request=self._approval_queue.current(),
                             resumed_from_approval=True,
                             stage="approved",
                         ),
@@ -925,6 +1004,7 @@ class FakeStrandsRuntime:
                             pending.request,
                             status="denied",
                             remaining_pending_count=self._approval_queue.pending_count(),
+                            next_pending_request=self._approval_queue.current(),
                             resumed_from_approval=False,
                             stage="denied",
                         ),
@@ -938,18 +1018,21 @@ class FakeStrandsRuntime:
             approve=approve,
             tool_result=tool_result,
         )
+        next_pending = self._approval_queue.current()
         events.append(
             _approval_follow_up_event(
                 pending.request,
                 approve=approve,
                 follow_up_prompt=follow_up_prompt,
                 remaining_pending_count=self._approval_queue.pending_count(),
+                next_pending_request=next_pending,
                 tool_result=tool_result,
             )
         )
 
-        next_pending = self._approval_queue.current()
         if next_pending is not None:
+            pending_snapshot = self._approval_queue.snapshot()
+            upcoming_pending = pending_snapshot[1] if len(pending_snapshot) > 1 else None
             events.append(
                 runtime_event(
                     kind="steering_confirmation_required",
@@ -965,6 +1048,7 @@ class FakeStrandsRuntime:
                             next_pending,
                             status="pending",
                             pending_count=self._approval_queue.pending_count(),
+                            next_pending_request=upcoming_pending,
                             stage="requested",
                         ),
                     },
@@ -1104,13 +1188,14 @@ def build_workspace_tools(
                         action,
                         dict(kwargs),
                         event_sink,
-                        event_context=_approval_event_context(
-                            request,
-                            status="approved",
-                            remaining_pending_count=approval_queue.pending_count(),
-                            resumed_from_approval=True,
-                            stage="approved",
-                        ),
+                    event_context=_approval_event_context(
+                        request,
+                        status="approved",
+                        remaining_pending_count=approval_queue.pending_count(),
+                        next_pending_request=approval_queue.current(),
+                        resumed_from_approval=True,
+                        stage="approved",
+                    ),
                     ),
                 )
                 if event_sink is not None:
@@ -1131,6 +1216,9 @@ def build_workspace_tools(
                                     request,
                                     status="pending",
                                     pending_count=approval_queue.pending_count(),
+                                    next_pending_request=approval_queue.snapshot()[1]
+                                    if approval_queue.pending_count() > 1
+                                    else None,
                                     stage="requested",
                                 ),
                                 **decision.details,
@@ -1325,6 +1413,7 @@ class StrandsSDKRuntime:
                     request,
                     status="approved",
                     remaining_pending_count=self._approval_queue.pending_count(),
+                    next_pending_request=self._approval_queue.current(),
                     resumed_from_approval=True,
                     stage="approved",
                 ),
@@ -1421,6 +1510,7 @@ class StrandsSDKRuntime:
                                 pending.request,
                                 status="approved",
                                 remaining_pending_count=self._approval_queue.pending_count(),
+                                next_pending_request=self._approval_queue.current(),
                                 resumed_from_approval=True,
                                 stage="approved",
                             ),
@@ -1447,6 +1537,7 @@ class StrandsSDKRuntime:
                                 pending.request,
                                 status="denied",
                                 remaining_pending_count=self._approval_queue.pending_count(),
+                                next_pending_request=self._approval_queue.current(),
                                 resumed_from_approval=False,
                                 stage="denied",
                             ),
@@ -1464,6 +1555,7 @@ class StrandsSDKRuntime:
                     approve=approve,
                     follow_up_prompt=follow_up_prompt,
                     remaining_pending_count=self._approval_queue.pending_count(),
+                    next_pending_request=self._approval_queue.current(),
                     tool_result=tool_result,
                 )
             )

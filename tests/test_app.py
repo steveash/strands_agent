@@ -458,10 +458,11 @@ async def test_app_renders_pending_approval_banner_for_risky_mutation(tmp_path: 
         rendered_events = str(app.query_one("#events").render())
 
         assert "Approval required before continuing: write_file" in rendered_output
-        assert "Approval: pending:write_file" in rendered_status
-        assert "Approval pending: write_file" in rendered_approval
+        assert "Approval: pending:write_file(1/1)" in rendered_status
+        assert "Approval pending: write_file (approval-0001) | queue: 1/1" in rendered_approval
         assert "kind=steering_confirmation_required | write_file" in rendered_events
         assert "approval_id='approval-0001'" in rendered_events
+        assert "approval_queue_total=1" in rendered_events
         assert app.pending_approval is not None
         assert app.pending_approval.tool_name == "write_file"
 
@@ -627,8 +628,8 @@ async def test_app_restores_pending_approval_from_artifacts_after_restart(tmp_pa
         restored_approval = str(second_app.query_one("#approval").render())
         restored_events = str(second_app.query_one("#events").render())
 
-        assert "Approval: pending:write_file" in restored_status
-        assert "Approval pending: write_file (approval-0001)" in restored_approval
+        assert "Approval: pending:write_file(1/2)" in restored_status
+        assert "Approval pending: write_file (approval-0001) | queue: 1/2 | next: replace_text" in restored_approval
         assert "kind=session_state_restored | Pending approvals restored" in restored_events
 
         await pilot.press("f9")
@@ -640,8 +641,8 @@ async def test_app_restores_pending_approval_from_artifacts_after_restart(tmp_pa
 
         assert "User: Approve pending write_file (approval-0001)" in resolved_output
         assert "Next approval required: replace_text." in resolved_output
-        assert "Approval: pending:replace_text" in resolved_status
-        assert "Approval pending: replace_text (approval-0002)" in resolved_approval
+        assert "Approval: pending:replace_text(1/1)" in resolved_status
+        assert "Approval pending: replace_text (approval-0002) | queue: 1/1" in resolved_approval
 
     third_app = StrandsAgentApp(
         runtime=FakeStrandsRuntime(),
@@ -658,7 +659,7 @@ async def test_app_restores_pending_approval_from_artifacts_after_restart(tmp_pa
     async with third_app.run_test() as pilot:
         await pilot.pause()
         third_approval = str(third_app.query_one("#approval").render())
-        assert "Approval pending: replace_text (approval-0002)" in third_approval
+        assert "Approval pending: replace_text (approval-0002) | queue: 1/1" in third_approval
 
 
 @pytest.mark.asyncio
@@ -2814,8 +2815,8 @@ async def test_session_switcher_restores_pending_approval_from_selected_session(
         status = str(app.query_one("#status").render())
         events = str(app.query_one("#events").render())
 
-        assert "Approval pending: run_shell_command (approval-0007)" in approval
-        assert "Approval: pending:run_shell_command" in status
+        assert "Approval pending: run_shell_command (approval-0007) | queue: 1/1" in approval
+        assert "Approval: pending:run_shell_command(1/1)" in status
         assert "kind=session_state_restored | Pending approvals restored" in events
 
 

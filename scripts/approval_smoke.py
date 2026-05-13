@@ -16,6 +16,14 @@ def main() -> None:
         and pending_event.data.get("approval_source") == "fake_runtime"
         and pending_event.data.get("pending_count") == 2,
     )
+    print(
+        "initial queue schema=",
+        pending_event is not None
+        and pending_event.data.get("approval_queue_position") == 1
+        and pending_event.data.get("approval_queue_total") == 2
+        and pending_event.data.get("approval_queue_after_current") == 1
+        and pending_event.data.get("next_pending_tool") == "replace_text",
+    )
 
     if first.pending_approval is None:
         return
@@ -32,6 +40,14 @@ def main() -> None:
         and approved_tool_event.data.get("resumed_from_approval") is True
         and approved_tool_event.data.get("remaining_pending_count") == 1,
     )
+    approved_follow_up_event = next((event for event in approved.events if event.kind == "approval_follow_up_prepared"), None)
+    print(
+        "approved queue schema=",
+        approved_follow_up_event is not None
+        and approved_follow_up_event.data.get("approval_queue_total") == 2
+        and approved_follow_up_event.data.get("approval_queue_after_current") == 1
+        and approved_follow_up_event.data.get("next_pending_tool") == "replace_text",
+    )
 
     if approved.pending_approval is None:
         return
@@ -46,6 +62,13 @@ def main() -> None:
         denied_event is not None
         and denied_event.data.get("approval_status") == "denied"
         and denied_event.data.get("remaining_pending_count") == 0,
+    )
+    denied_follow_up_event = next((event for event in denied.events if event.kind == "approval_follow_up_prepared"), None)
+    print(
+        "denied queue schema=",
+        denied_follow_up_event is not None
+        and denied_follow_up_event.data.get("approval_queue_total") == 1
+        and denied_follow_up_event.data.get("approval_queue_after_current") == 0,
     )
 
 

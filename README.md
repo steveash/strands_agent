@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell backlog rollup headers with overlap and page summaries across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, and restored multi-approval queue breakdowns that mirror the existing pending-triage wording.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell backlog rollup headers with overlap and page summaries across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, and shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -119,41 +119,30 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added backlog rollup headers for `workspace-inspect`, `workspace-edit`, `shell`, `shell-inspect`, and `shell-test` filters in both the launch-time picker and in-app `F11` session switcher,
-- the new rollups summarize matched session counts, lane overlap, and page/off-page lane breakdowns so saved-session triage stays legible as the list grows,
-- refreshed picker/switcher regression coverage plus both smoke scripts around the new workspace/shell backlog summaries,
-- safely self-unblocked by rerunning the smoke scripts, reconciling mixed-lane fixture counts, and tightening the expected rollup copy instead of weakening assertions.
+- enriched shared approval event metadata with queue position, queue totals, next-pending request/tool details, and compact age summaries,
+- wired that metadata through fake-runtime and live-runtime confirmation-required, approved, denied, restored, and continuation event paths,
+- surfaced the queue/age state in the TUI approval banner and compact status line so blocked work reads like an ordered queue instead of a single opaque prompt,
+- refreshed runtime/app regression coverage plus `scripts/approval_smoke.py`, and self-unblocked by tightening a mismatched app assertion after confirming the fake prompt only queued one pending request.
 
 Why this matters now:
-- Steve can now see not just which individual sessions match a workspace or shell lane, but what the whole backlog looks like before reopening anything.
-- This makes Strands tool behavior easier to reason about because inspect/test/edit patterns now read like operational queues instead of isolated rows.
-- It also tightens the link between Phase 2 tool seams and Phase 5 session ergonomics: the prototype is increasingly acting like an operator console for studying agent behavior, not just a chat transcript viewer.
+- Steve can now see where a confirmation sits in the queue, how old it is, and what comes next without reading raw JSON or reopening session artifacts.
+- This makes Strands steering behavior easier to reason about because approval lifecycles now carry stable observability fields across fake and live runtime paths.
+- It also tightens the bridge between Phase 2 tool steering and Phase 5 session ergonomics: pending intervention state is becoming inspectable operator state instead of just modal UI friction.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including recent-session selection, workspace/shell backlog rollups, workspace-inspect/workspace-edit filtering, denied-approval filtering, restored approval-queue breakdowns, intervention event/session filtering, shell/test outcome rollups, mixed lane overlap badges, denied-aware attention sorting, in-app session switching, in-app approval flows, restart-safe approval recovery, restart-safe view-state recovery, restart-safe draft recovery, the shell-command seam, and stale-approval pending/denied/restored subfilter summaries/rollups,
-- the CLI help still renders correctly for launch controls.
+- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including approval queue/age metadata in runtime events and the richer pending-approval banner/state rendering.
 
 Current evidence:
-- automated tests: `138 passed`
-- runnable picker workspace/shell backlog verification: `.venv/bin/python scripts/session_picker_smoke.py` now prints `picker_workspace_inspect_filter= True`, `picker_workspace_edit_filter= True`, `picker_shell_filter= True`, `picker_shell_inspect_filter= True`, and `picker_shell_test_filter= True` alongside the existing stale/intervention picker checks,
-- runnable picker stale-backlog verification: `.venv/bin/python scripts/session_picker_smoke.py` still prints `picker_approval_stale_filter= True`, `picker_approval_stale_backlog= True`, `picker_stale_cutoff_copy= True`, `picker_approval_stale_page_rollup= True`, `picker_approval_stale_pending_filter= True`, `picker_approval_stale_denied_filter= True`, `picker_approval_stale_restored_filter= True`, `picker_custom_stale_threshold= True`, and `picker_custom_stale_cutoff_copy= True`,
-- runnable shell-policy verification: `.venv/bin/python scripts/shell_tool_smoke.py` prints direct `pwd` and `git status --short` results with `Policy level: inspect`, then queues `run_shell_command` approval for `pytest -q`,
-- runnable approval-restart verification: `.venv/bin/python scripts/approval_restart_smoke.py` still saves a queued approval snapshot, restores it into a fresh runtime, approves it, and leaves the next queued approval persisted,
-- runnable live-restore verification: `.venv/bin/python scripts/live_restore_smoke.py` now prints `live_restore_initial_pending= True`, `live_restore_saved_pending= True`, `live_restore_restored_queue= True`, `live_restore_approved_event= True`, `live_restore_tool_event= True`, and `live_restore_summary= True`,
-- runnable live-restore denial verification: `.venv/bin/python scripts/live_restore_denied_smoke.py` prints `live_restore_denied_initial_pending= True`, `live_restore_denied_saved_pending= True`, `live_restore_denied_restored_queue= True`, `live_restore_denied_event= True`, `live_restore_denied_no_tool_event= True`, and `live_restore_denied_summary= True`,
-- runnable session-switcher workspace/shell backlog verification: `.venv/bin/python scripts/session_switcher_smoke.py` now prints `switcher_workspace_inspect_filter= True`, `switcher_workspace_edit_filter= True`, `switcher_shell_filter= True`, `switcher_shell_inspect_filter= True`, and `switcher_shell_test_filter= True`, while preserving the existing stale/intervention checks,
-- CLI verification: `.venv/bin/python -m strands_agent_tui.app --help | grep -E -- '--pick-filter|workspace-inspect|workspace-edit|shell-inspect|shell-test|shell'` now shows the expanded `--pick-filter` choices including `workspace-inspect`, `workspace-edit`, `shell`, `shell-inspect`, and `shell-test`,
-- recent-session verification by test: recent session summaries now surface pending approvals, restored approval-queue breakdowns, denied-approval rollups, restore-state badges, workspace-lane badges/previews, workspace/shell backlog rollup headers, last-event previews, explicit shell/test rollups, distinct shell-inspect vs shell-test filter membership, distinct workspace-inspect vs workspace-edit filter membership, stale-pending/stale-denied/stale-restored subfilters, multi-page stale-lane rollups, and attention ordering that still keeps pending/restored test work ahead of lower-signal restore/tool activity,
-- live runtime verification by test: a stubbed live Strands runtime still records real `read_file` tool activity plus structured metadata in the returned event timeline,
-- artifact verification by test: persisted `turns.jsonl` entries still include schema version, timestamped events, and response metadata,
-- UI verification by test: fake mode still renders pending approval state in both status and approval banners, blocks new prompts until the approval is resolved, surfaces restore-state badges in the session switcher, and persists the approval resolution turn to session artifacts,
-- steering verification by test: default policy now auto-allows read-only shell inspection, still requires confirmation for shell test runs plus overwrite and multi-occurrence edit requests, rejects unsupported shell commands earlier, opt-in overwrite mode still emits an allow-with-notice steering event, and protected-file mutations remain denied.
-- local unblock note: a bare `pytest -q` against the host Python still fails when the shell is not using the repo `.venv` because `strands` and `textual` are not installed globally; rerunning with `.venv/bin/pytest -q` succeeds and remains the supported verification path.
-- local unblock note: an initial targeted assertion failed because the session-switcher fixture set did not yet include a workspace-tool session; re-reading the active fixture data, adding `session-tool`, and rerunning the suite resolved it without destructive changes.
+- automated tests: `155 passed` via `.venv/bin/pytest -q`,
+- runnable approval observability verification: `.venv/bin/python scripts/approval_smoke.py` prints `initial queue schema= True`, `approved queue schema= True`, and `denied queue schema= True`,
+- UI verification by test: fake mode still renders pending approval state in both status and approval banners, now including queue progress and next-pending context when available,
+- live-runtime verification by test: restored and live approval flows still carry approval metadata through approved/denied continuation paths,
+- local unblock note: a bare `pytest -q` against the host Python still fails when the shell is not using the repo `.venv` because `strands` and `textual` are not installed globally; rerunning with `.venv/bin/pytest -q` remains the supported verification path,
+- local unblock note: one app assertion initially expected a two-item queue for an overwrite-only fake prompt; re-checking the fake runtime behavior and tightening the expectation to `1/1` resolved the mismatch without weakening coverage,
 - git publish note: the repo-specific commit/tag/push workflow remains part of the end-of-run checklist for each daily prototype pass.
 
 ## First five phases
@@ -636,8 +625,8 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
+- surface approval queue/age summaries in recent-session picker and switcher rows so stale blocked work is visible before opening a session
 - decide whether focused previews inside workspace/shell filters should collapse to the active lane instead of showing the full mixed session history
-- reconcile the pinned prototype path with the canonical repo so future automation does not need README indirection or split commits
 - decide whether the stale-approval threshold should surface inside picker/switcher UI copy so operators can see the active cutoff without relying on CLI/env context
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - keep tightening the fake/live event schema around steering and intervention milestones
