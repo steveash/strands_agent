@@ -21,6 +21,7 @@ from .summary_utils import (
     render_filter_focus_line,
     render_lane_focus_suffix,
     render_lane_label_list,
+    render_numbered_preview_section_lines,
     render_page_label,
     render_page_lane_summary_line,
     render_page_window_label,
@@ -341,12 +342,9 @@ class SessionSummary:
             lines.append(f"- intervention: {', '.join(self.intervention_badges)}")
         if self.last_intervention_preview:
             lines.append(f"- last intervention: {self.last_intervention_preview}")
-        if self.recent_intervention_previews:
-            lines.append(f"- recent interventions ({len(self.recent_intervention_previews)}):")
-            lines.extend(
-                f"  {index}. {preview}"
-                for index, preview in enumerate(self.recent_intervention_previews, start=1)
-            )
+        lines.extend(
+            render_numbered_preview_section_lines("recent interventions", self.recent_intervention_previews)
+        )
         if self.restore_badges:
             lines.append(f"- restore: {', '.join(self.restore_badges)}")
         if self.stale_session_summary:
@@ -363,18 +361,14 @@ class SessionSummary:
                 lines.append(f"- last tool: {badge_prefix}")
             else:
                 lines.append(f"- last tool: {self.last_tool_preview}")
-        if self.recent_tool_previews:
-            lines.append(f"- recent tools ({len(self.recent_tool_previews)}):")
-            lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_tool_previews, start=1))
+        lines.extend(render_numbered_preview_section_lines("recent tools", self.recent_tool_previews))
         if self.workspace_lane_badges:
             lines.append(f"- workspace lanes: {', '.join(self.workspace_lane_badges)}")
         if self.last_workspace_preview:
             lines.append(f"- last workspace tool: {self.last_workspace_preview}")
-        if self.recent_workspace_previews:
-            lines.append(f"- recent workspace tools ({len(self.recent_workspace_previews)}):")
-            lines.extend(
-                f"  {index}. {preview}" for index, preview in enumerate(self.recent_workspace_previews, start=1)
-            )
+        lines.extend(
+            render_numbered_preview_section_lines("recent workspace tools", self.recent_workspace_previews)
+        )
         if self.shell_activity_badges:
             lines.append(f"- shell: {', '.join(self.shell_activity_badges)}")
         if self.shell_lane_badges:
@@ -383,9 +377,9 @@ class SessionSummary:
             lines.append(f"- failures: {', '.join(self.failure_activity_badges)}")
         if self.last_shell_preview:
             lines.append(f"- last shell: {self.last_shell_preview}")
-        if self.recent_shell_previews:
-            lines.append(f"- recent shell outcomes ({len(self.recent_shell_previews)}):")
-            lines.extend(f"  {index}. {preview}" for index, preview in enumerate(self.recent_shell_previews, start=1))
+        lines.extend(
+            render_numbered_preview_section_lines("recent shell outcomes", self.recent_shell_previews)
+        )
         if self.last_event_preview:
             lines.append(f"- last event: {self.last_event_preview}")
         return lines

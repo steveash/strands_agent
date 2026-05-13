@@ -3,6 +3,7 @@ from strands_agent_tui.sessions.summary_utils import (
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
     render_filter_focus_line,
+    render_numbered_preview_section_lines,
     render_page_label,
     render_page_lane_summary_line,
     render_page_window_label,
@@ -108,6 +109,44 @@ def main() -> None:
             "- slot 2 on this page | overall 10 of 11 | session session-01",
             "- artifact dir: /tmp/sessions/session-01",
         ],
+    )
+    print(
+        "summary_preview_sections=",
+        render_numbered_preview_section_lines(
+            "recent interventions",
+            ["approve queued edit", "deny shell rerun"],
+        )
+        == [
+            "- recent interventions (2):",
+            "  1. approve queued edit",
+            "  2. deny shell rerun",
+        ]
+        and render_numbered_preview_section_lines(
+            "recent tools",
+            ["inspect/e0 git status --short -> M README.md"],
+        )
+        == [
+            "- recent tools (1):",
+            "  1. inspect/e0 git status --short -> M README.md",
+        ]
+        and render_numbered_preview_section_lines(
+            "recent workspace tools",
+            ["inspect read README.md", "edit write report.md"],
+        )
+        == [
+            "- recent workspace tools (2):",
+            "  1. inspect read README.md",
+            "  2. edit write report.md",
+        ]
+        and render_numbered_preview_section_lines(
+            "recent shell outcomes",
+            ["confirm/e1 pytest -q -> exit 1"],
+        )
+        == [
+            "- recent shell outcomes (1):",
+            "  1. confirm/e1 pytest -q -> exit 1",
+        ]
+        and render_numbered_preview_section_lines("recent tools", []) == [],
     )
     print(
         "summary_empty_state=",

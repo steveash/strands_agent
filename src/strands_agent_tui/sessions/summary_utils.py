@@ -210,6 +210,15 @@ def render_selected_session_preview_header_lines(
     ]
 
 
+def render_numbered_preview_section_lines(label: str, items: Sequence[str]) -> list[str]:
+    if not items:
+        return []
+    return [
+        f"- {label} ({len(items)}):",
+        *(f"  {index}. {item}" for index, item in enumerate(items, start=1)),
+    ]
+
+
 def render_picker_controls_line() -> str:
     return (
         "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, "

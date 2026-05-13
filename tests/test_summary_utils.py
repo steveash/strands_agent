@@ -8,6 +8,7 @@ from strands_agent_tui.sessions.summary_utils import (
     render_lane_focus_preview_lines,
     render_lane_focus_suffix,
     render_lane_label_list,
+    render_numbered_preview_section_lines,
     render_page_label,
     render_page_lane_summary_line,
     render_page_window_label,
@@ -151,6 +152,40 @@ def test_render_selected_session_preview_header_lines_share_slot_and_artifact_co
         "- slot 2 on this page | overall 10 of 11 | session session-01",
         "- artifact dir: /tmp/sessions/session-01",
     ]
+
+
+def test_render_numbered_preview_section_lines_share_recent_preview_section_copy() -> None:
+    assert render_numbered_preview_section_lines(
+        "recent interventions",
+        ["approve queued edit", "deny shell rerun"],
+    ) == [
+        "- recent interventions (2):",
+        "  1. approve queued edit",
+        "  2. deny shell rerun",
+    ]
+    assert render_numbered_preview_section_lines(
+        "recent tools",
+        ["inspect/e0 git status --short -> M README.md"],
+    ) == [
+        "- recent tools (1):",
+        "  1. inspect/e0 git status --short -> M README.md",
+    ]
+    assert render_numbered_preview_section_lines(
+        "recent workspace tools",
+        ["inspect read README.md", "edit write report.md"],
+    ) == [
+        "- recent workspace tools (2):",
+        "  1. inspect read README.md",
+        "  2. edit write report.md",
+    ]
+    assert render_numbered_preview_section_lines(
+        "recent shell outcomes",
+        ["confirm/e1 pytest -q -> exit 1"],
+    ) == [
+        "- recent shell outcomes (1):",
+        "  1. confirm/e1 pytest -q -> exit 1",
+    ]
+    assert render_numbered_preview_section_lines("recent tools", []) == []
 
 
 def test_render_compact_badge_helpers_render_single_focus_badge_consistently() -> None:
