@@ -36,6 +36,8 @@ from .summary_utils import (
     render_picker_selection_prompt,
     render_preview_badges_line,
     render_preview_detail_line,
+    render_recent_session_list_row,
+    render_recent_session_summary_line,
     render_row_badges_suffix,
     render_row_detail_suffix,
     render_recent_session_empty_state_lines as render_recent_session_empty_state_lines_helper,
@@ -238,9 +240,42 @@ class SessionSummary:
         event_suffix = render_row_detail_suffix("last event", self.last_event_preview)
         stale_suffix = render_row_badges_suffix("stale", self.stale_session_badges)
         restore_suffix = render_row_badges_suffix("restore", self.restore_badges)
-        return (
-            f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
-            f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{restore_focus_suffix}{restored_current_suffix}{restored_outcome_suffix}{restored_outcome_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{workspace_lane_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"
+        return render_recent_session_summary_line(
+            index=index,
+            session_id=self.session_id,
+            turn_count=self.turn_count,
+            updated_at=self.updated_at,
+            suffixes=[
+                pending_suffix,
+                pending_age_suffix,
+                pending_tool_suffix,
+                approval_suffix,
+                approval_focus_suffix,
+                denied_suffix,
+                denied_age_suffix,
+                approval_restore_suffix,
+                approval_restore_tool_suffix,
+                approval_restore_queue_suffix,
+                approval_restore_age_suffix,
+                restore_focus_suffix,
+                restored_current_suffix,
+                restored_outcome_suffix,
+                restored_outcome_age_suffix,
+                stale_approval_suffix,
+                stale_focus_suffix,
+                intervention_suffix,
+                attention_suffix,
+                stale_suffix,
+                restore_suffix,
+                prompt_suffix,
+                tool_hint,
+                tool_streak_suffix,
+                workspace_lane_suffix,
+                shell_suffix,
+                shell_lane_suffix,
+                failure_suffix,
+                event_suffix,
+            ],
         )
 
     def render_preview(
@@ -633,7 +668,14 @@ def render_session_picker(
         for index, summary in enumerate(summaries, start=1):
             marker = ">" if index - 1 == selected_index else " "
             lines.append(
-                f"{marker} {summary.render_line(index, include_attention_reason=sort_mode == 'attention', filter_mode=filter_mode)}"
+                render_recent_session_list_row(
+                    marker=marker,
+                    summary_line=summary.render_line(
+                        index,
+                        include_attention_reason=sort_mode == 'attention',
+                        filter_mode=filter_mode,
+                    ),
+                )
             )
         lines.extend(
             [

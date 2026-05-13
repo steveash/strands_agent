@@ -18,11 +18,13 @@ from strands_agent_tui.sessions.summary_utils import (
     render_picker_selection_prompt,
     render_preview_badges_line,
     render_preview_detail_line,
-    render_row_badges_suffix,
-    render_row_detail_suffix,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
+    render_recent_session_list_row,
     render_recent_session_page_banner,
+    render_recent_session_summary_line,
+    render_row_badges_suffix,
+    render_row_detail_suffix,
     render_selected_session_preview_header_lines,
     render_switcher_controls_line,
 )
@@ -220,6 +222,33 @@ def main() -> None:
         and render_badged_row_suffix("last tool", "git status --short", [])
         == " | last tool: git status --short"
         and render_badged_row_suffix("last tool", "", []) == "",
+    )
+    print(
+        "summary_row_assembly=",
+        render_recent_session_summary_line(
+            index=2,
+            session_id="session-02",
+            turn_count=3,
+            updated_at="2026-05-13 08:00 UTC",
+            suffixes=[
+                " | pending: run_shell_command",
+                "",
+                " | last prompt: review demo",
+                " | last tool: inspect/e0 git status --short -> M README.md",
+            ],
+        )
+        == "2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC | pending: run_shell_command | last prompt: review demo | last tool: inspect/e0 git status --short -> M README.md"
+        and render_recent_session_list_row(
+            marker=">",
+            summary_line="2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC | pending: run_shell_command | last prompt: review demo | last tool: inspect/e0 git status --short -> M README.md",
+        )
+        == "> 2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC | pending: run_shell_command | last prompt: review demo | last tool: inspect/e0 git status --short -> M README.md"
+        and render_recent_session_list_row(
+            marker=" ",
+            summary_line="2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC | pending: run_shell_command | last prompt: review demo | last tool: inspect/e0 git status --short -> M README.md",
+            is_current=True,
+        )
+        == "  2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC | pending: run_shell_command | last prompt: review demo | last tool: inspect/e0 git status --short -> M README.md (current)",
     )
     print(
         "summary_empty_state=",

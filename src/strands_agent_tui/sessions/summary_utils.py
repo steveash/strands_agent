@@ -253,6 +253,28 @@ def render_row_badges_suffix(
     return render_row_detail_suffix(label, separator.join(values))
 
 
+def render_recent_session_summary_line(
+    *,
+    index: int,
+    session_id: str,
+    turn_count: int,
+    updated_at: str,
+    suffixes: Sequence[str],
+) -> str:
+    rendered_suffixes = "".join(suffix for suffix in suffixes if suffix)
+    return f"{index}. {session_id} | {turn_count} turn(s) | updated {updated_at}{rendered_suffixes}"
+
+
+def render_recent_session_list_row(
+    *,
+    marker: str,
+    summary_line: str,
+    is_current: bool = False,
+) -> str:
+    current_suffix = " (current)" if is_current else ""
+    return f"{marker} {summary_line}{current_suffix}"
+
+
 def render_badged_preview_line(
     label: str,
     value: str,

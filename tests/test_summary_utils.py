@@ -23,11 +23,13 @@ from strands_agent_tui.sessions.summary_utils import (
     render_picker_selection_prompt,
     render_preview_badges_line,
     render_preview_detail_line,
-    render_row_badges_suffix,
-    render_row_detail_suffix,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
+    render_recent_session_list_row,
     render_recent_session_page_banner,
+    render_recent_session_summary_line,
+    render_row_badges_suffix,
+    render_row_detail_suffix,
     render_selected_session_preview_header_lines,
     render_switcher_controls_line,
 )
@@ -270,6 +272,39 @@ def test_render_row_badges_and_badged_value_helpers_share_single_line_row_copy()
     assert render_badged_row_suffix("last tool", "", ["inspect", "e0"]) == " | last tool: inspect/e0"
     assert render_badged_row_suffix("last tool", "git status --short", []) == " | last tool: git status --short"
     assert render_badged_row_suffix("last tool", "", []) == ""
+
+
+def test_render_recent_session_row_helpers_share_composite_row_assembly() -> None:
+    summary_line = render_recent_session_summary_line(
+        index=2,
+        session_id="session-02",
+        turn_count=3,
+        updated_at="2026-05-13 08:00 UTC",
+        suffixes=[
+            " | pending: run_shell_command",
+            "",
+            " | last prompt: review demo",
+            " | last tool: inspect/e0 git status --short -> M README.md",
+        ],
+    )
+    assert summary_line == (
+        "2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC"
+        " | pending: run_shell_command"
+        " | last prompt: review demo"
+        " | last tool: inspect/e0 git status --short -> M README.md"
+    )
+    assert render_recent_session_list_row(marker=">", summary_line=summary_line) == (
+        "> 2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC"
+        " | pending: run_shell_command"
+        " | last prompt: review demo"
+        " | last tool: inspect/e0 git status --short -> M README.md"
+    )
+    assert render_recent_session_list_row(marker=" ", summary_line=summary_line, is_current=True) == (
+        "  2. session-02 | 3 turn(s) | updated 2026-05-13 08:00 UTC"
+        " | pending: run_shell_command"
+        " | last prompt: review demo"
+        " | last tool: inspect/e0 git status --short -> M README.md (current)"
+    )
 
 
 def test_render_compact_badge_helpers_render_single_focus_badge_consistently() -> None:

@@ -29,6 +29,7 @@ from strands_agent_tui.sessions import (
 from strands_agent_tui.sessions.summary_utils import (
     render_page_label,
     render_page_window_label,
+    render_recent_session_list_row,
     render_recent_session_page_banner,
     render_switcher_controls_line,
 )
@@ -580,10 +581,17 @@ class StrandsAgentApp(App):
             return "\n".join(lines)
 
         for index, summary in enumerate(self.session_switcher_summaries, start=1):
-            current_suffix = " (current)" if summary.session_id == self.artifact_store.session_id else ""
             marker = ">" if index - 1 == self.session_switcher_selected_index else " "
             lines.append(
-                f"{marker} {summary.render_line(index, include_attention_reason=self.session_switcher_sort_mode == 'attention', filter_mode=self.session_switcher_filter_mode)}{current_suffix}"
+                render_recent_session_list_row(
+                    marker=marker,
+                    summary_line=summary.render_line(
+                        index,
+                        include_attention_reason=self.session_switcher_sort_mode == 'attention',
+                        filter_mode=self.session_switcher_filter_mode,
+                    ),
+                    is_current=summary.session_id == self.artifact_store.session_id,
+                )
             )
 
         selected_summary = self._current_session_switcher_summary()
