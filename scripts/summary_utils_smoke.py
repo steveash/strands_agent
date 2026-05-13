@@ -25,6 +25,7 @@ from strands_agent_tui.sessions.summary_utils import (
     render_recent_session_summary_line,
     render_row_badges_suffix,
     render_row_detail_suffix,
+    render_selected_preview_section_lines,
     render_selected_session_preview_header_lines,
     render_selected_session_preview_lines,
     render_switcher_controls_line,
@@ -156,6 +157,42 @@ def main() -> None:
             "  1. confirm/e1 pytest -q -> exit 1",
         ]
         and render_numbered_preview_section_lines("recent tools", []) == [],
+    )
+    print(
+        "summary_preview_section_groups=",
+        render_selected_preview_section_lines(
+            render_preview_detail_line("pending", "2 approvals | first: run_shell_command"),
+            render_preview_detail_line("pending queue", "first test; rest edit 1"),
+            render_preview_badges_line("pending tools", ["test", "edit"]),
+            render_preview_detail_line("approval restore age", "3d"),
+            ["- stale focus: pending", "- approval stale age: 45d"],
+        )
+        == [
+            "- pending: 2 approvals | first: run_shell_command",
+            "- pending queue: first test; rest edit 1",
+            "- pending tools: test, edit",
+            "- approval restore age: 3d",
+            "- stale focus: pending",
+            "- approval stale age: 45d",
+        ]
+        and render_selected_preview_section_lines(
+            render_preview_badges_line("shell", ["inspect 1", "test 2"]),
+            render_preview_badges_line("shell lanes", ["inspect", "test"]),
+            render_preview_badges_line("failures", ["test 1"]),
+            render_preview_detail_line("last shell", "confirm/e1 pytest -q -> exit 1"),
+            render_numbered_preview_section_lines(
+                "recent shell outcomes",
+                ["confirm/e1 pytest -q -> exit 1"],
+            ),
+        )
+        == [
+            "- shell: inspect 1, test 2",
+            "- shell lanes: inspect, test",
+            "- failures: test 1",
+            "- last shell: confirm/e1 pytest -q -> exit 1",
+            "- recent shell outcomes (1):",
+            "  1. confirm/e1 pytest -q -> exit 1",
+        ],
     )
     print(
         "summary_preview_assembly=",

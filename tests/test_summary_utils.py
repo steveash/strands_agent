@@ -30,6 +30,7 @@ from strands_agent_tui.sessions.summary_utils import (
     render_recent_session_summary_line,
     render_row_badges_suffix,
     render_row_detail_suffix,
+    render_selected_preview_section_lines,
     render_selected_session_preview_header_lines,
     render_selected_session_preview_lines,
     render_switcher_controls_line,
@@ -195,6 +196,115 @@ def test_render_numbered_preview_section_lines_share_recent_preview_section_copy
         "  1. confirm/e1 pytest -q -> exit 1",
     ]
     assert render_numbered_preview_section_lines("recent tools", []) == []
+
+
+def test_render_selected_preview_section_lines_share_group_assembly_for_preview_subsections() -> None:
+    assert render_selected_preview_section_lines(
+        render_preview_detail_line("pending", "2 approvals | first: run_shell_command"),
+        render_preview_detail_line("pending queue", "first test; rest edit 1"),
+        render_preview_detail_line("pending age", "45d"),
+        render_preview_badges_line("pending tools", ["test", "edit"]),
+        render_preview_badges_line("approvals", ["pending 2", "approved 1"]),
+        render_preview_detail_line("approval focus", "pending/restored"),
+        render_preview_detail_line("last approval", "pending run_shell_command via fake_runtime | queued 2"),
+        render_preview_badges_line("denied", ["edit 1"]),
+        render_preview_detail_line("last denied approval", "denied replace_text via fake_runtime | fresh request"),
+        render_preview_detail_line("last denied age", "9h"),
+        render_preview_badges_line("approval restore", ["pending 1", "approved 1"]),
+        render_preview_badges_line("approval restore tools", ["test 1", "edit 1"]),
+        render_preview_detail_line("approval restore queue", "first test; rest edit 1"),
+        ["- approval restore age: 3d"],
+        render_preview_detail_line(
+            "restored current approval",
+            "pending run_shell_command via fake_runtime | queued 1",
+        ),
+        render_preview_detail_line(
+            "latest restored outcome",
+            "approved replace_text via fake_runtime | restored queue | queued 1",
+        ),
+        render_preview_detail_line("latest restored outcome age", "6h"),
+        ["- stale focus: pending", "- approval stale age: 45d"],
+    ) == [
+        "- pending: 2 approvals | first: run_shell_command",
+        "- pending queue: first test; rest edit 1",
+        "- pending age: 45d",
+        "- pending tools: test, edit",
+        "- approvals: pending 2, approved 1",
+        "- approval focus: pending/restored",
+        "- last approval: pending run_shell_command via fake_runtime | queued 2",
+        "- denied: edit 1",
+        "- last denied approval: denied replace_text via fake_runtime | fresh request",
+        "- last denied age: 9h",
+        "- approval restore: pending 1, approved 1",
+        "- approval restore tools: test 1, edit 1",
+        "- approval restore queue: first test; rest edit 1",
+        "- approval restore age: 3d",
+        "- restored current approval: pending run_shell_command via fake_runtime | queued 1",
+        "- latest restored outcome: approved replace_text via fake_runtime | restored queue | queued 1",
+        "- latest restored outcome age: 6h",
+        "- stale focus: pending",
+        "- approval stale age: 45d",
+    ]
+    assert render_selected_preview_section_lines(
+        render_preview_badges_line("intervention", ["pending 2", "restored 1"]),
+        render_preview_detail_line("last intervention", "approved queued edit"),
+        render_numbered_preview_section_lines(
+            "recent interventions",
+            ["approve queued edit", "deny shell rerun"],
+        ),
+    ) == [
+        "- intervention: pending 2, restored 1",
+        "- last intervention: approved queued edit",
+        "- recent interventions (2):",
+        "  1. approve queued edit",
+        "  2. deny shell rerun",
+    ]
+    assert render_selected_preview_section_lines(
+        render_badged_preview_line(
+            "last tool",
+            "git status --short -> M README.md",
+            ["inspect", "e0"],
+        ),
+        render_numbered_preview_section_lines(
+            "recent tools",
+            ["inspect/e0 git status --short -> M README.md"],
+        ),
+    ) == [
+        "- last tool: inspect/e0 git status --short -> M README.md",
+        "- recent tools (1):",
+        "  1. inspect/e0 git status --short -> M README.md",
+    ]
+    assert render_selected_preview_section_lines(
+        render_preview_badges_line("workspace lanes", ["inspect", "edit"]),
+        render_preview_detail_line("last workspace tool", "inspect read README.md"),
+        render_numbered_preview_section_lines(
+            "recent workspace tools",
+            ["inspect read README.md", "edit write report.md"],
+        ),
+    ) == [
+        "- workspace lanes: inspect, edit",
+        "- last workspace tool: inspect read README.md",
+        "- recent workspace tools (2):",
+        "  1. inspect read README.md",
+        "  2. edit write report.md",
+    ]
+    assert render_selected_preview_section_lines(
+        render_preview_badges_line("shell", ["inspect 1", "test 2"]),
+        render_preview_badges_line("shell lanes", ["inspect", "test"]),
+        render_preview_badges_line("failures", ["test 1"]),
+        render_preview_detail_line("last shell", "confirm/e1 pytest -q -> exit 1"),
+        render_numbered_preview_section_lines(
+            "recent shell outcomes",
+            ["confirm/e1 pytest -q -> exit 1"],
+        ),
+    ) == [
+        "- shell: inspect 1, test 2",
+        "- shell lanes: inspect, test",
+        "- failures: test 1",
+        "- last shell: confirm/e1 pytest -q -> exit 1",
+        "- recent shell outcomes (1):",
+        "  1. confirm/e1 pytest -q -> exit 1",
+    ]
 
 
 def test_render_selected_session_preview_lines_share_composite_preview_assembly() -> None:

@@ -210,6 +210,13 @@ def render_selected_session_preview_header_lines(
     ]
 
 
+def render_selected_preview_section_lines(*blocks: Sequence[str]) -> list[str]:
+    lines: list[str] = []
+    for block in blocks:
+        lines.extend(line for line in block if line)
+    return lines
+
+
 def render_selected_session_preview_lines(
     *,
     header_lines: Sequence[str],
@@ -222,8 +229,7 @@ def render_selected_session_preview_lines(
     shell_lines: Sequence[str] = (),
     event_lines: Sequence[str] = (),
 ) -> list[str]:
-    lines: list[str] = []
-    for block in (
+    return render_selected_preview_section_lines(
         header_lines,
         status_lines,
         approval_lines,
@@ -233,9 +239,7 @@ def render_selected_session_preview_lines(
         workspace_lines,
         shell_lines,
         event_lines,
-    ):
-        lines.extend(line for line in block if line)
-    return lines
+    )
 
 
 def render_numbered_preview_section_lines(label: str, items: Sequence[str]) -> list[str]:
