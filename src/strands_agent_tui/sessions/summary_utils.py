@@ -225,6 +225,12 @@ def render_preview_detail_line(label: str, value: str) -> list[str]:
     return [f"- {label}: {value}"]
 
 
+def render_row_detail_suffix(label: str, value: str) -> str:
+    if not value:
+        return ""
+    return f" | {label}: {value}"
+
+
 def render_preview_badges_line(
     label: str,
     values: Sequence[str],
@@ -234,6 +240,17 @@ def render_preview_badges_line(
     if not values:
         return []
     return render_preview_detail_line(label, separator.join(values))
+
+
+def render_row_badges_suffix(
+    label: str,
+    values: Sequence[str],
+    *,
+    separator: str = ", ",
+) -> str:
+    if not values:
+        return ""
+    return render_row_detail_suffix(label, separator.join(values))
 
 
 def render_badged_preview_line(
@@ -250,6 +267,22 @@ def render_badged_preview_line(
     else:
         rendered_value = badge_prefix or value
     return render_preview_detail_line(label, rendered_value)
+
+
+def render_badged_row_suffix(
+    label: str,
+    value: str,
+    badges: Sequence[str],
+    *,
+    badge_separator: str = "/",
+    badge_value_separator: str = " ",
+) -> str:
+    badge_prefix = badge_separator.join(badges)
+    if badge_prefix and value:
+        rendered_value = f"{badge_prefix}{badge_value_separator}{value}"
+    else:
+        rendered_value = badge_prefix or value
+    return render_row_detail_suffix(label, rendered_value)
 
 
 def render_picker_controls_line() -> str:

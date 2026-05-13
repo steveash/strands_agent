@@ -17,6 +17,7 @@ from .artifacts import (
 from .summary_utils import (
     render_backlog_summary_line,
     render_badged_preview_line,
+    render_badged_row_suffix,
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
     render_filter_focus_line,
@@ -35,6 +36,8 @@ from .summary_utils import (
     render_picker_selection_prompt,
     render_preview_badges_line,
     render_preview_detail_line,
+    render_row_badges_suffix,
+    render_row_detail_suffix,
     render_recent_session_empty_state_lines as render_recent_session_empty_state_lines_helper,
     render_recent_session_page_banner,
     render_selected_session_preview_header_lines,
@@ -176,39 +179,32 @@ class SessionSummary:
         include_attention_reason: bool = False,
         filter_mode: str = "all",
     ) -> str:
-        prompt_suffix = f" | last prompt: {self.last_prompt_preview}" if self.last_prompt_preview else ""
-        pending_suffix = ""
+        prompt_suffix = render_row_detail_suffix("last prompt", self.last_prompt_preview)
+        pending_value = ""
         if self.pending_approval_count == 1 and self.pending_approval_tool:
-            pending_suffix = f" | pending: {self.pending_approval_tool}"
+            pending_value = self.pending_approval_tool
         elif self.pending_approval_count > 1:
             tool_hint = f" ({self.pending_approval_queue_summary})" if self.pending_approval_queue_summary else ""
-            pending_suffix = f" | pending: {self.pending_approval_count} approvals{tool_hint}"
-        pending_age_suffix = f" | pending age: {self.pending_approval_age_summary}" if self.pending_approval_age_summary else ""
-        pending_tool_suffix = (
-            f" | pending tools: {', '.join(self.pending_approval_badges)}" if self.pending_approval_badges else ""
+            pending_value = f"{self.pending_approval_count} approvals{tool_hint}"
+        pending_suffix = render_row_detail_suffix("pending", pending_value)
+        pending_age_suffix = render_row_detail_suffix("pending age", self.pending_approval_age_summary)
+        pending_tool_suffix = render_row_badges_suffix("pending tools", self.pending_approval_badges)
+        approval_suffix = render_row_badges_suffix("approvals", self.approval_status_badges)
+        approval_focus_suffix = render_row_badges_suffix(
+            "approval focus",
+            self.approval_focus_badges,
+            separator="/",
         )
-        approval_suffix = (
-            f" | approvals: {', '.join(self.approval_status_badges)}" if self.approval_status_badges else ""
+        denied_suffix = render_row_badges_suffix("denied", self.denied_approval_badges)
+        denied_age_suffix = render_row_detail_suffix("denied age", self.last_denied_approval_age_summary)
+        approval_restore_suffix = render_row_badges_suffix("approval restore", self.restored_approval_badges)
+        approval_restore_tool_suffix = render_row_badges_suffix(
+            "approval restore tools",
+            self.restored_approval_tool_badges,
         )
-        approval_focus_suffix = (
-            f" | approval focus: {'/'.join(self.approval_focus_badges)}" if self.approval_focus_badges else ""
-        )
-        denied_suffix = f" | denied: {', '.join(self.denied_approval_badges)}" if self.denied_approval_badges else ""
-        denied_age_suffix = f" | denied age: {self.last_denied_approval_age_summary}" if self.last_denied_approval_age_summary else ""
-        approval_restore_suffix = (
-            f" | approval restore: {', '.join(self.restored_approval_badges)}"
-            if self.restored_approval_badges
-            else ""
-        )
-        approval_restore_tool_suffix = (
-            f" | approval restore tools: {', '.join(self.restored_approval_tool_badges)}"
-            if self.restored_approval_tool_badges
-            else ""
-        )
-        approval_restore_queue_suffix = (
-            f" | approval restore queue: {self.restored_pending_approval_queue_summary}"
-            if self.restored_pending_approval_queue_summary
-            else ""
+        approval_restore_queue_suffix = render_row_detail_suffix(
+            "approval restore queue",
+            self.restored_pending_approval_queue_summary,
         )
         approval_restore_age_suffix, restore_focus_suffix, suppress_restored_outcome_age_suffix = (
             _render_approval_restore_row_age_suffixes(self, filter_mode)
@@ -225,40 +221,23 @@ class SessionSummary:
             stale_focus_lanes=stale_focus_lanes,
         )
         stale_focus_suffix = render_lane_focus_suffix("stale focus", stale_focus_lanes)
-        intervention_suffix = (
-            f" | intervention: {', '.join(self.intervention_badges)}" if self.intervention_badges else ""
+        intervention_suffix = render_row_badges_suffix("intervention", self.intervention_badges)
+        tool_hint = render_badged_row_suffix("last tool", self.last_tool_preview, self.last_tool_badges)
+        tool_streak_suffix = render_row_detail_suffix(
+            "tool streak",
+            f"{len(self.recent_tool_previews)} recent" if len(self.recent_tool_previews) > 1 else "",
         )
-        tool_hint = ""
-        if self.last_tool_preview or self.last_tool_badges:
-            badge_prefix = "/".join(self.last_tool_badges)
-            if badge_prefix and self.last_tool_preview:
-                tool_hint = f" | last tool: {badge_prefix} {self.last_tool_preview}"
-            elif badge_prefix:
-                tool_hint = f" | last tool: {badge_prefix}"
-            else:
-                tool_hint = f" | last tool: {self.last_tool_preview}"
-        tool_streak_suffix = ""
-        if len(self.recent_tool_previews) > 1:
-            tool_streak_suffix = f" | tool streak: {len(self.recent_tool_previews)} recent"
-        workspace_lane_suffix = (
-            f" | workspace lanes: {', '.join(self.workspace_lane_badges)}" if self.workspace_lane_badges else ""
-        )
-        shell_suffix = (
-            f" | shell: {', '.join(self.shell_activity_badges)}" if self.shell_activity_badges else ""
-        )
-        shell_lane_suffix = (
-            f" | shell lanes: {', '.join(self.shell_lane_badges)}" if self.shell_lane_badges else ""
-        )
-        failure_suffix = (
-            f" | failures: {', '.join(self.failure_activity_badges)}" if self.failure_activity_badges else ""
-        )
+        workspace_lane_suffix = render_row_badges_suffix("workspace lanes", self.workspace_lane_badges)
+        shell_suffix = render_row_badges_suffix("shell", self.shell_activity_badges)
+        shell_lane_suffix = render_row_badges_suffix("shell lanes", self.shell_lane_badges)
+        failure_suffix = render_row_badges_suffix("failures", self.failure_activity_badges)
         attention_suffix = ""
         attention_badge = _attention_reason_badge(self) if include_attention_reason and self.attention_reason_summary else ""
         if attention_badge and not _is_redundant_attention_badge(self, attention_badge):
-            attention_suffix = f" | attention: {attention_badge}"
-        event_suffix = f" | last event: {self.last_event_preview}" if self.last_event_preview else ""
-        stale_suffix = f" | stale: {', '.join(self.stale_session_badges)}" if self.stale_session_badges else ""
-        restore_suffix = f" | restore: {', '.join(self.restore_badges)}" if self.restore_badges else ""
+            attention_suffix = render_row_detail_suffix("attention", attention_badge)
+        event_suffix = render_row_detail_suffix("last event", self.last_event_preview)
+        stale_suffix = render_row_badges_suffix("stale", self.stale_session_badges)
+        restore_suffix = render_row_badges_suffix("restore", self.restore_badges)
         return (
             f"{index}. {self.session_id} | {self.turn_count} turn(s) | "
             f"updated {self.updated_at}{pending_suffix}{pending_age_suffix}{pending_tool_suffix}{approval_suffix}{approval_focus_suffix}{denied_suffix}{denied_age_suffix}{approval_restore_suffix}{approval_restore_tool_suffix}{approval_restore_queue_suffix}{approval_restore_age_suffix}{restore_focus_suffix}{restored_current_suffix}{restored_outcome_suffix}{restored_outcome_age_suffix}{stale_approval_suffix}{stale_focus_suffix}{intervention_suffix}{attention_suffix}{stale_suffix}{restore_suffix}{prompt_suffix}{tool_hint}{tool_streak_suffix}{workspace_lane_suffix}{shell_suffix}{shell_lane_suffix}{failure_suffix}{event_suffix}"

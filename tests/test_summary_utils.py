@@ -3,6 +3,7 @@ import pytest
 from strands_agent_tui.sessions.summary_utils import (
     render_backlog_summary_line,
     render_badged_preview_line,
+    render_badged_row_suffix,
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
     render_filter_focus_line,
@@ -22,6 +23,8 @@ from strands_agent_tui.sessions.summary_utils import (
     render_picker_selection_prompt,
     render_preview_badges_line,
     render_preview_detail_line,
+    render_row_badges_suffix,
+    render_row_detail_suffix,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
     render_recent_session_page_banner,
@@ -213,6 +216,28 @@ def test_render_preview_detail_helpers_share_single_line_selected_preview_copy()
     assert render_preview_detail_line("last prompt", "") == []
 
 
+def test_render_row_detail_helpers_share_single_line_recent_session_row_copy() -> None:
+    assert render_row_detail_suffix("pending queue", "first test; rest edit 1, tool 1") == (
+        " | pending queue: first test; rest edit 1, tool 1"
+    )
+    assert render_row_detail_suffix("pending age", "45d") == " | pending age: 45d"
+    assert render_row_detail_suffix("last denied age", "9h") == " | last denied age: 9h"
+    assert render_row_detail_suffix("approval restore queue", "first test; rest edit 1, tool 1") == (
+        " | approval restore queue: first test; rest edit 1, tool 1"
+    )
+    assert render_row_detail_suffix("last intervention", "approved queued edit") == (
+        " | last intervention: approved queued edit"
+    )
+    assert render_row_detail_suffix("last prompt", "review demo") == " | last prompt: review demo"
+    assert render_row_detail_suffix("last workspace tool", "inspect read README.md") == (
+        " | last workspace tool: inspect read README.md"
+    )
+    assert render_row_detail_suffix("last shell", "inspect/e0 git status --short -> M README.md") == (
+        " | last shell: inspect/e0 git status --short -> M README.md"
+    )
+    assert render_row_detail_suffix("last prompt", "") == ""
+
+
 def test_render_preview_badges_and_badged_value_helpers_share_single_line_preview_copy() -> None:
     assert render_preview_badges_line("pending tools", ["test", "edit"]) == ["- pending tools: test, edit"]
     assert render_preview_badges_line("approval focus", ["approved", "restored"], separator="/") == [
@@ -230,6 +255,21 @@ def test_render_preview_badges_and_badged_value_helpers_share_single_line_previe
         "- last tool: git status --short"
     ]
     assert render_badged_preview_line("last tool", "", []) == []
+
+
+def test_render_row_badges_and_badged_value_helpers_share_single_line_row_copy() -> None:
+    assert render_row_badges_suffix("pending tools", ["test", "edit"]) == " | pending tools: test, edit"
+    assert render_row_badges_suffix("approval focus", ["approved", "restored"], separator="/") == (
+        " | approval focus: approved/restored"
+    )
+    assert render_badged_row_suffix(
+        "last tool",
+        "git status --short -> M README.md",
+        ["inspect", "e0"],
+    ) == " | last tool: inspect/e0 git status --short -> M README.md"
+    assert render_badged_row_suffix("last tool", "", ["inspect", "e0"]) == " | last tool: inspect/e0"
+    assert render_badged_row_suffix("last tool", "git status --short", []) == " | last tool: git status --short"
+    assert render_badged_row_suffix("last tool", "", []) == ""
 
 
 def test_render_compact_badge_helpers_render_single_focus_badge_consistently() -> None:

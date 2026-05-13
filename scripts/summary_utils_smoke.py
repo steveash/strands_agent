@@ -1,6 +1,7 @@
 from strands_agent_tui.sessions.summary_utils import (
     render_backlog_summary_line,
     render_badged_preview_line,
+    render_badged_row_suffix,
     render_compact_badge_preview_lines,
     render_compact_badge_row_suffix,
     render_filter_focus_line,
@@ -17,6 +18,8 @@ from strands_agent_tui.sessions.summary_utils import (
     render_picker_selection_prompt,
     render_preview_badges_line,
     render_preview_detail_line,
+    render_row_badges_suffix,
+    render_row_detail_suffix,
     render_recent_session_empty_state_lines,
     render_recent_session_filter_jump_line,
     render_recent_session_page_banner,
@@ -169,6 +172,23 @@ def main() -> None:
         and render_preview_detail_line("last prompt", "") == [],
     )
     print(
+        "summary_row_detail_suffixes=",
+        render_row_detail_suffix("pending queue", "first test; rest edit 1, tool 1")
+        == " | pending queue: first test; rest edit 1, tool 1"
+        and render_row_detail_suffix("pending age", "45d") == " | pending age: 45d"
+        and render_row_detail_suffix("last denied age", "9h") == " | last denied age: 9h"
+        and render_row_detail_suffix("approval restore queue", "first test; rest edit 1, tool 1")
+        == " | approval restore queue: first test; rest edit 1, tool 1"
+        and render_row_detail_suffix("last intervention", "approved queued edit")
+        == " | last intervention: approved queued edit"
+        and render_row_detail_suffix("last prompt", "review demo") == " | last prompt: review demo"
+        and render_row_detail_suffix("last workspace tool", "inspect read README.md")
+        == " | last workspace tool: inspect read README.md"
+        and render_row_detail_suffix("last shell", "inspect/e0 git status --short -> M README.md")
+        == " | last shell: inspect/e0 git status --short -> M README.md"
+        and render_row_detail_suffix("last prompt", "") == "",
+    )
+    print(
         "summary_preview_badged_lines=",
         render_preview_badges_line("pending tools", ["test", "edit"])
         == ["- pending tools: test, edit"]
@@ -184,6 +204,22 @@ def main() -> None:
         and render_badged_preview_line("last tool", "git status --short", [])
         == ["- last tool: git status --short"]
         and render_badged_preview_line("last tool", "", []) == [],
+    )
+    print(
+        "summary_row_badged_suffixes=",
+        render_row_badges_suffix("pending tools", ["test", "edit"]) == " | pending tools: test, edit"
+        and render_row_badges_suffix("approval focus", ["approved", "restored"], separator="/")
+        == " | approval focus: approved/restored"
+        and render_badged_row_suffix(
+            "last tool",
+            "git status --short -> M README.md",
+            ["inspect", "e0"],
+        )
+        == " | last tool: inspect/e0 git status --short -> M README.md"
+        and render_badged_row_suffix("last tool", "", ["inspect", "e0"]) == " | last tool: inspect/e0"
+        and render_badged_row_suffix("last tool", "git status --short", [])
+        == " | last tool: git status --short"
+        and render_badged_row_suffix("last tool", "", []) == "",
     )
     print(
         "summary_empty_state=",
