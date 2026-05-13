@@ -43,6 +43,7 @@ from .summary_utils import (
     render_recent_session_empty_state_lines as render_recent_session_empty_state_lines_helper,
     render_recent_session_page_banner,
     render_selected_session_preview_header_lines,
+    render_selected_session_preview_lines,
 )
 from ..runtime import ApprovalRequest
 from ..tools.workspace import resolve_shell_command
@@ -287,87 +288,118 @@ class SessionSummary:
         filter_mode: str = "all",
         stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
     ) -> list[str]:
-        lines = render_selected_session_preview_header_lines(
+        header_lines = render_selected_session_preview_header_lines(
             visible_index=visible_index,
             overall_index=overall_index,
             total_matches=total_matches,
             session_id=self.session_id,
             session_dir=self.session_dir,
         )
+
+        status_lines: list[str] = []
         if _should_render_stale_cutoff_preview_line(filter_mode):
-            lines.append(
-                "- stale lane focus: "
-                f"{_stale_approval_filter_focus_label(filter_mode)} | "
-                f"cutoff: {format_stale_approval_cutoff(stale_approval_warning_seconds)}"
+            status_lines.extend(
+                render_preview_detail_line(
+                    "stale lane focus",
+                    f"{_stale_approval_filter_focus_label(filter_mode)} | "
+                    f"cutoff: {format_stale_approval_cutoff(stale_approval_warning_seconds)}",
+                )
             )
-        if self.attention_reason_summary:
-            lines.append(f"- attention reason: {self.attention_reason_summary}")
+        status_lines.extend(render_preview_detail_line("attention reason", self.attention_reason_summary))
+
+        approval_lines: list[str] = []
         if self.pending_approval_count > 0:
             pending_line = self.pending_approval_summary or self.pending_approval_tool or "pending approval"
             if self.pending_approval_count > 1:
                 pending_line = f"{self.pending_approval_count} approvals | first: {pending_line}"
-            lines.append(f"- pending: {pending_line}")
-        lines.extend(render_preview_detail_line("pending queue", self.pending_approval_queue_summary))
-        lines.extend(render_preview_detail_line("pending age", self.pending_approval_age_summary))
-        lines.extend(render_preview_badges_line("pending tools", self.pending_approval_badges))
-        lines.extend(render_preview_badges_line("approvals", self.approval_status_badges))
-        lines.extend(render_preview_detail_line("approval focus", "/".join(self.approval_focus_badges)))
-        lines.extend(render_preview_detail_line("last approval", self.last_approval_summary))
-        lines.extend(render_preview_badges_line("denied", self.denied_approval_badges))
-        lines.extend(render_preview_detail_line("last denied approval", self.last_denied_approval_summary))
-        lines.extend(render_preview_detail_line("last denied age", self.last_denied_approval_age_summary))
-        lines.extend(render_preview_badges_line("approval restore", self.restored_approval_badges))
-        lines.extend(render_preview_badges_line("approval restore tools", self.restored_approval_tool_badges))
-        lines.extend(render_preview_detail_line("approval restore queue", self.restored_pending_approval_queue_summary))
+            approval_lines.extend(render_preview_detail_line("pending", pending_line))
+        approval_lines.extend(render_preview_detail_line("pending queue", self.pending_approval_queue_summary))
+        approval_lines.extend(render_preview_detail_line("pending age", self.pending_approval_age_summary))
+        approval_lines.extend(render_preview_badges_line("pending tools", self.pending_approval_badges))
+        approval_lines.extend(render_preview_badges_line("approvals", self.approval_status_badges))
+        approval_lines.extend(render_preview_detail_line("approval focus", "/".join(self.approval_focus_badges)))
+        approval_lines.extend(render_preview_detail_line("last approval", self.last_approval_summary))
+        approval_lines.extend(render_preview_badges_line("denied", self.denied_approval_badges))
+        approval_lines.extend(render_preview_detail_line("last denied approval", self.last_denied_approval_summary))
+        approval_lines.extend(render_preview_detail_line("last denied age", self.last_denied_approval_age_summary))
+        approval_lines.extend(render_preview_badges_line("approval restore", self.restored_approval_badges))
+        approval_lines.extend(render_preview_badges_line("approval restore tools", self.restored_approval_tool_badges))
+        approval_lines.extend(
+            render_preview_detail_line("approval restore queue", self.restored_pending_approval_queue_summary)
+        )
         approval_restore_preview_lines, suppress_restored_preview_age = _render_approval_restore_preview_lines(
             self,
             filter_mode,
         )
-        lines.extend(approval_restore_preview_lines)
+        approval_lines.extend(approval_restore_preview_lines)
         if self.last_restored_outcome_summary and self.last_restored_outcome_summary != self.last_restored_approval_summary:
-            lines.extend(render_preview_detail_line("restored current approval", self.last_restored_approval_summary))
+            approval_lines.extend(
+                render_preview_detail_line("restored current approval", self.last_restored_approval_summary)
+            )
         else:
-            lines.extend(render_preview_detail_line("last restored approval", self.last_restored_approval_summary))
+            approval_lines.extend(render_preview_detail_line("last restored approval", self.last_restored_approval_summary))
         if self.last_restored_outcome_summary and self.last_restored_outcome_summary != self.last_restored_approval_summary:
-            lines.extend(render_preview_detail_line("latest restored outcome", self.last_restored_outcome_summary))
+            approval_lines.extend(render_preview_detail_line("latest restored outcome", self.last_restored_outcome_summary))
         restored_outcome_age_summary = _restored_outcome_preview_age_summary(self)
         restored_outcome_age_label = _restored_outcome_preview_age_label(self)
         if not suppress_restored_preview_age and restored_outcome_age_summary and (
             not self.restored_pending_approval_age_summary
             or restored_outcome_age_summary != self.restored_pending_approval_age_summary
         ):
-            lines.extend(render_preview_detail_line(restored_outcome_age_label, restored_outcome_age_summary))
+            approval_lines.extend(render_preview_detail_line(restored_outcome_age_label, restored_outcome_age_summary))
         elif not suppress_restored_preview_age and self.last_restored_approval_age_summary and (
             not self.restored_pending_approval_age_summary
             or self.last_restored_approval_age_summary != self.restored_pending_approval_age_summary
         ):
-            lines.extend(render_preview_detail_line("last restored age", self.last_restored_approval_age_summary))
-        lines.extend(_render_stale_approval_preview_lines(self, filter_mode))
-        lines.extend(render_preview_badges_line("intervention", self.intervention_badges))
-        lines.extend(render_preview_detail_line("last intervention", self.last_intervention_preview))
-        lines.extend(
+            approval_lines.extend(render_preview_detail_line("last restored age", self.last_restored_approval_age_summary))
+        approval_lines.extend(_render_stale_approval_preview_lines(self, filter_mode))
+
+        intervention_lines: list[str] = []
+        intervention_lines.extend(render_preview_badges_line("intervention", self.intervention_badges))
+        intervention_lines.extend(render_preview_detail_line("last intervention", self.last_intervention_preview))
+        intervention_lines.extend(
             render_numbered_preview_section_lines("recent interventions", self.recent_intervention_previews)
         )
-        lines.extend(render_preview_badges_line("restore", self.restore_badges))
-        lines.extend(render_preview_detail_line("session age", self.stale_session_summary))
-        lines.extend(render_preview_detail_line("draft", self.draft_prompt_preview))
-        lines.extend(render_preview_detail_line("last prompt", self.last_prompt_preview))
-        lines.extend(render_badged_preview_line("last tool", self.last_tool_preview, self.last_tool_badges))
-        lines.extend(render_numbered_preview_section_lines("recent tools", self.recent_tool_previews))
-        lines.extend(render_preview_badges_line("workspace lanes", self.workspace_lane_badges))
-        lines.extend(render_preview_detail_line("last workspace tool", self.last_workspace_preview))
-        lines.extend(
+
+        session_lines: list[str] = []
+        session_lines.extend(render_preview_badges_line("restore", self.restore_badges))
+        session_lines.extend(render_preview_detail_line("session age", self.stale_session_summary))
+        session_lines.extend(render_preview_detail_line("draft", self.draft_prompt_preview))
+        session_lines.extend(render_preview_detail_line("last prompt", self.last_prompt_preview))
+
+        tool_lines: list[str] = []
+        tool_lines.extend(render_badged_preview_line("last tool", self.last_tool_preview, self.last_tool_badges))
+        tool_lines.extend(render_numbered_preview_section_lines("recent tools", self.recent_tool_previews))
+
+        workspace_lines: list[str] = []
+        workspace_lines.extend(render_preview_badges_line("workspace lanes", self.workspace_lane_badges))
+        workspace_lines.extend(render_preview_detail_line("last workspace tool", self.last_workspace_preview))
+        workspace_lines.extend(
             render_numbered_preview_section_lines("recent workspace tools", self.recent_workspace_previews)
         )
-        lines.extend(render_preview_badges_line("shell", self.shell_activity_badges))
-        lines.extend(render_preview_badges_line("shell lanes", self.shell_lane_badges))
-        lines.extend(render_preview_badges_line("failures", self.failure_activity_badges))
-        lines.extend(render_preview_detail_line("last shell", self.last_shell_preview))
-        lines.extend(
+
+        shell_lines: list[str] = []
+        shell_lines.extend(render_preview_badges_line("shell", self.shell_activity_badges))
+        shell_lines.extend(render_preview_badges_line("shell lanes", self.shell_lane_badges))
+        shell_lines.extend(render_preview_badges_line("failures", self.failure_activity_badges))
+        shell_lines.extend(render_preview_detail_line("last shell", self.last_shell_preview))
+        shell_lines.extend(
             render_numbered_preview_section_lines("recent shell outcomes", self.recent_shell_previews)
         )
-        lines.extend(render_preview_detail_line("last event", self.last_event_preview))
-        return lines
+
+        event_lines = render_preview_detail_line("last event", self.last_event_preview)
+
+        return render_selected_session_preview_lines(
+            header_lines=header_lines,
+            status_lines=status_lines,
+            approval_lines=approval_lines,
+            intervention_lines=intervention_lines,
+            session_lines=session_lines,
+            tool_lines=tool_lines,
+            workspace_lines=workspace_lines,
+            shell_lines=shell_lines,
+            event_lines=event_lines,
+        )
 
 
 def list_recent_sessions(

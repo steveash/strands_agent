@@ -31,6 +31,7 @@ from strands_agent_tui.sessions.summary_utils import (
     render_row_badges_suffix,
     render_row_detail_suffix,
     render_selected_session_preview_header_lines,
+    render_selected_session_preview_lines,
     render_switcher_controls_line,
 )
 
@@ -194,6 +195,52 @@ def test_render_numbered_preview_section_lines_share_recent_preview_section_copy
         "  1. confirm/e1 pytest -q -> exit 1",
     ]
     assert render_numbered_preview_section_lines("recent tools", []) == []
+
+
+def test_render_selected_session_preview_lines_share_composite_preview_assembly() -> None:
+    assert render_selected_session_preview_lines(
+        header_lines=[
+            "Selected preview:",
+            "- slot 2 on this page | overall 10 of 11 | session session-01",
+            "- artifact dir: /tmp/sessions/session-01",
+        ],
+        status_lines=[
+            "- stale lane focus: pending | cutoff: approvals >= 7d old",
+            "- attention reason: pending test approval queue",
+        ],
+        approval_lines=[
+            "- pending: run_shell_command",
+            "- pending age: 45d",
+            "- pending tools: test",
+        ],
+        intervention_lines=["- last intervention: approved queued edit"],
+        session_lines=["- draft: rerun picker smoke"],
+        tool_lines=[
+            "- last tool: inspect/e0 git status --short -> M README.md",
+            "- recent tools (1):",
+            "  1. inspect/e0 git status --short -> M README.md",
+        ],
+        workspace_lines=["- workspace lanes: inspect"],
+        shell_lines=["- last shell: inspect/e0 git status --short -> M README.md"],
+        event_lines=["- last event: tool_finished: run_shell_command"],
+    ) == [
+        "Selected preview:",
+        "- slot 2 on this page | overall 10 of 11 | session session-01",
+        "- artifact dir: /tmp/sessions/session-01",
+        "- stale lane focus: pending | cutoff: approvals >= 7d old",
+        "- attention reason: pending test approval queue",
+        "- pending: run_shell_command",
+        "- pending age: 45d",
+        "- pending tools: test",
+        "- last intervention: approved queued edit",
+        "- draft: rerun picker smoke",
+        "- last tool: inspect/e0 git status --short -> M README.md",
+        "- recent tools (1):",
+        "  1. inspect/e0 git status --short -> M README.md",
+        "- workspace lanes: inspect",
+        "- last shell: inspect/e0 git status --short -> M README.md",
+        "- last event: tool_finished: run_shell_command",
+    ]
 
 
 def test_render_preview_detail_helpers_share_single_line_selected_preview_copy() -> None:
