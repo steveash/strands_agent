@@ -927,6 +927,8 @@ class StrandsAgentApp(App):
 
         all_summaries: list[SessionSummary] | None = None
         filter_mode_needs_rollup = self.session_switcher_filter_mode in {
+            "pending",
+            "denied",
             "approval-restore",
             "workspace-inspect",
             "workspace-edit",

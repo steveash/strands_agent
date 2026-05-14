@@ -1097,8 +1097,133 @@ async def test_session_switcher_surfaces_approval_rollups_in_summary_and_preview
 
         selected_output = str(app.query_one("#output").render())
         assert "- approvals: pending 1, approved 1" in selected_output
-        assert "- approval focus: pending" in selected_output
-        assert "- last approval: pending run_shell_command via fake_runtime | queued 1" in selected_output
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_surfaces_pending_backlog_rollups(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    fresh_store = SessionArtifactStore(tmp_path, session_id="session-pending-fresh")
+    fresh_store.append_turn(
+        TurnArtifact(
+            prompt="queue fresh test approval",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    fresh_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-switcher-pending-fresh",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+                created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            )
+        ]
+    )
+
+    restored_store = SessionArtifactStore(tmp_path, session_id="session-pending-restored")
+    restored_store.append_turn(
+        TurnArtifact(
+            prompt="resume restored edit approval",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-switcher-pending-restored",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume edit",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=1)).isoformat(),
+            )
+        ]
+    )
+
+    multi_store = SessionArtifactStore(tmp_path, session_id="session-pending-multi")
+    multi_store.append_turn(
+        TurnArtifact(
+            prompt="queue multiple pending approvals",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    multi_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-switcher-pending-multi-1",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="queue test",
+                created_at=(datetime.now(UTC) - timedelta(hours=12)).isoformat(),
+            ),
+            ApprovalRequest(
+                request_id="approval-switcher-pending-multi-2",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "old_text": "old", "new_text": "new"},
+                source="fake_runtime",
+                prompt="queue edit",
+                created_at=(datetime.now(UTC) - timedelta(hours=11)).isoformat(),
+            ),
+        ]
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("p")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+
+        assert (
+            "Pending approval backlog: 3 sessions | approvals: 4 | families: test 2, edit 2 | multi-queue: 1 session | restored queues: 1 session"
+            in output
+        )
+        assert "Pending focus: fresh, restored | oldest: 2d" in output
 
 
 @pytest.mark.asyncio
