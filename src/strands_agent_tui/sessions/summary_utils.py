@@ -123,6 +123,47 @@ def render_page_lane_summary_line(
     return line
 
 
+def render_recent_session_filter_summary_block_lines(
+    *,
+    backlog_label: str,
+    count: int,
+    focus_label: str,
+    focus_lanes: Sequence[str],
+    lane_rollup: str = "",
+    overlap_summary: str = "",
+    cutoff: str = "",
+    page_lane_label: str = "",
+    visible_rollup: str = "",
+    off_page_rollup: str = "",
+    visible_overlap_summary: str = "",
+    off_page_overlap_summary: str = "",
+) -> list[str]:
+    lines = [
+        render_backlog_summary_line(
+            backlog_label,
+            count,
+            lane_rollup=lane_rollup,
+            overlap_summary=overlap_summary,
+        ),
+        render_filter_focus_line(
+            focus_label,
+            focus_lanes,
+            cutoff=cutoff,
+        ),
+    ]
+    if page_lane_label and visible_rollup:
+        lines.append(
+            render_page_lane_summary_line(
+                page_lane_label,
+                visible_rollup,
+                off_page_rollup=off_page_rollup,
+                visible_overlap_summary=visible_overlap_summary,
+                off_page_overlap_summary=off_page_overlap_summary,
+            )
+        )
+    return lines
+
+
 def render_compact_badge_row_suffix(
     *,
     default_suffix: str,

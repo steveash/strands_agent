@@ -14,6 +14,7 @@ from strands_agent_tui.sessions.summary_utils import (
     render_page_label,
     render_page_lane_summary_line,
     render_page_window_label,
+    render_recent_session_filter_summary_block_lines,
     render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
@@ -162,6 +163,93 @@ def test_render_selected_session_preview_header_lines_share_slot_and_artifact_co
         "- slot 2 on this page | overall 10 of 11 | session session-01",
         "- artifact dir: /tmp/sessions/session-01",
     ]
+
+
+@pytest.mark.parametrize(
+    (
+        "kwargs",
+        "expected",
+    ),
+    [
+        (
+            {
+                "backlog_label": "Approval restore backlog",
+                "count": 10,
+                "focus_label": "Restore lane focus",
+                "focus_lanes": ["restore queue", "restored"],
+                "lane_rollup": "restore queue 9 (oldest 18d), restored 2 (oldest 8h)",
+                "overlap_summary": "mixed 1 session",
+                "page_lane_label": "restore lanes",
+                "visible_rollup": "restore queue 8 (oldest 18d)",
+                "off_page_rollup": "restore queue 1 (oldest 3d), restored 2 (oldest 8h)",
+                "visible_overlap_summary": "none",
+                "off_page_overlap_summary": "mixed 1 session",
+            },
+            [
+                "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 (oldest 8h) | overlap: mixed 1 session",
+                "Restore lane focus: restore queue, restored",
+                "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session",
+            ],
+        ),
+        (
+            {
+                "backlog_label": "Workspace backlog",
+                "count": 2,
+                "focus_label": "Workspace focus",
+                "focus_lanes": ["inspect"],
+                "lane_rollup": "inspect 2, edit 1",
+                "overlap_summary": "mixed 1 session",
+            },
+            [
+                "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session",
+                "Workspace focus: inspect",
+            ],
+        ),
+        (
+            {
+                "backlog_label": "Shell backlog",
+                "count": 3,
+                "focus_label": "Shell focus",
+                "focus_lanes": ["inspect", "test"],
+                "lane_rollup": "inspect 2, test 2",
+                "overlap_summary": "mixed 1 session",
+                "page_lane_label": "shell lanes",
+                "visible_rollup": "inspect 1, test 1",
+                "off_page_rollup": "inspect 1, test 1",
+                "visible_overlap_summary": "mixed 1 session",
+                "off_page_overlap_summary": "none",
+            },
+            [
+                "Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session",
+                "Shell focus: inspect, test",
+                "This page shell lanes: inspect 1, test 1 | more off-page: inspect 1, test 1 | overlap here/off-page: mixed 1 session / none",
+            ],
+        ),
+        (
+            {
+                "backlog_label": "Stale denied backlog",
+                "count": 4,
+                "focus_label": "Stale lane focus",
+                "focus_lanes": ["denied"],
+                "lane_rollup": "denied 4 (oldest 12d)",
+                "cutoff": "approvals >= 7d old",
+                "page_lane_label": "stale lanes",
+                "visible_rollup": "denied 2 (oldest 12d)",
+                "off_page_rollup": "denied 2 (oldest 8d)",
+            },
+            [
+                "Stale denied backlog: 4 sessions | lanes: denied 4 (oldest 12d)",
+                "Stale lane focus: denied | cutoff: approvals >= 7d old",
+                "This page stale lanes: denied 2 (oldest 12d) | more off-page: denied 2 (oldest 8d)",
+            ],
+        ),
+    ],
+)
+def test_render_recent_session_filter_summary_block_lines_share_filter_backlog_copy(
+    kwargs: dict[str, object],
+    expected: list[str],
+) -> None:
+    assert render_recent_session_filter_summary_block_lines(**kwargs) == expected
 
 
 def test_render_numbered_preview_section_lines_share_recent_preview_section_copy() -> None:
