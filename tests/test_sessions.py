@@ -7,6 +7,7 @@ from strands_agent_tui.sessions import (
     MAX_RECENT_SESSIONS,
     SessionArtifactStore,
     SessionPickerState,
+    SessionSummary,
     SessionState,
     TurnArtifact,
     count_recent_sessions,
@@ -15,6 +16,13 @@ from strands_agent_tui.sessions import (
     pick_session,
     render_session_picker,
     save_session_picker_state,
+)
+from strands_agent_tui.sessions.picker import (
+    APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
+    _approval_restore_lane_age_seconds,
+    _approval_restore_lanes,
+    _slice_visible_and_off_page_summaries,
+    _summarize_lane_activity,
 )
 
 
@@ -35,6 +43,59 @@ def _set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> 
     timestamp = when.timestamp()
     for path in [store.session_dir, *store.session_dir.iterdir()]:
         os.utime(path, (timestamp, timestamp))
+
+
+def _session_summary(session_id: str, **overrides: object):
+    return SessionSummary(
+        session_id=session_id,
+        session_dir=Path(f"/tmp/{session_id}"),
+        turn_count=1,
+        updated_at="2026-05-14 04:00 UTC",
+        **overrides,
+    )
+
+
+def test_summarize_lane_activity_shares_restore_counts_ages_and_overlap() -> None:
+    mixed_summary = _session_summary(
+        "session-mixed",
+        restored_approval_badges=["pending 1", "approved 1"],
+        restored_pending_approval_age_sort_key=int(timedelta(days=3).total_seconds()),
+        last_restored_outcome_age_sort_key=int(timedelta(hours=6).total_seconds()),
+    )
+    restored_only_summary = _session_summary(
+        "session-restored-only",
+        restored_approval_badges=["approved 1"],
+        last_restored_outcome_age_sort_key=int(timedelta(days=8).total_seconds()),
+    )
+
+    rollup = _summarize_lane_activity(
+        [mixed_summary, restored_only_summary],
+        display_order=APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
+        lane_getter=_approval_restore_lanes,
+        age_getter=_approval_restore_lane_age_seconds,
+        include_mixed_count=True,
+    )
+
+    assert rollup.lane_counts == {"restore queue": 1, "restored": 2}
+    assert rollup.lane_oldest_ages == {
+        "restore queue": int(timedelta(days=3).total_seconds()),
+        "restored": int(timedelta(days=8).total_seconds()),
+    }
+    assert rollup.mixed_count == 1
+
+
+def test_slice_visible_and_off_page_summaries_clamps_page_index_and_preserves_order() -> None:
+    summaries = [_session_summary(f"session-{index}") for index in range(5)]
+
+    visible, off_page = _slice_visible_and_off_page_summaries(summaries, page_index=9, page_size=2)
+
+    assert [summary.session_id for summary in visible] == ["session-4"]
+    assert [summary.session_id for summary in off_page] == [
+        "session-0",
+        "session-1",
+        "session-2",
+        "session-3",
+    ]
 
 
 def test_list_recent_sessions_orders_by_latest_activity_and_includes_prompt_preview(tmp_path: Path) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import UTC, datetime
@@ -420,6 +421,13 @@ class SessionSummary:
             shell_lines=shell_lines,
             event_lines=event_lines,
         )
+
+
+@dataclass(slots=True)
+class LaneActivityRollup:
+    lane_counts: dict[str, int]
+    lane_oldest_ages: dict[str, int] = field(default_factory=dict)
+    mixed_count: int = 0
 
 
 def list_recent_sessions(
@@ -2053,193 +2061,76 @@ def render_recent_session_filter_summary_lines(
         )
 
     if filter_mode == "approval-restore" and summaries:
-        lane_counts, lane_oldest_ages, mixed_count = _summarize_approval_restore_lanes(summaries)
-        lane_rollup = _format_approval_restore_lane_rollup(lane_counts, lane_oldest_ages)
-        overlap_summary = _format_mixed_overlap_count(mixed_count) if mixed_count > 0 else ""
-        lines = render_recent_session_filter_summary_block_lines(
+        return _render_lane_filter_summary_lines(
+            summaries,
             backlog_label="Approval restore backlog",
-            count=len(summaries),
             focus_label="Restore lane focus",
             focus_lanes=APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
-            lane_rollup=lane_rollup,
-            overlap_summary=overlap_summary,
-        )
-        if len(summaries) <= page_size:
-            return lines
-
-        page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
-        start = page_index * page_size
-        end = start + page_size
-        visible_summaries = summaries[start:end]
-        off_page_summaries = summaries[:start] + summaries[end:]
-
-        visible_lane_counts, visible_lane_oldest_ages, visible_mixed_count = _summarize_approval_restore_lanes(
-            visible_summaries
-        )
-        visible_rollup = _format_approval_restore_lane_rollup(visible_lane_counts, visible_lane_oldest_ages)
-        if not visible_rollup:
-            return lines
-
-        off_page_lane_counts, off_page_lane_oldest_ages, off_page_mixed_count = _summarize_approval_restore_lanes(
-            off_page_summaries
-        )
-        off_page_rollup = _format_approval_restore_lane_rollup(off_page_lane_counts, off_page_lane_oldest_ages)
-        return render_recent_session_filter_summary_block_lines(
-            backlog_label="Approval restore backlog",
-            count=len(summaries),
-            focus_label="Restore lane focus",
-            focus_lanes=APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
-            lane_rollup=lane_rollup,
-            overlap_summary=overlap_summary,
             page_lane_label="restore lanes",
-            visible_rollup=visible_rollup,
-            off_page_rollup=off_page_rollup,
-            visible_overlap_summary=(
-                _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else ""
-            ),
-            off_page_overlap_summary=(
-                _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else ""
-            ),
+            page_index=page_index,
+            page_size=page_size,
+            rollup_formatter=_format_approval_restore_lane_rollup,
+            lane_getter=_approval_restore_lanes,
+            age_getter=_approval_restore_lane_age_seconds,
+            display_order=APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
+            include_overlap_summary=True,
         )
 
     if filter_mode in {"workspace-inspect", "workspace-edit"} and summaries:
-        lane_counts, mixed_count = _summarize_workspace_lanes(summaries)
-        lane_rollup = _format_simple_lane_rollup(lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
-        overlap_summary = _format_mixed_overlap_count(mixed_count) if mixed_count > 0 else ""
         focus_lanes = ["edit"] if filter_mode == "workspace-edit" else ["inspect"]
-        lines = render_recent_session_filter_summary_block_lines(
+        return _render_lane_filter_summary_lines(
+            summaries,
             backlog_label="Workspace backlog",
-            count=len(summaries),
             focus_label="Workspace focus",
             focus_lanes=focus_lanes,
-            lane_rollup=lane_rollup,
-            overlap_summary=overlap_summary,
-        )
-        if len(summaries) <= page_size:
-            return lines
-
-        page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
-        start = page_index * page_size
-        end = start + page_size
-        visible_summaries = summaries[start:end]
-        off_page_summaries = summaries[:start] + summaries[end:]
-        visible_lane_counts, visible_mixed_count = _summarize_workspace_lanes(visible_summaries)
-        visible_rollup = _format_simple_lane_rollup(visible_lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
-        if not visible_rollup:
-            return lines
-
-        off_page_lane_counts, off_page_mixed_count = _summarize_workspace_lanes(off_page_summaries)
-        off_page_rollup = _format_simple_lane_rollup(off_page_lane_counts, WORKSPACE_LANE_DISPLAY_ORDER)
-        return render_recent_session_filter_summary_block_lines(
-            backlog_label="Workspace backlog",
-            count=len(summaries),
-            focus_label="Workspace focus",
-            focus_lanes=focus_lanes,
-            lane_rollup=lane_rollup,
-            overlap_summary=overlap_summary,
             page_lane_label="workspace lanes",
-            visible_rollup=visible_rollup,
-            off_page_rollup=off_page_rollup,
-            visible_overlap_summary=(
-                _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else ""
-            ),
-            off_page_overlap_summary=(
-                _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else ""
-            ),
+            page_index=page_index,
+            page_size=page_size,
+            rollup_formatter=_format_simple_lane_rollup_for_display_order(WORKSPACE_LANE_DISPLAY_ORDER),
+            lane_getter=_workspace_lanes,
+            display_order=WORKSPACE_LANE_DISPLAY_ORDER,
+            include_overlap_summary=True,
         )
 
     if filter_mode in {"shell", "shell-inspect", "shell-test"} and summaries:
-        lane_counts, mixed_count = _summarize_shell_lanes(summaries)
-        lane_rollup = _format_simple_lane_rollup(lane_counts, SHELL_LANE_DISPLAY_ORDER)
-        overlap_summary = _format_mixed_overlap_count(mixed_count) if mixed_count > 0 else ""
         shell_focus_lanes = (
             ["inspect"]
             if filter_mode == "shell-inspect"
             else ["test"] if filter_mode == "shell-test" else list(SHELL_LANE_DISPLAY_ORDER)
         )
-        lines = render_recent_session_filter_summary_block_lines(
+        return _render_lane_filter_summary_lines(
+            summaries,
             backlog_label="Shell backlog",
-            count=len(summaries),
             focus_label="Shell focus",
             focus_lanes=shell_focus_lanes,
-            lane_rollup=lane_rollup,
-            overlap_summary=overlap_summary,
-        )
-        if len(summaries) <= page_size:
-            return lines
-
-        page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
-        start = page_index * page_size
-        end = start + page_size
-        visible_summaries = summaries[start:end]
-        off_page_summaries = summaries[:start] + summaries[end:]
-        visible_lane_counts, visible_mixed_count = _summarize_shell_lanes(visible_summaries)
-        visible_rollup = _format_simple_lane_rollup(visible_lane_counts, SHELL_LANE_DISPLAY_ORDER)
-        if not visible_rollup:
-            return lines
-
-        off_page_lane_counts, off_page_mixed_count = _summarize_shell_lanes(off_page_summaries)
-        off_page_rollup = _format_simple_lane_rollup(off_page_lane_counts, SHELL_LANE_DISPLAY_ORDER)
-        return render_recent_session_filter_summary_block_lines(
-            backlog_label="Shell backlog",
-            count=len(summaries),
-            focus_label="Shell focus",
-            focus_lanes=shell_focus_lanes,
-            lane_rollup=lane_rollup,
-            overlap_summary=overlap_summary,
             page_lane_label="shell lanes",
-            visible_rollup=visible_rollup,
-            off_page_rollup=off_page_rollup,
-            visible_overlap_summary=(
-                _format_mixed_overlap_count(visible_mixed_count) if visible_mixed_count > 0 else ""
-            ),
-            off_page_overlap_summary=(
-                _format_mixed_overlap_count(off_page_mixed_count) if off_page_mixed_count > 0 else ""
-            ),
+            page_index=page_index,
+            page_size=page_size,
+            rollup_formatter=_format_simple_lane_rollup_for_display_order(SHELL_LANE_DISPLAY_ORDER),
+            lane_getter=_shell_lanes,
+            display_order=SHELL_LANE_DISPLAY_ORDER,
+            include_overlap_summary=True,
         )
 
     stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
     if stale_filter_lanes is None or not summaries:
         return []
 
-    lane_counts, lane_oldest_ages = _summarize_stale_approval_lanes(summaries, lanes=stale_filter_lanes)
-    lane_rollup = _format_stale_approval_lane_rollup(lane_counts, lane_oldest_ages)
     stale_focus_lanes = [lane for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER if lane in stale_filter_lanes]
-    lines = render_recent_session_filter_summary_block_lines(
+    return _render_lane_filter_summary_lines(
+        summaries,
         backlog_label=_stale_approval_summary_label(filter_mode),
-        count=len(summaries),
         focus_label="Stale lane focus",
         focus_lanes=stale_focus_lanes,
-        lane_rollup=lane_rollup,
-        cutoff=format_stale_approval_cutoff(stale_approval_warning_seconds),
-    )
-    if len(summaries) <= page_size:
-        return lines
-
-    page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
-    start = page_index * page_size
-    end = start + page_size
-    visible_summaries = summaries[start:end]
-    off_page_summaries = summaries[:start] + summaries[end:]
-    visible_rollup = _format_stale_approval_lane_rollup(
-        *_summarize_stale_approval_lanes(visible_summaries, lanes=stale_filter_lanes)
-    )
-    if not visible_rollup:
-        return lines
-
-    off_page_rollup = _format_stale_approval_lane_rollup(
-        *_summarize_stale_approval_lanes(off_page_summaries, lanes=stale_filter_lanes)
-    )
-    return render_recent_session_filter_summary_block_lines(
-        backlog_label=_stale_approval_summary_label(filter_mode),
-        count=len(summaries),
-        focus_label="Stale lane focus",
-        focus_lanes=stale_focus_lanes,
-        lane_rollup=lane_rollup,
         cutoff=format_stale_approval_cutoff(stale_approval_warning_seconds),
         page_lane_label="stale lanes",
-        visible_rollup=visible_rollup,
-        off_page_rollup=off_page_rollup,
+        page_index=page_index,
+        page_size=page_size,
+        rollup_formatter=_format_stale_approval_lane_rollup,
+        lane_getter=_stale_approval_lanes,
+        age_getter=_stale_approval_lane_age_seconds,
+        display_order=STALE_APPROVAL_LANE_DISPLAY_ORDER,
+        allowed_lanes=stale_filter_lanes,
     )
 
 
@@ -2254,6 +2145,158 @@ def render_recent_session_empty_state_lines(
         filter_mode=filter_mode,
         surface=surface,
     )
+
+
+def _render_lane_filter_summary_lines(
+    summaries: list[SessionSummary],
+    *,
+    backlog_label: str,
+    focus_label: str,
+    focus_lanes: Sequence[str],
+    page_lane_label: str,
+    page_index: int,
+    page_size: int,
+    rollup_formatter: Callable[[dict[str, int], dict[str, int]], str],
+    lane_getter: Callable[[SessionSummary], set[str]],
+    display_order: Sequence[str],
+    age_getter: Callable[[SessionSummary], dict[str, int]] | None = None,
+    allowed_lanes: frozenset[str] | None = None,
+    include_overlap_summary: bool = False,
+    cutoff: str = "",
+) -> list[str]:
+    full_rollup = _summarize_lane_activity(
+        summaries,
+        display_order=display_order,
+        lane_getter=lane_getter,
+        age_getter=age_getter,
+        allowed_lanes=allowed_lanes,
+        include_mixed_count=include_overlap_summary,
+    )
+    lane_rollup = rollup_formatter(full_rollup.lane_counts, full_rollup.lane_oldest_ages)
+    overlap_summary = (
+        _format_mixed_overlap_count(full_rollup.mixed_count)
+        if include_overlap_summary and full_rollup.mixed_count > 0
+        else ""
+    )
+    lines = render_recent_session_filter_summary_block_lines(
+        backlog_label=backlog_label,
+        count=len(summaries),
+        focus_label=focus_label,
+        focus_lanes=focus_lanes,
+        lane_rollup=lane_rollup,
+        overlap_summary=overlap_summary,
+        cutoff=cutoff,
+    )
+    if len(summaries) <= page_size:
+        return lines
+
+    visible_summaries, off_page_summaries = _slice_visible_and_off_page_summaries(
+        summaries,
+        page_index=page_index,
+        page_size=page_size,
+    )
+    visible_rollup_data = _summarize_lane_activity(
+        visible_summaries,
+        display_order=display_order,
+        lane_getter=lane_getter,
+        age_getter=age_getter,
+        allowed_lanes=allowed_lanes,
+        include_mixed_count=include_overlap_summary,
+    )
+    visible_rollup = rollup_formatter(visible_rollup_data.lane_counts, visible_rollup_data.lane_oldest_ages)
+    if not visible_rollup:
+        return lines
+
+    off_page_rollup_data = _summarize_lane_activity(
+        off_page_summaries,
+        display_order=display_order,
+        lane_getter=lane_getter,
+        age_getter=age_getter,
+        allowed_lanes=allowed_lanes,
+        include_mixed_count=include_overlap_summary,
+    )
+    return render_recent_session_filter_summary_block_lines(
+        backlog_label=backlog_label,
+        count=len(summaries),
+        focus_label=focus_label,
+        focus_lanes=focus_lanes,
+        lane_rollup=lane_rollup,
+        overlap_summary=overlap_summary,
+        cutoff=cutoff,
+        page_lane_label=page_lane_label,
+        visible_rollup=visible_rollup,
+        off_page_rollup=rollup_formatter(
+            off_page_rollup_data.lane_counts,
+            off_page_rollup_data.lane_oldest_ages,
+        ),
+        visible_overlap_summary=(
+            _format_mixed_overlap_count(visible_rollup_data.mixed_count)
+            if include_overlap_summary and visible_rollup_data.mixed_count > 0
+            else ""
+        ),
+        off_page_overlap_summary=(
+            _format_mixed_overlap_count(off_page_rollup_data.mixed_count)
+            if include_overlap_summary and off_page_rollup_data.mixed_count > 0
+            else ""
+        ),
+    )
+
+
+def _slice_visible_and_off_page_summaries(
+    summaries: Sequence[SessionSummary],
+    *,
+    page_index: int,
+    page_size: int,
+) -> tuple[list[SessionSummary], list[SessionSummary]]:
+    normalized_page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
+    start = normalized_page_index * page_size
+    end = start + page_size
+    visible_summaries = list(summaries[start:end])
+    off_page_summaries = [*summaries[:start], *summaries[end:]]
+    return visible_summaries, off_page_summaries
+
+
+def _summarize_lane_activity(
+    summaries: Sequence[SessionSummary],
+    *,
+    display_order: Sequence[str],
+    lane_getter: Callable[[SessionSummary], set[str]],
+    age_getter: Callable[[SessionSummary], dict[str, int]] | None = None,
+    allowed_lanes: frozenset[str] | None = None,
+    include_mixed_count: bool = False,
+) -> LaneActivityRollup:
+    lane_counts = {lane: 0 for lane in display_order}
+    lane_oldest_ages = {lane: 0 for lane in display_order}
+    mixed_count = 0
+
+    for summary in summaries:
+        lanes = {
+            lane
+            for lane in lane_getter(summary)
+            if allowed_lanes is None or lane in allowed_lanes
+        }
+        if include_mixed_count and len(lanes) > 1:
+            mixed_count += 1
+        for lane in lanes:
+            lane_counts[lane] = lane_counts.get(lane, 0) + 1
+        if age_getter is None:
+            continue
+        for lane, age_seconds in age_getter(summary).items():
+            if allowed_lanes is not None and lane not in allowed_lanes:
+                continue
+            lane_oldest_ages[lane] = max(lane_oldest_ages.get(lane, 0), age_seconds)
+
+    return LaneActivityRollup(
+        lane_counts=lane_counts,
+        lane_oldest_ages=lane_oldest_ages,
+        mixed_count=mixed_count,
+    )
+
+
+def _format_simple_lane_rollup_for_display_order(
+    display_order: tuple[str, ...],
+) -> Callable[[dict[str, int], dict[str, int]], str]:
+    return lambda lane_counts, _lane_oldest_ages: _format_simple_lane_rollup(lane_counts, display_order)
 
 
 def _render_backlog_metric_line(label: str, count: int, metrics: list[str]) -> str:
@@ -2379,11 +2422,11 @@ def _render_pending_approval_filter_summary_lines(
     if len(summaries) <= page_size:
         return lines
 
-    page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
-    start = page_index * page_size
-    end = start + page_size
-    visible_summaries = summaries[start:end]
-    off_page_summaries = summaries[:start] + summaries[end:]
+    visible_summaries, off_page_summaries = _slice_visible_and_off_page_summaries(
+        summaries,
+        page_index=page_index,
+        page_size=page_size,
+    )
     visible_metrics = _summarize_pending_approval_filter_metrics(visible_summaries)
     off_page_metrics = _summarize_pending_approval_filter_metrics(off_page_summaries)
     lines.append(
@@ -2456,11 +2499,11 @@ def _render_denied_approval_filter_summary_lines(
     if len(summaries) <= page_size:
         return lines
 
-    page_index = _normalize_picker_page_index(len(summaries), page_size, page_index)
-    start = page_index * page_size
-    end = start + page_size
-    visible_summaries = summaries[start:end]
-    off_page_summaries = summaries[:start] + summaries[end:]
+    visible_summaries, off_page_summaries = _slice_visible_and_off_page_summaries(
+        summaries,
+        page_index=page_index,
+        page_size=page_size,
+    )
     visible_metrics = _summarize_denied_approval_filter_metrics(visible_summaries)
     off_page_metrics = _summarize_denied_approval_filter_metrics(off_page_summaries)
     lines.append(
@@ -2501,15 +2544,13 @@ def _workspace_filter_focus_label(filter_mode: str) -> str:
 
 
 def _summarize_workspace_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, int], int]:
-    lane_counts = {lane: 0 for lane in WORKSPACE_LANE_DISPLAY_ORDER}
-    mixed_count = 0
-    for summary in summaries:
-        lanes = _workspace_lanes(summary)
-        if len(lanes) > 1:
-            mixed_count += 1
-        for lane in lanes:
-            lane_counts[lane] += 1
-    return lane_counts, mixed_count
+    rollup = _summarize_lane_activity(
+        summaries,
+        display_order=WORKSPACE_LANE_DISPLAY_ORDER,
+        lane_getter=_workspace_lanes,
+        include_mixed_count=True,
+    )
+    return rollup.lane_counts, rollup.mixed_count
 
 
 def _shell_lanes(summary: SessionSummary) -> set[str]:
@@ -2530,15 +2571,13 @@ def _shell_filter_focus_label(filter_mode: str) -> str:
 
 
 def _summarize_shell_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, int], int]:
-    lane_counts = {lane: 0 for lane in SHELL_LANE_DISPLAY_ORDER}
-    mixed_count = 0
-    for summary in summaries:
-        lanes = _shell_lanes(summary)
-        if len(lanes) > 1:
-            mixed_count += 1
-        for lane in lanes:
-            lane_counts[lane] += 1
-    return lane_counts, mixed_count
+    rollup = _summarize_lane_activity(
+        summaries,
+        display_order=SHELL_LANE_DISPLAY_ORDER,
+        lane_getter=_shell_lanes,
+        include_mixed_count=True,
+    )
+    return rollup.lane_counts, rollup.mixed_count
 
 
 def _format_simple_lane_rollup(lane_counts: dict[str, int], display_order: tuple[str, ...]) -> str:
@@ -2580,18 +2619,14 @@ def _approval_restore_lane_age_seconds(summary: SessionSummary) -> dict[str, int
 def _summarize_approval_restore_lanes(
     summaries: list[SessionSummary],
 ) -> tuple[dict[str, int], dict[str, int], int]:
-    lane_counts = {lane: 0 for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER}
-    lane_oldest_ages = {lane: 0 for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER}
-    mixed_count = 0
-    for summary in summaries:
-        lanes = _approval_restore_lanes(summary)
-        if len(lanes) > 1:
-            mixed_count += 1
-        for lane in lanes:
-            lane_counts[lane] += 1
-        for lane, age_seconds in _approval_restore_lane_age_seconds(summary).items():
-            lane_oldest_ages[lane] = max(lane_oldest_ages[lane], age_seconds)
-    return lane_counts, lane_oldest_ages, mixed_count
+    rollup = _summarize_lane_activity(
+        summaries,
+        display_order=APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
+        lane_getter=_approval_restore_lanes,
+        age_getter=_approval_restore_lane_age_seconds,
+        include_mixed_count=True,
+    )
+    return rollup.lane_counts, rollup.lane_oldest_ages, rollup.mixed_count
 
 
 def _format_approval_restore_lane_rollup(
@@ -2633,18 +2668,14 @@ def _summarize_stale_approval_lanes(
     *,
     lanes: frozenset[str] | None = None,
 ) -> tuple[dict[str, int], dict[str, int]]:
-    lane_counts = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
-    lane_oldest_ages = {lane: 0 for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER}
-    for summary in summaries:
-        for lane in _stale_approval_lanes(summary):
-            if lanes is not None and lane not in lanes:
-                continue
-            lane_counts[lane] += 1
-        for lane, age_seconds in _stale_approval_lane_age_seconds(summary).items():
-            if lanes is not None and lane not in lanes:
-                continue
-            lane_oldest_ages[lane] = max(lane_oldest_ages[lane], age_seconds)
-    return lane_counts, lane_oldest_ages
+    rollup = _summarize_lane_activity(
+        summaries,
+        display_order=STALE_APPROVAL_LANE_DISPLAY_ORDER,
+        lane_getter=_stale_approval_lanes,
+        age_getter=_stale_approval_lane_age_seconds,
+        allowed_lanes=lanes,
+    )
+    return rollup.lane_counts, rollup.lane_oldest_ages
 
 
 def _format_stale_approval_lane_rollup(
