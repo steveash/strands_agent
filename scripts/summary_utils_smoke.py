@@ -1,4 +1,5 @@
 from strands_agent_tui.sessions.summary_utils import (
+    render_backlog_metric_summary_line,
     render_backlog_summary_line,
     render_badged_preview_line,
     render_badged_row_suffix,
@@ -7,9 +8,11 @@ from strands_agent_tui.sessions.summary_utils import (
     render_filter_focus_line,
     render_numbered_preview_section_lines,
     render_page_label,
+    render_page_metric_summary_line,
     render_page_lane_summary_line,
     render_page_window_label,
     render_recent_session_filter_summary_block_lines,
+    render_recent_session_metric_summary_block_lines,
     render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
@@ -37,6 +40,12 @@ def main() -> None:
     print(
         "summary_backlog_counts=",
         render_backlog_summary_line("Shell backlog", 1) == "Shell backlog: 1 session"
+        and render_backlog_metric_summary_line(
+            "Pending approval backlog",
+            3,
+            ["approvals: 4", "families: test 2, edit 2", "restored queues: 1 session"],
+        )
+        == "Pending approval backlog: 3 sessions | approvals: 4 | families: test 2, edit 2 | restored queues: 1 session"
         and render_backlog_summary_line(
             "Approval restore backlog",
             10,
@@ -48,6 +57,8 @@ def main() -> None:
     print(
         "summary_filter_focus=",
         render_filter_focus_line("Shell focus", []) == "Shell focus: none"
+        and render_filter_focus_line("Pending focus", ["fresh", "restored"], oldest="2d")
+        == "Pending focus: fresh, restored | oldest: 2d"
         and render_filter_focus_line(
             "Stale lane focus",
             ["pending", "denied"],
@@ -66,7 +77,13 @@ def main() -> None:
         )
         == "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
         and render_page_lane_summary_line("stale lanes", "pending 2 (oldest 14d)")
-        == "This page stale lanes: pending 2 (oldest 14d)",
+        == "This page stale lanes: pending 2 (oldest 14d)"
+        and render_page_metric_summary_line(
+            "pending queues",
+            ["approvals: 3", "families: test 2, edit 1", "multi-queue: 1 session"],
+            off_page_metrics=["approvals: 1", "families: edit 1", "restored queues: 1 session"],
+        )
+        == "This page pending queues: approvals: 3 | families: test 2, edit 1 | multi-queue: 1 session | more off-page: approvals: 1 | families: edit 1 | restored queues: 1 session",
     )
     print(
         "summary_compact_badges=",
@@ -186,6 +203,27 @@ def main() -> None:
             "Stale denied backlog: 4 sessions | lanes: denied 4 (oldest 12d)",
             "Stale lane focus: denied | cutoff: approvals >= 7d old",
             "This page stale lanes: denied 2 (oldest 12d) | more off-page: denied 2 (oldest 8d)",
+        ]
+        and render_recent_session_metric_summary_block_lines(
+            backlog_label="Pending approval backlog",
+            count=3,
+            backlog_metrics=[
+                "approvals: 4",
+                "families: test 2, edit 2",
+                "multi-queue: 1 session",
+                "restored queues: 1 session",
+            ],
+            focus_label="Pending focus",
+            focus_lanes=["fresh", "restored"],
+            oldest="2d",
+            page_metric_label="pending queues",
+            visible_metrics=["approvals: 3", "families: test 2, edit 1", "multi-queue: 1 session"],
+            off_page_metrics=["approvals: 1", "families: edit 1", "restored queues: 1 session"],
+        )
+        == [
+            "Pending approval backlog: 3 sessions | approvals: 4 | families: test 2, edit 2 | multi-queue: 1 session | restored queues: 1 session",
+            "Pending focus: fresh, restored | oldest: 2d",
+            "This page pending queues: approvals: 3 | families: test 2, edit 1 | multi-queue: 1 session | more off-page: approvals: 1 | families: edit 1 | restored queues: 1 session",
         ],
     )
     print(

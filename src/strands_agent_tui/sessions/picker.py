@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeVar
 
 from .artifacts import (
     SessionArtifactStore,
@@ -35,6 +35,7 @@ from .summary_utils import (
     render_preview_badges_line,
     render_preview_detail_line,
     render_recent_session_filter_summary_block_lines,
+    render_recent_session_metric_summary_block_lines,
     render_recent_session_list_row,
     render_recent_session_summary_line,
     render_row_badges_suffix,
@@ -58,6 +59,7 @@ MAX_INTERVENTION_ROLLUP_EVENTS = 6
 MAX_SHELL_STREAK_PREVIEWS = 3
 MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
+MetricRollupT = TypeVar("MetricRollupT")
 STALE_SESSION_WARNING_SECONDS = 7 * 24 * 60 * 60
 STALE_SESSION_DANGER_SECONDS = 30 * 24 * 60 * 60
 STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
@@ -428,6 +430,25 @@ class LaneActivityRollup:
     lane_counts: dict[str, int]
     lane_oldest_ages: dict[str, int] = field(default_factory=dict)
     mixed_count: int = 0
+
+
+@dataclass(slots=True)
+class PendingApprovalFilterMetrics:
+    total_approvals: int
+    family_counts: dict[str, int]
+    fresh_queue_sessions: int
+    restored_queue_sessions: int
+    multi_queue_sessions: int
+    oldest_age_seconds: int
+
+
+@dataclass(slots=True)
+class DeniedApprovalFilterMetrics:
+    total_denied: int
+    family_counts: dict[str, int]
+    fresh_denied_sessions: int
+    restored_denied_sessions: int
+    oldest_age_seconds: int
 
 
 def list_recent_sessions(
@@ -2299,28 +2320,6 @@ def _format_simple_lane_rollup_for_display_order(
     return lambda lane_counts, _lane_oldest_ages: _format_simple_lane_rollup(lane_counts, display_order)
 
 
-def _render_backlog_metric_line(label: str, count: int, metrics: list[str]) -> str:
-    session_label = "session" if count == 1 else "sessions"
-    parts = [f"{label}: {count} {session_label}", *[metric for metric in metrics if metric]]
-    return " | ".join(parts)
-
-
-def _render_focus_metric_line(label: str, focus_lanes: list[str], *, oldest_age_seconds: int = 0) -> str:
-    parts = [f"{label}: {', '.join(focus_lanes) or 'none'}"]
-    if oldest_age_seconds > 0:
-        parts.append(f"oldest: {_format_age_compact(oldest_age_seconds)}")
-    return " | ".join(parts)
-
-
-def _render_page_metric_line(label: str, metrics: list[str], *, off_page_metrics: list[str] | None = None) -> str:
-    visible = [metric for metric in metrics if metric]
-    line = f"This page {label}: {' | '.join(visible) if visible else 'none'}"
-    remaining = [metric for metric in (off_page_metrics or []) if metric]
-    if remaining:
-        line += f" | more off-page: {' | '.join(remaining)}"
-    return line
-
-
 def _render_approval_volume_metric(total: int) -> str:
     approval_label = "approval" if total == 1 else "approvals"
     return f"{approval_label}: {total}"
@@ -2355,9 +2354,79 @@ def _pending_filter_focus_lanes(fresh_queue_sessions: int, restored_queue_sessio
     return focus_lanes or ["pending"]
 
 
+def _format_pending_approval_filter_metrics(metrics: PendingApprovalFilterMetrics) -> list[str]:
+    return [
+        _render_approval_volume_metric(metrics.total_approvals),
+        _render_approval_family_metric(metrics.family_counts),
+        _render_session_count_metric("multi-queue", metrics.multi_queue_sessions),
+        _render_session_count_metric("restored queues", metrics.restored_queue_sessions),
+    ]
+
+
+def _pending_approval_filter_focus_lanes(metrics: PendingApprovalFilterMetrics) -> list[str]:
+    return _pending_filter_focus_lanes(metrics.fresh_queue_sessions, metrics.restored_queue_sessions)
+
+
+def _format_denied_approval_filter_metrics(metrics: DeniedApprovalFilterMetrics) -> list[str]:
+    return [
+        _render_approval_volume_metric(metrics.total_denied),
+        _render_approval_family_metric(metrics.family_counts),
+        _render_session_count_metric("restored denied", metrics.restored_denied_sessions),
+    ]
+
+
+def _denied_approval_filter_focus_lanes(metrics: DeniedApprovalFilterMetrics) -> list[str]:
+    return _pending_filter_focus_lanes(metrics.fresh_denied_sessions, metrics.restored_denied_sessions)
+
+
+def _render_metric_filter_summary_lines(
+    summaries: list[SessionSummary],
+    *,
+    backlog_label: str,
+    focus_label: str,
+    page_metric_label: str,
+    page_index: int,
+    page_size: int,
+    summarize_metrics: Callable[[list[SessionSummary]], MetricRollupT],
+    format_metrics: Callable[[MetricRollupT], list[str]],
+    focus_lanes_getter: Callable[[MetricRollupT], list[str]],
+    oldest_age_seconds_getter: Callable[[MetricRollupT], int],
+) -> list[str]:
+    full_metrics = summarize_metrics(summaries)
+    oldest_age_seconds = oldest_age_seconds_getter(full_metrics)
+    lines = render_recent_session_metric_summary_block_lines(
+        backlog_label=backlog_label,
+        count=len(summaries),
+        backlog_metrics=format_metrics(full_metrics),
+        focus_label=focus_label,
+        focus_lanes=focus_lanes_getter(full_metrics),
+        oldest=_format_age_compact(oldest_age_seconds) if oldest_age_seconds > 0 else "",
+    )
+    if len(summaries) <= page_size:
+        return lines
+
+    visible_summaries, off_page_summaries = _slice_visible_and_off_page_summaries(
+        summaries,
+        page_index=page_index,
+        page_size=page_size,
+    )
+    visible_metrics = summarize_metrics(visible_summaries)
+    return render_recent_session_metric_summary_block_lines(
+        backlog_label=backlog_label,
+        count=len(summaries),
+        backlog_metrics=format_metrics(full_metrics),
+        focus_label=focus_label,
+        focus_lanes=focus_lanes_getter(full_metrics),
+        oldest=_format_age_compact(oldest_age_seconds) if oldest_age_seconds > 0 else "",
+        page_metric_label=page_metric_label,
+        visible_metrics=format_metrics(visible_metrics),
+        off_page_metrics=format_metrics(summarize_metrics(off_page_summaries)),
+    )
+
+
 def _summarize_pending_approval_filter_metrics(
     summaries: list[SessionSummary],
-) -> tuple[int, dict[str, int], int, int, int, int]:
+) -> PendingApprovalFilterMetrics:
     total_approvals = 0
     family_counts: dict[str, int] = {}
     fresh_queue_sessions = 0
@@ -2378,13 +2447,13 @@ def _summarize_pending_approval_filter_metrics(
             _add_family_counts(family_counts, restored_pending_key)
         oldest_age_seconds = max(oldest_age_seconds, summary.pending_approval_age_sort_key)
 
-    return (
-        total_approvals,
-        family_counts,
-        fresh_queue_sessions,
-        restored_queue_sessions,
-        multi_queue_sessions,
-        oldest_age_seconds,
+    return PendingApprovalFilterMetrics(
+        total_approvals=total_approvals,
+        family_counts=family_counts,
+        fresh_queue_sessions=fresh_queue_sessions,
+        restored_queue_sessions=restored_queue_sessions,
+        multi_queue_sessions=multi_queue_sessions,
+        oldest_age_seconds=oldest_age_seconds,
     )
 
 
@@ -2394,64 +2463,23 @@ def _render_pending_approval_filter_summary_lines(
     page_index: int,
     page_size: int,
 ) -> list[str]:
-    (
-        total_approvals,
-        family_counts,
-        fresh_queue_sessions,
-        restored_queue_sessions,
-        multi_queue_sessions,
-        oldest_age_seconds,
-    ) = _summarize_pending_approval_filter_metrics(summaries)
-    lines = [
-        _render_backlog_metric_line(
-            "Pending approval backlog",
-            len(summaries),
-            [
-                _render_approval_volume_metric(total_approvals),
-                _render_approval_family_metric(family_counts),
-                _render_session_count_metric("multi-queue", multi_queue_sessions),
-                _render_session_count_metric("restored queues", restored_queue_sessions),
-            ],
-        ),
-        _render_focus_metric_line(
-            "Pending focus",
-            _pending_filter_focus_lanes(fresh_queue_sessions, restored_queue_sessions),
-            oldest_age_seconds=oldest_age_seconds,
-        ),
-    ]
-    if len(summaries) <= page_size:
-        return lines
-
-    visible_summaries, off_page_summaries = _slice_visible_and_off_page_summaries(
+    return _render_metric_filter_summary_lines(
         summaries,
+        backlog_label="Pending approval backlog",
+        focus_label="Pending focus",
+        page_metric_label="pending queues",
         page_index=page_index,
         page_size=page_size,
+        summarize_metrics=_summarize_pending_approval_filter_metrics,
+        format_metrics=_format_pending_approval_filter_metrics,
+        focus_lanes_getter=_pending_approval_filter_focus_lanes,
+        oldest_age_seconds_getter=lambda metrics: metrics.oldest_age_seconds,
     )
-    visible_metrics = _summarize_pending_approval_filter_metrics(visible_summaries)
-    off_page_metrics = _summarize_pending_approval_filter_metrics(off_page_summaries)
-    lines.append(
-        _render_page_metric_line(
-            "pending queues",
-            [
-                _render_approval_volume_metric(visible_metrics[0]),
-                _render_approval_family_metric(visible_metrics[1]),
-                _render_session_count_metric("multi-queue", visible_metrics[4]),
-                _render_session_count_metric("restored queues", visible_metrics[3]),
-            ],
-            off_page_metrics=[
-                _render_approval_volume_metric(off_page_metrics[0]),
-                _render_approval_family_metric(off_page_metrics[1]),
-                _render_session_count_metric("multi-queue", off_page_metrics[4]),
-                _render_session_count_metric("restored queues", off_page_metrics[3]),
-            ],
-        )
-    )
-    return lines
 
 
 def _summarize_denied_approval_filter_metrics(
     summaries: list[SessionSummary],
-) -> tuple[int, dict[str, int], int, int, int]:
+) -> DeniedApprovalFilterMetrics:
     total_denied = 0
     family_counts: dict[str, int] = {}
     fresh_denied_sessions = 0
@@ -2468,7 +2496,13 @@ def _summarize_denied_approval_filter_metrics(
             restored_denied_sessions += 1
         oldest_age_seconds = max(oldest_age_seconds, summary.last_denied_approval_age_sort_key)
 
-    return total_denied, family_counts, fresh_denied_sessions, restored_denied_sessions, oldest_age_seconds
+    return DeniedApprovalFilterMetrics(
+        total_denied=total_denied,
+        family_counts=family_counts,
+        fresh_denied_sessions=fresh_denied_sessions,
+        restored_denied_sessions=restored_denied_sessions,
+        oldest_age_seconds=oldest_age_seconds,
+    )
 
 
 def _render_denied_approval_filter_summary_lines(
@@ -2477,51 +2511,18 @@ def _render_denied_approval_filter_summary_lines(
     page_index: int,
     page_size: int,
 ) -> list[str]:
-    total_denied, family_counts, fresh_denied_sessions, restored_denied_sessions, oldest_age_seconds = (
-        _summarize_denied_approval_filter_metrics(summaries)
-    )
-    lines = [
-        _render_backlog_metric_line(
-            "Denied approval backlog",
-            len(summaries),
-            [
-                _render_approval_volume_metric(total_denied),
-                _render_approval_family_metric(family_counts),
-                _render_session_count_metric("restored denied", restored_denied_sessions),
-            ],
-        ),
-        _render_focus_metric_line(
-            "Denied focus",
-            _pending_filter_focus_lanes(fresh_denied_sessions, restored_denied_sessions),
-            oldest_age_seconds=oldest_age_seconds,
-        ),
-    ]
-    if len(summaries) <= page_size:
-        return lines
-
-    visible_summaries, off_page_summaries = _slice_visible_and_off_page_summaries(
+    return _render_metric_filter_summary_lines(
         summaries,
+        backlog_label="Denied approval backlog",
+        focus_label="Denied focus",
+        page_metric_label="denied approvals",
         page_index=page_index,
         page_size=page_size,
+        summarize_metrics=_summarize_denied_approval_filter_metrics,
+        format_metrics=_format_denied_approval_filter_metrics,
+        focus_lanes_getter=_denied_approval_filter_focus_lanes,
+        oldest_age_seconds_getter=lambda metrics: metrics.oldest_age_seconds,
     )
-    visible_metrics = _summarize_denied_approval_filter_metrics(visible_summaries)
-    off_page_metrics = _summarize_denied_approval_filter_metrics(off_page_summaries)
-    lines.append(
-        _render_page_metric_line(
-            "denied approvals",
-            [
-                _render_approval_volume_metric(visible_metrics[0]),
-                _render_approval_family_metric(visible_metrics[1]),
-                _render_session_count_metric("restored denied", visible_metrics[3]),
-            ],
-            off_page_metrics=[
-                _render_approval_volume_metric(off_page_metrics[0]),
-                _render_approval_family_metric(off_page_metrics[1]),
-                _render_session_count_metric("restored denied", off_page_metrics[3]),
-            ],
-        )
-    )
-    return lines
 
 
 def _is_stale_approval_filter_mode(filter_mode: str) -> bool:

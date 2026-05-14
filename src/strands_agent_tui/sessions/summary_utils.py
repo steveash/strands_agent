@@ -43,11 +43,14 @@ def render_filter_focus_line(
     lanes: Sequence[str],
     *,
     cutoff: str = "",
+    oldest: str = "",
 ) -> str:
     lane_labels = render_lane_label_list(lanes) or "none"
     line = f"{label}: {lane_labels}"
     if cutoff:
         line += f" | cutoff: {cutoff}"
+    if oldest:
+        line += f" | oldest: {oldest}"
     return line
 
 
@@ -65,6 +68,16 @@ def render_backlog_summary_line(
     if overlap_summary:
         line += f" | overlap: {overlap_summary}"
     return line
+
+
+def render_backlog_metric_summary_line(
+    label: str,
+    count: int,
+    metrics: Sequence[str],
+) -> str:
+    session_label = "session" if count == 1 else "sessions"
+    parts = [f"{label}: {count} {session_label}", *(metric for metric in metrics if metric)]
+    return " | ".join(parts)
 
 
 def render_page_label(total_matches: int, page_size: int, page_index: int) -> str:
@@ -123,6 +136,20 @@ def render_page_lane_summary_line(
     return line
 
 
+def render_page_metric_summary_line(
+    label: str,
+    metrics: Sequence[str],
+    *,
+    off_page_metrics: Sequence[str] = (),
+) -> str:
+    visible = [metric for metric in metrics if metric]
+    line = f"This page {label}: {' | '.join(visible) if visible else 'none'}"
+    remaining = [metric for metric in off_page_metrics if metric]
+    if remaining:
+        line += f" | more off-page: {' | '.join(remaining)}"
+    return line
+
+
 def render_recent_session_filter_summary_block_lines(
     *,
     backlog_label: str,
@@ -159,6 +186,33 @@ def render_recent_session_filter_summary_block_lines(
                 off_page_rollup=off_page_rollup,
                 visible_overlap_summary=visible_overlap_summary,
                 off_page_overlap_summary=off_page_overlap_summary,
+            )
+        )
+    return lines
+
+
+def render_recent_session_metric_summary_block_lines(
+    *,
+    backlog_label: str,
+    count: int,
+    backlog_metrics: Sequence[str],
+    focus_label: str,
+    focus_lanes: Sequence[str],
+    oldest: str = "",
+    page_metric_label: str = "",
+    visible_metrics: Sequence[str] = (),
+    off_page_metrics: Sequence[str] = (),
+) -> list[str]:
+    lines = [
+        render_backlog_metric_summary_line(backlog_label, count, backlog_metrics),
+        render_filter_focus_line(focus_label, focus_lanes, oldest=oldest),
+    ]
+    if page_metric_label and any(metric for metric in visible_metrics):
+        lines.append(
+            render_page_metric_summary_line(
+                page_metric_label,
+                visible_metrics,
+                off_page_metrics=off_page_metrics,
             )
         )
     return lines

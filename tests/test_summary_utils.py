@@ -1,6 +1,7 @@
 import pytest
 
 from strands_agent_tui.sessions.summary_utils import (
+    render_backlog_metric_summary_line,
     render_backlog_summary_line,
     render_badged_preview_line,
     render_badged_row_suffix,
@@ -12,9 +13,11 @@ from strands_agent_tui.sessions.summary_utils import (
     render_lane_label_list,
     render_numbered_preview_section_lines,
     render_page_label,
+    render_page_metric_summary_line,
     render_page_lane_summary_line,
     render_page_window_label,
     render_recent_session_filter_summary_block_lines,
+    render_recent_session_metric_summary_block_lines,
     render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
     render_picker_empty_filter_prompt,
@@ -87,9 +90,31 @@ def test_render_backlog_summary_line_handles_singular_plural_and_optional_segmen
     ) == expected
 
 
+@pytest.mark.parametrize(
+    ("count", "metrics", "expected"),
+    [
+        (1, [], "Pending approval backlog: 1 session"),
+        (
+            3,
+            ["approvals: 4", "families: test 2, edit 2", "restored queues: 1 session"],
+            "Pending approval backlog: 3 sessions | approvals: 4 | families: test 2, edit 2 | restored queues: 1 session",
+        ),
+    ],
+)
+def test_render_backlog_metric_summary_line_handles_optional_metrics(
+    count: int,
+    metrics: list[str],
+    expected: str,
+) -> None:
+    assert render_backlog_metric_summary_line("Pending approval backlog", count, metrics) == expected
+
+
 def test_render_filter_focus_line_supports_cutoff_and_empty_lanes() -> None:
     assert render_filter_focus_line("Restore lane focus", ["restore queue", "restored"]) == (
         "Restore lane focus: restore queue, restored"
+    )
+    assert render_filter_focus_line("Pending focus", ["fresh", "restored"], oldest="2d") == (
+        "Pending focus: fresh, restored | oldest: 2d"
     )
     assert render_filter_focus_line(
         "Stale lane focus",
@@ -130,6 +155,18 @@ def test_render_page_lane_summary_line_handles_optional_rollups_and_overlap(
         visible_overlap_summary=visible_overlap_summary,
         off_page_overlap_summary=off_page_overlap_summary,
     ) == expected
+
+
+def test_render_page_metric_summary_line_handles_visible_and_off_page_metrics() -> None:
+    assert render_page_metric_summary_line(
+        "pending queues",
+        ["approvals: 8", "families: test 7, edit 1"],
+        off_page_metrics=["approvals: 2", "families: edit 1, tool 1", "restored queues: 1 session"],
+    ) == (
+        "This page pending queues: approvals: 8 | families: test 7, edit 1 | more off-page: approvals: 2 | "
+        "families: edit 1, tool 1 | restored queues: 1 session"
+    )
+    assert render_page_metric_summary_line("denied approvals", []) == "This page denied approvals: none"
 
 
 def test_render_recent_session_page_banner_helpers_share_page_math() -> None:
@@ -250,6 +287,63 @@ def test_render_recent_session_filter_summary_block_lines_share_filter_backlog_c
     expected: list[str],
 ) -> None:
     assert render_recent_session_filter_summary_block_lines(**kwargs) == expected
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        (
+            {
+                "backlog_label": "Pending approval backlog",
+                "count": 3,
+                "backlog_metrics": [
+                    "approvals: 4",
+                    "families: test 2, edit 2",
+                    "multi-queue: 1 session",
+                    "restored queues: 1 session",
+                ],
+                "focus_label": "Pending focus",
+                "focus_lanes": ["fresh", "restored"],
+                "oldest": "2d",
+                "page_metric_label": "pending queues",
+                "visible_metrics": [
+                    "approvals: 3",
+                    "families: test 2, edit 1",
+                    "multi-queue: 1 session",
+                ],
+                "off_page_metrics": [
+                    "approvals: 1",
+                    "families: edit 1",
+                    "restored queues: 1 session",
+                ],
+            },
+            [
+                "Pending approval backlog: 3 sessions | approvals: 4 | families: test 2, edit 2 | multi-queue: 1 session | restored queues: 1 session",
+                "Pending focus: fresh, restored | oldest: 2d",
+                "This page pending queues: approvals: 3 | families: test 2, edit 1 | multi-queue: 1 session | more off-page: approvals: 1 | families: edit 1 | restored queues: 1 session",
+            ],
+        ),
+        (
+            {
+                "backlog_label": "Denied approval backlog",
+                "count": 2,
+                "backlog_metrics": ["approvals: 2", "families: test 1, edit 1"],
+                "focus_label": "Denied focus",
+                "focus_lanes": ["fresh"],
+                "oldest": "9h",
+            },
+            [
+                "Denied approval backlog: 2 sessions | approvals: 2 | families: test 1, edit 1",
+                "Denied focus: fresh | oldest: 9h",
+            ],
+        ),
+    ],
+)
+def test_render_recent_session_metric_summary_block_lines_share_metric_backlog_copy(
+    kwargs: dict[str, object],
+    expected: list[str],
+) -> None:
+    assert render_recent_session_metric_summary_block_lines(**kwargs) == expected
 
 
 def test_render_numbered_preview_section_lines_share_recent_preview_section_copy() -> None:

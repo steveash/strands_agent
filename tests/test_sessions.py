@@ -550,6 +550,236 @@ def test_render_session_picker_surfaces_denied_approval_backlog_summary(tmp_path
     assert "Denied focus: fresh, restored | oldest: 9h" in rendered
 
 
+def test_render_session_picker_reports_pending_approval_page_rollups_when_backlog_spans_pages(
+    tmp_path: Path,
+) -> None:
+    now = datetime.now(UTC)
+
+    for index in range(MAX_RECENT_SESSIONS):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-pending-page-{index}")
+        activity_time = now - timedelta(hours=index + 1)
+        store.append_turn(
+            TurnArtifact(
+                prompt=f"queue fresh pending approval {index}",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[],
+                response_metadata={"mode": "fake"},
+                created_at=activity_time.isoformat(),
+            )
+        )
+        store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id=f"approval-pending-page-{index}",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt=f"rerun fresh pending test {index}",
+                    created_at=(now - timedelta(days=11 + index)).isoformat(),
+                )
+            ]
+        )
+        _set_session_artifact_mtime(store, activity_time)
+
+    restored_store = SessionArtifactStore(tmp_path, session_id="session-pending-restored-page-2")
+    restored_activity_time = now - timedelta(hours=9)
+    restored_store.append_turn(
+        TurnArtifact(
+            prompt="resume restored pending edit",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=restored_activity_time.isoformat(),
+        )
+    )
+    restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-pending-restored-page-2",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume restored edit",
+                restored_from_session=True,
+                created_at=(now - timedelta(days=3)).isoformat(),
+            )
+        ]
+    )
+    _set_session_artifact_mtime(restored_store, restored_activity_time)
+
+    multi_store = SessionArtifactStore(tmp_path, session_id="session-pending-multi-page-2")
+    multi_activity_time = now - timedelta(hours=10)
+    multi_store.append_turn(
+        TurnArtifact(
+            prompt="queue mixed pending follow-ups",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=multi_activity_time.isoformat(),
+        )
+    )
+    multi_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-pending-multi-page-2-a",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun mixed pending test",
+                created_at=(now - timedelta(days=2)).isoformat(),
+            ),
+            ApprovalRequest(
+                request_id="approval-pending-multi-page-2-b",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "old_text": "old", "new_text": "new"},
+                source="fake_runtime",
+                prompt="queue mixed pending edit",
+                created_at=(now - timedelta(days=1)).isoformat(),
+            ),
+        ]
+    )
+    _set_session_artifact_mtime(multi_store, multi_activity_time)
+
+    first_page = render_session_picker(tmp_path, filter_mode="pending")
+    second_page = render_session_picker(tmp_path, filter_mode="pending", page_index=1)
+
+    assert (
+        "Pending approval backlog: 10 sessions | approvals: 11 | families: test 9, edit 2 | multi-queue: 1 session | restored queues: 1 session"
+        in first_page
+    )
+    assert "Pending focus: fresh, restored | oldest: 18d" in first_page
+    assert (
+        "This page pending queues: approvals: 8 | families: test 8 | more off-page: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session"
+        in first_page
+    )
+    assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
+    assert (
+        "This page pending queues: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session | more off-page: approvals: 8 | families: test 8"
+        in second_page
+    )
+
+
+def test_render_session_picker_reports_denied_approval_page_rollups_when_backlog_spans_pages(
+    tmp_path: Path,
+) -> None:
+    now = datetime.now(UTC)
+
+    for index in range(MAX_RECENT_SESSIONS):
+        store = SessionArtifactStore(tmp_path, session_id=f"session-denied-page-{index}")
+        activity_time = now - timedelta(hours=index + 1)
+        denied_event = runtime_event(
+            "steering_denied",
+            "run_shell_command",
+            "Denied in the TUI",
+            data={
+                "tool_name": "run_shell_command",
+                "approval_id": f"approval-denied-page-{index}",
+                "approval_status": "denied",
+                "approval_source": "fake_runtime",
+                "remaining_pending_count": 0,
+                "command": "pytest -q",
+            },
+        )
+        denied_event.timestamp = (now - timedelta(hours=11 + index)).isoformat()
+        store.append_turn(
+            TurnArtifact(
+                prompt=f"deny fresh test rerun {index}",
+                response="ok",
+                provider="fake-strands",
+                mode="fake",
+                events=[denied_event],
+                response_metadata={"mode": "fake"},
+                created_at=activity_time.isoformat(),
+            )
+        )
+        _set_session_artifact_mtime(store, activity_time)
+
+    restored_store = SessionArtifactStore(tmp_path, session_id="session-denied-restored-page-2")
+    restored_activity_time = now - timedelta(hours=9)
+    restored_event = runtime_event(
+        "steering_denied",
+        "write_file",
+        "Denied in the TUI",
+        data={
+            "tool_name": "write_file",
+            "approval_id": "approval-denied-restored-page-2",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+        },
+    )
+    restored_event.timestamp = (now - timedelta(days=3)).isoformat()
+    restored_store.append_turn(
+        TurnArtifact(
+            prompt="deny restored edit",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[restored_event],
+            response_metadata={"mode": "fake"},
+            created_at=restored_activity_time.isoformat(),
+        )
+    )
+    _set_session_artifact_mtime(restored_store, restored_activity_time)
+
+    fresh_edit_store = SessionArtifactStore(tmp_path, session_id="session-denied-edit-page-2")
+    fresh_edit_activity_time = now - timedelta(hours=10)
+    fresh_edit_event = runtime_event(
+        "steering_denied",
+        "replace_text",
+        "Denied in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-denied-edit-page-2",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+        },
+    )
+    fresh_edit_event.timestamp = (now - timedelta(days=2)).isoformat()
+    fresh_edit_store.append_turn(
+        TurnArtifact(
+            prompt="deny fresh edit",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[fresh_edit_event],
+            response_metadata={"mode": "fake"},
+            created_at=fresh_edit_activity_time.isoformat(),
+        )
+    )
+    _set_session_artifact_mtime(fresh_edit_store, fresh_edit_activity_time)
+
+    first_page = render_session_picker(tmp_path, filter_mode="denied")
+    second_page = render_session_picker(tmp_path, filter_mode="denied", page_index=1)
+
+    assert (
+        "Denied approval backlog: 10 sessions | approvals: 10 | families: test 8, edit 2 | restored denied: 1 session"
+        in first_page
+    )
+    assert "Denied focus: fresh, restored | oldest: 3d" in first_page
+    assert (
+        "This page denied approvals: approvals: 8 | families: test 8 | more off-page: approvals: 2 | families: edit 2 | restored denied: 1 session"
+        in first_page
+    )
+    assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
+    assert (
+        "This page denied approvals: approvals: 2 | families: edit 2 | restored denied: 1 session | more off-page: approvals: 8 | families: test 8"
+        in second_page
+    )
+
+
 def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_paths(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-demo")
     _append_turn(store, "review demo")
