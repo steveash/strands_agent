@@ -13,10 +13,12 @@ from strands_agent_tui.sessions import (
     render_session_picker,
 )
 from strands_agent_tui.testing import (
+    seed_approval_restore_overlap_session,
     append_turn as _shared_append_turn,
     seed_approval_restore_rollup_scenario,
     seed_approval_restore_focus_scenario,
     seed_denied_approval_rollup_scenario,
+    seed_multi_approval_queue_session,
     seed_pending_approval_rollup_scenario,
     seed_stale_approval_rollup_scenario,
     set_session_artifact_mtime as _shared_set_session_artifact_mtime,
@@ -292,35 +294,11 @@ def main() -> None:
             empty_pending_picker = render_session_picker(empty_hint_root, filter_mode="pending")
 
         with TemporaryDirectory() as mixed_pending_root:
-            mixed_pending_store = SessionArtifactStore(mixed_pending_root, session_id="session-pending-mixed")
-            append_turn(mixed_pending_store, "queue mixed approvals")
-            mixed_pending_store.save_pending_approvals(
-                [
-                    ApprovalRequest(
-                        request_id="approval-mixed-1",
-                        tool_name="run_shell_command",
-                        reason="Needs confirmation",
-                        args={"command": "pytest -q"},
-                        source="fake_runtime",
-                        prompt="run tests",
-                    ),
-                    ApprovalRequest(
-                        request_id="approval-mixed-2",
-                        tool_name="write_file",
-                        reason="Needs confirmation",
-                        args={"relative_path": "notes.txt", "overwrite": True},
-                        source="fake_runtime",
-                        prompt="queue edit",
-                    ),
-                    ApprovalRequest(
-                        request_id="approval-mixed-3",
-                        tool_name="list_files",
-                        reason="Needs confirmation",
-                        args={"relative_path": "."},
-                        source="fake_runtime",
-                        prompt="inspect tree",
-                    ),
-                ]
+            seed_multi_approval_queue_session(
+                mixed_pending_root,
+                session_id="session-pending-mixed",
+                prompt="queue mixed approvals",
+                request_id_prefix="approval-mixed",
             )
             mixed_pending_picker = render_session_picker(mixed_pending_root, filter_mode="pending")
 
@@ -336,83 +314,21 @@ def main() -> None:
             )
 
         with TemporaryDirectory() as mixed_restored_root:
-            mixed_restored_store = SessionArtifactStore(mixed_restored_root, session_id="session-restored-mixed")
-            append_turn(mixed_restored_store, "resume mixed restored approvals")
-            mixed_restored_store.save_pending_approvals(
-                [
-                    ApprovalRequest(
-                        request_id="approval-0020a",
-                        tool_name="run_shell_command",
-                        reason="Needs confirmation",
-                        args={"command": "pytest -q"},
-                        source="fake_runtime",
-                        prompt="rerun restored tests",
-                        restored_from_session=True,
-                    ),
-                    ApprovalRequest(
-                        request_id="approval-0020b",
-                        tool_name="write_file",
-                        reason="Needs confirmation",
-                        args={"relative_path": "notes.txt", "overwrite": True},
-                        source="fake_runtime",
-                        prompt="resume restored edit",
-                        restored_from_session=True,
-                    ),
-                    ApprovalRequest(
-                        request_id="approval-0020c",
-                        tool_name="list_files",
-                        reason="Needs confirmation",
-                        args={"relative_path": "."},
-                        source="fake_runtime",
-                        prompt="resume restored inspection",
-                        restored_from_session=True,
-                    ),
-                ]
+            seed_multi_approval_queue_session(
+                mixed_restored_root,
+                session_id="session-restored-mixed",
+                prompt="resume mixed restored approvals",
+                restored_from_session=True,
+                request_id_prefix="approval-0020",
             )
             mixed_restored_picker = render_session_picker(mixed_restored_root, filter_mode="approval-restore")
 
         with TemporaryDirectory() as mixed_restored_split_root:
-            mixed_restored_split_store = SessionArtifactStore(
+            seed_approval_restore_overlap_session(
                 mixed_restored_split_root,
                 session_id="session-restored-overlap",
-            )
-            denied_event = runtime_event(
-                "steering_denied",
-                "replace_text",
-                "Denied in the TUI",
-                data={
-                    "tool_name": "replace_text",
-                    "approval_id": "approval-overlap-1",
-                    "approval_status": "denied",
-                    "approval_source": "fake_runtime",
-                    "approval_restored": True,
-                    "remaining_pending_count": 0,
-                },
-            )
-            denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
-            mixed_restored_split_store.append_turn(
-                TurnArtifact(
-                    prompt="restore denied edit and pending test",
-                    response="ok",
-                    provider="fake-strands",
-                    mode="fake",
-                    events=[denied_event],
-                    response_metadata={"mode": "fake"},
-                )
-            )
-            mixed_restored_split_store.save_pending_approvals(
-                [
-                    ApprovalRequest(
-                        request_id="approval-overlap-2",
-                        tool_name="run_shell_command",
-                        reason="Needs confirmation",
-                        args={"command": "pytest -q"},
-                        source="fake_runtime",
-                        prompt="rerun restored tests",
-                        restored_from_session=True,
-                        created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
-                    )
-                ]
+                pending_request_id="approval-overlap-2",
+                outcome_request_id="approval-overlap-1",
             )
             mixed_restored_split_picker = render_session_picker(
                 mixed_restored_split_root,

@@ -15,7 +15,9 @@ from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore
 from strands_agent_tui.sessions import SessionState
 from strands_agent_tui.sessions import save_session_picker_state
 from strands_agent_tui.testing import (
+    seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
+    seed_multi_approval_queue_session,
     seed_stale_approval_subfilter_scenario,
     set_session_artifact_mtime,
 )
@@ -1963,44 +1965,12 @@ async def test_session_switcher_surfaces_pending_queue_breakdown_for_multi_appro
         )
     )
 
-    mixed_pending_store = SessionArtifactStore(tmp_path, session_id="session-pending-mixed")
-    mixed_pending_store.append_turn(
-        TurnArtifact(
-            prompt="mixed pending prompt",
-            response="mixed pending response",
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    mixed_pending_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0090a",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="run tests",
-            ),
-            ApprovalRequest(
-                request_id="approval-0090b",
-                tool_name="write_file",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "overwrite": True},
-                source="fake_runtime",
-                prompt="queue edit",
-            ),
-            ApprovalRequest(
-                request_id="approval-0090c",
-                tool_name="list_files",
-                reason="Needs confirmation",
-                args={"relative_path": "."},
-                source="fake_runtime",
-                prompt="inspect tree",
-            ),
-        ]
+    seed_multi_approval_queue_session(
+        tmp_path,
+        session_id="session-pending-mixed",
+        prompt="mixed pending prompt",
+        response="mixed pending response",
+        request_id_prefix="approval-0090",
     )
 
     app = StrandsAgentApp(
@@ -2046,47 +2016,13 @@ async def test_session_switcher_surfaces_restored_pending_queue_breakdown_for_mu
         )
     )
 
-    mixed_restored_store = SessionArtifactStore(tmp_path, session_id="session-restored-mixed")
-    mixed_restored_store.append_turn(
-        TurnArtifact(
-            prompt="restored pending prompt",
-            response="restored pending response",
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    mixed_restored_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0091a",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="rerun restored tests",
-                restored_from_session=True,
-            ),
-            ApprovalRequest(
-                request_id="approval-0091b",
-                tool_name="write_file",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "overwrite": True},
-                source="fake_runtime",
-                prompt="resume restored edit",
-                restored_from_session=True,
-            ),
-            ApprovalRequest(
-                request_id="approval-0091c",
-                tool_name="list_files",
-                reason="Needs confirmation",
-                args={"relative_path": "."},
-                source="fake_runtime",
-                prompt="resume restored inspection",
-                restored_from_session=True,
-            ),
-        ]
+    seed_multi_approval_queue_session(
+        tmp_path,
+        session_id="session-restored-mixed",
+        prompt="restored pending prompt",
+        response="restored pending response",
+        restored_from_session=True,
+        request_id_prefix="approval-0091",
     )
 
     app = StrandsAgentApp(
@@ -2133,44 +2069,12 @@ async def test_session_switcher_surfaces_mixed_restore_overlap_summary_and_previ
         )
     )
 
-    mixed_store = SessionArtifactStore(tmp_path, session_id="session-restored-overlap")
-    denied_event = runtime_event(
-        "steering_denied",
-        "replace_text",
-        "Denied in the TUI",
-        data={
-            "tool_name": "replace_text",
-            "approval_id": "approval-overlap-1",
-            "approval_status": "denied",
-            "approval_source": "fake_runtime",
-            "approval_restored": True,
-            "remaining_pending_count": 0,
-        },
-    )
-    denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
-    mixed_store.append_turn(
-        TurnArtifact(
-            prompt="restore denied edit and pending test",
-            response="restored overlap response",
-            provider="fake-strands",
-            mode="fake",
-            events=[denied_event],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    mixed_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-overlap-2",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="rerun restored tests",
-                restored_from_session=True,
-                created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
-            )
-        ]
+    seed_approval_restore_overlap_session(
+        tmp_path,
+        session_id="session-restored-overlap",
+        response="restored overlap response",
+        pending_request_id="approval-overlap-2",
+        outcome_request_id="approval-overlap-1",
     )
 
     app = StrandsAgentApp(

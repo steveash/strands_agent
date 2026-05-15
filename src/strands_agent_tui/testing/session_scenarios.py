@@ -88,6 +88,100 @@ def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> N
         os.utime(path, (timestamp, timestamp))
 
 
+def seed_multi_approval_queue_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-pending-mixed",
+    prompt: str = "queue mixed approvals",
+    response: str = "ok",
+    restored_from_session: bool = False,
+    request_id_prefix: str = "approval-mixed",
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(store, prompt, response=response)
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id=f"{request_id_prefix}-test",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run tests" if not restored_from_session else "rerun restored tests",
+                restored_from_session=restored_from_session,
+            ),
+            ApprovalRequest(
+                request_id=f"{request_id_prefix}-edit",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit" if not restored_from_session else "resume restored edit",
+                restored_from_session=restored_from_session,
+            ),
+            ApprovalRequest(
+                request_id=f"{request_id_prefix}-tool",
+                tool_name="list_files",
+                reason="Needs confirmation",
+                args={"relative_path": "."},
+                source="fake_runtime",
+                prompt="inspect tree" if not restored_from_session else "resume restored inspection",
+                restored_from_session=restored_from_session,
+            ),
+        ]
+    )
+    return store
+
+
+def seed_approval_restore_overlap_session(
+    root: Path | str,
+    *,
+    now: datetime | None = None,
+    session_id: str = "session-restored-overlap",
+    prompt: str = "restore denied edit and pending test",
+    response: str = "ok",
+    pending_request_id: str = "approval-overlap-pending",
+    outcome_request_id: str = "approval-overlap-outcome",
+) -> SessionArtifactStore:
+    base_time = now or datetime.now(UTC)
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    denied_event = runtime_event(
+        "steering_denied",
+        "replace_text",
+        "Denied in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": outcome_request_id,
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+        },
+    )
+    denied_event.timestamp = (base_time - timedelta(hours=6, minutes=5)).isoformat()
+    append_turn(
+        store,
+        prompt,
+        response=response,
+        events=[denied_event],
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id=pending_request_id,
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun restored tests",
+                restored_from_session=True,
+                created_at=(base_time - timedelta(days=3, hours=2)).isoformat(),
+            )
+        ]
+    )
+    return store
+
+
 def seed_approval_restore_focus_scenario(
     root: Path | str,
     *,

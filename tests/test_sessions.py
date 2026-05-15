@@ -25,8 +25,10 @@ from strands_agent_tui.sessions.picker import (
 )
 from strands_agent_tui.testing import (
     append_turn as _shared_append_turn,
+    seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
     seed_denied_approval_rollup_scenario,
+    seed_multi_approval_queue_session,
     seed_pending_approval_rollup_scenario,
     seed_stale_approval_filter_scenario,
     seed_stale_approval_rollup_scenario,
@@ -1560,35 +1562,11 @@ def test_list_recent_sessions_surfaces_pending_approval_age_and_stale_session_cu
 
 
 def test_list_recent_sessions_surfaces_pending_queue_first_vs_rest_breakdown(tmp_path: Path) -> None:
-    store = SessionArtifactStore(tmp_path, session_id="session-pending-mixed")
-    _append_turn(store, "queue mixed approvals")
-    store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0007a",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="run pytest",
-            ),
-            ApprovalRequest(
-                request_id="approval-0007b",
-                tool_name="write_file",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "overwrite": True},
-                source="fake_runtime",
-                prompt="queue edit",
-            ),
-            ApprovalRequest(
-                request_id="approval-0007c",
-                tool_name="list_files",
-                reason="Needs confirmation",
-                args={"relative_path": "."},
-                source="fake_runtime",
-                prompt="inspect tree",
-            ),
-        ]
+    seed_multi_approval_queue_session(
+        tmp_path,
+        session_id="session-pending-mixed",
+        prompt="queue mixed approvals",
+        request_id_prefix="approval-0007",
     )
 
     summary = list_recent_sessions(tmp_path)[0]
@@ -1959,45 +1937,12 @@ def test_list_recent_sessions_surfaces_live_runtime_restored_denied_approval_sum
 
 
 def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(tmp_path: Path) -> None:
-    store = SessionArtifactStore(tmp_path, session_id="session-restored-breakdown")
-    denied_event = runtime_event(
-        "steering_denied",
-        "replace_text",
-        "Denied in the TUI",
-        data={
-            "tool_name": "replace_text",
-            "approval_id": "approval-9300",
-            "approval_status": "denied",
-            "approval_source": "fake_runtime",
-            "approval_restored": True,
-            "remaining_pending_count": 0,
-            "relative_path": "notes.txt",
-        },
-    )
-    denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
-    store.append_turn(
-        TurnArtifact(
-            prompt="restore denied edit and pending test",
-            response="triaged restored approvals",
-            provider="fake-strands",
-            mode="fake",
-            events=[denied_event],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-9301",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="rerun restored tests",
-                restored_from_session=True,
-                created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
-            )
-        ]
+    seed_approval_restore_overlap_session(
+        tmp_path,
+        session_id="session-restored-breakdown",
+        response="triaged restored approvals",
+        pending_request_id="approval-9301",
+        outcome_request_id="approval-9300",
     )
 
     summary = list_recent_sessions(tmp_path)[0]
@@ -2064,38 +2009,12 @@ def test_render_session_picker_reports_approval_restore_page_rollups_when_backlo
 
 
 def test_list_recent_sessions_surfaces_restored_pending_queue_breakdown(tmp_path: Path) -> None:
-    store = SessionArtifactStore(tmp_path, session_id="session-restored-pending-mixed")
-    _append_turn(store, "reopen restored approval queue")
-    store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-9310",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="rerun restored tests",
-                restored_from_session=True,
-            ),
-            ApprovalRequest(
-                request_id="approval-9311",
-                tool_name="write_file",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "overwrite": True},
-                source="fake_runtime",
-                prompt="resume restored edit",
-                restored_from_session=True,
-            ),
-            ApprovalRequest(
-                request_id="approval-9312",
-                tool_name="list_files",
-                reason="Needs confirmation",
-                args={"relative_path": "."},
-                source="fake_runtime",
-                prompt="resume restored inspection",
-                restored_from_session=True,
-            ),
-        ]
+    seed_multi_approval_queue_session(
+        tmp_path,
+        session_id="session-restored-pending-mixed",
+        prompt="reopen restored approval queue",
+        restored_from_session=True,
+        request_id_prefix="approval-931",
     )
 
     summary = list_recent_sessions(tmp_path)[0]
