@@ -1654,6 +1654,10 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         intervention_output = str(app.query_one("#output").render())
         assert "Filter: intervention | Sort: attention" in intervention_output
+        assert "Intervention backlog: 6 sessions" in intervention_output
+        assert "pending 5 (oldest 45d)" in intervention_output
+        assert "overlap: mixed 3 sessions" in intervention_output
+        assert "Intervention focus: pending, blocked, approved, denied, restored" in intervention_output
         assert "session-pending | 1 turn(s)" in intervention_output
         assert "session-denied | 1 turn(s)" in intervention_output
         assert "intervention: pending 1" in intervention_output
@@ -1664,6 +1668,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         tool_output = str(app.query_one("#output").render())
         assert "Filter: tool | Sort: attention" in tool_output
+        assert "Tool backlog: 3 sessions | lanes: workspace 1, shell 2" in tool_output
+        assert "Tool focus: workspace, shell, other" in tool_output
         assert "session-tool | 1 turn(s)" in tool_output
         assert "session-shell | 1 turn(s)" in tool_output
         assert "session-restore | 1 turn(s)" not in tool_output

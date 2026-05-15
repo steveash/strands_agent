@@ -66,6 +66,8 @@ STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
 APPROVAL_RESTORE_LANE_DISPLAY_ORDER = ("restore queue", "restored")
+TOOL_LANE_DISPLAY_ORDER = ("workspace", "shell", "other")
+INTERVENTION_LANE_DISPLAY_ORDER = ("pending", "blocked", "approved", "denied", "restored")
 WORKSPACE_LANE_DISPLAY_ORDER = ("inspect", "edit")
 SHELL_LANE_DISPLAY_ORDER = ("inspect", "test")
 STALE_APPROVAL_LANE_DISPLAY_ORDER = ("pending", "denied", "restore queue", "restored")
@@ -2097,6 +2099,37 @@ def render_recent_session_filter_summary_lines(
             include_overlap_summary=True,
         )
 
+    if filter_mode == "tool" and summaries:
+        return _render_lane_filter_summary_lines(
+            summaries,
+            backlog_label="Tool backlog",
+            focus_label="Tool focus",
+            focus_lanes=TOOL_LANE_DISPLAY_ORDER,
+            page_lane_label="tool lanes",
+            page_index=page_index,
+            page_size=page_size,
+            rollup_formatter=_format_simple_lane_rollup_for_display_order(TOOL_LANE_DISPLAY_ORDER),
+            lane_getter=_tool_lanes,
+            display_order=TOOL_LANE_DISPLAY_ORDER,
+            include_overlap_summary=True,
+        )
+
+    if filter_mode == "intervention" and summaries:
+        return _render_lane_filter_summary_lines(
+            summaries,
+            backlog_label="Intervention backlog",
+            focus_label="Intervention focus",
+            focus_lanes=INTERVENTION_LANE_DISPLAY_ORDER,
+            page_lane_label="intervention lanes",
+            page_index=page_index,
+            page_size=page_size,
+            rollup_formatter=_format_intervention_lane_rollup,
+            lane_getter=_intervention_lanes,
+            age_getter=_intervention_lane_age_seconds,
+            display_order=INTERVENTION_LANE_DISPLAY_ORDER,
+            include_overlap_summary=True,
+        )
+
     if filter_mode in {"workspace-inspect", "workspace-edit"} and summaries:
         focus_lanes = ["edit"] if filter_mode == "workspace-edit" else ["inspect"]
         return _render_lane_filter_summary_lines(
@@ -2529,6 +2562,17 @@ def _is_stale_approval_filter_mode(filter_mode: str) -> bool:
     return filter_mode in STALE_APPROVAL_FILTER_LANES
 
 
+def _tool_lanes(summary: SessionSummary) -> set[str]:
+    lanes: set[str] = set()
+    if summary.has_workspace_inspect_activity or summary.has_workspace_edit_activity:
+        lanes.add("workspace")
+    if summary.has_shell_inspect_activity or summary.has_shell_test_activity:
+        lanes.add("shell")
+    if (summary.last_tool_preview or summary.last_tool_badges or summary.recent_tool_previews) and not lanes:
+        lanes.add("other")
+    return lanes
+
+
 def _workspace_lanes(summary: SessionSummary) -> set[str]:
     lanes: set[str] = set()
     if summary.has_workspace_inspect_activity:
@@ -2583,6 +2627,88 @@ def _summarize_shell_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, i
 
 def _format_simple_lane_rollup(lane_counts: dict[str, int], display_order: tuple[str, ...]) -> str:
     return ", ".join(f"{lane} {lane_counts[lane]}" for lane in display_order if lane_counts.get(lane, 0) > 0)
+
+
+def _intervention_preview_matches(summary: SessionSummary, label: str) -> bool:
+    label_prefix = f"{label} "
+    for preview in [summary.last_intervention_preview, *summary.recent_intervention_previews]:
+        if preview == label or preview.startswith(label_prefix):
+            return True
+    return False
+
+
+def _intervention_preview_is_restored(summary: SessionSummary) -> bool:
+    for preview in [summary.last_intervention_preview, *summary.recent_intervention_previews]:
+        if " restored " in f" {preview} ":
+            return True
+    return False
+
+
+def _intervention_lanes(summary: SessionSummary) -> set[str]:
+    badges = summary.intervention_badges
+    lanes: set[str] = set()
+    if (
+        summary.pending_approval_count > 0
+        or any(badge.startswith("pending ") for badge in badges)
+        or _intervention_preview_matches(summary, "pending")
+    ):
+        lanes.add("pending")
+    if any(badge.startswith("blocked ") for badge in badges) or _intervention_preview_matches(summary, "blocked"):
+        lanes.add("blocked")
+    if (
+        any(badge.startswith("approved ") for badge in badges)
+        or _intervention_preview_matches(summary, "approved")
+        or _intervention_preview_matches(summary, "continued")
+    ):
+        lanes.add("approved")
+    if (
+        summary.denied_approval_count > 0
+        or any(badge.startswith("denied ") for badge in badges)
+        or _intervention_preview_matches(summary, "denied")
+    ):
+        lanes.add("denied")
+    if (
+        summary.restored_approval_count > 0
+        or any(badge.startswith("restored ") for badge in badges)
+        or _intervention_preview_is_restored(summary)
+    ):
+        lanes.add("restored")
+    return lanes
+
+
+def _intervention_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
+    lanes = _intervention_lanes(summary)
+    lane_ages: dict[str, int] = {}
+    if "pending" in lanes and summary.pending_approval_age_sort_key > 0:
+        lane_ages["pending"] = summary.pending_approval_age_sort_key
+    if "denied" in lanes and summary.last_denied_approval_age_sort_key > 0:
+        lane_ages["denied"] = summary.last_denied_approval_age_sort_key
+    if "restored" in lanes:
+        restored_age_seconds = max(
+            summary.restored_pending_approval_age_sort_key,
+            summary.last_restored_outcome_age_sort_key,
+            summary.last_restored_approval_age_sort_key,
+        )
+        if restored_age_seconds > 0:
+            lane_ages["restored"] = restored_age_seconds
+    return lane_ages
+
+
+def _format_intervention_lane_rollup(
+    lane_counts: dict[str, int],
+    lane_oldest_ages: dict[str, int],
+) -> str:
+    lane_parts: list[str] = []
+    for lane in INTERVENTION_LANE_DISPLAY_ORDER:
+        count = lane_counts.get(lane, 0)
+        if count <= 0:
+            continue
+        part = f"{lane} {count}"
+        oldest_age = lane_oldest_ages.get(lane, 0)
+        if oldest_age > 0:
+            part += f" (oldest {_format_age_compact(oldest_age)})"
+        lane_parts.append(part)
+    return ", ".join(lane_parts)
 
 
 def _should_render_stale_cutoff_preview_line(filter_mode: str) -> bool:

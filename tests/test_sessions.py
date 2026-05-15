@@ -903,6 +903,231 @@ def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Pat
     assert "session-plain" not in rendered
 
 
+def test_render_session_picker_surfaces_tool_backlog_rollups(tmp_path: Path) -> None:
+    workspace_store = SessionArtifactStore(tmp_path, session_id="session-workspace-tool")
+    workspace_store.append_turn(
+        TurnArtifact(
+            prompt="inspect workspace",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: src/"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    shell_store = SessionArtifactStore(tmp_path, session_id="session-shell-tool")
+    shell_store.append_turn(
+        TurnArtifact(
+            prompt="inspect shell",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "pwd",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "pwd -> /workspace/demo",
+                    },
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    mixed_store = SessionArtifactStore(tmp_path, session_id="session-mixed-tool")
+    mixed_store.append_turn(
+        TurnArtifact(
+            prompt="inspect both",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "run_shell_command",
+                    "Finished shell command",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "command": "git status --short",
+                        "shell_policy": "inspect",
+                        "exit_code": 0,
+                        "result_preview": "git status --short -> M README.md",
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    other_store = SessionArtifactStore(tmp_path, session_id="session-other-tool")
+    other_store.append_turn(
+        TurnArtifact(
+            prompt="custom tool",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "custom_tool",
+                    "Finished custom tool",
+                    data={"tool_name": "custom_tool", "result_preview": "custom tool output"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    rendered = render_session_picker(tmp_path, filter_mode="tool")
+
+    assert "Filter: tool | Sort: recent" in rendered
+    assert (
+        "Tool backlog: 4 sessions | lanes: workspace 2, shell 2, other 1 | overlap: mixed 1 session"
+        in rendered
+    )
+    assert "Tool focus: workspace, shell, other" in rendered
+    assert "session-workspace-tool" in rendered
+    assert "session-shell-tool" in rendered
+    assert "session-mixed-tool" in rendered
+    assert "session-other-tool" in rendered
+
+
+def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: Path) -> None:
+    pending_store = SessionArtifactStore(tmp_path, session_id="session-intervention-pending")
+    _append_turn(pending_store, "queue restored test")
+    pending_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-intervention-pending",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun tests",
+                restored_from_session=True,
+                created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            )
+        ]
+    )
+
+    blocked_store = SessionArtifactStore(tmp_path, session_id="session-intervention-blocked")
+    blocked_store.append_turn(
+        TurnArtifact(
+            prompt="edit protected file",
+            response="blocked",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_blocked",
+                    "write_file",
+                    "Protected file mutations are blocked.",
+                    data={"tool_name": "write_file", "approval_tool_family": "edit"},
+                )
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    approved_store = SessionArtifactStore(tmp_path, session_id="session-intervention-approved")
+    approved_store.append_turn(
+        TurnArtifact(
+            prompt="approve edit",
+            response="approved",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "steering_approved",
+                    "write_file",
+                    "Approved in the TUI",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-intervention-approved",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "approval_tool_family": "edit",
+                    },
+                ),
+                runtime_event(
+                    "approval_follow_up_prepared",
+                    "write_file",
+                    "Prepared continuation prompt.",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-intervention-approved",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "approval_tool_family": "edit",
+                        "tool_result_preview": "Simulated overwrite of notes.txt.",
+                    },
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    denied_store = SessionArtifactStore(tmp_path, session_id="session-intervention-denied")
+    denied_event = runtime_event(
+        "steering_denied",
+        "replace_text",
+        "Denied in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-intervention-denied",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "approval_tool_family": "edit",
+            "remaining_pending_count": 0,
+        },
+    )
+    denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6)).isoformat()
+    denied_store.append_turn(
+        TurnArtifact(
+            prompt="deny restored edit",
+            response="denied",
+            provider="fake-strands",
+            mode="fake",
+            events=[denied_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    rendered = render_session_picker(tmp_path, filter_mode="intervention")
+
+    assert "Filter: intervention | Sort: recent" in rendered
+    assert (
+        "Intervention backlog: 4 sessions | lanes: pending 1 (oldest 2d), blocked 1, approved 1, denied 1 (oldest 6h), restored 2 (oldest 2d) | overlap: mixed 2 sessions"
+        in rendered
+    )
+    assert "Intervention focus: pending, blocked, approved, denied, restored" in rendered
+    assert "session-intervention-pending" in rendered
+    assert "session-intervention-blocked" in rendered
+    assert "session-intervention-approved" in rendered
+    assert "session-intervention-denied" in rendered
+
+
 def test_restored_pending_approval_sessions_surface_restore_queue_age_cues(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-restored-aged")
     _append_turn(store, "resume restored queue")
