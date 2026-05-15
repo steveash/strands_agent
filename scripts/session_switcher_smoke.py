@@ -7,10 +7,13 @@ from tempfile import TemporaryDirectory
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
-from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, SessionState, TurnArtifact
+from strands_agent_tui.sessions import SessionArtifactStore, SessionState, TurnArtifact
 from strands_agent_tui.testing import (
     append_turn as _shared_append_turn,
+    seed_approval_restore_rollup_scenario,
     seed_approval_restore_focus_scenario,
+    seed_denied_approval_rollup_scenario,
+    seed_pending_approval_rollup_scenario,
     seed_stale_approval_rollup_scenario,
     set_session_artifact_mtime as _shared_set_session_artifact_mtime,
 )
@@ -645,109 +648,7 @@ async def run_smoke() -> None:
         append_turn(pending_rollup_current_store, "current pending rollup prompt", "current pending rollup response")
 
         pending_rollup_now = datetime.now(UTC)
-        for index in range(MAX_RECENT_SESSIONS):
-            pending_page_store = SessionArtifactStore(
-                pending_rollup_root,
-                session_id=f"session-pending-page-{index}",
-            )
-            pending_page_activity_time = pending_rollup_now - timedelta(hours=index + 1)
-            pending_page_store.append_turn(
-                TurnArtifact(
-                    prompt=f"queue fresh pending approval {index}",
-                    response="ok",
-                    provider="fake-strands",
-                    mode="fake",
-                    events=[],
-                    response_metadata={"mode": "fake"},
-                    created_at=pending_page_activity_time.isoformat(),
-                )
-            )
-            pending_page_store.save_pending_approvals(
-                [
-                    ApprovalRequest(
-                        request_id=f"approval-pending-page-{index}",
-                        tool_name="run_shell_command",
-                        reason="Needs confirmation",
-                        args={"command": "pytest -q"},
-                        source="fake_runtime",
-                        prompt=f"rerun fresh pending test {index}",
-                        created_at=(pending_rollup_now - timedelta(days=11 + index)).isoformat(),
-                    )
-                ]
-            )
-            set_session_artifact_mtime(pending_page_store, pending_page_activity_time)
-
-        pending_restored_store = SessionArtifactStore(
-            pending_rollup_root,
-            session_id="session-pending-restored-page-2",
-        )
-        pending_restored_activity_time = pending_rollup_now - timedelta(hours=9)
-        pending_restored_store.append_turn(
-            TurnArtifact(
-                prompt="resume restored pending edit",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[],
-                response_metadata={"mode": "fake"},
-                created_at=pending_restored_activity_time.isoformat(),
-            )
-        )
-        pending_restored_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-pending-restored-page-2",
-                    tool_name="write_file",
-                    reason="Needs confirmation",
-                    args={"relative_path": "notes.txt", "overwrite": True},
-                    source="fake_runtime",
-                    prompt="resume restored edit",
-                    restored_from_session=True,
-                    created_at=(pending_rollup_now - timedelta(days=3)).isoformat(),
-                )
-            ]
-        )
-        set_session_artifact_mtime(pending_restored_store, pending_restored_activity_time)
-
-        pending_multi_store = SessionArtifactStore(
-            pending_rollup_root,
-            session_id="session-pending-multi-page-2",
-        )
-        pending_multi_activity_time = pending_rollup_now - timedelta(hours=10)
-        pending_multi_store.append_turn(
-            TurnArtifact(
-                prompt="queue mixed pending follow-ups",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[],
-                response_metadata={"mode": "fake"},
-                created_at=pending_multi_activity_time.isoformat(),
-            )
-        )
-        pending_multi_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-pending-multi-page-2-a",
-                    tool_name="run_shell_command",
-                    reason="Needs confirmation",
-                    args={"command": "pytest -q"},
-                    source="fake_runtime",
-                    prompt="rerun mixed pending test",
-                    created_at=(pending_rollup_now - timedelta(days=2)).isoformat(),
-                ),
-                ApprovalRequest(
-                    request_id="approval-pending-multi-page-2-b",
-                    tool_name="write_file",
-                    reason="Needs confirmation",
-                    args={"relative_path": "notes.txt", "overwrite": True},
-                    source="fake_runtime",
-                    prompt="queue mixed pending edit",
-                    created_at=(pending_rollup_now - timedelta(days=1)).isoformat(),
-                ),
-            ]
-        )
-        set_session_artifact_mtime(pending_multi_store, pending_multi_activity_time)
+        seed_pending_approval_rollup_scenario(pending_rollup_root, now=pending_rollup_now)
 
         pending_rollup_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
@@ -787,101 +688,7 @@ async def run_smoke() -> None:
         append_turn(denied_rollup_current_store, "current denied rollup prompt", "current denied rollup response")
 
         denied_rollup_now = datetime.now(UTC)
-        for index in range(MAX_RECENT_SESSIONS):
-            denied_page_store = SessionArtifactStore(
-                denied_rollup_root,
-                session_id=f"session-denied-page-{index}",
-            )
-            denied_page_activity_time = denied_rollup_now - timedelta(hours=index + 1)
-            denied_page_event = runtime_event(
-                "steering_denied",
-                "run_shell_command",
-                "Denied in the TUI",
-                data={
-                    "tool_name": "run_shell_command",
-                    "approval_id": f"approval-denied-page-{index}",
-                    "approval_status": "denied",
-                    "approval_source": "fake_runtime",
-                    "remaining_pending_count": 0,
-                    "command": "pytest -q",
-                },
-            )
-            denied_page_event.timestamp = (denied_rollup_now - timedelta(hours=11 + index)).isoformat()
-            denied_page_store.append_turn(
-                TurnArtifact(
-                    prompt=f"deny fresh test rerun {index}",
-                    response="ok",
-                    provider="fake-strands",
-                    mode="fake",
-                    events=[denied_page_event],
-                    response_metadata={"mode": "fake"},
-                    created_at=denied_page_activity_time.isoformat(),
-                )
-            )
-            set_session_artifact_mtime(denied_page_store, denied_page_activity_time)
-
-        denied_restored_store = SessionArtifactStore(
-            denied_rollup_root,
-            session_id="session-denied-restored-page-2",
-        )
-        denied_restored_activity_time = denied_rollup_now - timedelta(hours=9)
-        denied_restored_event = runtime_event(
-            "steering_denied",
-            "write_file",
-            "Denied in the TUI",
-            data={
-                "tool_name": "write_file",
-                "approval_id": "approval-denied-restored-page-2",
-                "approval_status": "denied",
-                "approval_source": "fake_runtime",
-                "approval_restored": True,
-                "remaining_pending_count": 0,
-            },
-        )
-        denied_restored_event.timestamp = (denied_rollup_now - timedelta(days=3)).isoformat()
-        denied_restored_store.append_turn(
-            TurnArtifact(
-                prompt="deny restored edit",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[denied_restored_event],
-                response_metadata={"mode": "fake"},
-                created_at=denied_restored_activity_time.isoformat(),
-            )
-        )
-        set_session_artifact_mtime(denied_restored_store, denied_restored_activity_time)
-
-        denied_edit_store = SessionArtifactStore(
-            denied_rollup_root,
-            session_id="session-denied-edit-page-2",
-        )
-        denied_edit_activity_time = denied_rollup_now - timedelta(hours=10)
-        denied_edit_event = runtime_event(
-            "steering_denied",
-            "replace_text",
-            "Denied in the TUI",
-            data={
-                "tool_name": "replace_text",
-                "approval_id": "approval-denied-edit-page-2",
-                "approval_status": "denied",
-                "approval_source": "fake_runtime",
-                "remaining_pending_count": 0,
-            },
-        )
-        denied_edit_event.timestamp = (denied_rollup_now - timedelta(days=2)).isoformat()
-        denied_edit_store.append_turn(
-            TurnArtifact(
-                prompt="deny fresh edit",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[denied_edit_event],
-                response_metadata={"mode": "fake"},
-                created_at=denied_edit_activity_time.isoformat(),
-            )
-        )
-        set_session_artifact_mtime(denied_edit_store, denied_edit_activity_time)
+        seed_denied_approval_rollup_scenario(denied_rollup_root, now=denied_rollup_now)
 
         denied_rollup_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
@@ -1317,117 +1124,7 @@ async def run_smoke() -> None:
             append_turn(rollup_current_store, "current prompt", "current response")
 
             approval_restore_now = datetime.now(UTC)
-            for index in range(MAX_RECENT_SESSIONS):
-                queue_store = SessionArtifactStore(
-                    approval_restore_rollup_root,
-                    session_id=f"session-restored-queue-{index}",
-                )
-                queue_activity_time = approval_restore_now - timedelta(hours=index + 1)
-                queue_store.append_turn(
-                    TurnArtifact(
-                        prompt=f"resume restored queue {index}",
-                        response="ok",
-                        provider="fake-strands",
-                        mode="fake",
-                        events=[],
-                        response_metadata={"mode": "fake"},
-                        created_at=queue_activity_time.isoformat(),
-                    )
-                )
-                queue_store.save_pending_approvals(
-                    [
-                        ApprovalRequest(
-                            request_id=f"approval-restored-queue-{index}",
-                            tool_name="run_shell_command",
-                            reason="Needs confirmation",
-                            args={"command": "pytest -q"},
-                            source="fake_runtime",
-                            prompt=f"rerun restored queue {index}",
-                            restored_from_session=True,
-                            created_at=(approval_restore_now - timedelta(days=11 + index)).isoformat(),
-                        )
-                    ]
-                )
-                set_session_artifact_mtime(queue_store, queue_activity_time)
-
-            restored_only_store = SessionArtifactStore(
-                approval_restore_rollup_root,
-                session_id="session-restored-outcome-page-2",
-            )
-            restored_only_activity_time = approval_restore_now - timedelta(hours=10)
-            restored_only_event = runtime_event(
-                "steering_approved",
-                "replace_text",
-                "Approved in the TUI",
-                data={
-                    "tool_name": "replace_text",
-                    "approval_id": "approval-restored-outcome-page-2",
-                    "approval_status": "approved",
-                    "approval_source": "fake_runtime",
-                    "approval_restored": True,
-                    "remaining_pending_count": 0,
-                    "resumed_from_approval": True,
-                },
-            )
-            restored_only_event.timestamp = (approval_restore_now - timedelta(hours=8)).isoformat()
-            restored_only_store.append_turn(
-                TurnArtifact(
-                    prompt="review restored outcome only",
-                    response="ok",
-                    provider="fake-strands",
-                    mode="fake",
-                    events=[restored_only_event],
-                    response_metadata={"mode": "fake"},
-                    created_at=restored_only_activity_time.isoformat(),
-                )
-            )
-            set_session_artifact_mtime(restored_only_store, restored_only_activity_time)
-
-            mixed_rollup_store = SessionArtifactStore(
-                approval_restore_rollup_root,
-                session_id="session-restored-overlap-page-2",
-            )
-            mixed_rollup_activity_time = approval_restore_now - timedelta(hours=11)
-            mixed_rollup_event = runtime_event(
-                "steering_denied",
-                "write_file",
-                "Denied in the TUI",
-                data={
-                    "tool_name": "write_file",
-                    "approval_id": "approval-restored-overlap-page-2-outcome",
-                    "approval_status": "denied",
-                    "approval_source": "fake_runtime",
-                    "approval_restored": True,
-                    "remaining_pending_count": 0,
-                },
-            )
-            mixed_rollup_event.timestamp = (approval_restore_now - timedelta(hours=6)).isoformat()
-            mixed_rollup_store.append_turn(
-                TurnArtifact(
-                    prompt="review mixed restored overlap",
-                    response="ok",
-                    provider="fake-strands",
-                    mode="fake",
-                    events=[mixed_rollup_event],
-                    response_metadata={"mode": "fake"},
-                    created_at=mixed_rollup_activity_time.isoformat(),
-                )
-            )
-            mixed_rollup_store.save_pending_approvals(
-                [
-                    ApprovalRequest(
-                        request_id="approval-restored-overlap-page-2-pending",
-                        tool_name="run_shell_command",
-                        reason="Needs confirmation",
-                        args={"command": "pytest -q"},
-                        source="fake_runtime",
-                        prompt="rerun mixed restored tests",
-                        restored_from_session=True,
-                        created_at=(approval_restore_now - timedelta(days=3)).isoformat(),
-                    )
-                ]
-            )
-            set_session_artifact_mtime(mixed_rollup_store, mixed_rollup_activity_time)
+            seed_approval_restore_rollup_scenario(approval_restore_rollup_root, now=approval_restore_now)
 
             approval_restore_rollup_app = StrandsAgentApp(
                 runtime=FakeStrandsRuntime(),

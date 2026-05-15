@@ -40,6 +40,27 @@ class StaleApprovalRollupScenario:
     restored_id: str = "session-stale-restored-page-2"
 
 
+@dataclass(frozen=True)
+class PendingApprovalRollupScenario:
+    pending_prefix: str = "session-pending-page"
+    restored_id: str = "session-pending-restored-page-2"
+    multi_id: str = "session-pending-multi-page-2"
+
+
+@dataclass(frozen=True)
+class DeniedApprovalRollupScenario:
+    denied_prefix: str = "session-denied-page"
+    restored_id: str = "session-denied-restored-page-2"
+    edit_id: str = "session-denied-edit-page-2"
+
+
+@dataclass(frozen=True)
+class ApprovalRestoreRollupScenario:
+    queue_prefix: str = "session-restored-queue"
+    restored_outcome_id: str = "session-restored-outcome-page-2"
+    mixed_id: str = "session-restored-overlap-page-2"
+
+
 def append_turn(
     store: SessionArtifactStore,
     prompt: str,
@@ -439,5 +460,280 @@ def seed_stale_approval_rollup_scenario(
             events=[restored_event],
         )
     set_session_artifact_mtime(restored_store, restored_activity_time)
+
+    return scenario
+
+
+def seed_pending_approval_rollup_scenario(
+    root: Path | str,
+    *,
+    now: datetime | None = None,
+    scenario: PendingApprovalRollupScenario = PendingApprovalRollupScenario(),
+    pending_count: int = MAX_RECENT_SESSIONS,
+) -> PendingApprovalRollupScenario:
+    base_time = now or datetime.now(UTC)
+    root_path = Path(root)
+
+    for index in range(pending_count):
+        store = SessionArtifactStore(root_path, session_id=f"{scenario.pending_prefix}-{index}")
+        activity_time = base_time - timedelta(hours=index + 1)
+        append_turn(
+            store,
+            f"queue fresh pending approval {index}",
+            created_at=activity_time.isoformat(),
+        )
+        store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id=f"approval-pending-page-{index}",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt=f"rerun fresh pending test {index}",
+                    created_at=(base_time - timedelta(days=11 + index)).isoformat(),
+                )
+            ]
+        )
+        set_session_artifact_mtime(store, activity_time)
+
+    restored_store = SessionArtifactStore(root_path, session_id=scenario.restored_id)
+    restored_activity_time = base_time - timedelta(hours=9)
+    append_turn(
+        restored_store,
+        "resume restored pending edit",
+        created_at=restored_activity_time.isoformat(),
+    )
+    restored_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-pending-restored-page-2",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="resume restored edit",
+                restored_from_session=True,
+                created_at=(base_time - timedelta(days=3)).isoformat(),
+            )
+        ]
+    )
+    set_session_artifact_mtime(restored_store, restored_activity_time)
+
+    multi_store = SessionArtifactStore(root_path, session_id=scenario.multi_id)
+    multi_activity_time = base_time - timedelta(hours=10)
+    append_turn(
+        multi_store,
+        "queue mixed pending follow-ups",
+        created_at=multi_activity_time.isoformat(),
+    )
+    multi_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-pending-multi-page-2-a",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun mixed pending test",
+                created_at=(base_time - timedelta(days=2)).isoformat(),
+            ),
+            ApprovalRequest(
+                request_id="approval-pending-multi-page-2-b",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "old_text": "old", "new_text": "new"},
+                source="fake_runtime",
+                prompt="queue mixed pending edit",
+                created_at=(base_time - timedelta(days=1)).isoformat(),
+            ),
+        ]
+    )
+    set_session_artifact_mtime(multi_store, multi_activity_time)
+
+    return scenario
+
+
+def seed_denied_approval_rollup_scenario(
+    root: Path | str,
+    *,
+    now: datetime | None = None,
+    scenario: DeniedApprovalRollupScenario = DeniedApprovalRollupScenario(),
+    denied_count: int = MAX_RECENT_SESSIONS,
+) -> DeniedApprovalRollupScenario:
+    base_time = now or datetime.now(UTC)
+    root_path = Path(root)
+
+    for index in range(denied_count):
+        store = SessionArtifactStore(root_path, session_id=f"{scenario.denied_prefix}-{index}")
+        activity_time = base_time - timedelta(hours=index + 1)
+        denied_event = runtime_event(
+            "steering_denied",
+            "run_shell_command",
+            "Denied in the TUI",
+            data={
+                "tool_name": "run_shell_command",
+                "approval_id": f"approval-denied-page-{index}",
+                "approval_status": "denied",
+                "approval_source": "fake_runtime",
+                "remaining_pending_count": 0,
+                "command": "pytest -q",
+            },
+        )
+        denied_event.timestamp = (base_time - timedelta(hours=11 + index)).isoformat()
+        append_turn(
+            store,
+            f"deny fresh test rerun {index}",
+            created_at=activity_time.isoformat(),
+            events=[denied_event],
+        )
+        set_session_artifact_mtime(store, activity_time)
+
+    restored_store = SessionArtifactStore(root_path, session_id=scenario.restored_id)
+    restored_activity_time = base_time - timedelta(hours=9)
+    restored_event = runtime_event(
+        "steering_denied",
+        "write_file",
+        "Denied in the TUI",
+        data={
+            "tool_name": "write_file",
+            "approval_id": "approval-denied-restored-page-2",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+        },
+    )
+    restored_event.timestamp = (base_time - timedelta(days=3)).isoformat()
+    append_turn(
+        restored_store,
+        "deny restored edit",
+        created_at=restored_activity_time.isoformat(),
+        events=[restored_event],
+    )
+    set_session_artifact_mtime(restored_store, restored_activity_time)
+
+    edit_store = SessionArtifactStore(root_path, session_id=scenario.edit_id)
+    edit_activity_time = base_time - timedelta(hours=10)
+    edit_event = runtime_event(
+        "steering_denied",
+        "replace_text",
+        "Denied in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-denied-edit-page-2",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "remaining_pending_count": 0,
+        },
+    )
+    edit_event.timestamp = (base_time - timedelta(days=2)).isoformat()
+    append_turn(
+        edit_store,
+        "deny fresh edit",
+        created_at=edit_activity_time.isoformat(),
+        events=[edit_event],
+    )
+    set_session_artifact_mtime(edit_store, edit_activity_time)
+
+    return scenario
+
+
+def seed_approval_restore_rollup_scenario(
+    root: Path | str,
+    *,
+    now: datetime | None = None,
+    scenario: ApprovalRestoreRollupScenario = ApprovalRestoreRollupScenario(),
+    queue_count: int = MAX_RECENT_SESSIONS,
+) -> ApprovalRestoreRollupScenario:
+    base_time = now or datetime.now(UTC)
+    root_path = Path(root)
+
+    for index in range(queue_count):
+        store = SessionArtifactStore(root_path, session_id=f"{scenario.queue_prefix}-{index}")
+        activity_time = base_time - timedelta(hours=index + 1)
+        append_turn(
+            store,
+            f"resume restored queue {index}",
+            created_at=activity_time.isoformat(),
+        )
+        store.save_pending_approvals(
+            [
+                ApprovalRequest(
+                    request_id=f"approval-restored-queue-{index}",
+                    tool_name="run_shell_command",
+                    reason="Needs confirmation",
+                    args={"command": "pytest -q"},
+                    source="fake_runtime",
+                    prompt=f"rerun restored queue {index}",
+                    restored_from_session=True,
+                    created_at=(base_time - timedelta(days=11 + index)).isoformat(),
+                )
+            ]
+        )
+        set_session_artifact_mtime(store, activity_time)
+
+    restored_outcome_store = SessionArtifactStore(root_path, session_id=scenario.restored_outcome_id)
+    restored_outcome_activity_time = base_time - timedelta(hours=10)
+    restored_outcome_event = runtime_event(
+        "steering_approved",
+        "replace_text",
+        "Approved in the TUI",
+        data={
+            "tool_name": "replace_text",
+            "approval_id": "approval-restored-outcome-page-2",
+            "approval_status": "approved",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+            "resumed_from_approval": True,
+        },
+    )
+    restored_outcome_event.timestamp = (base_time - timedelta(hours=8)).isoformat()
+    append_turn(
+        restored_outcome_store,
+        "review restored outcome only",
+        created_at=restored_outcome_activity_time.isoformat(),
+        events=[restored_outcome_event],
+    )
+    set_session_artifact_mtime(restored_outcome_store, restored_outcome_activity_time)
+
+    mixed_store = SessionArtifactStore(root_path, session_id=scenario.mixed_id)
+    mixed_activity_time = base_time - timedelta(hours=11)
+    mixed_event = runtime_event(
+        "steering_denied",
+        "write_file",
+        "Denied in the TUI",
+        data={
+            "tool_name": "write_file",
+            "approval_id": "approval-restored-overlap-page-2-outcome",
+            "approval_status": "denied",
+            "approval_source": "fake_runtime",
+            "approval_restored": True,
+            "remaining_pending_count": 0,
+        },
+    )
+    mixed_event.timestamp = (base_time - timedelta(hours=6)).isoformat()
+    append_turn(
+        mixed_store,
+        "review mixed restored overlap",
+        created_at=mixed_activity_time.isoformat(),
+        events=[mixed_event],
+    )
+    mixed_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-restored-overlap-page-2-pending",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="rerun mixed restored tests",
+                restored_from_session=True,
+                created_at=(base_time - timedelta(days=3)).isoformat(),
+            )
+        ]
+    )
+    set_session_artifact_mtime(mixed_store, mixed_activity_time)
 
     return scenario
