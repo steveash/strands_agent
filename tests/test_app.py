@@ -1588,8 +1588,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "Restore lane focus: restore queue, restored" in approval_restore_output
         assert "approval restore tools: test 1" in approval_restore_output
         assert "approval restore tools: edit 1" in approval_restore_output
-        assert "restore focus: restore queue" in approval_restore_output
-        assert "restore focus: restored" in approval_restore_output
+        assert "restore focus: restore queue" not in approval_restore_output
+        assert "restore focus: restored" not in approval_restore_output
         assert "- restore focus: restore queue" not in approval_restore_output
         assert "- restore focus: restored" not in approval_restore_output
         assert "last restored approval:" in approval_restore_output or "restored current approval:" in approval_restore_output
@@ -1606,9 +1606,9 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
             in approval_stale_output
         )
         assert "session-aged" in approval_stale_output
-        assert "| approval stale age: 45d | stale focus: pending" in approval_stale_output
+        assert "approval stale age: pending 45d" in approval_stale_output
         assert "approval stale: pending 45d" not in approval_stale_output
-        assert "stale focus: pending" in approval_stale_output
+        assert "stale focus: pending" not in approval_stale_output
         assert (
             "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
             not in approval_stale_output
@@ -2308,7 +2308,7 @@ async def test_session_switcher_surfaces_mixed_restore_overlap_summary_and_previ
         assert "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session" in output
         assert "Restore lane focus: restore queue, restored" in output
         assert "approval restore ages: restore queue 3d; restored 6h" in output
-        assert "restore focus: restore queue, restored" in output
+        assert "restore focus: restore queue, restored" not in output
         assert "restored current: pending run_shell_command via fake_runtime; queued 1" in output
         assert "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0" in output
         assert "- restored current approval: pending run_shell_command via fake_runtime | queued 1" in output

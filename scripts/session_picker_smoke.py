@@ -385,6 +385,119 @@ def main() -> None:
             )
             mixed_pending_picker = render_session_picker(mixed_pending_root, filter_mode="pending")
 
+        with TemporaryDirectory() as pending_rollup_root:
+            pending_rollup_now = datetime.now(UTC)
+            for index in range(MAX_RECENT_SESSIONS):
+                pending_page_store = SessionArtifactStore(
+                    pending_rollup_root,
+                    session_id=f"session-pending-page-{index}",
+                )
+                pending_page_activity_time = pending_rollup_now - timedelta(hours=index + 1)
+                pending_page_store.append_turn(
+                    TurnArtifact(
+                        prompt=f"queue fresh pending approval {index}",
+                        response="ok",
+                        provider="fake-strands",
+                        mode="fake",
+                        events=[],
+                        response_metadata={"mode": "fake"},
+                        created_at=pending_page_activity_time.isoformat(),
+                    )
+                )
+                pending_page_store.save_pending_approvals(
+                    [
+                        ApprovalRequest(
+                            request_id=f"approval-pending-page-{index}",
+                            tool_name="run_shell_command",
+                            reason="Needs confirmation",
+                            args={"command": "pytest -q"},
+                            source="fake_runtime",
+                            prompt=f"rerun fresh pending test {index}",
+                            created_at=(pending_rollup_now - timedelta(days=11 + index)).isoformat(),
+                        )
+                    ]
+                )
+                set_session_artifact_mtime(pending_page_store, pending_page_activity_time)
+
+            pending_restored_store = SessionArtifactStore(
+                pending_rollup_root,
+                session_id="session-pending-restored-page-2",
+            )
+            pending_restored_activity_time = pending_rollup_now - timedelta(hours=9)
+            pending_restored_store.append_turn(
+                TurnArtifact(
+                    prompt="resume restored pending edit",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[],
+                    response_metadata={"mode": "fake"},
+                    created_at=pending_restored_activity_time.isoformat(),
+                )
+            )
+            pending_restored_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-pending-restored-page-2",
+                        tool_name="write_file",
+                        reason="Needs confirmation",
+                        args={"relative_path": "notes.txt", "overwrite": True},
+                        source="fake_runtime",
+                        prompt="resume restored edit",
+                        restored_from_session=True,
+                        created_at=(pending_rollup_now - timedelta(days=3)).isoformat(),
+                    )
+                ]
+            )
+            set_session_artifact_mtime(pending_restored_store, pending_restored_activity_time)
+
+            pending_multi_store = SessionArtifactStore(
+                pending_rollup_root,
+                session_id="session-pending-multi-page-2",
+            )
+            pending_multi_activity_time = pending_rollup_now - timedelta(hours=10)
+            pending_multi_store.append_turn(
+                TurnArtifact(
+                    prompt="queue mixed pending follow-ups",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[],
+                    response_metadata={"mode": "fake"},
+                    created_at=pending_multi_activity_time.isoformat(),
+                )
+            )
+            pending_multi_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-pending-multi-page-2-a",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="rerun mixed pending test",
+                        created_at=(pending_rollup_now - timedelta(days=2)).isoformat(),
+                    ),
+                    ApprovalRequest(
+                        request_id="approval-pending-multi-page-2-b",
+                        tool_name="write_file",
+                        reason="Needs confirmation",
+                        args={"relative_path": "notes.txt", "overwrite": True},
+                        source="fake_runtime",
+                        prompt="queue mixed pending edit",
+                        created_at=(pending_rollup_now - timedelta(days=1)).isoformat(),
+                    ),
+                ]
+            )
+            set_session_artifact_mtime(pending_multi_store, pending_multi_activity_time)
+
+            pending_rollup_picker = render_session_picker(pending_rollup_root, filter_mode="pending")
+            pending_rollup_page_two_picker = render_session_picker(
+                pending_rollup_root,
+                filter_mode="pending",
+                page_index=1,
+            )
+
         with TemporaryDirectory() as mixed_restored_root:
             mixed_restored_store = SessionArtifactStore(mixed_restored_root, session_id="session-restored-mixed")
             append_turn(mixed_restored_store, "resume mixed restored approvals")
@@ -593,6 +706,111 @@ def main() -> None:
                 page_index=1,
             )
 
+        with TemporaryDirectory() as denied_rollup_root:
+            denied_rollup_now = datetime.now(UTC)
+            for index in range(MAX_RECENT_SESSIONS):
+                denied_page_store = SessionArtifactStore(
+                    denied_rollup_root,
+                    session_id=f"session-denied-page-{index}",
+                )
+                denied_page_activity_time = denied_rollup_now - timedelta(hours=index + 1)
+                denied_page_event = runtime_event(
+                    "steering_denied",
+                    "run_shell_command",
+                    "Denied in the TUI",
+                    data={
+                        "tool_name": "run_shell_command",
+                        "approval_id": f"approval-denied-page-{index}",
+                        "approval_status": "denied",
+                        "approval_source": "fake_runtime",
+                        "remaining_pending_count": 0,
+                        "command": "pytest -q",
+                    },
+                )
+                denied_page_event.timestamp = (denied_rollup_now - timedelta(hours=11 + index)).isoformat()
+                denied_page_store.append_turn(
+                    TurnArtifact(
+                        prompt=f"deny fresh test rerun {index}",
+                        response="ok",
+                        provider="fake-strands",
+                        mode="fake",
+                        events=[denied_page_event],
+                        response_metadata={"mode": "fake"},
+                        created_at=denied_page_activity_time.isoformat(),
+                    )
+                )
+                set_session_artifact_mtime(denied_page_store, denied_page_activity_time)
+
+            denied_restored_store = SessionArtifactStore(
+                denied_rollup_root,
+                session_id="session-denied-restored-page-2",
+            )
+            denied_restored_activity_time = denied_rollup_now - timedelta(hours=9)
+            denied_restored_event = runtime_event(
+                "steering_denied",
+                "write_file",
+                "Denied in the TUI",
+                data={
+                    "tool_name": "write_file",
+                    "approval_id": "approval-denied-restored-page-2",
+                    "approval_status": "denied",
+                    "approval_source": "fake_runtime",
+                    "approval_restored": True,
+                    "remaining_pending_count": 0,
+                },
+            )
+            denied_restored_event.timestamp = (denied_rollup_now - timedelta(days=3)).isoformat()
+            denied_restored_store.append_turn(
+                TurnArtifact(
+                    prompt="deny restored edit",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[denied_restored_event],
+                    response_metadata={"mode": "fake"},
+                    created_at=denied_restored_activity_time.isoformat(),
+                )
+            )
+            set_session_artifact_mtime(denied_restored_store, denied_restored_activity_time)
+
+            denied_edit_store = SessionArtifactStore(
+                denied_rollup_root,
+                session_id="session-denied-edit-page-2",
+            )
+            denied_edit_activity_time = denied_rollup_now - timedelta(hours=10)
+            denied_edit_event = runtime_event(
+                "steering_denied",
+                "replace_text",
+                "Denied in the TUI",
+                data={
+                    "tool_name": "replace_text",
+                    "approval_id": "approval-denied-edit-page-2",
+                    "approval_status": "denied",
+                    "approval_source": "fake_runtime",
+                    "remaining_pending_count": 0,
+                },
+            )
+            denied_edit_event.timestamp = (denied_rollup_now - timedelta(days=2)).isoformat()
+            denied_edit_store.append_turn(
+                TurnArtifact(
+                    prompt="deny fresh edit",
+                    response="ok",
+                    provider="fake-strands",
+                    mode="fake",
+                    events=[denied_edit_event],
+                    response_metadata={"mode": "fake"},
+                    created_at=denied_edit_activity_time.isoformat(),
+                )
+            )
+            set_session_artifact_mtime(denied_edit_store, denied_edit_activity_time)
+
+            denied_rollup_picker = render_session_picker(denied_rollup_root, filter_mode="denied")
+            denied_rollup_page_two_picker = render_session_picker(
+                denied_rollup_root,
+                filter_mode="denied",
+                page_index=1,
+            )
+
         for index in range(8):
             store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index}")
             append_turn(store, f"page prompt {index}")
@@ -704,6 +922,16 @@ def main() -> None:
             "denied: edit 1" in denied_picker,
         )
         print(
+            "picker_denied_page_rollup=",
+            "Denied approval backlog: 10 sessions | approvals: 10 | families: test 8, edit 2 | restored denied: 1 session"
+            in denied_rollup_picker
+            and "Denied focus: fresh, restored | oldest: 3d" in denied_rollup_picker
+            and "This page denied approvals: approvals: 8 | families: test 8 | more off-page: approvals: 2 | families: edit 2 | restored denied: 1 session"
+            in denied_rollup_picker
+            and "This page denied approvals: approvals: 2 | families: edit 2 | restored denied: 1 session | more off-page: approvals: 8 | families: test 8"
+            in denied_rollup_page_two_picker,
+        )
+        print(
             "picker_restored_approval_badge=",
             "approval restore: pending 1" in approval_restore_picker and "approval restore: denied 1" in approval_restore_picker,
         )
@@ -713,10 +941,10 @@ def main() -> None:
         )
         print(
             "picker_restored_approval_age=",
-            "approval restore age: 3d" in approval_restore_picker
-            and "approval restore age: 6h" in approval_restore_picker
-            and "restore focus: restore queue" in approval_restore_picker
-            and "restore focus: restored" in approval_restore_picker,
+            "approval restore age: restore queue 3d" in approval_restore_picker
+            and "approval restore age: restored 6h" in approval_restore_picker
+            and "restore focus: restore queue" not in approval_restore_picker
+            and "restore focus: restored" not in approval_restore_picker,
         )
         print(
             "picker_restored_approval_preview_split=",
@@ -737,8 +965,11 @@ def main() -> None:
             "picker_approval_stale_filter=",
             "Filter: approval-stale | Sort: recent" in approval_stale_picker
             and "session-aged | 1 turn(s)" in approval_stale_picker
-            and "| approval stale age: 45d | stale focus: pending" in approval_stale_picker
+            and "| approval stale age: pending 45d" in approval_stale_picker
+            and "| approval stale age: 45d | stale focus: pending" not in approval_stale_picker
             and "approval stale: pending 45d" not in approval_stale_picker
+            and "- approval stale age: pending 45d" in approval_stale_picker
+            and "- stale focus: pending" not in approval_stale_picker
             and "session-restored-pending | 1 turn(s)" not in approval_stale_picker,
         )
         print(
@@ -757,11 +988,12 @@ def main() -> None:
         print(
             "picker_stale_preview_compact=",
             "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
-            not in approval_stale_picker,
+            not in approval_stale_picker
+            and "- stale focus: pending" not in approval_stale_picker,
         )
         print(
             "picker_stale_focus_rows=",
-            "stale focus: pending" in approval_stale_picker,
+            "stale focus: pending" not in approval_stale_picker,
         )
         print("picker_approval_rollup=", "approvals: pending 1, approved 1" in pending_picker)
         print("picker_row_approval_focus=", "approval focus: denied/restored" in denied_picker and "approval focus: pending" in default_picker)
@@ -843,6 +1075,16 @@ def main() -> None:
             and "- pending queue: first test; rest edit 1, tool 1" in mixed_pending_picker,
         )
         print(
+            "picker_pending_page_rollup=",
+            "Pending approval backlog: 10 sessions | approvals: 11 | families: test 9, edit 2 | multi-queue: 1 session | restored queues: 1 session"
+            in pending_rollup_picker
+            and "Pending focus: fresh, restored | oldest: 18d" in pending_rollup_picker
+            and "This page pending queues: approvals: 8 | families: test 8 | more off-page: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session"
+            in pending_rollup_picker
+            and "This page pending queues: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session | more off-page: approvals: 8 | families: test 8"
+            in pending_rollup_page_two_picker,
+        )
+        print(
             "picker_restored_pending_queue_breakdown=",
             "approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker
             and "- approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker,
@@ -856,7 +1098,7 @@ def main() -> None:
         print(
             "picker_approval_restore_overlap_preview_split=",
             "approval restore ages: restore queue 3d; restored 6h" in mixed_restored_split_picker
-            and "restore focus: restore queue, restored" in mixed_restored_split_picker
+            and "restore focus: restore queue, restored" not in mixed_restored_split_picker
             and "restored current: pending run_shell_command via fake_runtime; queued 1" in mixed_restored_split_picker
             and "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0"
             in mixed_restored_split_picker

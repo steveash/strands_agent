@@ -225,7 +225,7 @@ class SessionSummary:
             filter_mode,
             stale_focus_lanes=stale_focus_lanes,
         )
-        stale_focus_suffix = render_lane_focus_suffix("stale focus", stale_focus_lanes)
+        stale_focus_suffix = _render_stale_approval_focus_suffix(filter_mode, stale_focus_lanes)
         intervention_suffix = render_row_badges_suffix("intervention", self.intervention_badges)
         tool_hint = render_badged_row_suffix("last tool", self.last_tool_preview, self.last_tool_badges)
         tool_streak_suffix = render_row_detail_suffix(
@@ -2796,6 +2796,12 @@ def _approval_restore_age_badges(
     return badges
 
 
+def _approval_restore_single_age_transform(filter_mode: str) -> Callable[[str], str] | None:
+    if filter_mode == "approval-restore":
+        return None
+    return _approval_restore_age_label
+
+
 def _render_approval_restore_row_age_suffixes(
     summary: SessionSummary,
     filter_mode: str,
@@ -2807,15 +2813,15 @@ def _render_approval_restore_row_age_suffixes(
         default_age_suffix = f" | approval restore age: {summary.last_restored_approval_age_summary}"
 
     focus_lanes = _approval_restore_focus_lanes(summary, filter_mode)
-    focus_suffix = render_lane_focus_suffix("restore focus", focus_lanes)
     age_badges = _approval_restore_age_badges(summary, filter_mode, focus_lanes=focus_lanes)
     age_suffix = render_compact_badge_row_suffix(
         default_suffix=default_age_suffix,
         focused_badges=age_badges,
         singular_label="approval restore age",
         plural_label="approval restore ages",
-        singular_value_transform=_approval_restore_age_label,
+        singular_value_transform=_approval_restore_single_age_transform(filter_mode),
     )
+    focus_suffix = "" if filter_mode == "approval-restore" else render_lane_focus_suffix("restore focus", focus_lanes)
     return age_suffix, focus_suffix, "restored" in focus_lanes
 
 
@@ -2843,7 +2849,7 @@ def _render_approval_restore_preview_lines(
         include_focus_line=_should_render_approval_restore_focus_preview_line(filter_mode),
         singular_label="approval restore age",
         plural_label="approval restore ages",
-        singular_value_transform=_approval_restore_age_label,
+        singular_value_transform=_approval_restore_single_age_transform(filter_mode),
     )
     return lines, "restored" in focus_lanes
 
@@ -2893,6 +2899,22 @@ def _restored_outcome_preview_age_label(summary: SessionSummary) -> str:
     return "last restored age"
 
 
+def _stale_approval_single_age_transform(filter_mode: str) -> Callable[[str], str] | None:
+    if filter_mode == "approval-stale":
+        return None
+    return _stale_approval_badge_age_label
+
+
+def _render_stale_approval_focus_suffix(filter_mode: str, focus_lanes: Sequence[str]) -> str:
+    if filter_mode == "approval-stale":
+        return ""
+    return render_lane_focus_suffix("stale focus", focus_lanes)
+
+
+def _should_render_stale_focus_preview_line(filter_mode: str) -> bool:
+    return filter_mode != "approval-stale"
+
+
 def _render_stale_approval_row_suffix(
     summary: SessionSummary,
     filter_mode: str,
@@ -2906,7 +2928,7 @@ def _render_stale_approval_row_suffix(
         focused_badges=focus_badges,
         singular_label="approval stale age",
         plural_label="approval stale ages",
-        singular_value_transform=_stale_approval_badge_age_label,
+        singular_value_transform=_stale_approval_single_age_transform(filter_mode),
     )
 
 
@@ -2922,10 +2944,10 @@ def _render_stale_approval_preview_lines(summary: SessionSummary, filter_mode: s
         focused_badges=focus_badges,
         focus_lanes=focus_lanes,
         focus_label="stale focus",
-        include_focus_line=True,
+        include_focus_line=_should_render_stale_focus_preview_line(filter_mode),
         singular_label="approval stale age",
         plural_label="approval stale ages",
-        singular_value_transform=_stale_approval_badge_age_label,
+        singular_value_transform=_stale_approval_single_age_transform(filter_mode),
     )
 
 
