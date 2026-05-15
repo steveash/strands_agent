@@ -6,7 +6,6 @@ from tempfile import TemporaryDirectory
 from strands_agent_tui.runtime import ApprovalRequest, runtime_event
 from strands_agent_tui.sessions import (
     SessionArtifactStore,
-    SessionState,
     TurnArtifact,
     latest_session,
     pick_session,
@@ -20,11 +19,14 @@ from strands_agent_tui.testing import (
     seed_denied_approval_rollup_scenario,
     seed_multi_approval_queue_session,
     seed_pending_approval_rollup_scenario,
+    seed_restore_state_session,
+    seed_shell_failure_session,
     seed_shell_inspect_session,
     seed_shell_overlap_session,
     seed_shell_test_session,
     seed_stale_approval_rollup_scenario,
     seed_workspace_edit_session,
+    seed_workspace_failure_session,
     seed_workspace_inspect_session,
     seed_workspace_overlap_session,
     set_session_artifact_mtime as _shared_set_session_artifact_mtime,
@@ -144,83 +146,40 @@ def main() -> None:
 
         seed_approval_restore_focus_scenario(temp_dir)
 
-        restore_store = SessionArtifactStore(temp_dir, session_id="session-restore")
-        append_turn(restore_store, "resume the saved triage flow")
-        restore_store.save_session_state(SessionState(draft_prompt="queued follow-up"))
+        seed_restore_state_session(
+            temp_dir,
+            session_id="session-restore",
+            prompt="resume the saved triage flow",
+            response="ok",
+            draft_prompt="queued follow-up",
+        )
 
-        aged_store = SessionArtifactStore(temp_dir, session_id="session-aged")
         aged_turn_time = datetime.now(UTC) - timedelta(days=10)
-        aged_store.append_turn(
-            TurnArtifact(
-                prompt="resume the stale test queue",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[],
-                response_metadata={"mode": "fake"},
-                created_at=aged_turn_time.isoformat(),
-            )
+        seed_shell_test_session(
+            temp_dir,
+            session_id="session-aged",
+            prompt="resume the stale test queue",
+            response="ok",
+            request_id="approval-aged",
+            approval_prompt="resume old tests",
+            created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+            turn_created_at=aged_turn_time.isoformat(),
         )
-        aged_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-aged",
-                    tool_name="run_shell_command",
-                    reason="Needs confirmation",
-                    args={"command": "pytest -q"},
-                    source="fake_runtime",
-                    prompt="resume old tests",
-                    created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
-                )
-            ]
-        )
+        aged_store = SessionArtifactStore(temp_dir, session_id="session-aged")
         set_session_artifact_mtime(aged_store, aged_turn_time)
 
-        failed_test_store = SessionArtifactStore(temp_dir, session_id="session-failed-test")
-        failed_test_store.append_turn(
-            TurnArtifact(
-                prompt="run the failing test suite",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "tool_failed",
-                        "run_shell_command",
-                        "Shell test failed",
-                        data={
-                            "tool_name": "run_shell_command",
-                            "command": "pytest -q",
-                            "shell_policy": "confirm",
-                            "exit_code": 1,
-                            "result_preview": "pytest -q -> exit 1",
-                        },
-                    )
-                ],
-                response_metadata={"mode": "fake"},
-            )
+        seed_shell_failure_session(
+            temp_dir,
+            session_id="session-failed-test",
+            prompt="run the failing test suite",
+            response="ok",
         )
 
-        failed_tool_store = SessionArtifactStore(temp_dir, session_id="session-failed-tool")
-        failed_tool_store.append_turn(
-            TurnArtifact(
-                prompt="attempt the failing edit",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "tool_failed",
-                        "replace_text",
-                        "Edit failed",
-                        data={
-                            "tool_name": "replace_text",
-                            "result_preview": "replace_text notes.txt (2 occurrences)",
-                        },
-                    )
-                ],
-                response_metadata={"mode": "fake"},
-            )
+        seed_workspace_failure_session(
+            temp_dir,
+            session_id="session-failed-tool",
+            prompt="attempt the failing edit",
+            response="ok",
         )
 
         tool_store = seed_workspace_inspect_session(

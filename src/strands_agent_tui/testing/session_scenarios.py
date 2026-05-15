@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from strands_agent_tui.runtime import ApprovalRequest, runtime_event
-from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, TurnArtifact
+from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, SessionState, TurnArtifact
 
 
 @dataclass(frozen=True)
@@ -231,9 +231,10 @@ def seed_shell_test_session(
     approval_prompt: str = "run tests",
     restored_from_session: bool = False,
     created_at: str | None = None,
+    turn_created_at: str | None = None,
 ) -> SessionArtifactStore:
     store = SessionArtifactStore(Path(root), session_id=session_id)
-    append_turn(store, prompt, response=response)
+    append_turn(store, prompt, response=response, created_at=turn_created_at)
     store.save_pending_approvals(
         [
             ApprovalRequest(
@@ -282,6 +283,85 @@ def seed_shell_overlap_session(
                 prompt=approval_prompt,
             )
         ]
+    )
+    return store
+
+
+def seed_restore_state_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-restore",
+    prompt: str = "restore prompt",
+    response: str = "restore response",
+    draft_prompt: str = "draft restore",
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(store, prompt, response=response)
+    store.save_session_state(SessionState(draft_prompt=draft_prompt))
+    return store
+
+
+def seed_shell_failure_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-failed-test",
+    prompt: str = "run failing test",
+    response: str = "done",
+    command: str = "pytest -q",
+    shell_policy: str = "confirm",
+    exit_code: int = 1,
+    result_preview: str = "pytest -q -> exit 1",
+    event_message: str = "Shell test failed",
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(
+        store,
+        prompt,
+        response=response,
+        events=[
+            runtime_event(
+                "tool_failed",
+                "run_shell_command",
+                event_message,
+                data={
+                    "tool_name": "run_shell_command",
+                    "command": command,
+                    "shell_policy": shell_policy,
+                    "exit_code": exit_code,
+                    "result_preview": result_preview,
+                },
+            )
+        ],
+    )
+    return store
+
+
+def seed_workspace_failure_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-failed-tool",
+    prompt: str = "attempt failing edit",
+    response: str = "done",
+    tool_name: str = "replace_text",
+    event_message: str = "Edit failed",
+    result_preview: str = "replace_text notes.txt (2 occurrences)",
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(
+        store,
+        prompt,
+        response=response,
+        events=[
+            runtime_event(
+                "tool_failed",
+                tool_name,
+                event_message,
+                data={
+                    "tool_name": tool_name,
+                    "result_preview": result_preview,
+                },
+            )
+        ],
     )
     return store
 

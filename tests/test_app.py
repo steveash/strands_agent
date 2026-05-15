@@ -15,10 +15,17 @@ from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore
 from strands_agent_tui.sessions import SessionState
 from strands_agent_tui.sessions import save_session_picker_state
 from strands_agent_tui.testing import (
+    seed_approval_restore_focus_scenario,
     seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
     seed_multi_approval_queue_session,
+    seed_restore_state_session,
+    seed_shell_inspect_session,
+    seed_shell_overlap_session,
+    seed_shell_test_session,
     seed_stale_approval_subfilter_scenario,
+    seed_workspace_edit_session,
+    seed_workspace_inspect_session,
     set_session_artifact_mtime,
 )
 
@@ -1325,223 +1332,66 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         )
     )
 
-    pending_store = SessionArtifactStore(tmp_path, session_id="session-pending")
-    pending_store.append_turn(
-        TurnArtifact(
-            prompt="pending prompt",
-            response="pending response",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "tool_finished",
-                    "run_shell_command",
-                    "Finished shell command",
-                    data={
-                        "tool_name": "run_shell_command",
-                        "command": "git status --short",
-                        "shell_policy": "inspect",
-                        "exit_code": 0,
-                        "result_preview": "git status --short -> M README.md",
-                    },
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    pending_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0012",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="run tests",
-            )
-        ]
+    seed_shell_overlap_session(
+        tmp_path,
+        session_id="session-pending",
+        prompt="pending prompt",
+        response="pending response",
+        command="git status --short",
+        result_preview="git status --short -> M README.md",
+        request_id="approval-0012",
+        approval_prompt="run tests",
     )
 
-    pending_edit_store = SessionArtifactStore(tmp_path, session_id="session-pending-edit")
-    pending_edit_store.append_turn(
-        TurnArtifact(
-            prompt="pending edit prompt",
-            response="pending edit response",
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    pending_edit_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0012aa",
-                tool_name="write_file",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "overwrite": True},
-                source="fake_runtime",
-                prompt="queue edit",
-            )
-        ]
+    seed_workspace_edit_session(
+        tmp_path,
+        session_id="session-pending-edit",
+        prompt="pending edit prompt",
+        response="pending edit response",
+        request_id="approval-0012aa",
+        tool_name="write_file",
+        args={"relative_path": "notes.txt", "overwrite": True},
+        approval_prompt="queue edit",
     )
 
-    denied_store = SessionArtifactStore(tmp_path, session_id="session-denied")
-    denied_store.append_turn(
-        TurnArtifact(
-            prompt="deny risky edit",
-            response="skipped",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "steering_denied",
-                    "replace_text",
-                    "Denied in the TUI",
-                    data={
-                        "tool_name": "replace_text",
-                        "approval_id": "approval-0012b",
-                        "approval_status": "denied",
-                        "approval_source": "fake_runtime",
-                        "approval_restored": True,
-                        "remaining_pending_count": 0,
-                    },
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
-    )
+    seed_approval_restore_focus_scenario(tmp_path)
 
-    restored_pending_store = SessionArtifactStore(tmp_path, session_id="session-restored-pending")
-    restored_pending_store.append_turn(
-        TurnArtifact(
-            prompt="reopen restored test queue",
-            response="pending restored approval",
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
+    aged_turn_time = datetime.now(UTC) - timedelta(days=10)
+    seed_shell_test_session(
+        tmp_path,
+        session_id="session-aged",
+        prompt="resume stale test queue",
+        response="stale response",
+        request_id="approval-aged",
+        approval_prompt="resume old tests",
+        created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+        turn_created_at=aged_turn_time.isoformat(),
     )
-    restored_pending_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0012c",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="resume tests",
-                restored_from_session=True,
-            )
-        ]
-    )
-
-    restored_edit_pending_store = SessionArtifactStore(tmp_path, session_id="session-restored-edit-pending")
-    restored_edit_pending_store.append_turn(
-        TurnArtifact(
-            prompt="reopen restored edit queue",
-            response="pending restored edit approval",
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    restored_edit_pending_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-0012d",
-                tool_name="write_file",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "overwrite": True},
-                source="fake_runtime",
-                prompt="resume edit",
-                restored_from_session=True,
-            )
-        ]
-    )
-
     aged_store = SessionArtifactStore(tmp_path, session_id="session-aged")
-    aged_store.append_turn(
-        TurnArtifact(
-            prompt="resume stale test queue",
-            response="stale response",
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    aged_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-aged",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="resume old tests",
-                created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
-            )
-        ]
+    set_session_artifact_mtime(aged_store, aged_turn_time)
+
+    seed_restore_state_session(
+        tmp_path,
+        session_id="session-restore",
+        prompt="restore prompt",
+        response="restore response",
+        draft_prompt="draft restore",
     )
 
-    restore_store = SessionArtifactStore(tmp_path, session_id="session-restore")
-    restore_store.append_turn(
-        TurnArtifact(
-            prompt="restore prompt",
-            response="restore response",
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    restore_store.save_session_state(SessionState(draft_prompt="draft restore"))
-
-    tool_store = SessionArtifactStore(tmp_path, session_id="session-tool")
-    tool_store.append_turn(
-        TurnArtifact(
-            prompt="inspect workspace tool state",
-            response="tool response",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "tool_finished",
-                    "list_files",
-                    "Finished listing files",
-                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
+    seed_workspace_inspect_session(
+        tmp_path,
+        session_id="session-tool",
+        prompt="inspect workspace tool state",
+        response="tool response",
     )
 
-    shell_store = SessionArtifactStore(tmp_path, session_id="session-shell")
-    shell_store.append_turn(
-        TurnArtifact(
-            prompt="inspect shell-only repo state",
-            response="shell response",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "tool_finished",
-                    "run_shell_command",
-                    "Finished shell command",
-                    data={
-                        "tool_name": "run_shell_command",
-                        "command": "pwd",
-                        "shell_policy": "inspect",
-                        "exit_code": 0,
-                        "result_preview": "pwd -> /workspace/demo",
-                    },
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
+    seed_shell_inspect_session(
+        tmp_path,
+        session_id="session-shell",
+        prompt="inspect shell-only repo state",
+        response="shell response",
+        command="pwd",
+        result_preview="pwd -> /workspace/demo",
     )
 
     app = StrandsAgentApp(
@@ -1591,7 +1441,10 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-denied" in approval_restore_output
         assert "session-restore | 1 turn(s)" not in approval_restore_output
         assert "session-pending | 1 turn(s)" not in approval_restore_output
-        assert "Approval restore backlog: 3 sessions | lanes: restore queue 2, restored 1" in approval_restore_output
+        assert (
+            "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d), restored 1 (oldest 6h)"
+            in approval_restore_output
+        )
         assert "Restore lane focus: restore queue, restored" in approval_restore_output
         assert "approval restore tools: test 1" in approval_restore_output
         assert "approval restore tools: edit 1" in approval_restore_output
