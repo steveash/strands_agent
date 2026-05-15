@@ -20,7 +20,13 @@ from strands_agent_tui.testing import (
     seed_denied_approval_rollup_scenario,
     seed_multi_approval_queue_session,
     seed_pending_approval_rollup_scenario,
+    seed_shell_inspect_session,
+    seed_shell_overlap_session,
+    seed_shell_test_session,
     seed_stale_approval_rollup_scenario,
+    seed_workspace_edit_session,
+    seed_workspace_inspect_session,
+    seed_workspace_overlap_session,
     set_session_artifact_mtime as _shared_set_session_artifact_mtime,
 )
 
@@ -100,19 +106,14 @@ def main() -> None:
             ]
         )
 
-        pending_edit_store = SessionArtifactStore(temp_dir, session_id="session-pending-edit")
-        append_turn(pending_edit_store, "queue the risky edit")
-        pending_edit_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-0001b",
-                    tool_name="write_file",
-                    reason="Needs confirmation",
-                    args={"relative_path": "notes.txt", "overwrite": True},
-                    source="fake_runtime",
-                    prompt="queue edit",
-                )
-            ]
+        pending_edit_store = seed_workspace_edit_session(
+            temp_dir,
+            session_id="session-pending-edit",
+            prompt="queue the risky edit",
+            request_id="approval-0001b",
+            tool_name="write_file",
+            args={"relative_path": "notes.txt", "overwrite": True},
+            approval_prompt="queue edit",
         )
 
         denied_test_store = SessionArtifactStore(temp_dir, session_id="session-denied-test")
@@ -222,48 +223,18 @@ def main() -> None:
             )
         )
 
-        tool_store = SessionArtifactStore(temp_dir, session_id="session-tool")
-        tool_store.append_turn(
-            TurnArtifact(
-                prompt="list files",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "tool_finished",
-                        "list_files",
-                        "Finished listing files",
-                        data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                    )
-                ],
-                response_metadata={"mode": "fake"},
-            )
+        tool_store = seed_workspace_inspect_session(
+            temp_dir,
+            session_id="session-tool",
+            prompt="list files",
+            response="ok",
         )
 
-        inspect_store = SessionArtifactStore(temp_dir, session_id="session-inspect")
-        inspect_store.append_turn(
-            TurnArtifact(
-                prompt="inspect repo",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "tool_finished",
-                        "run_shell_command",
-                        "Finished shell command",
-                        data={
-                            "tool_name": "run_shell_command",
-                            "command": "git status --short",
-                            "shell_policy": "inspect",
-                            "exit_code": 0,
-                            "result_preview": "git status --short -> M README.md",
-                        },
-                    ),
-                ],
-                response_metadata={"mode": "fake"},
-            )
+        inspect_store = seed_shell_inspect_session(
+            temp_dir,
+            session_id="session-inspect",
+            prompt="inspect repo",
+            response="ok",
         )
 
         default_picker = render_session_picker(temp_dir)
@@ -349,6 +320,33 @@ def main() -> None:
                 page_index=1,
             )
 
+        with TemporaryDirectory() as workspace_overlap_root:
+            seed_workspace_inspect_session(workspace_overlap_root)
+            seed_workspace_overlap_session(workspace_overlap_root)
+            seed_workspace_edit_session(workspace_overlap_root)
+            workspace_overlap_inspect_picker = render_session_picker(
+                workspace_overlap_root,
+                filter_mode="workspace-inspect",
+            )
+            workspace_overlap_edit_picker = render_session_picker(
+                workspace_overlap_root,
+                filter_mode="workspace-edit",
+            )
+
+        with TemporaryDirectory() as shell_overlap_root:
+            seed_shell_inspect_session(shell_overlap_root)
+            seed_shell_overlap_session(shell_overlap_root)
+            seed_shell_test_session(shell_overlap_root)
+            shell_overlap_picker = render_session_picker(shell_overlap_root, filter_mode="shell")
+            shell_overlap_inspect_picker = render_session_picker(
+                shell_overlap_root,
+                filter_mode="shell-inspect",
+            )
+            shell_overlap_test_picker = render_session_picker(
+                shell_overlap_root,
+                filter_mode="shell-test",
+            )
+
         with TemporaryDirectory() as denied_rollup_root:
             denied_rollup_now = datetime.now(UTC)
             seed_denied_approval_rollup_scenario(denied_rollup_root, now=denied_rollup_now)
@@ -411,6 +409,16 @@ def main() -> None:
             and "session-inspect | 1 turn(s)" not in workspace_edit_picker,
         )
         print(
+            "picker_workspace_overlap_summary=",
+            "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session"
+            in workspace_overlap_inspect_picker
+            and "Workspace focus: inspect" in workspace_overlap_inspect_picker
+            and "Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session"
+            in workspace_overlap_edit_picker
+            and "Workspace focus: edit" in workspace_overlap_edit_picker
+            and "workspace lanes: inspect, edit" in workspace_overlap_inspect_picker,
+        )
+        print(
             "picker_shell_filter=",
             "Filter: shell | Sort: recent" in shell_picker
             and "Shell backlog: 6 sessions | lanes: inspect 2, test 5 | overlap: mixed 1 session" in shell_picker
@@ -457,6 +465,19 @@ def main() -> None:
             "session-pending | 1 turn(s)" in shell_inspect_picker
             and "shell lanes: inspect, test" in shell_inspect_picker
             and "shell lanes: inspect, test" in shell_test_picker,
+        )
+        print(
+            "picker_shell_overlap_summary=",
+            "Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session"
+            in shell_overlap_picker
+            and "Shell focus: inspect, test" in shell_overlap_picker
+            and "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session"
+            in shell_overlap_inspect_picker
+            and "Shell focus: inspect" in shell_overlap_inspect_picker
+            and "Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session"
+            in shell_overlap_test_picker
+            and "Shell focus: test" in shell_overlap_test_picker
+            and "shell lanes: inspect, test" in shell_overlap_inspect_picker,
         )
         print(
             "picker_denied_preview_origin=",

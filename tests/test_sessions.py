@@ -30,9 +30,15 @@ from strands_agent_tui.testing import (
     seed_denied_approval_rollup_scenario,
     seed_multi_approval_queue_session,
     seed_pending_approval_rollup_scenario,
+    seed_shell_inspect_session,
+    seed_shell_overlap_session,
+    seed_shell_test_session,
     seed_stale_approval_filter_scenario,
     seed_stale_approval_rollup_scenario,
     seed_stale_approval_subfilter_scenario,
+    seed_workspace_edit_session,
+    seed_workspace_inspect_session,
+    seed_workspace_overlap_session,
     set_session_artifact_mtime as _shared_set_session_artifact_mtime,
 )
 
@@ -255,70 +261,9 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
 
 
 def test_render_session_picker_surfaces_workspace_rollups_and_overlap(tmp_path: Path) -> None:
-    inspect_store = SessionArtifactStore(tmp_path, session_id="session-workspace-inspect")
-    inspect_store.append_turn(
-        TurnArtifact(
-            prompt="inspect files",
-            response="done",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "tool_finished",
-                    "list_files",
-                    "Finished listing files",
-                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
-    )
-
-    mixed_store = SessionArtifactStore(tmp_path, session_id="session-workspace-mixed")
-    mixed_store.append_turn(
-        TurnArtifact(
-            prompt="inspect before editing",
-            response="pending",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "tool_finished",
-                    "read_file",
-                    "Finished reading file",
-                    data={"tool_name": "read_file", "result_preview": "README.md lines 1-20"},
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    mixed_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-workspace-mixed",
-                tool_name="write_file",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "overwrite": True},
-                source="fake_runtime",
-                prompt="apply the edit",
-            )
-        ]
-    )
-
-    edit_store = SessionArtifactStore(tmp_path, session_id="session-workspace-edit")
-    _append_turn(edit_store, "queue edit")
-    edit_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-workspace-edit",
-                tool_name="replace_text",
-                reason="Needs confirmation",
-                args={"relative_path": "notes.txt", "old_text": "old", "new_text": "new"},
-                source="fake_runtime",
-                prompt="queue replace_text",
-            )
-        ]
-    )
+    seed_workspace_inspect_session(tmp_path)
+    seed_workspace_overlap_session(tmp_path)
+    seed_workspace_edit_session(tmp_path)
 
     inspect_rendered = render_session_picker(tmp_path, filter_mode="workspace-inspect")
     edit_rendered = render_session_picker(tmp_path, filter_mode="workspace-edit")
@@ -331,82 +276,9 @@ def test_render_session_picker_surfaces_workspace_rollups_and_overlap(tmp_path: 
 
 
 def test_render_session_picker_surfaces_shell_rollups_and_overlap(tmp_path: Path) -> None:
-    inspect_store = SessionArtifactStore(tmp_path, session_id="session-shell-inspect")
-    inspect_store.append_turn(
-        TurnArtifact(
-            prompt="inspect shell state",
-            response="done",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "tool_finished",
-                    "run_shell_command",
-                    "Finished shell command",
-                    data={
-                        "tool_name": "run_shell_command",
-                        "command": "git status --short",
-                        "shell_policy": "inspect",
-                        "exit_code": 0,
-                        "result_preview": "git status --short -> M README.md",
-                    },
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
-    )
-
-    mixed_store = SessionArtifactStore(tmp_path, session_id="session-shell-mixed-rollup")
-    mixed_store.append_turn(
-        TurnArtifact(
-            prompt="inspect before rerunning tests",
-            response="pending",
-            provider="fake-strands",
-            mode="fake",
-            events=[
-                runtime_event(
-                    "tool_finished",
-                    "run_shell_command",
-                    "Finished shell command",
-                    data={
-                        "tool_name": "run_shell_command",
-                        "command": "git diff --stat",
-                        "shell_policy": "inspect",
-                        "exit_code": 0,
-                        "result_preview": "git diff --stat -> README.md | 2 +-",
-                    },
-                )
-            ],
-            response_metadata={"mode": "fake"},
-        )
-    )
-    mixed_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-shell-mixed-rollup",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="rerun tests",
-            )
-        ]
-    )
-
-    test_store = SessionArtifactStore(tmp_path, session_id="session-shell-test")
-    _append_turn(test_store, "queue shell test")
-    test_store.save_pending_approvals(
-        [
-            ApprovalRequest(
-                request_id="approval-shell-test",
-                tool_name="run_shell_command",
-                reason="Needs confirmation",
-                args={"command": "pytest -q"},
-                source="fake_runtime",
-                prompt="run tests",
-            )
-        ]
-    )
+    seed_shell_inspect_session(tmp_path)
+    seed_shell_overlap_session(tmp_path)
+    seed_shell_test_session(tmp_path)
 
     shell_rendered = render_session_picker(tmp_path, filter_mode="shell")
     inspect_rendered = render_session_picker(tmp_path, filter_mode="shell-inspect")

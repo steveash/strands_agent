@@ -16,7 +16,13 @@ from strands_agent_tui.testing import (
     seed_denied_approval_rollup_scenario,
     seed_multi_approval_queue_session,
     seed_pending_approval_rollup_scenario,
+    seed_shell_inspect_session,
+    seed_shell_overlap_session,
+    seed_shell_test_session,
     seed_stale_approval_rollup_scenario,
+    seed_workspace_edit_session,
+    seed_workspace_inspect_session,
+    seed_workspace_overlap_session,
     set_session_artifact_mtime as _shared_set_session_artifact_mtime,
 )
 
@@ -125,19 +131,15 @@ async def run_smoke() -> None:
         )
         set_session_artifact_mtime(aged_store, aged_turn_time)
 
-        pending_edit_store = SessionArtifactStore(temp_dir, session_id="session-pending-edit")
-        append_turn(pending_edit_store, "queue pending edit", "queued edit response")
-        pending_edit_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-0004b",
-                    tool_name="write_file",
-                    reason="Needs confirmation",
-                    args={"relative_path": "notes.txt", "overwrite": True},
-                    source="fake_runtime",
-                    prompt="queue edit",
-                )
-            ]
+        pending_edit_store = seed_workspace_edit_session(
+            temp_dir,
+            session_id="session-pending-edit",
+            prompt="queue pending edit",
+            response="queued edit response",
+            request_id="approval-0004b",
+            tool_name="write_file",
+            args={"relative_path": "notes.txt", "overwrite": True},
+            approval_prompt="queue edit",
         )
 
         seed_approval_restore_focus_scenario(temp_dir)
@@ -189,23 +191,10 @@ async def run_smoke() -> None:
             )
         )
 
-        tool_store = SessionArtifactStore(temp_dir, session_id="session-tool")
-        tool_store.append_turn(
-            TurnArtifact(
-                prompt="list files",
-                response="done",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "tool_finished",
-                        "list_files",
-                        "Finished listing files",
-                        data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                    )
-                ],
-                response_metadata={"mode": "fake"},
-            )
+        tool_store = seed_workspace_inspect_session(
+            temp_dir,
+            session_id="session-tool",
+            prompt="list files",
         )
 
         first_app = StrandsAgentApp(
@@ -1076,6 +1065,71 @@ async def run_smoke() -> None:
                     and "This page restore lanes: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | more off-page: restore queue 8 (oldest 18d) | overlap here/off-page: mixed 1 session / none"
                     in approval_restore_rollup_second_page,
                 )
+
+    with TemporaryDirectory() as workspace_shell_overlap_root:
+        overlap_current_store = SessionArtifactStore(workspace_shell_overlap_root, session_id="session-current")
+        append_turn(overlap_current_store, "current prompt", "current response")
+
+        seed_workspace_inspect_session(workspace_shell_overlap_root)
+        seed_workspace_overlap_session(workspace_shell_overlap_root)
+        seed_workspace_edit_session(workspace_shell_overlap_root)
+        seed_shell_inspect_session(workspace_shell_overlap_root)
+        seed_shell_overlap_session(workspace_shell_overlap_root)
+        seed_shell_test_session(workspace_shell_overlap_root)
+
+        overlap_app = StrandsAgentApp(
+            runtime=FakeStrandsRuntime(),
+            config=AppConfig(
+                runtime_mode="fake",
+                openai_model="gpt-4o-mini",
+                workspace_root=".",
+                artifacts_root=workspace_shell_overlap_root,
+                session_id="session-current",
+            ),
+            artifact_store=overlap_current_store,
+        )
+
+        async with overlap_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("f11")
+            await pilot.pause()
+            await pilot.press("w")
+            await pilot.pause()
+            workspace_inspect_output = str(overlap_app.query_one("#output").render())
+            await pilot.press("e")
+            await pilot.pause()
+            workspace_edit_output = str(overlap_app.query_one("#output").render())
+            await pilot.press("h")
+            await pilot.pause()
+            shell_output = str(overlap_app.query_one("#output").render())
+            await pilot.press("i")
+            await pilot.pause()
+            shell_inspect_output = str(overlap_app.query_one("#output").render())
+            await pilot.press("y")
+            await pilot.pause()
+            shell_test_output = str(overlap_app.query_one("#output").render())
+            print(
+                "switcher_workspace_overlap_summary=",
+                "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session"
+                in workspace_inspect_output
+                and "Workspace focus: inspect" in workspace_inspect_output
+                and "Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session"
+                in workspace_edit_output
+                and "Workspace focus: edit" in workspace_edit_output
+                and "workspace lanes: inspect, edit" in workspace_inspect_output,
+            )
+            print(
+                "switcher_shell_overlap_summary=",
+                "Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session" in shell_output
+                and "Shell focus: inspect, test" in shell_output
+                and "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session"
+                in shell_inspect_output
+                and "Shell focus: inspect" in shell_inspect_output
+                and "Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session"
+                in shell_test_output
+                and "Shell focus: test" in shell_test_output
+                and "shell lanes: inspect, test" in shell_inspect_output,
+            )
 
 
 def main() -> None:

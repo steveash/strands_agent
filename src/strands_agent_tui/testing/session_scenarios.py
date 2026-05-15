@@ -88,6 +88,204 @@ def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> N
         os.utime(path, (timestamp, timestamp))
 
 
+def seed_workspace_inspect_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-workspace-inspect",
+    prompt: str = "inspect files",
+    tool_name: str = "list_files",
+    event_message: str = "Finished listing files",
+    result_preview: str = ".: README.md",
+    response: str = "done",
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(
+        store,
+        prompt,
+        response=response,
+        events=[
+            runtime_event(
+                "tool_finished",
+                tool_name,
+                event_message,
+                data={"tool_name": tool_name, "result_preview": result_preview},
+            )
+        ],
+    )
+    return store
+
+
+def seed_workspace_edit_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-workspace-edit",
+    prompt: str = "queue edit",
+    response: str = "ok",
+    request_id: str = "approval-workspace-edit",
+    tool_name: str = "replace_text",
+    args: dict[str, Any] | None = None,
+    approval_prompt: str = "queue replace_text",
+    restored_from_session: bool = False,
+    created_at: str | None = None,
+) -> SessionArtifactStore:
+    approval_args = args or {
+        "relative_path": "notes.txt",
+        "old_text": "old",
+        "new_text": "new",
+    }
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(store, prompt, response=response)
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id=request_id,
+                tool_name=tool_name,
+                reason="Needs confirmation",
+                args=approval_args,
+                source="fake_runtime",
+                prompt=approval_prompt,
+                restored_from_session=restored_from_session,
+                created_at=created_at,
+            )
+        ]
+    )
+    return store
+
+
+def seed_workspace_overlap_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-workspace-mixed",
+    prompt: str = "inspect before editing",
+    response: str = "pending",
+    tool_name: str = "read_file",
+    event_message: str = "Finished reading file",
+    result_preview: str = "README.md lines 1-20",
+    request_id: str = "approval-workspace-mixed",
+    approval_prompt: str = "apply the edit",
+) -> SessionArtifactStore:
+    store = seed_workspace_inspect_session(
+        root,
+        session_id=session_id,
+        prompt=prompt,
+        tool_name=tool_name,
+        event_message=event_message,
+        result_preview=result_preview,
+        response=response,
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id=request_id,
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt=approval_prompt,
+            )
+        ]
+    )
+    return store
+
+
+def seed_shell_inspect_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-shell-inspect",
+    prompt: str = "inspect shell state",
+    command: str = "git status --short",
+    result_preview: str = "git status --short -> M README.md",
+    response: str = "done",
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(
+        store,
+        prompt,
+        response=response,
+        events=[
+            runtime_event(
+                "tool_finished",
+                "run_shell_command",
+                "Finished shell command",
+                data={
+                    "tool_name": "run_shell_command",
+                    "command": command,
+                    "shell_policy": "inspect",
+                    "exit_code": 0,
+                    "result_preview": result_preview,
+                },
+            )
+        ],
+    )
+    return store
+
+
+def seed_shell_test_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-shell-test",
+    prompt: str = "queue shell test",
+    response: str = "ok",
+    request_id: str = "approval-shell-test",
+    command: str = "pytest -q",
+    approval_prompt: str = "run tests",
+    restored_from_session: bool = False,
+    created_at: str | None = None,
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(store, prompt, response=response)
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id=request_id,
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": command},
+                source="fake_runtime",
+                prompt=approval_prompt,
+                restored_from_session=restored_from_session,
+                created_at=created_at,
+            )
+        ]
+    )
+    return store
+
+
+def seed_shell_overlap_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-shell-mixed-rollup",
+    prompt: str = "inspect before rerunning tests",
+    response: str = "pending",
+    command: str = "git diff --stat",
+    result_preview: str = "git diff --stat -> README.md | 2 +-",
+    request_id: str = "approval-shell-mixed-rollup",
+    approval_prompt: str = "rerun tests",
+    pending_command: str = "pytest -q",
+) -> SessionArtifactStore:
+    store = seed_shell_inspect_session(
+        root,
+        session_id=session_id,
+        prompt=prompt,
+        command=command,
+        result_preview=result_preview,
+        response=response,
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id=request_id,
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": pending_command},
+                source="fake_runtime",
+                prompt=approval_prompt,
+            )
+        ]
+    )
+    return store
+
+
 def seed_multi_approval_queue_session(
     root: Path | str,
     *,
