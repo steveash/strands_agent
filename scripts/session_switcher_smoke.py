@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
@@ -9,25 +8,20 @@ from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
 from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, SessionState, TurnArtifact
+from strands_agent_tui.testing import (
+    append_turn as _shared_append_turn,
+    seed_approval_restore_focus_scenario,
+    seed_stale_approval_rollup_scenario,
+    set_session_artifact_mtime as _shared_set_session_artifact_mtime,
+)
 
 
 def append_turn(store: SessionArtifactStore, prompt: str, response: str) -> None:
-    store.append_turn(
-        TurnArtifact(
-            prompt=prompt,
-            response=response,
-            provider="fake-strands",
-            mode="fake",
-            events=[],
-            response_metadata={"mode": "fake"},
-        )
-    )
+    _shared_append_turn(store, prompt, response=response)
 
 
 def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> None:
-    timestamp = when.timestamp()
-    for path in [store.session_dir, *store.session_dir.iterdir()]:
-        os.utime(path, (timestamp, timestamp))
+    _shared_set_session_artifact_mtime(store, when)
 
 
 async def run_smoke() -> None:
@@ -141,64 +135,7 @@ async def run_smoke() -> None:
             ]
         )
 
-        denied_store = SessionArtifactStore(temp_dir, session_id="session-denied")
-        denied_event = runtime_event(
-            "steering_denied",
-            "replace_text",
-            "Denied in the TUI",
-            data={
-                "tool_name": "replace_text",
-                "approval_id": "approval-0005",
-                "approval_status": "denied",
-                "approval_source": "fake_runtime",
-                "approval_restored": True,
-                "remaining_pending_count": 0,
-            },
-        )
-        denied_event.timestamp = (datetime.now(UTC) - timedelta(hours=6, minutes=5)).isoformat()
-        denied_store.append_turn(
-            TurnArtifact(
-                prompt="deny risky edit",
-                response="skipped",
-                provider="fake-strands",
-                mode="fake",
-                events=[denied_event],
-                response_metadata={"mode": "fake"},
-            )
-        )
-
-        restored_pending_store = SessionArtifactStore(temp_dir, session_id="session-restored-pending")
-        append_turn(restored_pending_store, "resume restored test queue", "restored pending response")
-        restored_pending_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-0006",
-                    tool_name="run_shell_command",
-                    reason="Needs confirmation",
-                    args={"command": "pytest -q"},
-                    source="fake_runtime",
-                    prompt="resume tests",
-                    restored_from_session=True,
-                    created_at=(datetime.now(UTC) - timedelta(days=3, hours=2)).isoformat(),
-                )
-            ]
-        )
-
-        restored_edit_pending_store = SessionArtifactStore(temp_dir, session_id="session-restored-edit-pending")
-        append_turn(restored_edit_pending_store, "resume restored edit queue", "restored edit response")
-        restored_edit_pending_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-0006b",
-                    tool_name="write_file",
-                    reason="Needs confirmation",
-                    args={"relative_path": "notes.txt", "overwrite": True},
-                    source="fake_runtime",
-                    prompt="resume edit",
-                    restored_from_session=True,
-                )
-            ]
-        )
+        seed_approval_restore_focus_scenario(temp_dir)
 
         failed_test_store = SessionArtifactStore(temp_dir, session_id="session-failed-test")
         failed_test_store.append_turn(
@@ -982,120 +919,7 @@ async def run_smoke() -> None:
     with TemporaryDirectory() as stale_rollup_root:
         stale_current_store = SessionArtifactStore(stale_rollup_root, session_id="session-stale-current")
         append_turn(stale_current_store, "current stale rollup prompt", "current stale rollup response")
-        rollup_now = datetime.now(UTC)
-        for index in range(MAX_RECENT_SESSIONS):
-            store = SessionArtifactStore(stale_rollup_root, session_id=f"session-stale-pending-{index}")
-            activity_time = rollup_now - timedelta(minutes=index)
-            store.append_turn(
-                TurnArtifact(
-                    prompt=f"resume stale pending queue {index}",
-                    response="ok",
-                    provider="fake-strands",
-                    mode="fake",
-                    events=[],
-                    response_metadata={"mode": "fake"},
-                    created_at=activity_time.isoformat(),
-                )
-            )
-            store.save_pending_approvals(
-                [
-                    ApprovalRequest(
-                        request_id=f"approval-stale-pending-{index}",
-                        tool_name="run_shell_command",
-                        reason="Needs confirmation",
-                        args={"command": "pytest -q"},
-                        source="fake_runtime",
-                        prompt="rerun tests",
-                        created_at=(rollup_now - timedelta(days=45 + index)).isoformat(),
-                    )
-                ]
-            )
-            set_session_artifact_mtime(store, activity_time)
-
-        denied_store = SessionArtifactStore(stale_rollup_root, session_id="session-stale-denied-page-2")
-        denied_activity_time = rollup_now - timedelta(minutes=100)
-        denied_event = runtime_event(
-            "steering_denied",
-            "run_shell_command",
-            "Denied in the TUI",
-            data={
-                "tool_name": "run_shell_command",
-                "approval_id": "approval-stale-denied-page-2",
-                "approval_status": "denied",
-                "approval_source": "fake_runtime",
-                "remaining_pending_count": 0,
-                "command": "pytest -q",
-            },
-        )
-        denied_event.timestamp = (rollup_now - timedelta(days=14)).isoformat()
-        denied_store.append_turn(
-            TurnArtifact(
-                prompt="deny stale page-two test rerun",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[denied_event],
-                response_metadata={"mode": "fake"},
-                created_at=denied_activity_time.isoformat(),
-            )
-        )
-        set_session_artifact_mtime(denied_store, denied_activity_time)
-
-        restored_store = SessionArtifactStore(stale_rollup_root, session_id="session-stale-restored-page-2")
-        restored_activity_time = rollup_now - timedelta(minutes=101)
-        restored_store.append_turn(
-            TurnArtifact(
-                prompt="resume stale restored page-two queue",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[],
-                response_metadata={"mode": "fake"},
-                created_at=restored_activity_time.isoformat(),
-            )
-        )
-        restored_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-stale-restored-page-2",
-                    tool_name="write_file",
-                    reason="Needs confirmation",
-                    args={"relative_path": "notes.txt", "overwrite": True},
-                    source="fake_runtime",
-                    prompt="resume edit",
-                    restored_from_session=True,
-                    created_at=(rollup_now - timedelta(days=11)).isoformat(),
-                )
-            ]
-        )
-        restored_event = runtime_event(
-            "steering_approved",
-            "run_shell_command",
-            "Approved in the TUI",
-            data={
-                "tool_name": "run_shell_command",
-                "approval_id": "approval-stale-restored-page-2-approved",
-                "approval_status": "approved",
-                "approval_source": "fake_runtime",
-                "approval_restored": True,
-                "remaining_pending_count": 0,
-                "resumed_from_approval": True,
-                "command": "pytest -q",
-            },
-        )
-        restored_event.timestamp = (rollup_now - timedelta(days=10)).isoformat()
-        restored_store.append_turn(
-            TurnArtifact(
-                prompt="approve stale restored page-two test rerun",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[restored_event],
-                response_metadata={"mode": "fake"},
-                created_at=restored_activity_time.isoformat(),
-            )
-        )
-        set_session_artifact_mtime(restored_store, restored_activity_time)
+        seed_stale_approval_rollup_scenario(stale_rollup_root, include_restored_outcome=True)
 
         stale_rollup_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
