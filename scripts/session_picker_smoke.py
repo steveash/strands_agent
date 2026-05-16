@@ -620,8 +620,9 @@ def main() -> None:
         )
         print(
             "picker_approval_restore_overlap_summary=",
-            "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session"
-            in mixed_restored_split_picker
+            "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d @" in mixed_restored_split_picker
+            and "restored 1 (oldest 6h @" in mixed_restored_split_picker
+            and "| overlap: mixed 1 session" in mixed_restored_split_picker
             and "Restore lane focus: restore queue, restored" in mixed_restored_split_picker,
         )
         print(

@@ -2,15 +2,29 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, count_recent_sessions, list_recent_sessions
+from strands_agent_tui.sessions.picker import (
+    APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
+    _approval_restore_lane_age_seconds,
+    _approval_restore_lanes,
+    _summarize_lane_activity,
+    _summarize_shell_lanes,
+    _summarize_workspace_lanes,
+)
 from strands_agent_tui.testing import (
+    seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
     seed_denied_approval_rollup_scenario,
     seed_pending_approval_rollup_scenario,
     seed_restore_state_session,
     seed_shell_failure_session,
+    seed_shell_inspect_session,
+    seed_shell_overlap_session,
     seed_shell_test_session,
     seed_stale_approval_rollup_scenario,
+    seed_workspace_edit_session,
     seed_workspace_failure_session,
+    seed_workspace_inspect_session,
+    seed_workspace_overlap_session,
     set_session_artifact_mtime,
 )
 
@@ -146,6 +160,113 @@ def test_seed_shell_test_session_and_artifact_mtime_support_stale_turn_scenarios
     assert "approval stale: pending 45d" in rendered
     assert "stale: warning 10d" in rendered
     assert "attention: pending test" in rendered
+
+
+def test_seed_approval_restore_overlap_session_persists_lane_counts_and_age_rollups(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    store = seed_approval_restore_overlap_session(tmp_path, now=now)
+
+    summary = _summary_by_id(tmp_path, store.session_id, filter_mode="approval-restore")
+    rollup = _summarize_lane_activity(
+        [summary],
+        display_order=APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
+        lane_getter=_approval_restore_lanes,
+        age_getter=_approval_restore_lane_age_seconds,
+        include_mixed_count=True,
+    )
+
+    assert len(store.load_pending_approvals()) == 1
+    assert store.load_pending_approvals()[0].restored_from_session is True
+    assert len(store.load_turns()[-1].events) == 1
+    assert store.load_turns()[-1].events[0].data["approval_restored"] is True
+    assert summary.restored_pending_approval_age_summary == "3d"
+    assert summary.last_restored_outcome_age_summary == "6h"
+    assert summary.restored_approval_badges == ["pending 1", "denied 1"]
+    assert summary.restored_approval_tool_badges == ["test 1", "edit 1"]
+    assert rollup.lane_counts == {"restore queue": 1, "restored": 1}
+    assert rollup.lane_oldest_ages == {
+        "restore queue": int(timedelta(days=3, hours=2).total_seconds()),
+        "restored": int(timedelta(hours=6, minutes=5).total_seconds()),
+    }
+    assert rollup.mixed_count == 1
+    assert "approval restore ages: restore queue 3d; restored 6h" in summary.render_line(
+        1, filter_mode="approval-restore"
+    )
+
+
+def test_seed_workspace_overlap_session_persists_workspace_lane_overlap_rollups(tmp_path: Path) -> None:
+    seed_workspace_inspect_session(tmp_path)
+    overlap_store = seed_workspace_overlap_session(tmp_path)
+    seed_workspace_edit_session(tmp_path)
+
+    inspect_summaries = list_recent_sessions(
+        tmp_path,
+        filter_mode="workspace-inspect",
+        limit=count_recent_sessions(tmp_path, filter_mode="workspace-inspect"),
+    )
+    edit_summaries = list_recent_sessions(
+        tmp_path,
+        filter_mode="workspace-edit",
+        limit=count_recent_sessions(tmp_path, filter_mode="workspace-edit"),
+    )
+    overlap_summary = _summary_by_id(tmp_path, overlap_store.session_id, filter_mode="workspace-inspect")
+
+    assert {summary.session_id for summary in inspect_summaries} == {
+        overlap_store.session_id,
+        "session-workspace-inspect",
+    }
+    assert {summary.session_id for summary in edit_summaries} == {
+        overlap_store.session_id,
+        "session-workspace-edit",
+    }
+    assert _summarize_workspace_lanes(inspect_summaries) == ({"inspect": 2, "edit": 1}, 1)
+    assert _summarize_workspace_lanes(edit_summaries) == ({"inspect": 1, "edit": 2}, 1)
+    assert overlap_summary.has_workspace_inspect_activity is True
+    assert overlap_summary.has_workspace_edit_activity is True
+    assert "workspace lanes: inspect, edit" in overlap_summary.render_line(1)
+
+
+def test_seed_shell_overlap_session_persists_shell_lane_overlap_rollups(tmp_path: Path) -> None:
+    seed_shell_inspect_session(tmp_path)
+    overlap_store = seed_shell_overlap_session(tmp_path)
+    seed_shell_test_session(tmp_path)
+
+    shell_summaries = list_recent_sessions(
+        tmp_path,
+        filter_mode="shell",
+        limit=count_recent_sessions(tmp_path, filter_mode="shell"),
+    )
+    inspect_summaries = list_recent_sessions(
+        tmp_path,
+        filter_mode="shell-inspect",
+        limit=count_recent_sessions(tmp_path, filter_mode="shell-inspect"),
+    )
+    test_summaries = list_recent_sessions(
+        tmp_path,
+        filter_mode="shell-test",
+        limit=count_recent_sessions(tmp_path, filter_mode="shell-test"),
+    )
+    overlap_summary = _summary_by_id(tmp_path, overlap_store.session_id, filter_mode="shell")
+
+    assert {summary.session_id for summary in shell_summaries} == {
+        overlap_store.session_id,
+        "session-shell-test",
+        "session-shell-inspect",
+    }
+    assert {summary.session_id for summary in inspect_summaries} == {
+        overlap_store.session_id,
+        "session-shell-inspect",
+    }
+    assert {summary.session_id for summary in test_summaries} == {
+        overlap_store.session_id,
+        "session-shell-test",
+    }
+    assert _summarize_shell_lanes(shell_summaries) == ({"inspect": 2, "test": 2}, 1)
+    assert _summarize_shell_lanes(inspect_summaries) == ({"inspect": 2, "test": 1}, 1)
+    assert _summarize_shell_lanes(test_summaries) == ({"inspect": 1, "test": 2}, 1)
+    assert overlap_summary.has_shell_inspect_activity is True
+    assert overlap_summary.has_shell_test_activity is True
+    assert "shell lanes: inspect, test" in overlap_summary.render_line(1)
 
 
 def test_seed_pending_approval_rollup_scenario_persists_page_two_queue_counts_and_ages(tmp_path: Path) -> None:

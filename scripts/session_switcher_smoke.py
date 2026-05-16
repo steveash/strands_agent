@@ -965,8 +965,9 @@ async def run_smoke() -> None:
                 mixed_overlap_output = str(mixed_overlap_app.query_one("#output").render())
                 print(
                     "switcher_approval_restore_overlap_summary=",
-                    "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session"
-                    in mixed_overlap_output
+                    "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d @" in mixed_overlap_output
+                    and "restored 1 (oldest 6h @" in mixed_overlap_output
+                    and "| overlap: mixed 1 session" in mixed_overlap_output
                     and "Restore lane focus: restore queue, restored" in mixed_overlap_output,
                 )
                 print(
