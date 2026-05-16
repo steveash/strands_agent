@@ -342,8 +342,8 @@ def main() -> None:
             and "session-restored-pending" in approval_restore_picker
             and "session-restored-edit-pending" in approval_restore_picker
             and "session-denied" in approval_restore_picker
-            and "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d), restored 1 (oldest 6h)"
-            in approval_restore_picker
+            and "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d @" in approval_restore_picker
+            and "restored 1 (oldest 6h @" in approval_restore_picker
             and "Restore lane focus: restore queue, restored" in approval_restore_picker
             and "session-restore | 1 turn(s)" not in approval_restore_picker,
         )
@@ -639,12 +639,17 @@ def main() -> None:
         )
         print(
             "picker_approval_restore_page_rollup=",
-            "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 (oldest 8h) | overlap: mixed 1 session"
-            in approval_restore_rollup_picker
-            and "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
-            in approval_restore_rollup_picker
-            and "This page restore lanes: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | more off-page: restore queue 8 (oldest 18d) | overlap here/off-page: mixed 1 session / none"
-            in approval_restore_rollup_page_two_picker,
+            "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d @" in approval_restore_rollup_picker
+            and "restored 2 (oldest 8h @" in approval_restore_rollup_picker
+            and "| overlap: mixed 1 session" in approval_restore_rollup_picker
+            and "This page restore lanes: restore queue 8 (oldest 18d @" in approval_restore_rollup_picker
+            and "more off-page: restore queue 1 (oldest 3d @" in approval_restore_rollup_picker
+            and "restored 2 (oldest 8h @" in approval_restore_rollup_picker
+            and "overlap here/off-page: none / mixed 1 session" in approval_restore_rollup_picker
+            and "This page restore lanes: restore queue 1 (oldest 3d @" in approval_restore_rollup_page_two_picker
+            and "restored 2 (oldest 8h @" in approval_restore_rollup_page_two_picker
+            and "more off-page: restore queue 8 (oldest 18d @" in approval_restore_rollup_page_two_picker
+            and "overlap here/off-page: mixed 1 session / none" in approval_restore_rollup_page_two_picker,
         )
         print(
             "picker_denied_test_attention=",

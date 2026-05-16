@@ -1,8 +1,11 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from strands_agent_tui.sessions import SessionArtifactStore, list_recent_sessions
+from strands_agent_tui.sessions import MAX_RECENT_SESSIONS, SessionArtifactStore, count_recent_sessions, list_recent_sessions
 from strands_agent_tui.testing import (
+    seed_approval_restore_rollup_scenario,
+    seed_denied_approval_rollup_scenario,
+    seed_pending_approval_rollup_scenario,
     seed_restore_state_session,
     seed_shell_failure_session,
     seed_shell_test_session,
@@ -11,8 +14,13 @@ from strands_agent_tui.testing import (
 )
 
 
-def _summary_by_id(root: Path, session_id: str):
-    return next(summary for summary in list_recent_sessions(root) if summary.session_id == session_id)
+def _summary_by_id(root: Path, session_id: str, *, filter_mode: str = "all"):
+    summaries = list_recent_sessions(
+        root,
+        filter_mode=filter_mode,
+        limit=count_recent_sessions(root, filter_mode=filter_mode),
+    )
+    return next(summary for summary in summaries if summary.session_id == session_id)
 
 
 def test_seed_restore_state_session_persists_restore_state_and_summary(tmp_path: Path) -> None:
@@ -137,3 +145,93 @@ def test_seed_shell_test_session_and_artifact_mtime_support_stale_turn_scenarios
     assert "approval stale: pending 45d" in rendered
     assert "stale: warning 10d" in rendered
     assert "attention: pending test" in rendered
+
+
+def test_seed_pending_approval_rollup_scenario_persists_page_two_queue_counts_and_ages(tmp_path: Path) -> None:
+    now = datetime(2026, 5, 16, tzinfo=UTC)
+    scenario = seed_pending_approval_rollup_scenario(tmp_path, now=now)
+
+    total = count_recent_sessions(tmp_path, filter_mode="pending")
+    page_two = list_recent_sessions(
+        tmp_path,
+        filter_mode="pending",
+        limit=MAX_RECENT_SESSIONS,
+        offset=MAX_RECENT_SESSIONS,
+    )
+    restored_store = SessionArtifactStore(tmp_path, session_id=scenario.restored_id)
+    multi_store = SessionArtifactStore(tmp_path, session_id=scenario.multi_id)
+    restored_summary = _summary_by_id(tmp_path, scenario.restored_id, filter_mode="pending")
+    multi_summary = _summary_by_id(tmp_path, scenario.multi_id, filter_mode="pending")
+
+    assert total == MAX_RECENT_SESSIONS + 2
+    assert [summary.session_id for summary in page_two] == [scenario.restored_id, scenario.multi_id]
+    assert len(restored_store.load_pending_approvals()) == 1
+    assert restored_store.load_pending_approvals()[0].restored_from_session is True
+    assert restored_summary.pending_approval_count == 1
+    assert restored_summary.pending_approval_age_summary == "3d"
+    assert restored_summary.restored_pending_approval_age_summary == "3d"
+    assert restored_summary.restored_approval_badges == ["pending 1"]
+    assert len(multi_store.load_pending_approvals()) == 2
+    assert multi_summary.pending_approval_count == 2
+    assert multi_summary.pending_approval_age_summary == "oldest 2d"
+    assert multi_summary.pending_approval_queue_summary == "first test; rest edit 1"
+    assert "pending: 2 approvals (first test; rest edit 1)" in multi_summary.render_line(1)
+
+
+def test_seed_denied_approval_rollup_scenario_persists_page_two_denial_counts_and_ages(tmp_path: Path) -> None:
+    now = datetime(2026, 5, 16, tzinfo=UTC)
+    scenario = seed_denied_approval_rollup_scenario(tmp_path, now=now)
+
+    total = count_recent_sessions(tmp_path, filter_mode="denied")
+    page_two = list_recent_sessions(
+        tmp_path,
+        filter_mode="denied",
+        limit=MAX_RECENT_SESSIONS,
+        offset=MAX_RECENT_SESSIONS,
+    )
+    restored_store = SessionArtifactStore(tmp_path, session_id=scenario.restored_id)
+    edit_store = SessionArtifactStore(tmp_path, session_id=scenario.edit_id)
+    restored_summary = _summary_by_id(tmp_path, scenario.restored_id, filter_mode="denied")
+    edit_summary = _summary_by_id(tmp_path, scenario.edit_id, filter_mode="denied")
+
+    assert total == MAX_RECENT_SESSIONS + 2
+    assert [summary.session_id for summary in page_two] == [scenario.restored_id, scenario.edit_id]
+    assert restored_store.load_turns()[-1].events[0].data["approval_restored"] is True
+    assert restored_summary.last_denied_approval_age_summary == "3d"
+    assert restored_summary.last_restored_outcome_age_summary == "3d"
+    assert restored_summary.restored_approval_badges == ["denied 1"]
+    assert edit_store.load_turns()[-1].events[0].data.get("approval_restored") is not True
+    assert edit_summary.last_denied_approval_age_summary == "2d"
+    assert "denied: edit 1" in edit_summary.render_line(1)
+
+
+def test_seed_approval_restore_rollup_scenario_persists_page_two_restore_counts_and_ages(tmp_path: Path) -> None:
+    now = datetime(2026, 5, 16, tzinfo=UTC)
+    scenario = seed_approval_restore_rollup_scenario(tmp_path, now=now)
+
+    total = count_recent_sessions(tmp_path, filter_mode="approval-restore")
+    page_two = list_recent_sessions(
+        tmp_path,
+        filter_mode="approval-restore",
+        limit=MAX_RECENT_SESSIONS,
+        offset=MAX_RECENT_SESSIONS,
+    )
+    outcome_store = SessionArtifactStore(tmp_path, session_id=scenario.restored_outcome_id)
+    mixed_store = SessionArtifactStore(tmp_path, session_id=scenario.mixed_id)
+    queue_tail_summary = _summary_by_id(tmp_path, f"{scenario.queue_prefix}-7", filter_mode="approval-restore")
+    outcome_summary = _summary_by_id(tmp_path, scenario.restored_outcome_id, filter_mode="approval-restore")
+    mixed_summary = _summary_by_id(tmp_path, scenario.mixed_id, filter_mode="approval-restore")
+
+    assert total == MAX_RECENT_SESSIONS + 2
+    assert [summary.session_id for summary in page_two] == [scenario.restored_outcome_id, scenario.mixed_id]
+    assert len(outcome_store.load_turns()[-1].events) == 1
+    assert outcome_summary.last_restored_outcome_age_summary == "12h"
+    assert outcome_summary.restored_approval_badges == ["approved 1"]
+    assert queue_tail_summary.restored_pending_approval_age_summary == "18d"
+    assert len(mixed_store.load_pending_approvals()) == 1
+    assert mixed_store.load_pending_approvals()[0].restored_from_session is True
+    assert mixed_summary.restored_pending_approval_age_summary == "3d"
+    assert mixed_summary.last_restored_outcome_age_summary == "10h"
+    assert mixed_summary.restored_approval_badges == ["pending 1", "denied 1"]
+    assert mixed_summary.restored_approval_tool_badges == ["test 1", "edit 1"]
+    assert "approval restore ages: restore queue 3d; restored 10h" in mixed_summary.render_line(1, filter_mode="approval-restore")

@@ -1011,12 +1011,17 @@ async def run_smoke() -> None:
                 approval_restore_rollup_second_page = str(approval_restore_rollup_app.query_one("#output").render())
                 print(
                     "switcher_approval_restore_page_rollup=",
-                    "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 (oldest 8h) | overlap: mixed 1 session"
-                    in approval_restore_rollup_first_page
-                    and "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
-                    in approval_restore_rollup_first_page
-                    and "This page restore lanes: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | more off-page: restore queue 8 (oldest 18d) | overlap here/off-page: mixed 1 session / none"
-                    in approval_restore_rollup_second_page,
+                    "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d @" in approval_restore_rollup_first_page
+                    and "restored 2 (oldest 8h @" in approval_restore_rollup_first_page
+                    and "| overlap: mixed 1 session" in approval_restore_rollup_first_page
+                    and "This page restore lanes: restore queue 8 (oldest 18d @" in approval_restore_rollup_first_page
+                    and "more off-page: restore queue 1 (oldest 3d @" in approval_restore_rollup_first_page
+                    and "restored 2 (oldest 8h @" in approval_restore_rollup_first_page
+                    and "overlap here/off-page: none / mixed 1 session" in approval_restore_rollup_first_page
+                    and "This page restore lanes: restore queue 1 (oldest 3d @" in approval_restore_rollup_second_page
+                    and "restored 2 (oldest 8h @" in approval_restore_rollup_second_page
+                    and "more off-page: restore queue 8 (oldest 18d @" in approval_restore_rollup_second_page
+                    and "overlap here/off-page: mixed 1 session / none" in approval_restore_rollup_second_page,
                 )
 
     with TemporaryDirectory() as workspace_shell_overlap_root:
