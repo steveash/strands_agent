@@ -697,10 +697,14 @@ def main() -> None:
             )
             print(
                 "picker_approval_stale_page_rollup=",
-                "This page stale lanes: pending 8 (oldest 52d) | more off-page: denied 1 (oldest 14d), restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
-                in stale_rollup_picker
-                and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d), restored 1 (oldest 10d) | more off-page: pending 8 (oldest 52d)"
-                in stale_rollup_page_two_picker,
+                "This page stale lanes: pending 8 (oldest 52d @" in stale_rollup_picker
+                and "more off-page: denied 1 (oldest 14d @" in stale_rollup_picker
+                and "restore queue 1 (oldest 11d @" in stale_rollup_picker
+                and "restored 1 (oldest 10d @" in stale_rollup_picker
+                and "This page stale lanes: denied 1 (oldest 14d @" in stale_rollup_page_two_picker
+                and "restore queue 1 (oldest 11d @" in stale_rollup_page_two_picker
+                and "restored 1 (oldest 10d @" in stale_rollup_page_two_picker
+                and "more off-page: pending 8 (oldest 52d @" in stale_rollup_page_two_picker,
             )
             print(
                 "picker_approval_stale_pending_filter=",

@@ -9,6 +9,7 @@ from strands_agent_tui.testing import (
     seed_restore_state_session,
     seed_shell_failure_session,
     seed_shell_test_session,
+    seed_stale_approval_rollup_scenario,
     seed_workspace_failure_session,
     set_session_artifact_mtime,
 )
@@ -148,7 +149,7 @@ def test_seed_shell_test_session_and_artifact_mtime_support_stale_turn_scenarios
 
 
 def test_seed_pending_approval_rollup_scenario_persists_page_two_queue_counts_and_ages(tmp_path: Path) -> None:
-    now = datetime(2026, 5, 16, tzinfo=UTC)
+    now = datetime.now(UTC)
     scenario = seed_pending_approval_rollup_scenario(tmp_path, now=now)
 
     total = count_recent_sessions(tmp_path, filter_mode="pending")
@@ -179,7 +180,7 @@ def test_seed_pending_approval_rollup_scenario_persists_page_two_queue_counts_an
 
 
 def test_seed_denied_approval_rollup_scenario_persists_page_two_denial_counts_and_ages(tmp_path: Path) -> None:
-    now = datetime(2026, 5, 16, tzinfo=UTC)
+    now = datetime.now(UTC)
     scenario = seed_denied_approval_rollup_scenario(tmp_path, now=now)
 
     total = count_recent_sessions(tmp_path, filter_mode="denied")
@@ -206,7 +207,7 @@ def test_seed_denied_approval_rollup_scenario_persists_page_two_denial_counts_an
 
 
 def test_seed_approval_restore_rollup_scenario_persists_page_two_restore_counts_and_ages(tmp_path: Path) -> None:
-    now = datetime(2026, 5, 16, tzinfo=UTC)
+    now = datetime.now(UTC)
     scenario = seed_approval_restore_rollup_scenario(tmp_path, now=now)
 
     total = count_recent_sessions(tmp_path, filter_mode="approval-restore")
@@ -225,13 +226,57 @@ def test_seed_approval_restore_rollup_scenario_persists_page_two_restore_counts_
     assert total == MAX_RECENT_SESSIONS + 2
     assert [summary.session_id for summary in page_two] == [scenario.restored_outcome_id, scenario.mixed_id]
     assert len(outcome_store.load_turns()[-1].events) == 1
-    assert outcome_summary.last_restored_outcome_age_summary == "12h"
+    assert outcome_summary.last_restored_outcome_age_summary == "8h"
     assert outcome_summary.restored_approval_badges == ["approved 1"]
     assert queue_tail_summary.restored_pending_approval_age_summary == "18d"
     assert len(mixed_store.load_pending_approvals()) == 1
     assert mixed_store.load_pending_approvals()[0].restored_from_session is True
     assert mixed_summary.restored_pending_approval_age_summary == "3d"
-    assert mixed_summary.last_restored_outcome_age_summary == "10h"
+    assert mixed_summary.last_restored_outcome_age_summary == "6h"
     assert mixed_summary.restored_approval_badges == ["pending 1", "denied 1"]
     assert mixed_summary.restored_approval_tool_badges == ["test 1", "edit 1"]
-    assert "approval restore ages: restore queue 3d; restored 10h" in mixed_summary.render_line(1, filter_mode="approval-restore")
+    assert "approval restore ages: restore queue 3d; restored 6h" in mixed_summary.render_line(1, filter_mode="approval-restore")
+
+
+
+def test_seed_stale_approval_rollup_scenario_persists_page_two_stale_counts_and_ages(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    scenario = seed_stale_approval_rollup_scenario(tmp_path, now=now, include_restored_outcome=True)
+
+    stale_total = count_recent_sessions(tmp_path, filter_mode="approval-stale")
+    pending_total = count_recent_sessions(tmp_path, filter_mode="approval-stale-pending")
+    denied_total = count_recent_sessions(tmp_path, filter_mode="approval-stale-denied")
+    restored_total = count_recent_sessions(tmp_path, filter_mode="approval-stale-restored")
+    page_two = list_recent_sessions(
+        tmp_path,
+        filter_mode="approval-stale",
+        limit=MAX_RECENT_SESSIONS,
+        offset=MAX_RECENT_SESSIONS,
+    )
+    denied_store = SessionArtifactStore(tmp_path, session_id=scenario.denied_id)
+    restored_store = SessionArtifactStore(tmp_path, session_id=scenario.restored_id)
+    newest_pending_summary = _summary_by_id(tmp_path, f"{scenario.pending_prefix}-0", filter_mode="approval-stale")
+    oldest_pending_summary = _summary_by_id(tmp_path, f"{scenario.pending_prefix}-7", filter_mode="approval-stale")
+    denied_summary = _summary_by_id(tmp_path, scenario.denied_id, filter_mode="approval-stale")
+    restored_summary = _summary_by_id(tmp_path, scenario.restored_id, filter_mode="approval-stale")
+
+    assert stale_total == MAX_RECENT_SESSIONS + 2
+    assert pending_total == MAX_RECENT_SESSIONS
+    assert denied_total == 1
+    assert restored_total == 1
+    assert [summary.session_id for summary in page_two] == [scenario.denied_id, scenario.restored_id]
+    assert len(denied_store.load_turns()[-1].events) == 1
+    assert len(restored_store.load_pending_approvals()) == 1
+    assert restored_store.load_pending_approvals()[0].restored_from_session is True
+    assert len(restored_store.load_turns()[-1].events) == 1
+    assert newest_pending_summary.pending_approval_age_summary == "45d"
+    assert oldest_pending_summary.pending_approval_age_summary == "52d"
+    assert denied_summary.last_denied_approval_age_summary == "14d"
+    assert restored_summary.pending_approval_age_summary == "11d"
+    assert restored_summary.restored_pending_approval_age_summary == "11d"
+    assert restored_summary.last_restored_outcome_age_summary == "10d"
+    assert restored_summary.restored_approval_badges == ["pending 1", "approved 1"]
+    assert "approval stale age: denied 14d" in denied_summary.render_line(1, filter_mode="approval-stale")
+    assert "approval stale ages: restore queue 11d; restored 10d" in restored_summary.render_line(
+        1, filter_mode="approval-stale"
+    )

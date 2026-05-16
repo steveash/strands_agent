@@ -696,10 +696,14 @@ async def run_smoke() -> None:
             stale_rollup_second_page = str(stale_rollup_app.query_one("#output").render())
             print(
                 "switcher_approval_stale_page_rollup=",
-                "This page stale lanes: pending 8 (oldest 52d) | more off-page: denied 1 (oldest 14d), restore queue 1 (oldest 11d), restored 1 (oldest 10d)"
-                in stale_rollup_first_page
-                and "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d), restored 1 (oldest 10d) | more off-page: pending 8 (oldest 52d)"
-                in stale_rollup_second_page,
+                "This page stale lanes: pending 8 (oldest 52d @" in stale_rollup_first_page
+                and "more off-page: denied 1 (oldest 14d @" in stale_rollup_first_page
+                and "restore queue 1 (oldest 11d @" in stale_rollup_first_page
+                and "restored 1 (oldest 10d @" in stale_rollup_first_page
+                and "This page stale lanes: denied 1 (oldest 14d @" in stale_rollup_second_page
+                and "restore queue 1 (oldest 11d @" in stale_rollup_second_page
+                and "restored 1 (oldest 10d @" in stale_rollup_second_page
+                and "more off-page: pending 8 (oldest 52d @" in stale_rollup_second_page,
             )
             await pilot.press("q")
             await pilot.pause()
