@@ -808,13 +808,27 @@ def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: P
         )
     )
 
+    summaries = list_recent_sessions(tmp_path, filter_mode="intervention")
+    by_id = {summary.session_id: summary for summary in summaries}
     rendered = render_session_picker(tmp_path, filter_mode="intervention")
 
     assert "Filter: intervention | Sort: recent" in rendered
+    assert "Intervention backlog: 4 sessions | lanes:" in rendered
     assert (
-        "Intervention backlog: 4 sessions | lanes: pending 1 (oldest 2d), blocked 1, approved 1, denied 1 (oldest 6h), restored 2 (oldest 2d) | overlap: mixed 2 sessions"
+        f"pending 1 (oldest 2d @ {by_id['session-intervention-pending'].pending_approval_oldest_at})"
         in rendered
     )
+    assert "blocked 1" in rendered
+    assert "approved 1" in rendered
+    assert (
+        f"denied 1 (oldest 6h @ {by_id['session-intervention-denied'].last_denied_approval_at})"
+        in rendered
+    )
+    assert (
+        f"restored 2 (oldest 2d @ {by_id['session-intervention-pending'].restored_pending_approval_oldest_at})"
+        in rendered
+    )
+    assert "overlap: mixed 2 sessions" in rendered
     assert "Intervention focus: pending, blocked, approved, denied, restored" in rendered
     assert "session-intervention-pending" in rendered
     assert "session-intervention-blocked" in rendered
@@ -943,10 +957,14 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     stale_by_id = {summary.session_id: summary for summary in stale_summaries}
     rendered = render_session_picker(tmp_path, filter_mode="approval-stale")
 
+    pending_summary = stale_by_id[scenario.pending_id]
+    denied_summary = stale_by_id[scenario.denied_id]
+    restored_summary = stale_by_id[scenario.restored_id]
+
     assert set(stale_by_id) == {scenario.pending_id, scenario.denied_id, scenario.restored_id}
-    assert stale_by_id[scenario.pending_id].stale_approval_badges == ["pending 45d"]
-    assert stale_by_id[scenario.denied_id].stale_approval_badges == ["denied 9d"]
-    assert stale_by_id[scenario.restored_id].stale_approval_badges == ["restore queue 8d", "restored 10d"]
+    assert pending_summary.stale_approval_badges == ["pending 45d"]
+    assert denied_summary.stale_approval_badges == ["denied 9d"]
+    assert restored_summary.stale_approval_badges == ["restore queue 8d", "restored 10d"]
     assert "approval stale: pending 45d" in stale_by_id[scenario.pending_id].render_line(1)
     stale_pending_line = stale_by_id[scenario.pending_id].render_line(1, filter_mode="approval-stale")
     assert "approval stale age: pending 45d" in stale_pending_line
@@ -978,10 +996,17 @@ def test_stale_approval_filter_surfaces_old_pending_denied_and_restored_approval
     assert "- stale focus:" not in stale_restored_preview
     assert "- approval stale ages: restore queue 8d; restored 10d" in stale_restored_preview
     assert "- approval stale: restore queue 8d, restored 10d" not in stale_restored_preview
+    assert f"- pending at: {restored_summary.pending_approval_oldest_at}" in stale_restored_preview
+    assert f"- approval restore at: {restored_summary.restored_pending_approval_oldest_at}" in stale_restored_preview
+    assert f"- latest restored outcome at: {restored_summary.last_restored_outcome_at}" in stale_restored_preview
+    assert "Stale approval backlog: 3 sessions | lanes:" in rendered
+    assert f"pending 1 (oldest 45d @ {pending_summary.pending_approval_oldest_at})" in rendered
+    assert f"denied 1 (oldest 9d @ {denied_summary.last_denied_approval_at})" in rendered
     assert (
-        "Stale approval backlog: 3 sessions | lanes: pending 1 (oldest 45d), denied 1 (oldest 9d), "
-        "restore queue 1 (oldest 8d), restored 1 (oldest 10d)"
-    ) in rendered
+        f"restore queue 1 (oldest 8d @ {restored_summary.restored_pending_approval_oldest_at})"
+        in rendered
+    )
+    assert f"restored 1 (oldest 10d @ {restored_summary.last_restored_outcome_at})" in rendered
     assert (
         "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
         in rendered
@@ -995,19 +1020,17 @@ def test_stale_approval_filter_summarizes_current_page_and_off_page_lanes(tmp_pa
     first_page = render_session_picker(tmp_path, filter_mode="approval-stale")
     second_page = render_session_picker(tmp_path, filter_mode="approval-stale", page_index=1)
 
-    assert (
-        "Stale approval backlog: 10 sessions | lanes: pending 8 (oldest 52d), denied 1 (oldest 14d), "
-        "restore queue 1 (oldest 11d)"
-    ) in first_page
-    assert (
-        "This page stale lanes: pending 8 (oldest 52d) | more off-page: denied 1 (oldest 14d), "
-        "restore queue 1 (oldest 11d)"
-    ) in first_page
+    assert "Stale approval backlog: 10 sessions | lanes:" in first_page
+    assert "pending 8 (oldest 52d @" in first_page
+    assert "denied 1 (oldest 14d @" in first_page
+    assert "restore queue 1 (oldest 11d @" in first_page
+    assert "This page stale lanes: pending 8 (oldest 52d @" in first_page
+    assert "more off-page: denied 1 (oldest 14d @" in first_page
+    assert "restore queue 1 (oldest 11d @" in first_page
     assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
-    assert (
-        "This page stale lanes: denied 1 (oldest 14d), restore queue 1 (oldest 11d) | more off-page: "
-        "pending 8 (oldest 52d)"
-    ) in second_page
+    assert "This page stale lanes: denied 1 (oldest 14d @" in second_page
+    assert "restore queue 1 (oldest 11d @" in second_page
+    assert "more off-page: pending 8 (oldest 52d @" in second_page
     assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old" in first_page
     assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old" in second_page
 
@@ -1047,7 +1070,7 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     )
     assert "session-stale-denied" not in stale_pending_rendered
     assert "session-stale-restored-queue" not in stale_pending_rendered
-    assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d)" in stale_pending_rendered
+    assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d @" in stale_pending_rendered
     assert "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_rendered
     assert "- stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_rendered
     assert "| approval stale age: 45d | stale focus: pending" in stale_pending_rendered
@@ -1058,7 +1081,7 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     assert "stale focus: pending" in stale_pending_rendered
     assert "session-stale-pending" not in stale_denied_rendered
     assert "session-stale-pending" not in stale_restored_rendered
-    assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d)" in stale_denied_rendered
+    assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d @" in stale_denied_rendered
     assert "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_rendered
     assert "- stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_rendered
     assert "| approval stale age: 9d | stale focus: denied" in stale_denied_rendered
@@ -1067,9 +1090,9 @@ def test_stale_approval_filter_variants_isolate_pending_denied_and_restored_lane
     assert "- approval stale age: 9d" in stale_denied_rendered
     assert "- approval stale: denied 9d" not in stale_denied_rendered
     assert "stale focus: denied" in stale_denied_rendered
-    assert (
-        "Stale restored backlog: 2 sessions | lanes: restore queue 2 (oldest 11d), restored 1 (oldest 9d)"
-    ) in stale_restored_rendered
+    assert "Stale restored backlog: 2 sessions | lanes:" in stale_restored_rendered
+    assert "restore queue 2 (oldest 11d @" in stale_restored_rendered
+    assert "restored 1 (oldest 9d @" in stale_restored_rendered
     assert (
         "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
         in stale_restored_rendered
@@ -1140,7 +1163,7 @@ def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path)
     assert [summary.session_id for summary in custom_summaries] == ["session-custom-threshold"]
     assert custom_summaries[0].stale_approval_badges == ["pending 2d"]
     assert "Stale cutoff: approvals >= 1d old" in custom_rendered
-    assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_rendered
+    assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d @" in custom_rendered
     assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old" in custom_rendered
     assert "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old" not in custom_rendered
 
@@ -1846,11 +1869,14 @@ def test_list_recent_sessions_surfaces_restored_approval_tool_family_breakdown(t
     assert "- approval restore tools: test 1, edit 1" in preview
     assert "- restore focus: restore queue, restored" not in preview
     assert "- approval restore ages: restore queue 3d; restored 6h" in preview
+    assert f"- approval restore at: {summary.restored_pending_approval_oldest_at}" in preview
     assert "- restored current approval: pending run_shell_command via fake_runtime | queued 1" in preview
+    assert f"- last restored at: {summary.last_restored_approval_at}" in preview
     assert "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0" in preview
+    assert f"- latest restored outcome at: {summary.last_restored_outcome_at}" in preview
     assert "- latest restored outcome age: 6h" not in preview
     assert (
-        "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session"
+        f"Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d @ {summary.restored_pending_approval_oldest_at}), restored 1 (oldest 6h @ {summary.last_restored_outcome_at}) | overlap: mixed 1 session"
         in rendered
     )
     assert "Restore lane focus: restore queue, restored" in rendered
@@ -1864,20 +1890,20 @@ def test_render_session_picker_reports_approval_restore_page_rollups_when_backlo
     first_page = render_session_picker(tmp_path, filter_mode="approval-restore")
     second_page = render_session_picker(tmp_path, filter_mode="approval-restore", page_index=1)
 
-    assert (
-        "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 (oldest 8h) | overlap: mixed 1 session"
-        in first_page
-    )
+    assert "Approval restore backlog: 10 sessions | lanes:" in first_page
+    assert "restore queue 9 (oldest 18d @" in first_page
+    assert "restored 2 (oldest 8h @" in first_page
+    assert "overlap: mixed 1 session" in first_page
     assert "Restore lane focus: restore queue, restored" in first_page
-    assert (
-        "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
-        in first_page
-    )
+    assert "This page restore lanes: restore queue 8 (oldest 18d @" in first_page
+    assert "more off-page: restore queue 1 (oldest 3d @" in first_page
+    assert "restored 2 (oldest 8h @" in first_page
+    assert "overlap here/off-page: none / mixed 1 session" in first_page
     assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
-    assert (
-        "This page restore lanes: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | more off-page: restore queue 8 (oldest 18d) | overlap here/off-page: mixed 1 session / none"
-        in second_page
-    )
+    assert "This page restore lanes: restore queue 1 (oldest 3d @" in second_page
+    assert "restored 2 (oldest 8h @" in second_page
+    assert "more off-page: restore queue 8 (oldest 18d @" in second_page
+    assert "overlap here/off-page: mixed 1 session / none" in second_page
 
 
 def test_list_recent_sessions_surfaces_restored_pending_queue_breakdown(tmp_path: Path) -> None:

@@ -113,9 +113,12 @@ def test_render_filter_focus_line_supports_cutoff_and_empty_lanes() -> None:
     assert render_filter_focus_line("Restore lane focus", ["restore queue", "restored"]) == (
         "Restore lane focus: restore queue, restored"
     )
-    assert render_filter_focus_line("Pending focus", ["fresh", "restored"], oldest="2d") == (
-        "Pending focus: fresh, restored | oldest: 2d"
-    )
+    assert render_filter_focus_line(
+        "Pending focus",
+        ["fresh", "restored"],
+        oldest="2d",
+        oldest_at="2026-05-14 04:00 UTC",
+    ) == "Pending focus: fresh, restored | oldest: 2d | oldest at: 2026-05-14 04:00 UTC"
     assert render_filter_focus_line(
         "Stale lane focus",
         ["pending", "denied"],
@@ -167,6 +170,21 @@ def test_render_page_metric_summary_line_handles_visible_and_off_page_metrics() 
         "families: edit 1, tool 1 | restored queues: 1 session"
     )
     assert render_page_metric_summary_line("denied approvals", []) == "This page denied approvals: none"
+
+
+def test_render_recent_session_metric_summary_block_lines_supports_oldest_timestamps() -> None:
+    assert render_recent_session_metric_summary_block_lines(
+        backlog_label="Pending approval backlog",
+        count=2,
+        backlog_metrics=["approvals: 3"],
+        focus_label="Pending focus",
+        focus_lanes=["fresh", "restored"],
+        oldest="2d",
+        oldest_at="2026-05-14 04:00 UTC",
+    ) == [
+        "Pending approval backlog: 2 sessions | approvals: 3",
+        "Pending focus: fresh, restored | oldest: 2d | oldest at: 2026-05-14 04:00 UTC",
+    ]
 
 
 def test_render_recent_session_page_banner_helpers_share_page_math() -> None:

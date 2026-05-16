@@ -44,6 +44,7 @@ def render_filter_focus_line(
     *,
     cutoff: str = "",
     oldest: str = "",
+    oldest_at: str = "",
 ) -> str:
     lane_labels = render_lane_label_list(lanes) or "none"
     line = f"{label}: {lane_labels}"
@@ -51,6 +52,8 @@ def render_filter_focus_line(
         line += f" | cutoff: {cutoff}"
     if oldest:
         line += f" | oldest: {oldest}"
+    if oldest_at:
+        line += f" | oldest at: {oldest_at}"
     return line
 
 
@@ -199,13 +202,14 @@ def render_recent_session_metric_summary_block_lines(
     focus_label: str,
     focus_lanes: Sequence[str],
     oldest: str = "",
+    oldest_at: str = "",
     page_metric_label: str = "",
     visible_metrics: Sequence[str] = (),
     off_page_metrics: Sequence[str] = (),
 ) -> list[str]:
     lines = [
         render_backlog_metric_summary_line(backlog_label, count, backlog_metrics),
-        render_filter_focus_line(focus_label, focus_lanes, oldest=oldest),
+        render_filter_focus_line(focus_label, focus_lanes, oldest=oldest, oldest_at=oldest_at),
     ]
     if page_metric_label and any(metric for metric in visible_metrics):
         lines.append(

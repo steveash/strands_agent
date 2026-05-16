@@ -1441,10 +1441,9 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-denied" in approval_restore_output
         assert "session-restore | 1 turn(s)" not in approval_restore_output
         assert "session-pending | 1 turn(s)" not in approval_restore_output
-        assert (
-            "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d), restored 1 (oldest 6h)"
-            in approval_restore_output
-        )
+        assert "Approval restore backlog: 3 sessions | lanes:" in approval_restore_output
+        assert "restore queue 2 (oldest 3d @" in approval_restore_output
+        assert "restored 1 (oldest 6h @" in approval_restore_output
         assert "Restore lane focus: restore queue, restored" in approval_restore_output
         assert "approval restore tools: test 1" in approval_restore_output
         assert "approval restore tools: edit 1" in approval_restore_output
@@ -1460,7 +1459,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         approval_stale_output = str(app.query_one("#output").render())
         assert "Filter: approval-stale | Sort: recent" in approval_stale_output
         assert "Stale cutoff: approvals >= 7d old" in approval_stale_output
-        assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d)" in approval_stale_output
+        assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d @" in approval_stale_output
         assert (
             "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
             in approval_stale_output
@@ -1515,7 +1514,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         intervention_output = str(app.query_one("#output").render())
         assert "Filter: intervention | Sort: attention" in intervention_output
         assert "Intervention backlog: 6 sessions" in intervention_output
-        assert "pending 5 (oldest 45d)" in intervention_output
+        assert "pending 5 (oldest 45d @" in intervention_output
         assert "overlap: mixed 3 sessions" in intervention_output
         assert "Intervention focus: pending, blocked, approved, denied, restored" in intervention_output
         assert "session-pending | 1 turn(s)" in intervention_output
@@ -1655,7 +1654,7 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         await pilot.pause()
         stale_pending_output = str(app.query_one("#output").render())
         assert "Filter: approval-stale-pending | Sort: recent" in stale_pending_output
-        assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d)" in stale_pending_output
+        assert "Stale pending backlog: 1 session | lanes: pending 1 (oldest 45d @" in stale_pending_output
         assert "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_output
         assert "| approval stale age: 45d | stale focus: pending" in stale_pending_output
         assert "| approval stale: pending 45d | stale focus: pending" not in stale_pending_output
@@ -1671,7 +1670,7 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         await pilot.pause()
         stale_denied_output = str(app.query_one("#output").render())
         assert "Filter: approval-stale-denied | Sort: recent" in stale_denied_output
-        assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d)" in stale_denied_output
+        assert "Stale denied backlog: 1 session | lanes: denied 1 (oldest 9d @" in stale_denied_output
         assert "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_output
         assert "| approval stale age: 9d | stale focus: denied" in stale_denied_output
         assert "| approval stale: denied 9d | stale focus: denied" not in stale_denied_output
@@ -1687,10 +1686,9 @@ async def test_session_switcher_supports_stale_pending_denied_and_restored_subfi
         await pilot.pause()
         stale_restored_output = str(app.query_one("#output").render())
         assert "Filter: approval-stale-restored | Sort: recent" in stale_restored_output
-        assert (
-            "Stale restored backlog: 2 sessions | lanes: restore queue 2 (oldest 11d), restored 1 (oldest 9d)"
-            in stale_restored_output
-        )
+        assert "Stale restored backlog: 2 sessions | lanes:" in stale_restored_output
+        assert "restore queue 2 (oldest 11d @" in stale_restored_output
+        assert "restored 1 (oldest 9d @" in stale_restored_output
         assert "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old" in stale_restored_output
         assert "| approval stale age: 11d | stale focus: restore queue" in stale_restored_output
         assert (
@@ -1796,7 +1794,7 @@ async def test_session_switcher_respects_custom_stale_threshold(tmp_path: Path) 
 
         assert "Filter: approval-stale | Sort: recent" in output
         assert "Stale cutoff: approvals >= 1d old" in output
-        assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in output
+        assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d @" in output
         assert (
             "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old"
             in output
@@ -1951,7 +1949,10 @@ async def test_session_switcher_surfaces_mixed_restore_overlap_summary_and_previ
 
         output = str(app.query_one("#output").render())
 
-        assert "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d), restored 1 (oldest 6h) | overlap: mixed 1 session" in output
+        assert "Approval restore backlog: 1 session | lanes:" in output
+        assert "restore queue 1 (oldest 3d @" in output
+        assert "restored 1 (oldest 6h @" in output
+        assert "overlap: mixed 1 session" in output
         assert "Restore lane focus: restore queue, restored" in output
         assert "approval restore ages: restore queue 3d; restored 6h" in output
         assert "restore focus: restore queue, restored" not in output
@@ -2005,20 +2006,20 @@ async def test_session_switcher_reports_approval_restore_page_rollups_when_backl
         await pilot.pause()
         second_page_output = str(app.query_one("#output").render())
 
-        assert (
-            "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d), restored 2 (oldest 8h) | overlap: mixed 1 session"
-            in first_page_output
-        )
+        assert "Approval restore backlog: 10 sessions | lanes:" in first_page_output
+        assert "restore queue 9 (oldest 18d @" in first_page_output
+        assert "restored 2 (oldest 8h @" in first_page_output
+        assert "overlap: mixed 1 session" in first_page_output
         assert "Restore lane focus: restore queue, restored" in first_page_output
-        assert (
-            "This page restore lanes: restore queue 8 (oldest 18d) | more off-page: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | overlap here/off-page: none / mixed 1 session"
-            in first_page_output
-        )
+        assert "This page restore lanes: restore queue 8 (oldest 18d @" in first_page_output
+        assert "more off-page: restore queue 1 (oldest 3d @" in first_page_output
+        assert "restored 2 (oldest 8h @" in first_page_output
+        assert "overlap here/off-page: none / mixed 1 session" in first_page_output
         assert "Page: 2/2 | Showing: 9-10 of 10" in second_page_output
-        assert (
-            "This page restore lanes: restore queue 1 (oldest 3d), restored 2 (oldest 8h) | more off-page: restore queue 8 (oldest 18d) | overlap here/off-page: mixed 1 session / none"
-            in second_page_output
-        )
+        assert "This page restore lanes: restore queue 1 (oldest 3d @" in second_page_output
+        assert "restored 2 (oldest 8h @" in second_page_output
+        assert "more off-page: restore queue 8 (oldest 18d @" in second_page_output
+        assert "overlap here/off-page: mixed 1 session / none" in second_page_output
 
 
 @pytest.mark.asyncio

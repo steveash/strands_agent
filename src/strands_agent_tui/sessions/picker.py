@@ -122,6 +122,7 @@ class SessionSummary:
     pending_approval_summary: str = ""
     pending_approval_queue_summary: str = ""
     pending_approval_age_summary: str = ""
+    pending_approval_oldest_at: str = ""
     pending_approval_badges: list[str] = field(default_factory=list)
     approval_status_badges: list[str] = field(default_factory=list)
     approval_focus_badges: list[str] = field(default_factory=list)
@@ -130,18 +131,22 @@ class SessionSummary:
     denied_approval_badges: list[str] = field(default_factory=list)
     last_denied_approval_summary: str = ""
     last_denied_approval_age_summary: str = ""
+    last_denied_approval_at: str = ""
     last_denied_approval_age_sort_key: int = 0
     restored_approval_count: int = 0
     restored_approval_badges: list[str] = field(default_factory=list)
     restored_approval_tool_badges: list[str] = field(default_factory=list)
     restored_pending_approval_queue_summary: str = ""
     restored_pending_approval_age_summary: str = ""
+    restored_pending_approval_oldest_at: str = ""
     restored_pending_approval_age_sort_key: int = 0
     last_restored_approval_summary: str = ""
     last_restored_approval_age_summary: str = ""
+    last_restored_approval_at: str = ""
     last_restored_approval_age_sort_key: int = 0
     last_restored_outcome_summary: str = ""
     last_restored_outcome_age_summary: str = ""
+    last_restored_outcome_at: str = ""
     last_restored_outcome_age_sort_key: int = 0
     stale_approval_badges: list[str] = field(default_factory=list)
     intervention_badges: list[str] = field(default_factory=list)
@@ -361,6 +366,7 @@ class SessionSummary:
             pending_lines,
             render_preview_detail_line("pending queue", self.pending_approval_queue_summary),
             render_preview_detail_line("pending age", self.pending_approval_age_summary),
+            render_preview_detail_line("pending at", self.pending_approval_oldest_at),
             render_preview_badges_line("pending tools", self.pending_approval_badges),
             render_preview_badges_line("approvals", self.approval_status_badges),
             render_preview_detail_line("approval focus", "/".join(self.approval_focus_badges)),
@@ -368,13 +374,17 @@ class SessionSummary:
             render_preview_badges_line("denied", self.denied_approval_badges),
             render_preview_detail_line("last denied approval", self.last_denied_approval_summary),
             render_preview_detail_line("last denied age", self.last_denied_approval_age_summary),
+            render_preview_detail_line("last denied at", self.last_denied_approval_at),
             render_preview_badges_line("approval restore", self.restored_approval_badges),
             render_preview_badges_line("approval restore tools", self.restored_approval_tool_badges),
             render_preview_detail_line("approval restore queue", self.restored_pending_approval_queue_summary),
             approval_restore_preview_lines,
+            render_preview_detail_line("approval restore at", self.restored_pending_approval_oldest_at),
             restored_current_lines,
+            render_preview_detail_line("last restored at", self.last_restored_approval_at),
             restored_outcome_lines,
             restored_outcome_age_lines,
+            render_preview_detail_line("latest restored outcome at", self.last_restored_outcome_at),
             _render_stale_approval_preview_lines(self, filter_mode),
         )
 
@@ -431,6 +441,7 @@ class SessionSummary:
 class LaneActivityRollup:
     lane_counts: dict[str, int]
     lane_oldest_ages: dict[str, int] = field(default_factory=dict)
+    lane_oldest_timestamps: dict[str, str] = field(default_factory=dict)
     mixed_count: int = 0
 
 
@@ -442,6 +453,7 @@ class PendingApprovalFilterMetrics:
     restored_queue_sessions: int
     multi_queue_sessions: int
     oldest_age_seconds: int
+    oldest_at: str = ""
 
 
 @dataclass(slots=True)
@@ -451,6 +463,41 @@ class DeniedApprovalFilterMetrics:
     fresh_denied_sessions: int
     restored_denied_sessions: int
     oldest_age_seconds: int
+    oldest_at: str = ""
+
+
+@dataclass(slots=True)
+class ApprovalActivitySummary:
+    pending_approval_badges: list[str]
+    approval_status_badges: list[str]
+    approval_focus_badges: list[str]
+    last_approval_summary: str
+    pending_approval_age_summary: str
+    pending_approval_oldest_at: str
+    denied_approval_count: int
+    denied_approval_badges: list[str]
+    last_denied_approval_summary: str
+    last_denied_approval_age_summary: str
+    last_denied_approval_at: str
+    last_denied_approval_age_sort_key: int
+    restored_approval_count: int
+    restored_approval_badges: list[str]
+    restored_approval_tool_badges: list[str]
+    restored_pending_approval_age_summary: str
+    restored_pending_approval_oldest_at: str
+    restored_pending_approval_age_sort_key: int
+    last_restored_approval_summary: str
+    last_restored_approval_age_summary: str
+    last_restored_approval_at: str
+    last_restored_approval_age_sort_key: int
+    last_restored_outcome_summary: str
+    last_restored_outcome_age_summary: str
+    last_restored_outcome_at: str
+    last_restored_outcome_age_sort_key: int
+    stale_approval_badges: list[str]
+    pending_approval_attention_sort_key: tuple[int, ...]
+    approval_attention_sort_key: tuple[int, ...]
+    denied_approval_attention_sort_key: tuple[int, ...]
 
 
 def list_recent_sessions(
@@ -524,33 +571,7 @@ def _ordered_recent_sessions(
         turns = store.load_turns()
         session_state = store.load_session_state() or SessionState()
         pending_approvals = store.load_pending_approvals()
-        (
-            pending_approval_badges,
-            approval_status_badges,
-            approval_focus_badges,
-            last_approval_summary,
-            pending_approval_age_summary,
-            denied_approval_count,
-            denied_approval_badges,
-            last_denied_approval_summary,
-            last_denied_approval_age_summary,
-            last_denied_approval_age_sort_key,
-            restored_approval_count,
-            restored_approval_badges,
-            restored_approval_tool_badges,
-            restored_pending_approval_age_summary,
-            restored_pending_approval_age_sort_key,
-            last_restored_approval_summary,
-            last_restored_approval_age_summary,
-            last_restored_approval_age_sort_key,
-            last_restored_outcome_summary,
-            last_restored_outcome_age_summary,
-            last_restored_outcome_age_sort_key,
-            stale_approval_badges,
-            pending_approval_attention_sort_key,
-            approval_attention_sort_key,
-            denied_approval_attention_sort_key,
-        ) = _approval_activity(
+        approval_activity = _approval_activity(
             turns,
             pending_approvals,
             stale_approval_warning_seconds=stale_approval_warning_seconds,
@@ -582,36 +603,41 @@ def _ordered_recent_sessions(
             pending_approval_tool=pending_approvals[0].tool_name if pending_approvals else "",
             pending_approval_summary=pending_approvals[0].summary() if pending_approvals else "",
             pending_approval_queue_summary=_pending_approval_queue_summary(pending_approvals),
-            pending_approval_age_summary=pending_approval_age_summary,
-            pending_approval_badges=pending_approval_badges,
-            approval_status_badges=approval_status_badges,
-            approval_focus_badges=approval_focus_badges,
-            last_approval_summary=last_approval_summary,
-            denied_approval_count=denied_approval_count,
-            denied_approval_badges=denied_approval_badges,
-            last_denied_approval_summary=last_denied_approval_summary,
-            last_denied_approval_age_summary=last_denied_approval_age_summary,
-            last_denied_approval_age_sort_key=last_denied_approval_age_sort_key,
-            restored_approval_count=restored_approval_count,
-            restored_approval_badges=restored_approval_badges,
-            restored_approval_tool_badges=restored_approval_tool_badges,
+            pending_approval_age_summary=approval_activity.pending_approval_age_summary,
+            pending_approval_oldest_at=approval_activity.pending_approval_oldest_at,
+            pending_approval_badges=approval_activity.pending_approval_badges,
+            approval_status_badges=approval_activity.approval_status_badges,
+            approval_focus_badges=approval_activity.approval_focus_badges,
+            last_approval_summary=approval_activity.last_approval_summary,
+            denied_approval_count=approval_activity.denied_approval_count,
+            denied_approval_badges=approval_activity.denied_approval_badges,
+            last_denied_approval_summary=approval_activity.last_denied_approval_summary,
+            last_denied_approval_age_summary=approval_activity.last_denied_approval_age_summary,
+            last_denied_approval_at=approval_activity.last_denied_approval_at,
+            last_denied_approval_age_sort_key=approval_activity.last_denied_approval_age_sort_key,
+            restored_approval_count=approval_activity.restored_approval_count,
+            restored_approval_badges=approval_activity.restored_approval_badges,
+            restored_approval_tool_badges=approval_activity.restored_approval_tool_badges,
             restored_pending_approval_queue_summary=_restored_pending_approval_queue_summary(pending_approvals),
-            restored_pending_approval_age_summary=restored_pending_approval_age_summary,
-            restored_pending_approval_age_sort_key=restored_pending_approval_age_sort_key,
-            last_restored_approval_summary=last_restored_approval_summary,
-            last_restored_approval_age_summary=last_restored_approval_age_summary,
-            last_restored_approval_age_sort_key=last_restored_approval_age_sort_key,
-            last_restored_outcome_summary=last_restored_outcome_summary,
-            last_restored_outcome_age_summary=last_restored_outcome_age_summary,
-            last_restored_outcome_age_sort_key=last_restored_outcome_age_sort_key,
-            stale_approval_badges=stale_approval_badges,
+            restored_pending_approval_age_summary=approval_activity.restored_pending_approval_age_summary,
+            restored_pending_approval_oldest_at=approval_activity.restored_pending_approval_oldest_at,
+            restored_pending_approval_age_sort_key=approval_activity.restored_pending_approval_age_sort_key,
+            last_restored_approval_summary=approval_activity.last_restored_approval_summary,
+            last_restored_approval_age_summary=approval_activity.last_restored_approval_age_summary,
+            last_restored_approval_at=approval_activity.last_restored_approval_at,
+            last_restored_approval_age_sort_key=approval_activity.last_restored_approval_age_sort_key,
+            last_restored_outcome_summary=approval_activity.last_restored_outcome_summary,
+            last_restored_outcome_age_summary=approval_activity.last_restored_outcome_age_summary,
+            last_restored_outcome_at=approval_activity.last_restored_outcome_at,
+            last_restored_outcome_age_sort_key=approval_activity.last_restored_outcome_age_sort_key,
+            stale_approval_badges=approval_activity.stale_approval_badges,
             intervention_badges=_intervention_activity_badges(turns, pending_approvals),
             last_intervention_preview=_latest_intervention_preview(turns, pending_approvals),
             recent_intervention_previews=_recent_intervention_previews(turns, pending_approvals),
             has_intervention_activity=_has_intervention_activity(turns, pending_approvals),
-            pending_approval_attention_sort_key=pending_approval_attention_sort_key,
-            approval_attention_sort_key=approval_attention_sort_key,
-            denied_approval_attention_sort_key=denied_approval_attention_sort_key,
+            pending_approval_attention_sort_key=approval_activity.pending_approval_attention_sort_key,
+            approval_attention_sort_key=approval_activity.approval_attention_sort_key,
+            denied_approval_attention_sort_key=approval_activity.denied_approval_attention_sort_key,
             last_event_preview=_latest_event_preview(turns),
             last_tool_preview=_latest_tool_preview(turns),
             last_tool_badges=_latest_tool_badges(turns),
@@ -1524,32 +1550,7 @@ def _approval_activity(
     pending_approvals,
     *,
     stale_approval_warning_seconds: int = STALE_APPROVAL_WARNING_SECONDS,
-) -> tuple[
-    list[str],
-    list[str],
-    list[str],
-    str,
-    str,
-    int,
-    list[str],
-    str,
-    str,
-    int,
-    int,
-    list[str],
-    list[str],
-    str,
-    str,
-    str,
-    int,
-    str,
-    str,
-    int,
-    list[str],
-    tuple[int, ...],
-    tuple[int, ...],
-    tuple[int, ...],
-]:
+) -> ApprovalActivitySummary:
     latest_by_request_id: dict[str, dict[str, object]] = {}
     last_record: dict[str, object] | None = None
     last_denied_record: dict[str, object] | None = None
@@ -1709,32 +1710,39 @@ def _approval_activity(
     )
     denied_approval_attention_sort_key = _tool_family_attention_sort_key(denied_family_counts)
 
-    return (
-        pending_badges,
-        badges,
-        _render_approval_focus_badges(last_record),
-        _render_last_approval_summary(last_record),
-        pending_approval_age_summary,
-        status_counts.get("denied", 0),
-        denied_badges,
-        _render_last_approval_summary(last_denied_record),
-        last_denied_approval_age_summary,
-        last_denied_approval_age_sort_key,
-        sum(restored_status_counts.values()),
-        restored_badges,
-        restored_tool_badges,
-        restored_pending_approval_age_summary,
-        restored_pending_approval_age_seconds,
-        _render_last_approval_summary(last_restored_record),
-        last_restored_approval_age_summary,
-        last_restored_approval_age_sort_key,
-        _render_last_approval_summary(last_restored_outcome_record),
-        last_restored_outcome_age_summary,
-        last_restored_outcome_age_sort_key,
-        stale_approval_badges,
-        pending_approval_attention_sort_key,
-        approval_attention_sort_key,
-        denied_approval_attention_sort_key,
+    return ApprovalActivitySummary(
+        pending_approval_badges=pending_badges,
+        approval_status_badges=badges,
+        approval_focus_badges=_render_approval_focus_badges(last_record),
+        last_approval_summary=_render_last_approval_summary(last_record),
+        pending_approval_age_summary=pending_approval_age_summary,
+        pending_approval_oldest_at=_oldest_approval_timestamp_display(pending_approvals),
+        denied_approval_count=status_counts.get("denied", 0),
+        denied_approval_badges=denied_badges,
+        last_denied_approval_summary=_render_last_approval_summary(last_denied_record),
+        last_denied_approval_age_summary=last_denied_approval_age_summary,
+        last_denied_approval_at=_approval_record_timestamp_display(last_denied_record),
+        last_denied_approval_age_sort_key=last_denied_approval_age_sort_key,
+        restored_approval_count=sum(restored_status_counts.values()),
+        restored_approval_badges=restored_badges,
+        restored_approval_tool_badges=restored_tool_badges,
+        restored_pending_approval_age_summary=restored_pending_approval_age_summary,
+        restored_pending_approval_oldest_at=_oldest_approval_timestamp_display(
+            [approval for approval in pending_approvals if approval.restored_from_session]
+        ),
+        restored_pending_approval_age_sort_key=restored_pending_approval_age_seconds,
+        last_restored_approval_summary=_render_last_approval_summary(last_restored_record),
+        last_restored_approval_age_summary=last_restored_approval_age_summary,
+        last_restored_approval_at=_approval_record_timestamp_display(last_restored_record),
+        last_restored_approval_age_sort_key=last_restored_approval_age_sort_key,
+        last_restored_outcome_summary=_render_last_approval_summary(last_restored_outcome_record),
+        last_restored_outcome_age_summary=last_restored_outcome_age_summary,
+        last_restored_outcome_at=_approval_record_timestamp_display(last_restored_outcome_record),
+        last_restored_outcome_age_sort_key=last_restored_outcome_age_sort_key,
+        stale_approval_badges=stale_approval_badges,
+        pending_approval_attention_sort_key=pending_approval_attention_sort_key,
+        approval_attention_sort_key=approval_attention_sort_key,
+        denied_approval_attention_sort_key=denied_approval_attention_sort_key,
     )
 
 
@@ -2095,6 +2103,7 @@ def render_recent_session_filter_summary_lines(
             rollup_formatter=_format_approval_restore_lane_rollup,
             lane_getter=_approval_restore_lanes,
             age_getter=_approval_restore_lane_age_seconds,
+            timestamp_getter=_approval_restore_lane_timestamps,
             display_order=APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
@@ -2126,6 +2135,7 @@ def render_recent_session_filter_summary_lines(
             rollup_formatter=_format_intervention_lane_rollup,
             lane_getter=_intervention_lanes,
             age_getter=_intervention_lane_age_seconds,
+            timestamp_getter=_intervention_lane_timestamps,
             display_order=INTERVENTION_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
@@ -2183,6 +2193,7 @@ def render_recent_session_filter_summary_lines(
         rollup_formatter=_format_stale_approval_lane_rollup,
         lane_getter=_stale_approval_lanes,
         age_getter=_stale_approval_lane_age_seconds,
+        timestamp_getter=_stale_approval_lane_timestamps,
         display_order=STALE_APPROVAL_LANE_DISPLAY_ORDER,
         allowed_lanes=stale_filter_lanes,
     )
@@ -2210,10 +2221,11 @@ def _render_lane_filter_summary_lines(
     page_lane_label: str,
     page_index: int,
     page_size: int,
-    rollup_formatter: Callable[[dict[str, int], dict[str, int]], str],
+    rollup_formatter: Callable[[dict[str, int], dict[str, int], dict[str, str]], str],
     lane_getter: Callable[[SessionSummary], set[str]],
     display_order: Sequence[str],
     age_getter: Callable[[SessionSummary], dict[str, int]] | None = None,
+    timestamp_getter: Callable[[SessionSummary], dict[str, str]] | None = None,
     allowed_lanes: frozenset[str] | None = None,
     include_overlap_summary: bool = False,
     cutoff: str = "",
@@ -2223,10 +2235,15 @@ def _render_lane_filter_summary_lines(
         display_order=display_order,
         lane_getter=lane_getter,
         age_getter=age_getter,
+        timestamp_getter=timestamp_getter,
         allowed_lanes=allowed_lanes,
         include_mixed_count=include_overlap_summary,
     )
-    lane_rollup = rollup_formatter(full_rollup.lane_counts, full_rollup.lane_oldest_ages)
+    lane_rollup = rollup_formatter(
+        full_rollup.lane_counts,
+        full_rollup.lane_oldest_ages,
+        full_rollup.lane_oldest_timestamps,
+    )
     overlap_summary = (
         _format_mixed_overlap_count(full_rollup.mixed_count)
         if include_overlap_summary and full_rollup.mixed_count > 0
@@ -2254,10 +2271,15 @@ def _render_lane_filter_summary_lines(
         display_order=display_order,
         lane_getter=lane_getter,
         age_getter=age_getter,
+        timestamp_getter=timestamp_getter,
         allowed_lanes=allowed_lanes,
         include_mixed_count=include_overlap_summary,
     )
-    visible_rollup = rollup_formatter(visible_rollup_data.lane_counts, visible_rollup_data.lane_oldest_ages)
+    visible_rollup = rollup_formatter(
+        visible_rollup_data.lane_counts,
+        visible_rollup_data.lane_oldest_ages,
+        visible_rollup_data.lane_oldest_timestamps,
+    )
     if not visible_rollup:
         return lines
 
@@ -2266,6 +2288,7 @@ def _render_lane_filter_summary_lines(
         display_order=display_order,
         lane_getter=lane_getter,
         age_getter=age_getter,
+        timestamp_getter=timestamp_getter,
         allowed_lanes=allowed_lanes,
         include_mixed_count=include_overlap_summary,
     )
@@ -2282,6 +2305,7 @@ def _render_lane_filter_summary_lines(
         off_page_rollup=rollup_formatter(
             off_page_rollup_data.lane_counts,
             off_page_rollup_data.lane_oldest_ages,
+            off_page_rollup_data.lane_oldest_timestamps,
         ),
         visible_overlap_summary=(
             _format_mixed_overlap_count(visible_rollup_data.mixed_count)
@@ -2316,11 +2340,13 @@ def _summarize_lane_activity(
     display_order: Sequence[str],
     lane_getter: Callable[[SessionSummary], set[str]],
     age_getter: Callable[[SessionSummary], dict[str, int]] | None = None,
+    timestamp_getter: Callable[[SessionSummary], dict[str, str]] | None = None,
     allowed_lanes: frozenset[str] | None = None,
     include_mixed_count: bool = False,
 ) -> LaneActivityRollup:
     lane_counts = {lane: 0 for lane in display_order}
     lane_oldest_ages = {lane: 0 for lane in display_order}
+    lane_oldest_timestamps = {lane: "" for lane in display_order}
     mixed_count = 0
 
     for summary in summaries:
@@ -2335,22 +2361,36 @@ def _summarize_lane_activity(
             lane_counts[lane] = lane_counts.get(lane, 0) + 1
         if age_getter is None:
             continue
+        lane_timestamps = timestamp_getter(summary) if timestamp_getter is not None else {}
         for lane, age_seconds in age_getter(summary).items():
             if allowed_lanes is not None and lane not in allowed_lanes:
                 continue
-            lane_oldest_ages[lane] = max(lane_oldest_ages.get(lane, 0), age_seconds)
+            previous_age = lane_oldest_ages.get(lane, 0)
+            previous_timestamp = lane_oldest_timestamps.get(lane, "")
+            next_age, next_timestamp = _update_oldest_age_and_timestamp(
+                previous_age,
+                previous_timestamp,
+                age_seconds,
+                lane_timestamps.get(lane, ""),
+            )
+            lane_oldest_ages[lane] = next_age
+            lane_oldest_timestamps[lane] = next_timestamp
 
     return LaneActivityRollup(
         lane_counts=lane_counts,
         lane_oldest_ages=lane_oldest_ages,
+        lane_oldest_timestamps=lane_oldest_timestamps,
         mixed_count=mixed_count,
     )
 
 
 def _format_simple_lane_rollup_for_display_order(
     display_order: tuple[str, ...],
-) -> Callable[[dict[str, int], dict[str, int]], str]:
-    return lambda lane_counts, _lane_oldest_ages: _format_simple_lane_rollup(lane_counts, display_order)
+) -> Callable[[dict[str, int], dict[str, int], dict[str, str]], str]:
+    return lambda lane_counts, _lane_oldest_ages, _lane_oldest_timestamps: _format_simple_lane_rollup(
+        lane_counts,
+        display_order,
+    )
 
 
 def _render_approval_volume_metric(total: int) -> str:
@@ -2370,6 +2410,58 @@ def _render_session_count_metric(label: str, count: int) -> str:
         return ""
     session_label = "session" if count == 1 else "sessions"
     return f"{label}: {count} {session_label}"
+
+
+def _update_oldest_age_and_timestamp(
+    current_age: int,
+    current_timestamp: str,
+    candidate_age: int,
+    candidate_timestamp: str,
+) -> tuple[int, str]:
+    if candidate_age > current_age:
+        return candidate_age, candidate_timestamp
+    if candidate_age == current_age and candidate_age > 0 and not current_timestamp and candidate_timestamp:
+        return candidate_age, candidate_timestamp
+    return current_age, current_timestamp
+
+
+def _format_oldest_age_clause(age_seconds: int, timestamp: str = "") -> str:
+    if age_seconds <= 0:
+        return ""
+    clause = f"oldest {_format_age_compact(age_seconds)}"
+    if timestamp:
+        clause += f" @ {timestamp}"
+    return f" ({clause})"
+
+
+def _intervention_restored_age_and_timestamp(summary: SessionSummary) -> tuple[int, str]:
+    candidates = [
+        (summary.restored_pending_approval_age_sort_key, summary.restored_pending_approval_oldest_at),
+        (summary.last_restored_outcome_age_sort_key, summary.last_restored_outcome_at),
+        (summary.last_restored_approval_age_sort_key, summary.last_restored_approval_at),
+    ]
+    best_age = 0
+    best_timestamp = ""
+    for age_seconds, timestamp in candidates:
+        best_age, best_timestamp = _update_oldest_age_and_timestamp(
+            best_age,
+            best_timestamp,
+            age_seconds,
+            timestamp,
+        )
+    return best_age, best_timestamp
+
+
+def _approval_restore_restored_age_and_timestamp(summary: SessionSummary) -> tuple[int, str]:
+    if summary.last_restored_outcome_age_sort_key > 0:
+        return summary.last_restored_outcome_age_sort_key, summary.last_restored_outcome_at
+    if summary.restored_pending_approval_age_sort_key <= 0 and summary.last_restored_approval_age_sort_key > 0:
+        return summary.last_restored_approval_age_sort_key, summary.last_restored_approval_at
+    return 0, ""
+
+
+def _restored_reference_age_and_timestamp(summary: SessionSummary) -> tuple[int, str]:
+    return _approval_restore_restored_age_and_timestamp(summary)
 
 
 def _add_family_counts(target: dict[str, int], counts: tuple[int, ...]) -> None:
@@ -2434,6 +2526,7 @@ def _render_metric_filter_summary_lines(
         focus_label=focus_label,
         focus_lanes=focus_lanes_getter(full_metrics),
         oldest=_format_age_compact(oldest_age_seconds) if oldest_age_seconds > 0 else "",
+        oldest_at=getattr(full_metrics, "oldest_at", ""),
     )
     if len(summaries) <= page_size:
         return lines
@@ -2451,6 +2544,7 @@ def _render_metric_filter_summary_lines(
         focus_label=focus_label,
         focus_lanes=focus_lanes_getter(full_metrics),
         oldest=_format_age_compact(oldest_age_seconds) if oldest_age_seconds > 0 else "",
+        oldest_at=getattr(full_metrics, "oldest_at", ""),
         page_metric_label=page_metric_label,
         visible_metrics=format_metrics(visible_metrics),
         off_page_metrics=format_metrics(summarize_metrics(off_page_summaries)),
@@ -2466,6 +2560,7 @@ def _summarize_pending_approval_filter_metrics(
     restored_queue_sessions = 0
     multi_queue_sessions = 0
     oldest_age_seconds = 0
+    oldest_at = ""
 
     for summary in summaries:
         total_approvals += summary.pending_approval_count
@@ -2478,7 +2573,12 @@ def _summarize_pending_approval_filter_metrics(
         if any(restored_pending_key):
             restored_queue_sessions += 1
             _add_family_counts(family_counts, restored_pending_key)
-        oldest_age_seconds = max(oldest_age_seconds, summary.pending_approval_age_sort_key)
+        oldest_age_seconds, oldest_at = _update_oldest_age_and_timestamp(
+            oldest_age_seconds,
+            oldest_at,
+            summary.pending_approval_age_sort_key,
+            summary.pending_approval_oldest_at,
+        )
 
     return PendingApprovalFilterMetrics(
         total_approvals=total_approvals,
@@ -2487,6 +2587,7 @@ def _summarize_pending_approval_filter_metrics(
         restored_queue_sessions=restored_queue_sessions,
         multi_queue_sessions=multi_queue_sessions,
         oldest_age_seconds=oldest_age_seconds,
+        oldest_at=oldest_at,
     )
 
 
@@ -2518,6 +2619,7 @@ def _summarize_denied_approval_filter_metrics(
     fresh_denied_sessions = 0
     restored_denied_sessions = 0
     oldest_age_seconds = 0
+    oldest_at = ""
 
     for summary in summaries:
         total_denied += summary.denied_approval_count
@@ -2527,7 +2629,12 @@ def _summarize_denied_approval_filter_metrics(
             fresh_denied_sessions += 1
         if any(restored_denied_key):
             restored_denied_sessions += 1
-        oldest_age_seconds = max(oldest_age_seconds, summary.last_denied_approval_age_sort_key)
+        oldest_age_seconds, oldest_at = _update_oldest_age_and_timestamp(
+            oldest_age_seconds,
+            oldest_at,
+            summary.last_denied_approval_age_sort_key,
+            summary.last_denied_approval_at,
+        )
 
     return DeniedApprovalFilterMetrics(
         total_denied=total_denied,
@@ -2535,6 +2642,7 @@ def _summarize_denied_approval_filter_metrics(
         fresh_denied_sessions=fresh_denied_sessions,
         restored_denied_sessions=restored_denied_sessions,
         oldest_age_seconds=oldest_age_seconds,
+        oldest_at=oldest_at,
     )
 
 
@@ -2694,9 +2802,24 @@ def _intervention_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
     return lane_ages
 
 
+def _intervention_lane_timestamps(summary: SessionSummary) -> dict[str, str]:
+    lanes = _intervention_lanes(summary)
+    lane_timestamps: dict[str, str] = {}
+    if "pending" in lanes and summary.pending_approval_oldest_at:
+        lane_timestamps["pending"] = summary.pending_approval_oldest_at
+    if "denied" in lanes and summary.last_denied_approval_at:
+        lane_timestamps["denied"] = summary.last_denied_approval_at
+    if "restored" in lanes:
+        _, restored_timestamp = _intervention_restored_age_and_timestamp(summary)
+        if restored_timestamp:
+            lane_timestamps["restored"] = restored_timestamp
+    return lane_timestamps
+
+
 def _format_intervention_lane_rollup(
     lane_counts: dict[str, int],
     lane_oldest_ages: dict[str, int],
+    lane_oldest_timestamps: dict[str, str],
 ) -> str:
     lane_parts: list[str] = []
     for lane in INTERVENTION_LANE_DISPLAY_ORDER:
@@ -2706,7 +2829,7 @@ def _format_intervention_lane_rollup(
         part = f"{lane} {count}"
         oldest_age = lane_oldest_ages.get(lane, 0)
         if oldest_age > 0:
-            part += f" (oldest {_format_age_compact(oldest_age)})"
+            part += _format_oldest_age_clause(oldest_age, lane_oldest_timestamps.get(lane, ""))
         lane_parts.append(part)
     return ", ".join(lane_parts)
 
@@ -2743,6 +2866,18 @@ def _approval_restore_lane_age_seconds(summary: SessionSummary) -> dict[str, int
     return lane_ages
 
 
+def _approval_restore_lane_timestamps(summary: SessionSummary) -> dict[str, str]:
+    lanes = _approval_restore_lanes(summary)
+    lane_timestamps: dict[str, str] = {}
+    if "restore queue" in lanes and summary.restored_pending_approval_oldest_at:
+        lane_timestamps["restore queue"] = summary.restored_pending_approval_oldest_at
+    if "restored" in lanes:
+        _, restored_timestamp = _restored_reference_age_and_timestamp(summary)
+        if restored_timestamp:
+            lane_timestamps["restored"] = restored_timestamp
+    return lane_timestamps
+
+
 def _summarize_approval_restore_lanes(
     summaries: list[SessionSummary],
 ) -> tuple[dict[str, int], dict[str, int], int]:
@@ -2759,6 +2894,7 @@ def _summarize_approval_restore_lanes(
 def _format_approval_restore_lane_rollup(
     lane_counts: dict[str, int],
     lane_oldest_ages: dict[str, int],
+    lane_oldest_timestamps: dict[str, str],
 ) -> str:
     lane_parts: list[str] = []
     for lane in APPROVAL_RESTORE_LANE_DISPLAY_ORDER:
@@ -2768,7 +2904,7 @@ def _format_approval_restore_lane_rollup(
         part = f"{lane} {count}"
         oldest_age = lane_oldest_ages.get(lane, 0)
         if oldest_age > 0:
-            part += f" (oldest {_format_age_compact(oldest_age)})"
+            part += _format_oldest_age_clause(oldest_age, lane_oldest_timestamps.get(lane, ""))
         lane_parts.append(part)
     return ", ".join(lane_parts)
 
@@ -2808,6 +2944,7 @@ def _summarize_stale_approval_lanes(
 def _format_stale_approval_lane_rollup(
     lane_counts: dict[str, int],
     lane_oldest_ages: dict[str, int],
+    lane_oldest_timestamps: dict[str, str],
 ) -> str:
     lane_parts: list[str] = []
     for lane in STALE_APPROVAL_LANE_DISPLAY_ORDER:
@@ -2817,7 +2954,7 @@ def _format_stale_approval_lane_rollup(
         part = f"{lane} {count}"
         oldest_age = lane_oldest_ages.get(lane, 0)
         if oldest_age > 0:
-            part += f" (oldest {_format_age_compact(oldest_age)})"
+            part += _format_oldest_age_clause(oldest_age, lane_oldest_timestamps.get(lane, ""))
         lane_parts.append(part)
     return ", ".join(lane_parts)
 
@@ -3125,6 +3262,22 @@ def _stale_approval_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
     return lane_ages
 
 
+def _stale_approval_lane_timestamps(summary: SessionSummary) -> dict[str, str]:
+    lane_timestamps: dict[str, str] = {}
+    for lane in _stale_approval_lanes(summary):
+        if lane == "pending" and summary.pending_approval_oldest_at:
+            lane_timestamps[lane] = summary.pending_approval_oldest_at
+        elif lane == "denied" and summary.last_denied_approval_at:
+            lane_timestamps[lane] = summary.last_denied_approval_at
+        elif lane == "restore queue" and summary.restored_pending_approval_oldest_at:
+            lane_timestamps[lane] = summary.restored_pending_approval_oldest_at
+        elif lane == "restored":
+            _, restored_timestamp = _restored_reference_age_and_timestamp(summary)
+            if restored_timestamp:
+                lane_timestamps[lane] = restored_timestamp
+    return lane_timestamps
+
+
 def _toggle_picker_filter_mode(current_filter_mode: str, next_filter_mode: str) -> str:
     if current_filter_mode == next_filter_mode:
         return "all"
@@ -3269,6 +3422,31 @@ def _parse_iso_timestamp(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def _format_iso_timestamp(value: str | None) -> str:
+    parsed = _parse_iso_timestamp(value)
+    if parsed is None:
+        return ""
+    return _format_timestamp(parsed.timestamp())
+
+
+def _oldest_approval_timestamp_display(approvals: Sequence[ApprovalRequest]) -> str:
+    parsed_timestamps = [
+        parsed
+        for parsed in (_parse_iso_timestamp(approval.created_at) for approval in approvals)
+        if parsed is not None
+    ]
+    if not parsed_timestamps:
+        return ""
+    oldest = min(parsed_timestamps)
+    return _format_timestamp(oldest.timestamp())
+
+
+def _approval_record_timestamp_display(record: dict[str, object] | None) -> str:
+    if record is None:
+        return ""
+    return _format_iso_timestamp(str(record.get("timestamp")) if record.get("timestamp") else None)
 
 
 def _age_seconds_from_timestamp(value: str | None) -> int | None:
