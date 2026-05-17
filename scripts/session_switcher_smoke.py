@@ -9,6 +9,25 @@ from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import FakeStrandsRuntime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, SessionState
 from strands_agent_tui.testing import (
+    matches_approval_restore_age_output,
+    matches_approval_restore_badges_output,
+    matches_approval_restore_focus_output,
+    matches_approval_restore_overlap_output,
+    matches_approval_restore_overlap_preview_split_output,
+    matches_approval_restore_page_rollup_output,
+    matches_approval_restore_preview_split_output,
+    matches_approval_restore_tool_badges_output,
+    matches_broad_approval_stale_output,
+    matches_broad_stale_row_focus_suppression,
+    matches_compact_stale_preview_output,
+    matches_custom_stale_cutoff_output,
+    matches_stale_backlog_output,
+    matches_stale_cutoff_output,
+    matches_stale_denied_subfilter_output,
+    matches_stale_lane_focus_output,
+    matches_stale_page_rollup_output,
+    matches_stale_pending_subfilter_output,
+    matches_stale_restored_subfilter_output,
     seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
     seed_approval_restore_focus_scenario,
@@ -207,26 +226,23 @@ async def run_smoke() -> None:
             print("switcher_approval_restore_filter=", "Filter: approval-restore | Sort: recent" in approval_restore_text)
             print(
                 "switcher_approval_restore_only_restored=",
-                "session-denied | 1 turn(s)" in approval_restore_text
-                and "session-restored-pending | 1 turn(s)" in approval_restore_text
-                and "session-restored-edit-pending | 1 turn(s)" in approval_restore_text
-                and "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d @"
-                in approval_restore_text
-                and "restored 1 (oldest 6h @" in approval_restore_text
-                and "Restore lane focus: restore queue, restored" in approval_restore_text
-                and "session-newer | 1 turn(s)" not in approval_restore_text,
+                matches_approval_restore_focus_output(
+                    approval_restore_text,
+                    required_session_ids=[
+                        "session-denied",
+                        "session-restored-pending",
+                        "session-restored-edit-pending",
+                    ],
+                    excluded_session_ids=["session-newer"],
+                ),
             )
             print(
                 "switcher_restored_approval_tool_badges=",
-                "approval restore tools: test 1" in approval_restore_text
-                and "approval restore tools: edit 1" in approval_restore_text,
+                matches_approval_restore_tool_badges_output(approval_restore_text),
             )
             print(
                 "switcher_restored_approval_age=",
-                "approval restore age: restore queue 3d" in approval_restore_text
-                and "approval restore age: restored 6h" in approval_restore_text
-                and "restore focus: restore queue" not in approval_restore_text
-                and "restore focus: restored" not in approval_restore_text,
+                matches_approval_restore_age_output(approval_restore_text),
             )
             print(
                 "switcher_last_restored_approval_preview=",
@@ -235,18 +251,11 @@ async def run_smoke() -> None:
             )
             print(
                 "switcher_restored_approval_preview_split=",
-                "- last restored approval:" in approval_restore_text
-                or (
-                    "- restored current approval: pending run_shell_command via fake_runtime | queued 1"
-                    in approval_restore_text
-                    and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
-                    in approval_restore_text
-                ),
+                matches_approval_restore_preview_split_output(approval_restore_text),
             )
             print(
                 "switcher_restore_preview_compact=",
-                "- restore focus: restore queue" not in approval_restore_text
-                and "- restore focus: restored" not in approval_restore_text,
+                matches_approval_restore_age_output(approval_restore_text),
             )
             await pilot.press("s")
             await pilot.pause()
@@ -422,37 +431,32 @@ async def run_smoke() -> None:
             approval_stale_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_approval_stale_filter=",
-                "Filter: approval-stale | Sort: attention" in approval_stale_output
-                and "session-aged | 1 turn(s)" in approval_stale_output
-                and "| approval stale age: pending 45d" in approval_stale_output
-                and "| approval stale age: 45d | stale focus: pending" not in approval_stale_output
-                and "approval stale: pending 45d" not in approval_stale_output
-                and "- approval stale age: pending 45d" in approval_stale_output
-                and "- stale focus: pending" not in approval_stale_output
-                and "session-newer | 1 turn(s)" not in approval_stale_output,
+                matches_broad_approval_stale_output(
+                    approval_stale_output,
+                    required_session_ids=["session-aged"],
+                    excluded_session_ids=["session-newer"],
+                    sort_mode="attention",
+                ),
             )
             print(
                 "switcher_approval_stale_backlog=",
-                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d @" in approval_stale_output,
+                matches_stale_backlog_output(approval_stale_output),
             )
             print(
                 "switcher_stale_cutoff_copy=",
-                "Stale cutoff: approvals >= 7d old" in approval_stale_output,
+                matches_stale_cutoff_output(approval_stale_output),
             )
             print(
                 "switcher_stale_lane_focus=",
-                "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
-                in approval_stale_output,
+                matches_stale_lane_focus_output(approval_stale_output),
             )
             print(
                 "switcher_stale_preview_compact=",
-                "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old"
-                not in approval_stale_output
-                and "- stale focus: pending" not in approval_stale_output,
+                matches_compact_stale_preview_output(approval_stale_output),
             )
             print(
                 "switcher_stale_focus_rows=",
-                "stale focus: pending" not in approval_stale_output,
+                matches_broad_stale_row_focus_suppression(approval_stale_output),
             )
             await pilot.press("up")
             await pilot.pause()
@@ -680,98 +684,43 @@ async def run_smoke() -> None:
             stale_rollup_second_page = str(stale_rollup_app.query_one("#output").render())
             print(
                 "switcher_approval_stale_page_rollup=",
-                "This page stale lanes: pending 8 (oldest 52d @" in stale_rollup_first_page
-                and "more off-page: denied 1 (oldest 14d @" in stale_rollup_first_page
-                and "restore queue 1 (oldest 11d @" in stale_rollup_first_page
-                and "restored 1 (oldest 10d @" in stale_rollup_first_page
-                and "This page stale lanes: denied 1 (oldest 14d @" in stale_rollup_second_page
-                and "restore queue 1 (oldest 11d @" in stale_rollup_second_page
-                and "restored 1 (oldest 10d @" in stale_rollup_second_page
-                and "more off-page: pending 8 (oldest 52d @" in stale_rollup_second_page,
+                matches_stale_page_rollup_output(
+                    stale_rollup_first_page,
+                    stale_rollup_second_page,
+                ),
             )
             await pilot.press("q")
             await pilot.pause()
             stale_pending_output = str(stale_rollup_app.query_one("#output").render())
             print(
                 "switcher_approval_stale_pending_filter=",
-                "Filter: approval-stale-pending | Sort: recent" in stale_pending_output
-                and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d @" in stale_pending_output
-                and "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_output
-                and "- stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_output
-                and "| approvals: pending 1 | approval focus: pending" in stale_pending_output
-                and "| approval stale age: 45d | stale focus: pending" in stale_pending_output
-                and "| intervention: pending 1" in stale_pending_output
-                and "| approval stale: pending 45d | stale focus: pending" not in stale_pending_output
-                and "- stale focus: pending" in stale_pending_output
-                and "- approvals: pending 1" in stale_pending_output
-                and "- approval focus: pending" in stale_pending_output
-                and "- approval stale age: 45d" in stale_pending_output
-                and "- approval stale: pending 45d" not in stale_pending_output
-                and "stale focus: pending" in stale_pending_output
-                and "session-stale-pending-0" in stale_pending_output
-                and "session-stale-denied-page-2" not in stale_pending_output,
+                matches_stale_pending_subfilter_output(
+                    stale_pending_output,
+                    required_session_ids=["session-stale-pending-0"],
+                    excluded_session_ids=["session-stale-denied-page-2"],
+                ),
             )
             await pilot.press("x")
             await pilot.pause()
             stale_denied_output = str(stale_rollup_app.query_one("#output").render())
             print(
                 "switcher_approval_stale_denied_filter=",
-                "Filter: approval-stale-denied | Sort: recent" in stale_denied_output
-                and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d @" in stale_denied_output
-                and "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_output
-                and "- stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_output
-                and "| approvals: denied 1 | approval focus: denied/fresh" in stale_denied_output
-                and "| denied age: 14d | approval stale age: 14d | stale focus: denied" in stale_denied_output
-                and "| intervention: denied 1" in stale_denied_output
-                and "| approval stale: denied 14d | stale focus: denied" not in stale_denied_output
-                and "- stale focus: denied" in stale_denied_output
-                and "- approvals: denied 1" in stale_denied_output
-                and "- approval focus: denied/fresh" in stale_denied_output
-                and "- approval stale age: 14d" in stale_denied_output
-                and "- approval stale: denied 14d" not in stale_denied_output
-                and "stale focus: denied" in stale_denied_output
-                and "session-stale-denied-page-2" in stale_denied_output
-                and "session-stale-restored-page-2" not in stale_denied_output,
+                matches_stale_denied_subfilter_output(
+                    stale_denied_output,
+                    required_session_ids=["session-stale-denied-page-2"],
+                    excluded_session_ids=["session-stale-restored-page-2"],
+                ),
             )
             await pilot.press("u")
             await pilot.pause()
             stale_restored_output = str(stale_rollup_app.query_one("#output").render())
             print(
                 "switcher_approval_stale_restored_filter=",
-                "Filter: approval-stale-restored | Sort: recent" in stale_restored_output
-                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d @" in stale_restored_output
-                and "restored 1 (oldest 10d @" in stale_restored_output
-                and "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
-                in stale_restored_output
-                and "- stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
-                in stale_restored_output
-                and "| approvals: pending 1, approved 1 | approval focus: pending/restored" in stale_restored_output
-                and "| approval restore: pending 1, approved 1 | approval restore tools: test 1, edit 1"
-                in stale_restored_output
-                and "| approval restore age: 11d" in stale_restored_output
-                and "| approval stale ages: restore queue 11d; restored 10d | stale focus: restore queue, restored"
-                in stale_restored_output
-                and "| intervention: pending 1, approved 1, restored 1" in stale_restored_output
-                and "restored current: pending write_file via fake_runtime; queued 1" in stale_restored_output
-                and "restored outcome: approved run_shell_command via fake_runtime; resumed; remaining 0"
-                in stale_restored_output
-                and "restored outcome age: 10d" in stale_restored_output
-                and "| approval stale: restore queue 11d, restored 10d | stale focus: restore queue, restored" not in stale_restored_output
-                and "- stale focus: restore queue, restored" in stale_restored_output
-                and "- approvals: pending 1, approved 1" in stale_restored_output
-                and "- approval focus: pending/restored" in stale_restored_output
-                and "- approval restore: pending 1, approved 1" in stale_restored_output
-                and "- approval restore age: 11d" in stale_restored_output
-                and "- approval stale ages: restore queue 11d; restored 10d" in stale_restored_output
-                and "- restored current approval: pending write_file via fake_runtime | queued 1"
-                in stale_restored_output
-                and "- latest restored outcome: approved run_shell_command via fake_runtime | resumed | remaining 0"
-                in stale_restored_output
-                and "- latest restored outcome age: 10d" in stale_restored_output
-                and "- approval stale: restore queue 11d, restored 10d" not in stale_restored_output
-                and "stale focus: restore queue" in stale_restored_output
-                and "session-stale-restored-page-2" in stale_restored_output
-                and "session-stale-denied-page-2" not in stale_restored_output,
+                matches_stale_restored_subfilter_output(
+                    stale_restored_output,
+                    required_session_ids=["session-stale-restored-page-2"],
+                    excluded_session_ids=["session-stale-denied-page-2"],
+                ),
             )
 
     with TemporaryDirectory() as custom_stale_root:
@@ -815,17 +764,15 @@ async def run_smoke() -> None:
             custom_stale_output = str(custom_stale_app.query_one("#output").render())
             print(
                 "switcher_custom_stale_threshold=",
-                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d @" in custom_stale_output
-                and "session-custom-threshold" in custom_stale_output,
+                matches_custom_stale_cutoff_output(custom_stale_output),
             )
             print(
                 "switcher_custom_stale_cutoff_copy=",
-                "Stale cutoff: approvals >= 1d old" in custom_stale_output,
+                matches_stale_cutoff_output(custom_stale_output, days=1),
             )
             print(
                 "switcher_custom_stale_lane_focus=",
-                "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old"
-                in custom_stale_output,
+                matches_stale_lane_focus_output(custom_stale_output, days=1),
             )
 
     with TemporaryDirectory() as empty_hint_root:
@@ -982,24 +929,11 @@ async def run_smoke() -> None:
                 mixed_overlap_output = str(mixed_overlap_app.query_one("#output").render())
                 print(
                     "switcher_approval_restore_overlap_summary=",
-                    "Approval restore backlog: 1 session | lanes: restore queue 1 (oldest 3d @" in mixed_overlap_output
-                    and "restored 1 (oldest 6h @" in mixed_overlap_output
-                    and "| overlap: mixed 1 session" in mixed_overlap_output
-                    and "Restore lane focus: restore queue, restored" in mixed_overlap_output,
+                    matches_approval_restore_overlap_output(mixed_overlap_output),
                 )
                 print(
                     "switcher_approval_restore_overlap_preview_split=",
-                    "approval restore ages: restore queue 3d; restored 6h" in mixed_overlap_output
-                    and "restore focus: restore queue, restored" not in mixed_overlap_output
-                    and "restored current: pending run_shell_command via fake_runtime; queued 1"
-                    in mixed_overlap_output
-                    and "restored outcome: denied replace_text via fake_runtime; restored queue; remaining 0"
-                    in mixed_overlap_output
-                    and "- restored current approval: pending run_shell_command via fake_runtime | queued 1"
-                    in mixed_overlap_output
-                    and "- latest restored outcome: denied replace_text via fake_runtime | restored queue | remaining 0"
-                    in mixed_overlap_output
-                    and "- latest restored outcome age: 6h" not in mixed_overlap_output,
+                    matches_approval_restore_overlap_preview_split_output(mixed_overlap_output),
                 )
 
         with TemporaryDirectory() as approval_restore_rollup_root:
@@ -1037,17 +971,10 @@ async def run_smoke() -> None:
                 approval_restore_rollup_second_page = str(approval_restore_rollup_app.query_one("#output").render())
                 print(
                     "switcher_approval_restore_page_rollup=",
-                    "Approval restore backlog: 10 sessions | lanes: restore queue 9 (oldest 18d @" in approval_restore_rollup_first_page
-                    and "restored 2 (oldest 8h @" in approval_restore_rollup_first_page
-                    and "| overlap: mixed 1 session" in approval_restore_rollup_first_page
-                    and "This page restore lanes: restore queue 8 (oldest 18d @" in approval_restore_rollup_first_page
-                    and "more off-page: restore queue 1 (oldest 3d @" in approval_restore_rollup_first_page
-                    and "restored 2 (oldest 8h @" in approval_restore_rollup_first_page
-                    and "overlap here/off-page: none / mixed 1 session" in approval_restore_rollup_first_page
-                    and "This page restore lanes: restore queue 1 (oldest 3d @" in approval_restore_rollup_second_page
-                    and "restored 2 (oldest 8h @" in approval_restore_rollup_second_page
-                    and "more off-page: restore queue 8 (oldest 18d @" in approval_restore_rollup_second_page
-                    and "overlap here/off-page: mixed 1 session / none" in approval_restore_rollup_second_page,
+                    matches_approval_restore_page_rollup_output(
+                        approval_restore_rollup_first_page,
+                        approval_restore_rollup_second_page,
+                    ),
                 )
 
     with TemporaryDirectory() as workspace_shell_overlap_root:
