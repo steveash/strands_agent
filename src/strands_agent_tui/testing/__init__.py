@@ -31,6 +31,8 @@ from .session_scenarios import (
     set_session_artifact_mtime,
 )
 from .smoke_assertions import (
+    failed_smoke_check_lines,
+    is_failed_smoke_check_line,
     matches_approval_restore_age_output,
     matches_approval_restore_badges_output,
     matches_approval_restore_focus_output,
@@ -76,6 +78,8 @@ __all__ = [
     "StaleApprovalRollupScenario",
     "StaleApprovalSubfilterScenario",
     "append_turn",
+    "failed_smoke_check_lines",
+    "is_failed_smoke_check_line",
     "matches_approval_restore_age_output",
     "matches_approval_restore_badges_output",
     "matches_approval_restore_focus_output",

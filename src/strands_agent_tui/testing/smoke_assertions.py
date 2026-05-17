@@ -20,6 +20,14 @@ def smoke_text_matches(
     return all(snippet in text for snippet in required) and all(snippet not in text for snippet in excluded)
 
 
+def is_failed_smoke_check_line(line: str) -> bool:
+    return line.rstrip().endswith("= False")
+
+
+def failed_smoke_check_lines(lines: Iterable[str]) -> list[str]:
+    return [line.rstrip("\n") for line in lines if is_failed_smoke_check_line(line)]
+
+
 def _matches_filter_output(
     text: str,
     *,

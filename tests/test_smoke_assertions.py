@@ -1,6 +1,8 @@
 from textwrap import dedent
 
 from strands_agent_tui.testing import (
+    failed_smoke_check_lines,
+    is_failed_smoke_check_line,
     matches_approval_restore_age_output,
     matches_approval_restore_badges_output,
     matches_approval_restore_focus_output,
@@ -42,6 +44,24 @@ def test_smoke_text_matches_supports_required_and_excluded_snippets() -> None:
     assert smoke_text_matches("alpha beta gamma", required=["alpha", "gamma"], excluded=["delta"])
     assert not smoke_text_matches("alpha beta gamma", required=["alpha", "delta"])
     assert not smoke_text_matches("alpha beta gamma", excluded=["beta"])
+
+
+def test_smoke_failure_helpers_detect_false_result_lines() -> None:
+    lines = [
+        "picker_default_surface= True\n",
+        "picker_tool_filter= False\n",
+        "switcher_pending_filter= True\n",
+        "plain traceback False but not a result line\n",
+        "switcher_tool_filter= False\n",
+    ]
+
+    assert is_failed_smoke_check_line(lines[1])
+    assert not is_failed_smoke_check_line(lines[0])
+    assert not is_failed_smoke_check_line(lines[3])
+    assert failed_smoke_check_lines(lines) == [
+        "picker_tool_filter= False",
+        "switcher_tool_filter= False",
+    ]
 
 
 def test_approval_restore_smoke_helpers_share_focus_age_and_preview_checks() -> None:
