@@ -30,6 +30,7 @@ from strands_agent_tui.testing import (
     seed_denied_approval_rollup_scenario,
     seed_multi_approval_queue_session,
     seed_pending_approval_rollup_scenario,
+    seed_shell_failure_session,
     seed_shell_inspect_session,
     seed_shell_overlap_session,
     seed_shell_test_session,
@@ -37,6 +38,7 @@ from strands_agent_tui.testing import (
     seed_stale_approval_rollup_scenario,
     seed_stale_approval_subfilter_scenario,
     seed_workspace_edit_session,
+    seed_workspace_failure_session,
     seed_workspace_inspect_session,
     seed_workspace_overlap_session,
     set_session_artifact_mtime as _shared_set_session_artifact_mtime,
@@ -700,10 +702,25 @@ def test_render_session_picker_surfaces_tool_backlog_rollups(tmp_path: Path) -> 
         in rendered
     )
     assert "Tool focus: workspace, shell, other" in rendered
+    assert "Tool failure mix: failures: none" in rendered
     assert "session-workspace-tool" in rendered
     assert "session-shell-tool" in rendered
     assert "session-mixed-tool" in rendered
     assert "session-other-tool" in rendered
+
+
+def test_render_session_picker_surfaces_tool_failure_mix_metrics(tmp_path: Path) -> None:
+    seed_shell_failure_session(tmp_path, session_id="session-tool-failed-test")
+    seed_workspace_failure_session(tmp_path, session_id="session-tool-failed-edit")
+    seed_workspace_inspect_session(tmp_path, session_id="session-tool-inspect")
+
+    rendered = render_session_picker(tmp_path, filter_mode="tool")
+
+    assert "Tool backlog: 3 sessions | lanes: workspace 2, shell 1" in rendered
+    assert "Tool failure mix: failures: test 1, tool 1 | failing: 2 sessions" in rendered
+    assert "session-tool-failed-test" in rendered
+    assert "session-tool-failed-edit" in rendered
+    assert "session-tool-inspect" in rendered
 
 
 def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: Path) -> None:
@@ -830,6 +847,7 @@ def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: P
     )
     assert "overlap: mixed 2 sessions" in rendered
     assert "Intervention focus: pending, blocked, approved, denied, restored" in rendered
+    assert "Intervention mix: requests: 4 | families: test 1, edit 3" in rendered
     assert "session-intervention-pending" in rendered
     assert "session-intervention-blocked" in rendered
     assert "session-intervention-approved" in rendered

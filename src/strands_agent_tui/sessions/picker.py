@@ -24,6 +24,7 @@ from .summary_utils import (
     render_lane_label_list,
     render_numbered_preview_section_lines,
     render_page_label,
+    render_page_metric_summary_line,
     render_page_window_label,
     render_picker_controls_line,
     render_picker_empty_filter_adjust_guidance,
@@ -150,6 +151,8 @@ class SessionSummary:
     last_restored_outcome_age_sort_key: int = 0
     stale_approval_badges: list[str] = field(default_factory=list)
     intervention_badges: list[str] = field(default_factory=list)
+    intervention_family_counts: dict[str, int] = field(default_factory=dict)
+    intervention_unique_count: int = 0
     last_intervention_preview: str = ""
     recent_intervention_previews: list[str] = field(default_factory=list)
     has_intervention_activity: bool = False
@@ -467,6 +470,25 @@ class DeniedApprovalFilterMetrics:
 
 
 @dataclass(slots=True)
+class ToolFilterMetrics:
+    total_test_failures: int
+    total_tool_failures: int
+    failing_sessions: int
+
+
+@dataclass(slots=True)
+class InterventionActivitySummary:
+    family_counts: dict[str, int]
+    unique_count: int
+
+
+@dataclass(slots=True)
+class InterventionFilterMetrics:
+    total_requests: int
+    family_counts: dict[str, int]
+
+
+@dataclass(slots=True)
 class ApprovalActivitySummary:
     pending_approval_badges: list[str]
     approval_status_badges: list[str]
@@ -593,6 +615,8 @@ def _ordered_recent_sessions(
             pending_approvals,
         )
         has_shell_inspect_activity, has_shell_test_activity = _shell_activity_presence(turns, pending_approvals)
+        intervention_activity = _summarize_intervention_activity(turns, pending_approvals)
+
         summary = SessionSummary(
             session_id=store.session_id,
             session_dir=store.session_dir,
@@ -632,6 +656,8 @@ def _ordered_recent_sessions(
             last_restored_outcome_age_sort_key=approval_activity.last_restored_outcome_age_sort_key,
             stale_approval_badges=approval_activity.stale_approval_badges,
             intervention_badges=_intervention_activity_badges(turns, pending_approvals),
+            intervention_family_counts=intervention_activity.family_counts,
+            intervention_unique_count=intervention_activity.unique_count,
             last_intervention_preview=_latest_intervention_preview(turns, pending_approvals),
             recent_intervention_previews=_recent_intervention_previews(turns, pending_approvals),
             has_intervention_activity=_has_intervention_activity(turns, pending_approvals),
@@ -1249,6 +1275,65 @@ def _bounded_recent_intervention_events(turns: list[TurnArtifact], *, limit: int
         if len(events) >= limit:
             break
     return events
+
+
+def _intervention_activity_key_for_event(event) -> str:
+    approval_id = str(event.data.get("approval_id", "") or "").strip()
+    if approval_id:
+        return f"approval:{approval_id}"
+    tool_name = str(event.data.get("tool_name", "") or event.title or "").strip()
+    command = str(event.data.get("command", "") or "").strip()
+    timestamp = str(event.timestamp or "").strip()
+    detail = str(event.detail or "").strip()
+    return f"event:{event.kind}:{tool_name}:{command}:{timestamp}:{detail}"
+
+
+def _intervention_event_family(event) -> str:
+    family = str(event.data.get("approval_tool_family", "") or "").strip()
+    if family:
+        return family
+    return _approval_tool_family_for_values(
+        tool_name=str(event.data.get("tool_name", "") or event.title or "").strip(),
+        command=str(event.data.get("command", "") or "").strip(),
+        shell_command_family=str(event.data.get("shell_command_family", "") or "").strip(),
+    )
+
+
+
+def _summarize_intervention_activity(
+    turns: list[TurnArtifact],
+    pending_approvals: list[ApprovalRequest],
+    count_window: int = MAX_INTERVENTION_ROLLUP_EVENTS,
+) -> InterventionActivitySummary:
+    family_counts: dict[str, int] = {}
+    counted_keys: set[str] = set()
+    unique_count = 0
+
+    for event in _bounded_recent_intervention_events(turns, limit=count_window):
+        key = _intervention_activity_key_for_event(event)
+        if key in counted_keys:
+            continue
+        counted_keys.add(key)
+        family = _intervention_event_family(event)
+        if family:
+            family_counts[family] = family_counts.get(family, 0) + 1
+        unique_count += 1
+
+    for approval in pending_approvals:
+        key = f"approval:{approval.request_id}"
+        if key in counted_keys:
+            continue
+        counted_keys.add(key)
+        family = _approval_tool_family_for_values(
+            tool_name=str(approval.tool_name or "").strip(),
+            command=_approval_command_from_args(approval.args),
+            shell_command_family="",
+        )
+        if family:
+            family_counts[family] = family_counts.get(family, 0) + 1
+        unique_count += 1
+
+    return InterventionActivitySummary(family_counts=family_counts, unique_count=unique_count)
 
 
 def _has_intervention_activity(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> bool:
@@ -2109,7 +2194,7 @@ def render_recent_session_filter_summary_lines(
         )
 
     if filter_mode == "tool" and summaries:
-        return _render_lane_filter_summary_lines(
+        lines = _render_lane_filter_summary_lines(
             summaries,
             backlog_label="Tool backlog",
             focus_label="Tool focus",
@@ -2122,9 +2207,19 @@ def render_recent_session_filter_summary_lines(
             display_order=TOOL_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
+        return _append_metric_detail_lines(
+            lines,
+            summaries,
+            detail_label="Tool failure mix",
+            page_metric_label="tool failure mix",
+            page_index=page_index,
+            page_size=page_size,
+            summarize_metrics=_summarize_tool_filter_metrics,
+            format_metrics=_format_tool_filter_metrics,
+        )
 
     if filter_mode == "intervention" and summaries:
-        return _render_lane_filter_summary_lines(
+        lines = _render_lane_filter_summary_lines(
             summaries,
             backlog_label="Intervention backlog",
             focus_label="Intervention focus",
@@ -2138,6 +2233,16 @@ def render_recent_session_filter_summary_lines(
             timestamp_getter=_intervention_lane_timestamps,
             display_order=INTERVENTION_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
+        )
+        return _append_metric_detail_lines(
+            lines,
+            summaries,
+            detail_label="Intervention mix",
+            page_metric_label="intervention mix",
+            page_index=page_index,
+            page_size=page_size,
+            summarize_metrics=_summarize_intervention_filter_metrics,
+            format_metrics=_format_intervention_filter_metrics,
         )
 
     if filter_mode in {"workspace-inspect", "workspace-edit"} and summaries:
@@ -2405,6 +2510,24 @@ def _render_approval_family_metric(family_counts: dict[str, int]) -> str:
     return f"families: {', '.join(badges)}"
 
 
+def _render_tool_failure_metric(test_failure_count: int, tool_failure_count: int) -> str:
+    parts: list[str] = []
+    if test_failure_count > 0:
+        parts.append(f"test {test_failure_count}")
+    if tool_failure_count > 0:
+        parts.append(f"tool {tool_failure_count}")
+    if not parts:
+        return "failures: none"
+    return f"failures: {', '.join(parts)}"
+
+
+
+def _render_intervention_request_metric(total_requests: int) -> str:
+    request_label = "request" if total_requests == 1 else "requests"
+    return f"{request_label}: {total_requests}"
+
+
+
 def _render_session_count_metric(label: str, count: int) -> str:
     if count <= 0:
         return ""
@@ -2551,6 +2674,48 @@ def _render_metric_filter_summary_lines(
     )
 
 
+def _render_metric_detail_line(label: str, metrics: Sequence[str]) -> str:
+    filtered_metrics = [metric for metric in metrics if metric]
+    if not filtered_metrics:
+        return ""
+    return f"{label}: {' | '.join(filtered_metrics)}"
+
+
+
+def _append_metric_detail_lines(
+    lines: list[str],
+    summaries: list[SessionSummary],
+    *,
+    detail_label: str,
+    page_metric_label: str,
+    page_index: int,
+    page_size: int,
+    summarize_metrics: Callable[[list[SessionSummary]], MetricRollupT],
+    format_metrics: Callable[[MetricRollupT], list[str]],
+) -> list[str]:
+    metrics = summarize_metrics(summaries)
+    detail_line = _render_metric_detail_line(detail_label, format_metrics(metrics))
+    if detail_line:
+        lines.append(detail_line)
+    if len(summaries) <= page_size:
+        return lines
+
+    visible_summaries, off_page_summaries = _slice_visible_and_off_page_summaries(
+        summaries,
+        page_index=page_index,
+        page_size=page_size,
+    )
+    lines.append(
+        render_page_metric_summary_line(
+            page_metric_label,
+            format_metrics(summarize_metrics(visible_summaries)),
+            off_page_metrics=format_metrics(summarize_metrics(off_page_summaries)),
+        )
+    )
+    return lines
+
+
+
 def _summarize_pending_approval_filter_metrics(
     summaries: list[SessionSummary],
 ) -> PendingApprovalFilterMetrics:
@@ -2609,6 +2774,60 @@ def _render_pending_approval_filter_summary_lines(
         focus_lanes_getter=_pending_approval_filter_focus_lanes,
         oldest_age_seconds_getter=lambda metrics: metrics.oldest_age_seconds,
     )
+
+
+def _summarize_tool_filter_metrics(
+    summaries: list[SessionSummary],
+) -> ToolFilterMetrics:
+    total_test_failures = 0
+    total_tool_failures = 0
+    failing_sessions = 0
+
+    for summary in summaries:
+        total_test_failures += summary.recent_test_failure_count
+        total_tool_failures += summary.recent_tool_failure_count
+        if summary.recent_test_failure_count > 0 or summary.recent_tool_failure_count > 0:
+            failing_sessions += 1
+
+    return ToolFilterMetrics(
+        total_test_failures=total_test_failures,
+        total_tool_failures=total_tool_failures,
+        failing_sessions=failing_sessions,
+    )
+
+
+
+def _format_tool_filter_metrics(metrics: ToolFilterMetrics) -> list[str]:
+    return [
+        _render_tool_failure_metric(metrics.total_test_failures, metrics.total_tool_failures),
+        _render_session_count_metric("failing", metrics.failing_sessions),
+    ]
+
+
+
+def _summarize_intervention_filter_metrics(
+    summaries: list[SessionSummary],
+) -> InterventionFilterMetrics:
+    total_requests = 0
+    family_counts: dict[str, int] = {}
+
+    for summary in summaries:
+        total_requests += summary.intervention_unique_count
+        for family, count in summary.intervention_family_counts.items():
+            if count > 0:
+                family_counts[family] = family_counts.get(family, 0) + count
+
+    return InterventionFilterMetrics(total_requests=total_requests, family_counts=family_counts)
+
+
+
+def _format_intervention_filter_metrics(metrics: InterventionFilterMetrics) -> list[str]:
+    family_metric = _render_approval_family_metric(metrics.family_counts) or "families: none"
+    return [
+        _render_intervention_request_metric(metrics.total_requests),
+        family_metric,
+    ]
+
 
 
 def _summarize_denied_approval_filter_metrics(

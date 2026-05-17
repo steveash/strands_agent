@@ -123,6 +123,7 @@ def main() -> None:
         denied_picker = render_session_picker(temp_dir, filter_mode="denied")
         approval_restore_picker = render_session_picker(temp_dir, filter_mode="approval-restore")
         approval_stale_picker = render_session_picker(temp_dir, filter_mode="approval-stale")
+        tool_picker = render_session_picker(temp_dir, filter_mode="tool")
         workspace_inspect_picker = render_session_picker(temp_dir, filter_mode="workspace-inspect")
         workspace_edit_picker = render_session_picker(temp_dir, filter_mode="workspace-edit")
         shell_picker = render_session_picker(temp_dir, filter_mode="shell")
@@ -305,11 +306,18 @@ def main() -> None:
             and "session-tool | 1 turn(s)" not in shell_picker,
         )
         print(
+            "picker_tool_filter=",
+            "Filter: tool | Sort: recent" in tool_picker
+            and "Tool backlog:" in tool_picker
+            and "Tool failure mix: failures: test 1, tool 1 | failing: 2 sessions" in tool_picker,
+        )
+        print(
             "picker_intervention_filter=",
             "Filter: intervention | Sort: recent" in intervention_picker
             and "session-pending | 1 turn(s)" in intervention_picker
             and "session-denied | 1 turn(s)" in intervention_picker
             and "intervention: pending 1" in intervention_picker
+            and "Intervention mix:" in intervention_picker
             and "session-plain | 1 turn(s)" not in intervention_picker,
         )
         print(
