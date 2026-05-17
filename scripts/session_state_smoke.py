@@ -59,10 +59,18 @@ async def run_smoke() -> None:
 
         async with second_app.run_test() as pilot:
             await pilot.pause()
-            print("restored_event_filter=", second_app.event_filter)
-            print("restored_view=", second_app.history_view_label())
-            print("restored_draft=", second_app.query_one("#prompt").value)
-            print("latest_visible_event=", second_app.filtered_events()[-1].kind if second_app.filtered_events() else None)
+            restored_event_filter = second_app.event_filter
+            restored_view = second_app.history_view_label()
+            restored_draft = second_app.query_one("#prompt").value
+            latest_visible_event = second_app.filtered_events()[-1].kind if second_app.filtered_events() else None
+            print("restored_event_filter=", restored_event_filter)
+            print("restored_view=", restored_view)
+            print("restored_draft=", restored_draft)
+            print("latest_visible_event=", latest_visible_event)
+            print("session_state_restored_event_filter=", restored_event_filter == "tool")
+            print("session_state_restored_view=", restored_view == "replay 3/4")
+            print("session_state_restored_draft=", restored_draft == "draft next step")
+            print("session_state_latest_visible_event=", latest_visible_event == "tool_finished")
 
 
 def main() -> None:
