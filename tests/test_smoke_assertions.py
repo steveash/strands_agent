@@ -16,9 +16,11 @@ from strands_agent_tui.testing import (
     matches_denied_filter_output,
     matches_denied_page_rollup_output,
     matches_denied_preview_output,
+    matches_intervention_filter_output,
     matches_pending_age_output,
     matches_pending_filter_output,
     matches_pending_page_rollup_output,
+    matches_picker_default_output,
     matches_queue_breakdown_output,
     matches_shell_filter_output,
     matches_stale_backlog_output,
@@ -28,6 +30,9 @@ from strands_agent_tui.testing import (
     matches_stale_page_rollup_output,
     matches_stale_pending_subfilter_output,
     matches_stale_restored_subfilter_output,
+    matches_switcher_default_output,
+    matches_switcher_selected_preview_output,
+    matches_tool_filter_output,
     matches_workspace_filter_output,
     smoke_text_matches,
 )
@@ -280,6 +285,88 @@ def test_pending_and_denied_smoke_helpers_cover_filter_queue_and_rollup_checks()
         require_restore_badge=True,
     )
     assert matches_denied_page_rollup_output(denied_first_page_text, denied_second_page_text)
+
+
+def test_default_tool_and_intervention_smoke_helpers_cover_remaining_picker_switcher_surfaces() -> None:
+    picker_default_text = dedent(
+        """
+        Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 13
+        Selected preview:
+        - artifact dir: /tmp/session-tool
+        > 1. session-tool | 1 turn(s) | approvals: pending 1, approved 1 | failures: test 1 | failures: tool 1 | shell: inspect 1
+        - last shell: inspect/e0 git status --short -> M README.md
+        - recent tools (1):
+          - inspect/e0 git status --short -> M README.md
+        """
+    ).strip()
+    picker_tool_text = dedent(
+        """
+        Filter: tool | Sort: recent
+        Tool backlog: 2 sessions | families: inspect 1, edit 1
+        Tool failure mix: failures: test 1, tool 1 | failing: 2 sessions
+        > 1. session-tool | 1 turn(s)
+        """
+    ).strip()
+    intervention_text = dedent(
+        """
+        Filter: intervention | Sort: recent
+        Intervention mix: pending 1, denied 1
+        > 1. session-pending | 1 turn(s) | intervention: pending 1
+          2. session-denied | 1 turn(s) | intervention: denied 1
+        - last intervention: pending run_shell_command via fake_runtime
+        - recent interventions (2): pending run_shell_command, denied replace_text
+        """
+    ).strip()
+    switcher_default_text = dedent(
+        """
+        > 1. session-tool | 1 turn(s)
+          2. session-older | 1 turn(s) (current)
+        pending: run_shell_command
+        approvals: pending 1, approved 1
+        restore: filter=tool, replay 1/1, draft 15c
+        last tool: inspect/e0 git status --short -> M README.md
+        shell: inspect 1
+        last event: tool_finished: run_shell_command
+        """
+    ).strip()
+    switcher_preview_text = dedent(
+        """
+        Selected preview:
+        - artifact dir: /tmp/session-tool
+        - last approval: pending run_shell_command via fake_runtime | queued 1
+        - last shell: inspect/e0 git status --short -> M README.md
+        - recent tools (2): inspect/e0 git status --short -> M README.md
+        """
+    ).strip()
+    switcher_tool_text = dedent(
+        """
+        Filter: tool | Sort: attention
+        Tool backlog: 2 sessions | families: inspect 1, edit 1
+        > 1. session-tool | 1 turn(s)
+          2. session-newer | 1 turn(s)
+        """
+    ).strip()
+
+    assert matches_picker_default_output(picker_default_text)
+    assert matches_tool_filter_output(
+        picker_tool_text,
+        failure_mix_line="Tool failure mix: failures: test 1, tool 1 | failing: 2 sessions",
+    )
+    assert matches_intervention_filter_output(
+        intervention_text,
+        required_session_ids=["session-pending", "session-denied"],
+        excluded_session_ids=["session-plain"],
+        required=["intervention: pending 1"],
+        require_preview=True,
+    )
+    assert matches_switcher_default_output(switcher_default_text)
+    assert matches_switcher_selected_preview_output(switcher_preview_text)
+    assert matches_tool_filter_output(
+        switcher_tool_text,
+        sort_mode="attention",
+        required_session_ids=["session-tool", "session-newer"],
+        excluded_session_ids=["session-restore"],
+    )
 
 
 def test_workspace_and_shell_smoke_helpers_cover_focus_and_overlap_copy() -> None:

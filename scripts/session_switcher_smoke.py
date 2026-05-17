@@ -36,6 +36,9 @@ from strands_agent_tui.testing import (
     matches_stale_page_rollup_output,
     matches_stale_pending_subfilter_output,
     matches_stale_restored_subfilter_output,
+    matches_switcher_default_output,
+    matches_switcher_selected_preview_output,
+    matches_tool_filter_output,
     matches_workspace_filter_output,
     seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
@@ -162,34 +165,15 @@ async def run_smoke() -> None:
                 (line for line in str(switcher_output).splitlines() if line.startswith("> ")),
                 "",
             )
-            print("switcher_default_selection_is_most_recent=", "session-tool" in selected_line and "(current)" not in selected_line)
-            print("switcher_has_pending_marker=", "pending: run_shell_command" in str(switcher_output))
-            print("switcher_has_approval_rollup=", "approvals: pending 1, approved 1" in str(switcher_output))
-            print(
-                "switcher_has_restore_badges=",
-                "restore: filter=tool, replay 1/1, draft 15c" in str(switcher_output),
-            )
-            print("switcher_has_tool_preview=", "last tool: inspect/e0 git status --short -> M README.md" in str(switcher_output))
-            print("switcher_has_shell_rollup=", "shell: inspect 1" in str(switcher_output))
-            print("switcher_has_event_preview=", "last event: tool_finished: run_shell_command" in str(switcher_output))
+            print("switcher_default_surface=", matches_switcher_default_output(str(switcher_output)))
             for _ in range(7):
                 await pilot.press("down")
                 await pilot.pause()
             selected_preview_output = first_app.query_one("#output").render()
             print(
-                "switcher_selected_preview=",
-                "Selected preview:" in str(selected_preview_output)
-                or "- artifact dir:" in str(selected_preview_output),
+                "switcher_selected_preview_surface=",
+                matches_switcher_selected_preview_output(str(selected_preview_output)),
             )
-            print(
-                "switcher_last_approval_preview=",
-                "last approval: pending run_shell_command via fake_runtime | queued 1" in str(selected_preview_output),
-            )
-            print(
-                "switcher_shell_preview=",
-                "- last shell: inspect/e0 git status --short -> M README.md" in str(selected_preview_output),
-            )
-            print("switcher_tool_streak_preview=", "recent tools (2)" in str(selected_preview_output))
             await pilot.press("p")
             await pilot.pause()
             pending_output = first_app.query_one("#output").render()
@@ -344,12 +328,14 @@ async def run_smoke() -> None:
             await pilot.press("t")
             await pilot.pause()
             tool_output = str(first_app.query_one("#output").render())
-            print("switcher_tool_filter=", "Filter: tool | Sort: attention" in tool_output)
             print(
-                "switcher_tool_filter_only_tool=",
-                "session-tool | 1 turn(s)" in tool_output
-                and "session-newer | 1 turn(s)" in tool_output
-                and "session-restore | 1 turn(s)" not in tool_output,
+                "switcher_tool_filter=",
+                matches_tool_filter_output(
+                    tool_output,
+                    sort_mode="attention",
+                    required_session_ids=["session-tool", "session-newer"],
+                    excluded_session_ids=["session-restore"],
+                ),
             )
             await pilot.press("w")
             await pilot.pause()

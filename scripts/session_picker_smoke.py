@@ -25,9 +25,11 @@ from strands_agent_tui.testing import (
     matches_denied_filter_output,
     matches_denied_page_rollup_output,
     matches_denied_preview_output,
+    matches_intervention_filter_output,
     matches_pending_age_output,
     matches_pending_filter_output,
     matches_pending_page_rollup_output,
+    matches_picker_default_output,
     matches_queue_breakdown_output,
     matches_shell_filter_output,
     matches_stale_backlog_output,
@@ -37,6 +39,7 @@ from strands_agent_tui.testing import (
     matches_stale_page_rollup_output,
     matches_stale_pending_subfilter_output,
     matches_stale_restored_subfilter_output,
+    matches_tool_filter_output,
     matches_workspace_filter_output,
     seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
@@ -269,8 +272,7 @@ def main() -> None:
 
         paged_picker = render_session_picker(temp_dir, page_index=1)
 
-        print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 13" in default_picker)
-        print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
+        print("picker_default_surface=", matches_picker_default_output(default_picker))
         print("picker_pending_filter=", matches_pending_filter_output(pending_picker))
         print(
             "picker_pending_only_pending=",
@@ -358,23 +360,20 @@ def main() -> None:
         )
         print(
             "picker_tool_filter=",
-            "Filter: tool | Sort: recent" in tool_picker
-            and "Tool backlog:" in tool_picker
-            and "Tool failure mix: failures: test 1, tool 1 | failing: 2 sessions" in tool_picker,
+            matches_tool_filter_output(
+                tool_picker,
+                failure_mix_line="Tool failure mix: failures: test 1, tool 1 | failing: 2 sessions",
+            ),
         )
         print(
-            "picker_intervention_filter=",
-            "Filter: intervention | Sort: recent" in intervention_picker
-            and "session-pending | 1 turn(s)" in intervention_picker
-            and "session-denied | 1 turn(s)" in intervention_picker
-            and "intervention: pending 1" in intervention_picker
-            and "Intervention mix:" in intervention_picker
-            and "session-plain | 1 turn(s)" not in intervention_picker,
-        )
-        print(
-            "picker_intervention_preview=",
-            "- last intervention:" in intervention_picker
-            and "- recent interventions (" in intervention_picker,
+            "picker_intervention_surface=",
+            matches_intervention_filter_output(
+                intervention_picker,
+                required_session_ids=["session-pending", "session-denied"],
+                excluded_session_ids=["session-plain"],
+                required=["intervention: pending 1"],
+                require_preview=True,
+            ),
         )
         print(
             "picker_shell_inspect_filter=",
@@ -497,19 +496,7 @@ def main() -> None:
             "Try A to show all sessions" in empty_pending_picker
             and "Press Enter or N to start a fresh session while keeping this picker context for the next reopen." in empty_pending_picker,
         )
-        print(
-            "picker_shell_rollup=",
-            "shell: inspect 1" in default_picker
-            and "- last shell: inspect/e0 git status --short -> M README.md" in default_picker,
-        )
-        print(
-            "picker_tool_streak_preview=",
-            "- recent tools (1):" in default_picker and "inspect/e0 git status --short -> M README.md" in default_picker,
-        )
-        print(
-            "picker_failure_badges=",
-            "failures: test 1" in default_picker and "failures: tool 1" in default_picker,
-        )
+        print("picker_tool_rollup_surface=", matches_picker_default_output(default_picker))
         attention_lines = [
             line
             for line in attention_picker.splitlines()

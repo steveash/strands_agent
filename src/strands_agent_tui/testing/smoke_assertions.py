@@ -41,6 +41,129 @@ def _matches_filter_output(
     )
 
 
+def matches_picker_default_output(
+    text: str,
+    *,
+    banner_line: str = "Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 13",
+    recent_tool_count: int = 1,
+    last_shell_summary: str = "inspect/e0 git status --short -> M README.md",
+) -> bool:
+    return smoke_text_matches(
+        text,
+        required=[
+            banner_line,
+            "Selected preview:",
+            "- artifact dir:",
+            "shell: inspect 1",
+            f"- last shell: {last_shell_summary}",
+            f"- recent tools ({recent_tool_count}):",
+            last_shell_summary,
+            "failures: test 1",
+            "failures: tool 1",
+        ],
+    )
+
+
+def matches_switcher_default_output(
+    text: str,
+    *,
+    selected_session_id: str = "session-tool",
+    pending_marker: str = "pending: run_shell_command",
+    restore_badge: str = "restore: filter=tool, replay 1/1, draft 15c",
+    tool_preview: str = "last tool: inspect/e0 git status --short -> M README.md",
+    shell_rollup: str = "shell: inspect 1",
+    event_preview: str = "last event: tool_finished: run_shell_command",
+) -> bool:
+    selected_line = next((line for line in text.splitlines() if line.startswith("> ")), "")
+    return (
+        selected_session_id in selected_line
+        and "(current)" not in selected_line
+        and smoke_text_matches(
+            text,
+            required=[
+                pending_marker,
+                "approvals: pending 1, approved 1",
+                restore_badge,
+                tool_preview,
+                shell_rollup,
+                event_preview,
+            ],
+        )
+    )
+
+
+def matches_switcher_selected_preview_output(
+    text: str,
+    *,
+    last_approval_summary: str = "pending run_shell_command via fake_runtime | queued 1",
+    last_shell_summary: str = "inspect/e0 git status --short -> M README.md",
+    recent_tool_count: int = 2,
+) -> bool:
+    return (
+        ("Selected preview:" in text or "- artifact dir:" in text)
+        and smoke_text_matches(
+            text,
+            required=[
+                f"- last approval: {last_approval_summary}",
+                f"- last shell: {last_shell_summary}",
+                f"recent tools ({recent_tool_count})",
+            ],
+        )
+    )
+
+
+def matches_tool_filter_output(
+    text: str,
+    *,
+    sort_mode: str = "recent",
+    required_session_ids: Iterable[str] = (),
+    excluded_session_ids: Iterable[str] = (),
+    required: Iterable[str] = (),
+    excluded: Iterable[str] = (),
+    require_backlog: bool = True,
+    failure_mix_line: str | None = None,
+) -> bool:
+    required_lines = [
+        f"Filter: tool | Sort: {sort_mode}",
+        *_session_lines(required_session_ids),
+        *required,
+    ]
+    if require_backlog:
+        required_lines.append("Tool backlog:")
+    if failure_mix_line is not None:
+        required_lines.append(failure_mix_line)
+    return smoke_text_matches(
+        text,
+        required=required_lines,
+        excluded=[*_session_lines(excluded_session_ids), *excluded],
+    )
+
+
+def matches_intervention_filter_output(
+    text: str,
+    *,
+    sort_mode: str = "recent",
+    required_session_ids: Iterable[str] = (),
+    excluded_session_ids: Iterable[str] = (),
+    required: Iterable[str] = (),
+    excluded: Iterable[str] = (),
+    require_preview: bool = False,
+) -> bool:
+    required_lines = [
+        f"Filter: intervention | Sort: {sort_mode}",
+        "Intervention mix:",
+        *_session_lines(required_session_ids),
+        *required,
+    ]
+    if require_preview:
+        required_lines.extend(["- last intervention:", "- recent interventions ("])
+    return smoke_text_matches(
+        text,
+        required=required_lines,
+        excluded=[*_session_lines(excluded_session_ids), *excluded],
+    )
+
+
 def matches_pending_filter_output(
     text: str,
     *,
