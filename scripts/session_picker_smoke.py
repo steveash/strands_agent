@@ -22,6 +22,14 @@ from strands_agent_tui.testing import (
     matches_broad_stale_row_focus_suppression,
     matches_compact_stale_preview_output,
     matches_custom_stale_cutoff_output,
+    matches_denied_filter_output,
+    matches_denied_page_rollup_output,
+    matches_denied_preview_output,
+    matches_pending_age_output,
+    matches_pending_filter_output,
+    matches_pending_page_rollup_output,
+    matches_queue_breakdown_output,
+    matches_shell_filter_output,
     matches_stale_backlog_output,
     matches_stale_cutoff_output,
     matches_stale_denied_subfilter_output,
@@ -29,6 +37,7 @@ from strands_agent_tui.testing import (
     matches_stale_page_rollup_output,
     matches_stale_pending_subfilter_output,
     matches_stale_restored_subfilter_output,
+    matches_workspace_filter_output,
     seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
     seed_approval_restore_focus_scenario,
@@ -262,16 +271,22 @@ def main() -> None:
 
         print("picker_default_banner=", "Filter: all | Sort: recent | Page: 1/2 | Showing: 1-8 of 13" in default_picker)
         print("picker_default_preview=", "Selected preview:" in default_picker and "- artifact dir:" in default_picker)
-        print("picker_pending_filter=", "Filter: pending | Sort: recent" in pending_picker)
+        print("picker_pending_filter=", matches_pending_filter_output(pending_picker))
         print(
             "picker_pending_only_pending=",
-            "session-pending" in pending_picker
-            and "session-pending-edit" in pending_picker
-            and "session-plain" not in pending_picker,
+            matches_pending_filter_output(
+                pending_picker,
+                required_session_ids=["session-pending", "session-pending-edit"],
+                excluded_session_ids=["session-plain"],
+            ),
         )
         print(
             "picker_denied_filter=",
-            "Filter: denied | Sort: recent" in denied_picker and "session-denied" in denied_picker and "session-plain" not in denied_picker,
+            matches_denied_filter_output(
+                denied_picker,
+                required_session_ids=["session-denied"],
+                excluded_session_ids=["session-plain"],
+            ),
         )
         print(
             "picker_approval_restore_filter=",
@@ -287,43 +302,59 @@ def main() -> None:
         )
         print(
             "picker_workspace_inspect_filter=",
-            "Filter: workspace-inspect | Sort: recent" in workspace_inspect_picker
-            and "Workspace backlog: 1 session | lanes: inspect 1" in workspace_inspect_picker
-            and "Workspace focus: inspect" in workspace_inspect_picker
-            and "session-tool | 1 turn(s)" in workspace_inspect_picker
-            and "workspace lanes: inspect" in workspace_inspect_picker
-            and "session-inspect | 1 turn(s)" not in workspace_inspect_picker,
+            matches_workspace_filter_output(
+                workspace_inspect_picker,
+                filter_mode="workspace-inspect",
+                backlog_line="Workspace backlog: 1 session | lanes: inspect 1",
+                focus="inspect",
+                required_session_ids=["session-tool"],
+                excluded_session_ids=["session-inspect"],
+                required=["workspace lanes: inspect"],
+            ),
         )
         print(
             "picker_workspace_edit_filter=",
-            "Filter: workspace-edit | Sort: recent" in workspace_edit_picker
-            and "Workspace backlog: 5 sessions | lanes: edit 5" in workspace_edit_picker
-            and "Workspace focus: edit" in workspace_edit_picker
-            and "session-pending-edit | 1 turn(s)" in workspace_edit_picker
-            and "session-restored-edit-pending | 1 turn(s)" in workspace_edit_picker
-            and "session-denied | 1 turn(s)" in workspace_edit_picker
-            and "workspace lanes: edit" in workspace_edit_picker
-            and "session-inspect | 1 turn(s)" not in workspace_edit_picker,
+            matches_workspace_filter_output(
+                workspace_edit_picker,
+                filter_mode="workspace-edit",
+                backlog_line="Workspace backlog: 5 sessions | lanes: edit 5",
+                focus="edit",
+                required_session_ids=[
+                    "session-pending-edit",
+                    "session-restored-edit-pending",
+                    "session-denied",
+                ],
+                excluded_session_ids=["session-inspect"],
+                required=["workspace lanes: edit"],
+            ),
         )
         print(
             "picker_workspace_overlap_summary=",
-            "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session"
-            in workspace_overlap_inspect_picker
-            and "Workspace focus: inspect" in workspace_overlap_inspect_picker
-            and "Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session"
-            in workspace_overlap_edit_picker
-            and "Workspace focus: edit" in workspace_overlap_edit_picker
-            and "workspace lanes: inspect, edit" in workspace_overlap_inspect_picker,
+            matches_workspace_filter_output(
+                workspace_overlap_inspect_picker,
+                filter_mode="workspace-inspect",
+                backlog_line="Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session",
+                focus="inspect",
+                required=["workspace lanes: inspect, edit"],
+            )
+            and matches_workspace_filter_output(
+                workspace_overlap_edit_picker,
+                filter_mode="workspace-edit",
+                backlog_line="Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session",
+                focus="edit",
+            ),
         )
         print(
             "picker_shell_filter=",
-            "Filter: shell | Sort: recent" in shell_picker
-            and "Shell backlog: 6 sessions | lanes: inspect 2, test 5 | overlap: mixed 1 session" in shell_picker
-            and "Shell focus: inspect, test" in shell_picker
-            and "session-inspect | 1 turn(s)" in shell_picker
-            and "session-pending | 1 turn(s)" in shell_picker
-            and "shell: inspect 1" in shell_picker
-            and "session-tool | 1 turn(s)" not in shell_picker,
+            matches_shell_filter_output(
+                shell_picker,
+                filter_mode="shell",
+                backlog_line="Shell backlog: 6 sessions | lanes: inspect 2, test 5 | overlap: mixed 1 session",
+                focus="inspect, test",
+                required_session_ids=["session-inspect", "session-pending"],
+                excluded_session_ids=["session-tool"],
+                required=["shell: inspect 1"],
+            ),
         )
         print(
             "picker_tool_filter=",
@@ -347,22 +378,25 @@ def main() -> None:
         )
         print(
             "picker_shell_inspect_filter=",
-            "Filter: shell-inspect | Sort: recent" in shell_inspect_picker
-            and "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session" in shell_inspect_picker
-            and "Shell focus: inspect" in shell_inspect_picker
-            and "session-inspect | 1 turn(s)" in shell_inspect_picker
-            and "session-pending | 1 turn(s)" in shell_inspect_picker
-            and "session-tool | 1 turn(s)" not in shell_inspect_picker,
+            matches_shell_filter_output(
+                shell_inspect_picker,
+                filter_mode="shell-inspect",
+                backlog_line="Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session",
+                focus="inspect",
+                required_session_ids=["session-inspect", "session-pending"],
+                excluded_session_ids=["session-tool"],
+            ),
         )
         print(
             "picker_shell_test_filter=",
-            "Filter: shell-test | Sort: recent" in shell_test_picker
-            and "Shell backlog: 5 sessions | lanes: inspect 1, test 5 | overlap: mixed 1 session" in shell_test_picker
-            and "Shell focus: test" in shell_test_picker
-            and "session-pending | 1 turn(s)" in shell_test_picker
-            and "session-aged | 1 turn(s)" in shell_test_picker
-            and "session-failed-test | 1 turn(s)" in shell_test_picker
-            and "session-inspect | 1 turn(s)" not in shell_test_picker,
+            matches_shell_filter_output(
+                shell_test_picker,
+                filter_mode="shell-test",
+                backlog_line="Shell backlog: 5 sessions | lanes: inspect 1, test 5 | overlap: mixed 1 session",
+                focus="test",
+                required_session_ids=["session-pending", "session-aged", "session-failed-test"],
+                excluded_session_ids=["session-inspect"],
+            ),
         )
         print(
             "picker_shell_overlap_badge=",
@@ -372,38 +406,41 @@ def main() -> None:
         )
         print(
             "picker_shell_overlap_summary=",
-            "Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session"
-            in shell_overlap_picker
-            and "Shell focus: inspect, test" in shell_overlap_picker
-            and "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session"
-            in shell_overlap_inspect_picker
-            and "Shell focus: inspect" in shell_overlap_inspect_picker
-            and "Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session"
-            in shell_overlap_test_picker
-            and "Shell focus: test" in shell_overlap_test_picker
-            and "shell lanes: inspect, test" in shell_overlap_inspect_picker,
+            matches_shell_filter_output(
+                shell_overlap_picker,
+                filter_mode="shell",
+                backlog_line="Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session",
+                focus="inspect, test",
+            )
+            and matches_shell_filter_output(
+                shell_overlap_inspect_picker,
+                filter_mode="shell-inspect",
+                backlog_line="Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session",
+                focus="inspect",
+                required=["shell lanes: inspect, test"],
+            )
+            and matches_shell_filter_output(
+                shell_overlap_test_picker,
+                filter_mode="shell-test",
+                backlog_line="Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session",
+                focus="test",
+            ),
         )
         print(
             "picker_denied_preview_origin=",
-            "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_picker,
+            matches_denied_preview_output(denied_picker),
         )
         print(
             "picker_denied_age=",
-            "denied age: 6h" in denied_picker and "- last denied age: 6h" in denied_picker,
+            matches_denied_preview_output(denied_picker),
         )
         print(
             "picker_denied_badges=",
-            "denied: edit 1" in denied_picker,
+            matches_denied_preview_output(denied_picker, required_badges=["denied: edit 1"]),
         )
         print(
             "picker_denied_page_rollup=",
-            "Denied approval backlog: 10 sessions | approvals: 10 | families: test 8, edit 2 | restored denied: 1 session"
-            in denied_rollup_picker
-            and "Denied focus: fresh, restored | oldest: 3d" in denied_rollup_picker
-            and "This page denied approvals: approvals: 8 | families: test 8 | more off-page: approvals: 2 | families: edit 2 | restored denied: 1 session"
-            in denied_rollup_picker
-            and "This page denied approvals: approvals: 2 | families: edit 2 | restored denied: 1 session | more off-page: approvals: 8 | families: test 8"
-            in denied_rollup_page_two_picker,
+            matches_denied_page_rollup_output(denied_rollup_picker, denied_rollup_page_two_picker),
         )
         print(
             "picker_restored_approval_badge=",
@@ -522,30 +559,36 @@ def main() -> None:
         )
         print(
             "picker_pending_age_and_stale_cues=",
-            "session-aged" in pending_attention_picker
-            and "pending age: 45d" in pending_attention_picker
-            and "stale: warning 10d" in pending_attention_picker
-            and "- session age: idle 10d since last artifact activity" in pending_attention_age_picker,
+            matches_pending_filter_output(
+                pending_attention_picker,
+                required_session_ids=["session-aged"],
+                sort_mode="attention",
+            )
+            and matches_pending_age_output(pending_attention_picker)
+            and matches_pending_age_output(pending_attention_age_picker, session_idle_age="10d"),
         )
         print(
             "picker_pending_queue_breakdown=",
-            "pending: 3 approvals (first test; rest edit 1, tool 1)" in mixed_pending_picker
-            and "- pending queue: first test; rest edit 1, tool 1" in mixed_pending_picker,
+            matches_queue_breakdown_output(
+                mixed_pending_picker,
+                summary_line="pending: 3 approvals (first test; rest edit 1, tool 1)",
+                preview_line="- pending queue: first test; rest edit 1, tool 1",
+            ),
         )
         print(
             "picker_pending_page_rollup=",
-            "Pending approval backlog: 10 sessions | approvals: 11 | families: test 9, edit 2 | multi-queue: 1 session | restored queues: 1 session"
-            in pending_rollup_picker
-            and "Pending focus: fresh, restored | oldest: 18d" in pending_rollup_picker
-            and "This page pending queues: approvals: 8 | families: test 8 | more off-page: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session"
-            in pending_rollup_picker
-            and "This page pending queues: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session | more off-page: approvals: 8 | families: test 8"
-            in pending_rollup_page_two_picker,
+            matches_pending_page_rollup_output(
+                pending_rollup_picker,
+                pending_rollup_page_two_picker,
+            ),
         )
         print(
             "picker_restored_pending_queue_breakdown=",
-            "approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker
-            and "- approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_picker,
+            matches_queue_breakdown_output(
+                mixed_restored_picker,
+                summary_line="approval restore queue: first test; rest edit 1, tool 1",
+                preview_line="- approval restore queue: first test; rest edit 1, tool 1",
+            ),
         )
         print(
             "picker_approval_restore_overlap_summary=",

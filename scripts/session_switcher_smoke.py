@@ -21,6 +21,14 @@ from strands_agent_tui.testing import (
     matches_broad_stale_row_focus_suppression,
     matches_compact_stale_preview_output,
     matches_custom_stale_cutoff_output,
+    matches_denied_filter_output,
+    matches_denied_page_rollup_output,
+    matches_denied_preview_output,
+    matches_pending_age_output,
+    matches_pending_filter_output,
+    matches_pending_page_rollup_output,
+    matches_queue_breakdown_output,
+    matches_shell_filter_output,
     matches_stale_backlog_output,
     matches_stale_cutoff_output,
     matches_stale_denied_subfilter_output,
@@ -28,6 +36,7 @@ from strands_agent_tui.testing import (
     matches_stale_page_rollup_output,
     matches_stale_pending_subfilter_output,
     matches_stale_restored_subfilter_output,
+    matches_workspace_filter_output,
     seed_approval_restore_overlap_session,
     seed_approval_restore_rollup_scenario,
     seed_approval_restore_focus_scenario,
@@ -185,40 +194,50 @@ async def run_smoke() -> None:
             await pilot.pause()
             pending_output = first_app.query_one("#output").render()
             pending_text = str(pending_output)
-            print("switcher_pending_filter=", "Filter: pending | Sort: recent" in str(pending_output))
+            print("switcher_pending_filter=", matches_pending_filter_output(pending_text))
             print(
                 "switcher_pending_filter_only_newer=",
-                "session-newer | 1 turn(s)" in pending_text
-                and "session-aged | 1 turn(s)" in pending_text
-                and "session-pending-edit | 1 turn(s)" in pending_text
-                and "session-older | 1 turn(s)" not in pending_text,
+                matches_pending_filter_output(
+                    pending_text,
+                    required_session_ids=["session-newer", "session-aged", "session-pending-edit"],
+                    excluded_session_ids=["session-older"],
+                ),
             )
             print(
                 "switcher_pending_age_and_stale_cues=",
-                "session-aged | 1 turn(s)" in pending_text
-                and "pending age: 45d" in pending_text
-                and "stale: warning 10d" in pending_text,
+                matches_pending_filter_output(pending_text, required_session_ids=["session-aged"])
+                and matches_pending_age_output(pending_text),
             )
             await pilot.press("d")
             await pilot.pause()
             denied_output = first_app.query_one("#output").render()
             denied_text = str(denied_output)
-            print("switcher_denied_filter=", "Filter: denied | Sort: recent" in denied_text)
+            print("switcher_denied_filter=", matches_denied_filter_output(denied_text))
             print(
                 "switcher_denied_filter_only_denied=",
-                "session-denied | 1 turn(s)" in denied_text and "session-newer | 1 turn(s)" not in denied_text,
+                matches_denied_filter_output(
+                    denied_text,
+                    required_session_ids=["session-denied"],
+                    excluded_session_ids=["session-newer"],
+                ),
             )
             print(
                 "switcher_denied_preview_origin=",
-                "last denied approval: denied replace_text via fake_runtime | restored queue | remaining 0" in denied_text,
+                matches_denied_preview_output(denied_text),
             )
             print(
                 "switcher_denied_age=",
-                "denied age: 6h" in denied_text and "- last denied age: 6h" in denied_text,
+                matches_denied_preview_output(denied_text),
             )
             print("switcher_row_approval_focus=", "approval focus: denied/restored" in denied_text)
-            print("switcher_denied_badges=", "denied: edit 1" in denied_text)
-            print("switcher_restored_approval_badge=", "approval restore: denied 1" in denied_text)
+            print(
+                "switcher_denied_badges=",
+                matches_denied_preview_output(denied_text, required_badges=["denied: edit 1"]),
+            )
+            print(
+                "switcher_restored_approval_badge=",
+                matches_denied_preview_output(denied_text, require_restore_badge=True),
+            )
             await pilot.press("v")
             await pilot.pause()
             approval_restore_output = first_app.query_one("#output").render()
@@ -337,71 +356,112 @@ async def run_smoke() -> None:
             workspace_inspect_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_workspace_inspect_filter=",
-                "Filter: workspace-inspect | Sort: attention" in workspace_inspect_output
-                and "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session"
-                in workspace_inspect_output
-                and "Workspace focus: inspect" in workspace_inspect_output
+                matches_workspace_filter_output(
+                    workspace_inspect_output,
+                    filter_mode="workspace-inspect",
+                    sort_mode="attention",
+                    backlog_line="Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session",
+                    focus="inspect",
+                )
             )
             print(
                 "switcher_workspace_inspect_only_workspace=",
-                "session-tool | 1 turn(s)" in workspace_inspect_output
-                and "session-newer | 1 turn(s)" in workspace_inspect_output
-                and "workspace lanes: inspect" in workspace_inspect_output
-                and "session-inspect | 1 turn(s)" not in workspace_inspect_output,
+                matches_workspace_filter_output(
+                    workspace_inspect_output,
+                    filter_mode="workspace-inspect",
+                    sort_mode="attention",
+                    backlog_line="Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session",
+                    focus="inspect",
+                    required_session_ids=["session-tool", "session-newer"],
+                    excluded_session_ids=["session-inspect"],
+                    required=["workspace lanes: inspect"],
+                ),
             )
             await pilot.press("e")
             await pilot.pause()
             workspace_edit_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_workspace_edit_filter=",
-                "Filter: workspace-edit | Sort: attention" in workspace_edit_output
-                and "Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 | overlap: mixed 1 session"
-                in workspace_edit_output
-                and "Workspace focus: edit" in workspace_edit_output
+                matches_workspace_filter_output(
+                    workspace_edit_output,
+                    filter_mode="workspace-edit",
+                    sort_mode="attention",
+                    backlog_line="Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 | overlap: mixed 1 session",
+                    focus="edit",
+                )
             )
             print(
                 "switcher_workspace_edit_only_workspace=",
-                "session-newer | 1 turn(s)" in workspace_edit_output
-                and "session-pending-edit | 1 turn(s)" in workspace_edit_output
-                and "session-restored-edit-pending | 1 turn(s)" in workspace_edit_output
-                and "session-denied | 1 turn(s)" in workspace_edit_output
-                and "workspace lanes: edit" in workspace_edit_output
-                and "session-inspect | 1 turn(s)" not in workspace_edit_output,
+                matches_workspace_filter_output(
+                    workspace_edit_output,
+                    filter_mode="workspace-edit",
+                    sort_mode="attention",
+                    backlog_line="Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 | overlap: mixed 1 session",
+                    focus="edit",
+                    required_session_ids=[
+                        "session-newer",
+                        "session-pending-edit",
+                        "session-restored-edit-pending",
+                        "session-denied",
+                    ],
+                    excluded_session_ids=["session-inspect"],
+                    required=["workspace lanes: edit"],
+                ),
             )
             await pilot.press("h")
             await pilot.pause()
             shell_attention_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_shell_filter=",
-                "Filter: shell | Sort: attention" in shell_attention_output
-                and "Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session"
-                in shell_attention_output
-                and "Shell focus: inspect, test" in shell_attention_output
+                matches_shell_filter_output(
+                    shell_attention_output,
+                    filter_mode="shell",
+                    sort_mode="attention",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    focus="inspect, test",
+                )
             )
             print(
                 "switcher_shell_filter_only_shell=",
-                "session-newer | 1 turn(s)" in shell_attention_output
-                and "session-failed-test | 1 turn(s)" in shell_attention_output
-                and "session-tool | 1 turn(s)" not in shell_attention_output
-                and "session-denied | 1 turn(s)" not in shell_attention_output,
+                matches_shell_filter_output(
+                    shell_attention_output,
+                    filter_mode="shell",
+                    sort_mode="attention",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    focus="inspect, test",
+                    required_session_ids=["session-newer", "session-failed-test"],
+                    excluded_session_ids=["session-tool", "session-denied"],
+                ),
             )
             await pilot.press("i")
             await pilot.pause()
             shell_inspect_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_shell_inspect_filter=",
-                "Filter: shell-inspect | Sort: attention" in shell_inspect_output
-                and "Shell backlog: 1 session | lanes: inspect 1, test 1 | overlap: mixed 1 session"
-                in shell_inspect_output
-                and "Shell focus: inspect" in shell_inspect_output
+                matches_shell_filter_output(
+                    shell_inspect_output,
+                    filter_mode="shell-inspect",
+                    sort_mode="attention",
+                    backlog_line="Shell backlog: 1 session | lanes: inspect 1, test 1 | overlap: mixed 1 session",
+                    focus="inspect",
+                )
             )
             print(
                 "switcher_shell_inspect_only_inspect=",
-                "session-newer | 1 turn(s)" in shell_inspect_output
-                and "session-aged | 1 turn(s)" not in shell_inspect_output
-                and "session-failed-test | 1 turn(s)" not in shell_inspect_output
-                and "session-restored-pending | 1 turn(s)" not in shell_inspect_output
-                and "session-tool | 1 turn(s)" not in shell_inspect_output,
+                matches_shell_filter_output(
+                    shell_inspect_output,
+                    filter_mode="shell-inspect",
+                    sort_mode="attention",
+                    backlog_line="Shell backlog: 1 session | lanes: inspect 1, test 1 | overlap: mixed 1 session",
+                    focus="inspect",
+                    required_session_ids=["session-newer"],
+                    excluded_session_ids=[
+                        "session-aged",
+                        "session-failed-test",
+                        "session-restored-pending",
+                        "session-tool",
+                    ],
+                ),
             )
             print(
                 "switcher_shell_overlap_badge=",
@@ -413,18 +473,30 @@ async def run_smoke() -> None:
             shell_test_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_shell_test_filter=",
-                "Filter: shell-test | Sort: attention" in shell_test_output
-                and "Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session"
-                in shell_test_output
-                and "Shell focus: test" in shell_test_output
+                matches_shell_filter_output(
+                    shell_test_output,
+                    filter_mode="shell-test",
+                    sort_mode="attention",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    focus="test",
+                )
             )
             print(
                 "switcher_shell_test_only_test=",
-                "session-newer | 1 turn(s)" in shell_test_output
-                and "session-aged | 1 turn(s)" in shell_test_output
-                and "session-failed-test | 1 turn(s)" in shell_test_output
-                and "session-restored-pending | 1 turn(s)" in shell_test_output
-                and "session-tool | 1 turn(s)" not in shell_test_output,
+                matches_shell_filter_output(
+                    shell_test_output,
+                    filter_mode="shell-test",
+                    sort_mode="attention",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    focus="test",
+                    required_session_ids=[
+                        "session-newer",
+                        "session-aged",
+                        "session-failed-test",
+                        "session-restored-pending",
+                    ],
+                    excluded_session_ids=["session-tool"],
+                ),
             )
             await pilot.press("o")
             await pilot.pause()
@@ -598,13 +670,10 @@ async def run_smoke() -> None:
             pending_rollup_second_page = str(pending_rollup_app.query_one("#output").render())
             print(
                 "switcher_pending_page_rollup=",
-                "Pending approval backlog: 10 sessions | approvals: 11 | families: test 9, edit 2 | multi-queue: 1 session | restored queues: 1 session"
-                in pending_rollup_first_page
-                and "Pending focus: fresh, restored | oldest: 18d" in pending_rollup_first_page
-                and "This page pending queues: approvals: 8 | families: test 8 | more off-page: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session"
-                in pending_rollup_first_page
-                and "This page pending queues: approvals: 3 | families: test 1, edit 2 | multi-queue: 1 session | restored queues: 1 session | more off-page: approvals: 8 | families: test 8"
-                in pending_rollup_second_page,
+                matches_pending_page_rollup_output(
+                    pending_rollup_first_page,
+                    pending_rollup_second_page,
+                ),
             )
 
     with TemporaryDirectory() as denied_rollup_root:
@@ -642,13 +711,10 @@ async def run_smoke() -> None:
             denied_rollup_second_page = str(denied_rollup_app.query_one("#output").render())
             print(
                 "switcher_denied_page_rollup=",
-                "Denied approval backlog: 10 sessions | approvals: 10 | families: test 8, edit 2 | restored denied: 1 session"
-                in denied_rollup_first_page
-                and "Denied focus: fresh, restored | oldest: 3d" in denied_rollup_first_page
-                and "This page denied approvals: approvals: 8 | families: test 8 | more off-page: approvals: 2 | families: edit 2 | restored denied: 1 session"
-                in denied_rollup_first_page
-                and "This page denied approvals: approvals: 2 | families: edit 2 | restored denied: 1 session | more off-page: approvals: 8 | families: test 8"
-                in denied_rollup_second_page,
+                matches_denied_page_rollup_output(
+                    denied_rollup_first_page,
+                    denied_rollup_second_page,
+                ),
             )
 
     with TemporaryDirectory() as stale_rollup_root:
@@ -846,8 +912,11 @@ async def run_smoke() -> None:
             mixed_pending_output = str(mixed_pending_app.query_one("#output").render())
             print(
                 "switcher_pending_queue_breakdown=",
-                "pending: 3 approvals (first test; rest edit 1, tool 1)" in mixed_pending_output
-                and "- pending queue: first test; rest edit 1, tool 1" in mixed_pending_output,
+                matches_queue_breakdown_output(
+                    mixed_pending_output,
+                    summary_line="pending: 3 approvals (first test; rest edit 1, tool 1)",
+                    preview_line="- pending queue: first test; rest edit 1, tool 1",
+                ),
             )
 
     with TemporaryDirectory() as mixed_restored_root:
@@ -888,8 +957,11 @@ async def run_smoke() -> None:
             mixed_restored_output = str(mixed_restored_app.query_one("#output").render())
             print(
                 "switcher_restored_pending_queue_breakdown=",
-                "approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_output
-                and "- approval restore queue: first test; rest edit 1, tool 1" in mixed_restored_output,
+                matches_queue_breakdown_output(
+                    mixed_restored_output,
+                    summary_line="approval restore queue: first test; rest edit 1, tool 1",
+                    preview_line="- approval restore queue: first test; rest edit 1, tool 1",
+                ),
             )
 
         with TemporaryDirectory() as mixed_restore_overlap_root:
@@ -1025,25 +1097,46 @@ async def run_smoke() -> None:
             shell_test_output = str(overlap_app.query_one("#output").render())
             print(
                 "switcher_workspace_overlap_summary=",
-                "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session"
-                in workspace_inspect_output
-                and "Workspace focus: inspect" in workspace_inspect_output
-                and "Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session"
-                in workspace_edit_output
-                and "Workspace focus: edit" in workspace_edit_output
-                and "workspace lanes: inspect, edit" in workspace_inspect_output,
+                matches_workspace_filter_output(
+                    workspace_inspect_output,
+                    filter_mode="workspace-inspect",
+                    sort_mode="recent",
+                    backlog_line="Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session",
+                    focus="inspect",
+                    required=["workspace lanes: inspect, edit"],
+                )
+                and matches_workspace_filter_output(
+                    workspace_edit_output,
+                    filter_mode="workspace-edit",
+                    sort_mode="recent",
+                    backlog_line="Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session",
+                    focus="edit",
+                ),
             )
             print(
                 "switcher_shell_overlap_summary=",
-                "Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session" in shell_output
-                and "Shell focus: inspect, test" in shell_output
-                and "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session"
-                in shell_inspect_output
-                and "Shell focus: inspect" in shell_inspect_output
-                and "Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session"
-                in shell_test_output
-                and "Shell focus: test" in shell_test_output
-                and "shell lanes: inspect, test" in shell_inspect_output,
+                matches_shell_filter_output(
+                    shell_output,
+                    filter_mode="shell",
+                    sort_mode="recent",
+                    backlog_line="Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session",
+                    focus="inspect, test",
+                )
+                and matches_shell_filter_output(
+                    shell_inspect_output,
+                    filter_mode="shell-inspect",
+                    sort_mode="recent",
+                    backlog_line="Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session",
+                    focus="inspect",
+                    required=["shell lanes: inspect, test"],
+                )
+                and matches_shell_filter_output(
+                    shell_test_output,
+                    filter_mode="shell-test",
+                    sort_mode="recent",
+                    backlog_line="Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session",
+                    focus="test",
+                ),
             )
 
 
