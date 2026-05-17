@@ -88,6 +88,19 @@ def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> N
         os.utime(path, (timestamp, timestamp))
 
 
+def seed_plain_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-plain",
+    prompt: str = "inspect the plain artifact set",
+    response: str = "ok",
+    created_at: str | None = None,
+) -> SessionArtifactStore:
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(store, prompt, response=response, created_at=created_at)
+    return store
+
+
 def seed_workspace_inspect_session(
     root: Path | str,
     *,
@@ -362,6 +375,146 @@ def seed_workspace_failure_session(
                 },
             )
         ],
+    )
+    return store
+
+
+def seed_pending_approval_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-pending",
+    prompt: str = "run the gated test suite",
+    response: str = "ok",
+    pending_request_id: str = "approval-0001",
+    pending_tool_name: str = "run_shell_command",
+    pending_args: dict[str, Any] | None = None,
+    pending_prompt: str = "run tests",
+    pending_reason: str = "Needs confirmation",
+    pending_source: str = "fake_runtime",
+    pending_created_at: str | None = None,
+    approved_request_id: str | None = "approval-0000",
+    approved_tool_name: str = "write_file",
+    approved_source: str = "fake_runtime",
+    approved_remaining_pending_count: int = 1,
+    approved_message: str = "Approved in the TUI",
+    shell_command: str | None = "git status --short",
+    shell_result_preview: str = "git status --short -> M README.md",
+    shell_policy: str = "inspect",
+    shell_message: str = "Finished shell command",
+    include_confirmation_event: bool = True,
+    extra_events: list[dict[str, Any]] | None = None,
+    session_state: SessionState | None = None,
+    restored_from_session: bool = False,
+    turn_created_at: str | None = None,
+) -> SessionArtifactStore:
+    if pending_args is None:
+        pending_args = {"command": "pytest -q"} if pending_tool_name == "run_shell_command" else {}
+
+    events: list[dict[str, Any]] = []
+    if approved_request_id is not None:
+        events.append(
+            runtime_event(
+                "steering_approved",
+                approved_tool_name,
+                approved_message,
+                data={
+                    "tool_name": approved_tool_name,
+                    "approval_id": approved_request_id,
+                    "approval_status": "approved",
+                    "approval_source": approved_source,
+                    "remaining_pending_count": approved_remaining_pending_count,
+                    "resumed_from_approval": True,
+                },
+            )
+        )
+    if extra_events:
+        events.extend(extra_events)
+    if shell_command is not None:
+        events.append(
+            runtime_event(
+                "tool_finished",
+                "run_shell_command",
+                shell_message,
+                data={
+                    "tool_name": "run_shell_command",
+                    "command": shell_command,
+                    "shell_policy": shell_policy,
+                    "exit_code": 0,
+                    "result_preview": shell_result_preview,
+                },
+            )
+        )
+    if include_confirmation_event:
+        events.append(
+            runtime_event(
+                "steering_confirmation_required",
+                pending_tool_name,
+                pending_reason,
+                data={
+                    "tool_name": pending_tool_name,
+                    "approval_id": pending_request_id,
+                    "approval_status": "pending",
+                    "approval_source": pending_source,
+                    "pending_count": 1,
+                },
+            )
+        )
+
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(store, prompt, response=response, created_at=turn_created_at, events=events)
+    if session_state is not None:
+        store.save_session_state(session_state)
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id=pending_request_id,
+                tool_name=pending_tool_name,
+                reason=pending_reason,
+                args=pending_args,
+                source=pending_source,
+                prompt=pending_prompt,
+                restored_from_session=restored_from_session,
+                created_at=pending_created_at,
+            )
+        ]
+    )
+    return store
+
+
+def seed_denied_approval_session(
+    root: Path | str,
+    *,
+    session_id: str = "session-denied",
+    prompt: str = "deny the risky test approval",
+    response: str = "ok",
+    request_id: str = "approval-0008",
+    tool_name: str = "run_shell_command",
+    approval_source: str = "fake_runtime",
+    remaining_pending_count: int = 0,
+    command: str | None = "pytest -q",
+    event_message: str = "Denied in the TUI",
+    restored_from_session: bool = False,
+    created_at: str | None = None,
+) -> SessionArtifactStore:
+    data: dict[str, Any] = {
+        "tool_name": tool_name,
+        "approval_id": request_id,
+        "approval_status": "denied",
+        "approval_source": approval_source,
+        "remaining_pending_count": remaining_pending_count,
+    }
+    if command is not None:
+        data["command"] = command
+    if restored_from_session:
+        data["approval_restored"] = True
+
+    store = SessionArtifactStore(Path(root), session_id=session_id)
+    append_turn(
+        store,
+        prompt,
+        response=response,
+        created_at=created_at,
+        events=[runtime_event("steering_denied", tool_name, event_message, data=data)],
     )
     return store
 

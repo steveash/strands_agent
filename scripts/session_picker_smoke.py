@@ -3,22 +3,22 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
-from strands_agent_tui.runtime import ApprovalRequest, runtime_event
 from strands_agent_tui.sessions import (
     SessionArtifactStore,
-    TurnArtifact,
     latest_session,
     pick_session,
     render_session_picker,
 )
 from strands_agent_tui.testing import (
     seed_approval_restore_overlap_session,
-    append_turn as _shared_append_turn,
     seed_approval_restore_rollup_scenario,
     seed_approval_restore_focus_scenario,
+    seed_denied_approval_session,
     seed_denied_approval_rollup_scenario,
     seed_multi_approval_queue_session,
+    seed_pending_approval_session,
     seed_pending_approval_rollup_scenario,
+    seed_plain_session,
     seed_restore_state_session,
     seed_shell_failure_session,
     seed_shell_inspect_session,
@@ -33,80 +33,15 @@ from strands_agent_tui.testing import (
 )
 
 
-def append_turn(store: SessionArtifactStore, prompt: str) -> None:
-    _shared_append_turn(store, prompt)
-
-
 def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> None:
     _shared_set_session_artifact_mtime(store, when)
 
 
 def main() -> None:
     with TemporaryDirectory() as temp_dir:
-        plain_store = SessionArtifactStore(temp_dir, session_id="session-plain")
-        append_turn(plain_store, "inspect the plain artifact set")
+        seed_plain_session(temp_dir)
 
-        pending_store = SessionArtifactStore(temp_dir, session_id="session-pending")
-        pending_store.append_turn(
-            TurnArtifact(
-                prompt="run the gated test suite",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "steering_approved",
-                        "write_file",
-                        "Approved in the TUI",
-                        data={
-                            "tool_name": "write_file",
-                            "approval_id": "approval-0000",
-                            "approval_status": "approved",
-                            "approval_source": "fake_runtime",
-                            "remaining_pending_count": 1,
-                            "resumed_from_approval": True,
-                        },
-                    ),
-                    runtime_event(
-                        "tool_finished",
-                        "run_shell_command",
-                        "Finished shell command",
-                        data={
-                            "tool_name": "run_shell_command",
-                            "command": "git status --short",
-                            "shell_policy": "inspect",
-                            "exit_code": 0,
-                            "result_preview": "git status --short -> M README.md",
-                        },
-                    ),
-                    runtime_event(
-                        "steering_confirmation_required",
-                        "run_shell_command",
-                        "Needs confirmation",
-                        data={
-                            "tool_name": "run_shell_command",
-                            "approval_id": "approval-0001",
-                            "approval_status": "pending",
-                            "approval_source": "fake_runtime",
-                            "pending_count": 1,
-                        },
-                    ),
-                ],
-                response_metadata={"mode": "fake"},
-            )
-        )
-        pending_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-0001",
-                    tool_name="run_shell_command",
-                    reason="Needs confirmation",
-                    args={"command": "pytest -q"},
-                    source="fake_runtime",
-                    prompt="run tests",
-                )
-            ]
-        )
+        seed_pending_approval_session(temp_dir)
 
         pending_edit_store = seed_workspace_edit_session(
             temp_dir,
@@ -118,30 +53,10 @@ def main() -> None:
             approval_prompt="queue edit",
         )
 
-        denied_test_store = SessionArtifactStore(temp_dir, session_id="session-denied-test")
-        denied_test_store.append_turn(
-            TurnArtifact(
-                prompt="deny the risky test approval",
-                response="ok",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "steering_denied",
-                        "run_shell_command",
-                        "Denied in the TUI",
-                        data={
-                            "tool_name": "run_shell_command",
-                            "approval_id": "approval-0008",
-                            "approval_status": "denied",
-                            "approval_source": "fake_runtime",
-                            "remaining_pending_count": 0,
-                            "command": "pytest -q",
-                        },
-                    )
-                ],
-                response_metadata={"mode": "fake"},
-            )
+        seed_denied_approval_session(
+            temp_dir,
+            session_id="session-denied-test",
+            prompt="deny the risky test approval",
         )
 
         seed_approval_restore_focus_scenario(temp_dir)
@@ -219,8 +134,11 @@ def main() -> None:
         approval_restore_attention_picker = render_session_picker(temp_dir, filter_mode="approval-restore", sort_mode="attention")
 
         with TemporaryDirectory() as empty_hint_root:
-            empty_store = SessionArtifactStore(empty_hint_root, session_id="session-empty")
-            append_turn(empty_store, "plain session for empty-filter hint")
+            seed_plain_session(
+                empty_hint_root,
+                session_id="session-empty",
+                prompt="plain session for empty-filter hint",
+            )
             empty_pending_picker = render_session_picker(empty_hint_root, filter_mode="pending")
 
         with TemporaryDirectory() as mixed_pending_root:
@@ -318,8 +236,7 @@ def main() -> None:
             )
 
         for index in range(8):
-            store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index}")
-            append_turn(store, f"page prompt {index}")
+            seed_plain_session(temp_dir, session_id=f"session-page-{index}", prompt=f"page prompt {index}")
 
         paged_picker = render_session_picker(temp_dir, page_index=1)
 
@@ -503,7 +420,7 @@ def main() -> None:
         )
         print(
             "picker_approval_stale_backlog=",
-            "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d)" in approval_stale_picker,
+            "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d @" in approval_stale_picker,
         )
         print(
             "picker_stale_cutoff_copy=",
@@ -680,7 +597,8 @@ def main() -> None:
             "picker_paged_window=",
             "> 1. session-inspect" in paged_picker
             and "  2. session-tool" in paged_picker
-            and "  8. session-denied" in paged_picker
+            and "  6. session-denied" in paged_picker
+            and "  8. session-restored-pending" in paged_picker
             and "session-page-7" not in paged_picker,
         )
 
@@ -710,12 +628,16 @@ def main() -> None:
             print(
                 "picker_approval_stale_pending_filter=",
                 "Filter: approval-stale-pending | Sort: recent" in stale_pending_picker
-                and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d)" in stale_pending_picker
+                and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d @" in stale_pending_picker
                 and "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_picker
                 and "- stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_picker
+                and "| approvals: pending 1 | approval focus: pending" in stale_pending_picker
                 and "| approval stale age: 45d | stale focus: pending" in stale_pending_picker
+                and "| intervention: pending 1" in stale_pending_picker
                 and "| approval stale: pending 45d | stale focus: pending" not in stale_pending_picker
                 and "- stale focus: pending" in stale_pending_picker
+                and "- approvals: pending 1" in stale_pending_picker
+                and "- approval focus: pending" in stale_pending_picker
                 and "- approval stale age: 45d" in stale_pending_picker
                 and "- approval stale: pending 45d" not in stale_pending_picker
                 and "stale focus: pending" in stale_pending_picker
@@ -725,12 +647,16 @@ def main() -> None:
             print(
                 "picker_approval_stale_denied_filter=",
                 "Filter: approval-stale-denied | Sort: recent" in stale_denied_picker
-                and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d)" in stale_denied_picker
+                and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d @" in stale_denied_picker
                 and "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_picker
                 and "- stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_picker
-                and "| approval stale age: 14d | stale focus: denied" in stale_denied_picker
+                and "| approvals: denied 1 | approval focus: denied/fresh" in stale_denied_picker
+                and "| denied age: 14d | approval stale age: 14d | stale focus: denied" in stale_denied_picker
+                and "| intervention: denied 1" in stale_denied_picker
                 and "| approval stale: denied 14d | stale focus: denied" not in stale_denied_picker
                 and "- stale focus: denied" in stale_denied_picker
+                and "- approvals: denied 1" in stale_denied_picker
+                and "- approval focus: denied/fresh" in stale_denied_picker
                 and "- approval stale age: 14d" in stale_denied_picker
                 and "- approval stale: denied 14d" not in stale_denied_picker
                 and "stale focus: denied" in stale_denied_picker
@@ -740,19 +666,29 @@ def main() -> None:
             print(
                 "picker_approval_stale_restored_filter=",
                 "Filter: approval-stale-restored | Sort: recent" in stale_restored_picker
-                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)" in stale_restored_picker
+                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d @" in stale_restored_picker
+                and "restored 1 (oldest 10d @" in stale_restored_picker
                 and "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
                 in stale_restored_picker
                 and "- stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
                 in stale_restored_picker
+                and "| approvals: pending 1, approved 1 | approval focus: pending/restored" in stale_restored_picker
+                and "| approval restore: pending 1, approved 1 | approval restore tools: test 1, edit 1"
+                in stale_restored_picker
+                and "| approval restore age: 11d" in stale_restored_picker
                 and "| approval stale ages: restore queue 11d; restored 10d | stale focus: restore queue, restored"
                 in stale_restored_picker
+                and "| intervention: pending 1, approved 1, restored 1" in stale_restored_picker
                 and "restored current: pending write_file via fake_runtime; queued 1" in stale_restored_picker
                 and "restored outcome: approved run_shell_command via fake_runtime; resumed; remaining 0"
                 in stale_restored_picker
                 and "restored outcome age: 10d" in stale_restored_picker
                 and "| approval stale: restore queue 11d, restored 10d | stale focus: restore queue, restored" not in stale_restored_picker
                 and "- stale focus: restore queue, restored" in stale_restored_picker
+                and "- approvals: pending 1, approved 1" in stale_restored_picker
+                and "- approval focus: pending/restored" in stale_restored_picker
+                and "- approval restore: pending 1, approved 1" in stale_restored_picker
+                and "- approval restore age: 11d" in stale_restored_picker
                 and "- approval stale ages: restore queue 11d; restored 10d" in stale_restored_picker
                 and "- restored current approval: pending write_file via fake_runtime | queued 1" in stale_restored_picker
                 and "- latest restored outcome: approved run_shell_command via fake_runtime | resumed | remaining 0"
@@ -765,20 +701,15 @@ def main() -> None:
             )
 
         with TemporaryDirectory() as custom_stale_root:
-            custom_store = SessionArtifactStore(custom_stale_root, session_id="session-custom-threshold")
-            append_turn(custom_store, "resume moderately old pending queue")
-            custom_store.save_pending_approvals(
-                [
-                    ApprovalRequest(
-                        request_id="approval-custom-threshold",
-                        tool_name="run_shell_command",
-                        reason="Needs confirmation",
-                        args={"command": "pytest -q"},
-                        source="fake_runtime",
-                        prompt="rerun tests",
-                        created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
-                    )
-                ]
+            seed_pending_approval_session(
+                custom_stale_root,
+                session_id="session-custom-threshold",
+                prompt="resume moderately old pending queue",
+                pending_request_id="approval-custom-threshold",
+                pending_created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+                approved_request_id=None,
+                include_confirmation_event=False,
+                shell_command=None,
             )
             custom_stale_picker = render_session_picker(
                 custom_stale_root,
@@ -787,7 +718,7 @@ def main() -> None:
             )
             print(
                 "picker_custom_stale_threshold=",
-                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_stale_picker
+                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d @" in custom_stale_picker
                 and "session-custom-threshold" in custom_stale_picker,
             )
             print(

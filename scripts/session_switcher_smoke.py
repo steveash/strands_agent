@@ -6,16 +6,17 @@ from tempfile import TemporaryDirectory
 
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.config import AppConfig
-from strands_agent_tui.runtime import ApprovalRequest, FakeStrandsRuntime, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore, SessionState, TurnArtifact
+from strands_agent_tui.runtime import FakeStrandsRuntime, runtime_event
+from strands_agent_tui.sessions import SessionArtifactStore, SessionState
 from strands_agent_tui.testing import (
     seed_approval_restore_overlap_session,
-    append_turn as _shared_append_turn,
     seed_approval_restore_rollup_scenario,
     seed_approval_restore_focus_scenario,
     seed_denied_approval_rollup_scenario,
     seed_multi_approval_queue_session,
+    seed_pending_approval_session,
     seed_pending_approval_rollup_scenario,
+    seed_plain_session,
     seed_shell_failure_session,
     seed_shell_inspect_session,
     seed_shell_overlap_session,
@@ -29,80 +30,42 @@ from strands_agent_tui.testing import (
 )
 
 
-def append_turn(store: SessionArtifactStore, prompt: str, response: str) -> None:
-    _shared_append_turn(store, prompt, response=response)
-
-
 def set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> None:
     _shared_set_session_artifact_mtime(store, when)
 
 
 async def run_smoke() -> None:
     with TemporaryDirectory() as temp_dir:
-        older_store = SessionArtifactStore(temp_dir, session_id="session-older")
-        append_turn(older_store, "inspect older session", "older response")
-
-        newer_store = SessionArtifactStore(temp_dir, session_id="session-newer")
-        newer_store.append_turn(
-            TurnArtifact(
-                prompt="inspect newer session",
-                response="newer response",
-                provider="fake-strands",
-                mode="fake",
-                events=[
-                    runtime_event(
-                        "steering_approved",
-                        "write_file",
-                        "Approved in the TUI",
-                        data={
-                            "tool_name": "write_file",
-                            "approval_id": "approval-0003",
-                            "approval_status": "approved",
-                            "approval_source": "fake_runtime",
-                            "remaining_pending_count": 1,
-                            "resumed_from_approval": True,
-                        },
-                    ),
-                    runtime_event(
-                        "tool_finished",
-                        "list_files",
-                        "Finished listing files",
-                        data={"tool_name": "list_files", "result_preview": ".: README.md"},
-                    ),
-                    runtime_event(
-                        "tool_finished",
-                        "run_shell_command",
-                        "Finished shell command",
-                        data={
-                            "tool_name": "run_shell_command",
-                            "command": "git status --short",
-                            "shell_policy": "inspect",
-                            "exit_code": 0,
-                            "result_preview": "git status --short -> M README.md",
-                        },
-                    ),
-                ],
-                response_metadata={"mode": "fake"},
-            )
+        older_store = seed_plain_session(
+            temp_dir,
+            session_id="session-older",
+            prompt="inspect older session",
+            response="older response",
         )
-        newer_store.save_session_state(
-            SessionState(
+
+        newer_store = seed_pending_approval_session(
+            temp_dir,
+            session_id="session-newer",
+            prompt="inspect newer session",
+            response="newer response",
+            pending_request_id="approval-0004",
+            pending_args={"command": "pytest"},
+            pending_prompt="run pytest",
+            approved_request_id="approval-0003",
+            include_confirmation_event=False,
+            extra_events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                )
+            ],
+            session_state=SessionState(
                 event_filter="tool",
                 history_focus_index=0,
                 draft_prompt="draft next step",
-            )
-        )
-        newer_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-0004",
-                    tool_name="run_shell_command",
-                    reason="Needs confirmation",
-                    args={"command": "pytest"},
-                    source="fake_runtime",
-                    prompt="run pytest",
-                )
-            ]
+            ),
         )
 
         aged_turn_time = datetime.now(UTC) - timedelta(days=10)
@@ -247,8 +210,9 @@ async def run_smoke() -> None:
                 "session-denied | 1 turn(s)" in approval_restore_text
                 and "session-restored-pending | 1 turn(s)" in approval_restore_text
                 and "session-restored-edit-pending | 1 turn(s)" in approval_restore_text
-                and "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d), restored 1 (oldest 6h)"
+                and "Approval restore backlog: 3 sessions | lanes: restore queue 2 (oldest 3d @"
                 in approval_restore_text
+                and "restored 1 (oldest 6h @" in approval_restore_text
                 and "Restore lane focus: restore queue, restored" in approval_restore_text
                 and "session-newer | 1 turn(s)" not in approval_restore_text,
             )
@@ -469,7 +433,7 @@ async def run_smoke() -> None:
             )
             print(
                 "switcher_approval_stale_backlog=",
-                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d)" in approval_stale_output,
+                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 45d @" in approval_stale_output,
             )
             print(
                 "switcher_stale_cutoff_copy=",
@@ -523,11 +487,19 @@ async def run_smoke() -> None:
             print("history_latest=", restored_app.history[-1] if restored_app.history else None)
             print("latest_event=", restored_app.events[-1].kind if restored_app.events else None)
 
-        paged_current_store = SessionArtifactStore(temp_dir, session_id="session-page-current")
-        append_turn(paged_current_store, "paged current prompt", "paged current response")
+        paged_current_store = seed_plain_session(
+            temp_dir,
+            session_id="session-page-current",
+            prompt="paged current prompt",
+            response="paged current response",
+        )
         for index in range(9):
-            store = SessionArtifactStore(temp_dir, session_id=f"session-page-{index:02d}")
-            append_turn(store, f"paged prompt {index}", f"paged response {index}")
+            seed_plain_session(
+                temp_dir,
+                session_id=f"session-page-{index:02d}",
+                prompt=f"paged prompt {index}",
+                response=f"paged response {index}",
+            )
 
         paged_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
@@ -588,8 +560,12 @@ async def run_smoke() -> None:
             )
 
     with TemporaryDirectory() as pending_rollup_root:
-        pending_rollup_current_store = SessionArtifactStore(pending_rollup_root, session_id="session-current")
-        append_turn(pending_rollup_current_store, "current pending rollup prompt", "current pending rollup response")
+        pending_rollup_current_store = seed_plain_session(
+            pending_rollup_root,
+            session_id="session-current",
+            prompt="current pending rollup prompt",
+            response="current pending rollup response",
+        )
 
         pending_rollup_now = datetime.now(UTC)
         seed_pending_approval_rollup_scenario(pending_rollup_root, now=pending_rollup_now)
@@ -628,8 +604,12 @@ async def run_smoke() -> None:
             )
 
     with TemporaryDirectory() as denied_rollup_root:
-        denied_rollup_current_store = SessionArtifactStore(denied_rollup_root, session_id="session-current")
-        append_turn(denied_rollup_current_store, "current denied rollup prompt", "current denied rollup response")
+        denied_rollup_current_store = seed_plain_session(
+            denied_rollup_root,
+            session_id="session-current",
+            prompt="current denied rollup prompt",
+            response="current denied rollup response",
+        )
 
         denied_rollup_now = datetime.now(UTC)
         seed_denied_approval_rollup_scenario(denied_rollup_root, now=denied_rollup_now)
@@ -668,8 +648,12 @@ async def run_smoke() -> None:
             )
 
     with TemporaryDirectory() as stale_rollup_root:
-        stale_current_store = SessionArtifactStore(stale_rollup_root, session_id="session-stale-current")
-        append_turn(stale_current_store, "current stale rollup prompt", "current stale rollup response")
+        stale_current_store = seed_plain_session(
+            stale_rollup_root,
+            session_id="session-stale-current",
+            prompt="current stale rollup prompt",
+            response="current stale rollup response",
+        )
         seed_stale_approval_rollup_scenario(stale_rollup_root, include_restored_outcome=True)
 
         stale_rollup_app = StrandsAgentApp(
@@ -711,12 +695,16 @@ async def run_smoke() -> None:
             print(
                 "switcher_approval_stale_pending_filter=",
                 "Filter: approval-stale-pending | Sort: recent" in stale_pending_output
-                and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d)" in stale_pending_output
+                and "Stale pending backlog: 8 sessions | lanes: pending 8 (oldest 52d @" in stale_pending_output
                 and "Stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_output
                 and "- stale lane focus: pending | cutoff: approvals >= 7d old" in stale_pending_output
+                and "| approvals: pending 1 | approval focus: pending" in stale_pending_output
                 and "| approval stale age: 45d | stale focus: pending" in stale_pending_output
+                and "| intervention: pending 1" in stale_pending_output
                 and "| approval stale: pending 45d | stale focus: pending" not in stale_pending_output
                 and "- stale focus: pending" in stale_pending_output
+                and "- approvals: pending 1" in stale_pending_output
+                and "- approval focus: pending" in stale_pending_output
                 and "- approval stale age: 45d" in stale_pending_output
                 and "- approval stale: pending 45d" not in stale_pending_output
                 and "stale focus: pending" in stale_pending_output
@@ -729,12 +717,16 @@ async def run_smoke() -> None:
             print(
                 "switcher_approval_stale_denied_filter=",
                 "Filter: approval-stale-denied | Sort: recent" in stale_denied_output
-                and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d)" in stale_denied_output
+                and "Stale denied backlog: 1 session | lanes: denied 1 (oldest 14d @" in stale_denied_output
                 and "Stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_output
                 and "- stale lane focus: denied | cutoff: approvals >= 7d old" in stale_denied_output
-                and "| approval stale age: 14d | stale focus: denied" in stale_denied_output
+                and "| approvals: denied 1 | approval focus: denied/fresh" in stale_denied_output
+                and "| denied age: 14d | approval stale age: 14d | stale focus: denied" in stale_denied_output
+                and "| intervention: denied 1" in stale_denied_output
                 and "| approval stale: denied 14d | stale focus: denied" not in stale_denied_output
                 and "- stale focus: denied" in stale_denied_output
+                and "- approvals: denied 1" in stale_denied_output
+                and "- approval focus: denied/fresh" in stale_denied_output
                 and "- approval stale age: 14d" in stale_denied_output
                 and "- approval stale: denied 14d" not in stale_denied_output
                 and "stale focus: denied" in stale_denied_output
@@ -747,19 +739,29 @@ async def run_smoke() -> None:
             print(
                 "switcher_approval_stale_restored_filter=",
                 "Filter: approval-stale-restored | Sort: recent" in stale_restored_output
-                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d), restored 1 (oldest 10d)" in stale_restored_output
+                and "Stale restored backlog: 1 session | lanes: restore queue 1 (oldest 11d @" in stale_restored_output
+                and "restored 1 (oldest 10d @" in stale_restored_output
                 and "Stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
                 in stale_restored_output
                 and "- stale lane focus: restore queue, restored | cutoff: approvals >= 7d old"
                 in stale_restored_output
+                and "| approvals: pending 1, approved 1 | approval focus: pending/restored" in stale_restored_output
+                and "| approval restore: pending 1, approved 1 | approval restore tools: test 1, edit 1"
+                in stale_restored_output
+                and "| approval restore age: 11d" in stale_restored_output
                 and "| approval stale ages: restore queue 11d; restored 10d | stale focus: restore queue, restored"
                 in stale_restored_output
+                and "| intervention: pending 1, approved 1, restored 1" in stale_restored_output
                 and "restored current: pending write_file via fake_runtime; queued 1" in stale_restored_output
                 and "restored outcome: approved run_shell_command via fake_runtime; resumed; remaining 0"
                 in stale_restored_output
                 and "restored outcome age: 10d" in stale_restored_output
                 and "| approval stale: restore queue 11d, restored 10d | stale focus: restore queue, restored" not in stale_restored_output
                 and "- stale focus: restore queue, restored" in stale_restored_output
+                and "- approvals: pending 1, approved 1" in stale_restored_output
+                and "- approval focus: pending/restored" in stale_restored_output
+                and "- approval restore: pending 1, approved 1" in stale_restored_output
+                and "- approval restore age: 11d" in stale_restored_output
                 and "- approval stale ages: restore queue 11d; restored 10d" in stale_restored_output
                 and "- restored current approval: pending write_file via fake_runtime | queued 1"
                 in stale_restored_output
@@ -773,23 +775,22 @@ async def run_smoke() -> None:
             )
 
     with TemporaryDirectory() as custom_stale_root:
-        custom_current_store = SessionArtifactStore(custom_stale_root, session_id="session-custom-current")
-        append_turn(custom_current_store, "current prompt", "current response")
+        custom_current_store = seed_plain_session(
+            custom_stale_root,
+            session_id="session-custom-current",
+            prompt="current prompt",
+            response="current response",
+        )
 
-        custom_store = SessionArtifactStore(custom_stale_root, session_id="session-custom-threshold")
-        append_turn(custom_store, "resume moderately old pending queue", "ok")
-        custom_store.save_pending_approvals(
-            [
-                ApprovalRequest(
-                    request_id="approval-custom-threshold",
-                    tool_name="run_shell_command",
-                    reason="Needs confirmation",
-                    args={"command": "pytest -q"},
-                    source="fake_runtime",
-                    prompt="rerun tests",
-                    created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
-                )
-            ]
+        seed_pending_approval_session(
+            custom_stale_root,
+            session_id="session-custom-threshold",
+            prompt="resume moderately old pending queue",
+            pending_request_id="approval-custom-threshold",
+            pending_created_at=(datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            approved_request_id=None,
+            include_confirmation_event=False,
+            shell_command=None,
         )
 
         custom_stale_app = StrandsAgentApp(
@@ -814,7 +815,7 @@ async def run_smoke() -> None:
             custom_stale_output = str(custom_stale_app.query_one("#output").render())
             print(
                 "switcher_custom_stale_threshold=",
-                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d)" in custom_stale_output
+                "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d @" in custom_stale_output
                 and "session-custom-threshold" in custom_stale_output,
             )
             print(
@@ -828,8 +829,12 @@ async def run_smoke() -> None:
             )
 
     with TemporaryDirectory() as empty_hint_root:
-        empty_current_store = SessionArtifactStore(empty_hint_root, session_id="session-empty-current")
-        append_turn(empty_current_store, "plain current session", "plain current response")
+        empty_current_store = seed_plain_session(
+            empty_hint_root,
+            session_id="session-empty-current",
+            prompt="plain current session",
+            response="plain current response",
+        )
 
         empty_hint_app = StrandsAgentApp(
             runtime=FakeStrandsRuntime(),
@@ -858,8 +863,12 @@ async def run_smoke() -> None:
             )
 
     with TemporaryDirectory() as mixed_pending_root:
-        mixed_current_store = SessionArtifactStore(mixed_pending_root, session_id="session-current")
-        append_turn(mixed_current_store, "current prompt", "current response")
+        mixed_current_store = seed_plain_session(
+            mixed_pending_root,
+            session_id="session-current",
+            prompt="current prompt",
+            response="current response",
+        )
 
         seed_multi_approval_queue_session(
             mixed_pending_root,
@@ -895,8 +904,12 @@ async def run_smoke() -> None:
             )
 
     with TemporaryDirectory() as mixed_restored_root:
-        mixed_current_store = SessionArtifactStore(mixed_restored_root, session_id="session-current")
-        append_turn(mixed_current_store, "current prompt", "current response")
+        mixed_current_store = seed_plain_session(
+            mixed_restored_root,
+            session_id="session-current",
+            prompt="current prompt",
+            response="current response",
+        )
 
         seed_multi_approval_queue_session(
             mixed_restored_root,
@@ -933,8 +946,12 @@ async def run_smoke() -> None:
             )
 
         with TemporaryDirectory() as mixed_restore_overlap_root:
-            mixed_current_store = SessionArtifactStore(mixed_restore_overlap_root, session_id="session-current")
-            append_turn(mixed_current_store, "current prompt", "current response")
+            mixed_current_store = seed_plain_session(
+                mixed_restore_overlap_root,
+                session_id="session-current",
+                prompt="current prompt",
+                response="current response",
+            )
 
             seed_approval_restore_overlap_session(
                 mixed_restore_overlap_root,
@@ -986,8 +1003,12 @@ async def run_smoke() -> None:
                 )
 
         with TemporaryDirectory() as approval_restore_rollup_root:
-            rollup_current_store = SessionArtifactStore(approval_restore_rollup_root, session_id="session-current")
-            append_turn(rollup_current_store, "current prompt", "current response")
+            rollup_current_store = seed_plain_session(
+                approval_restore_rollup_root,
+                session_id="session-current",
+                prompt="current prompt",
+                response="current response",
+            )
 
             approval_restore_now = datetime.now(UTC)
             seed_approval_restore_rollup_scenario(approval_restore_rollup_root, now=approval_restore_now)
@@ -1030,8 +1051,12 @@ async def run_smoke() -> None:
                 )
 
     with TemporaryDirectory() as workspace_shell_overlap_root:
-        overlap_current_store = SessionArtifactStore(workspace_shell_overlap_root, session_id="session-current")
-        append_turn(overlap_current_store, "current prompt", "current response")
+        overlap_current_store = seed_plain_session(
+            workspace_shell_overlap_root,
+            session_id="session-current",
+            prompt="current prompt",
+            response="current response",
+        )
 
         seed_workspace_inspect_session(workspace_shell_overlap_root)
         seed_workspace_overlap_session(workspace_shell_overlap_root)
