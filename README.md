@@ -119,14 +119,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- added bundle-level start/pass/fail summary lines plus per-bundle timing output to `scripts/smoke_matrix.py`, so the matrix now reports which smoke bundle passed or failed without needing to scan the full interleaved stream,
-- kept the existing fail-fast behavior by running the standalone, triage, and recovery bundles sequentially through the shared smoke runner while emitting a final overall matrix summary,
-- expanded `tests/test_smoke_scripts.py` with direct regression coverage for local-vs-all bundle selection plus success/failure summary rendering.
+- expanded `tests/test_smoke_scripts.py` with direct recovery-script coverage for the mixed detail-line (`name: value`) plus boolean-check (`name= True/False`) contract used by `approval_restart_smoke.py`, `session_state_smoke.py`, `live_restore_smoke.py`, and `live_restore_denied_smoke.py`,
+- added wrapper-level success/failure assertions for the live-restore recovery scripts so detail output ordering and non-zero failure exits are now locked down without depending on live runtime execution,
+- kept the existing fail-fast recovery bundle behavior intact while moving more of that contract checking into fast pytest coverage.
 
 Why this matters now:
-- Steve can now tell **which smoke bundle is healthy or broken at a glance** when running the full matrix.
-- That makes the smoke matrix a better top-level operator command for the prototype, especially as the standalone, triage, and recovery bundles keep growing.
-- This closes the README's next-iteration observability idea without weakening the existing fail-fast contract.
+- Recovery-smoke regressions now fail inside pytest before they can silently break `session_recovery_smoke.py` bundle parsing.
+- That shortens feedback loops on the approval/session-state/live-restore surfaces, which now rely on a shared output contract across several scripts.
+- This closes the README-listed follow-up to harden the recovery bundle's structured smoke output.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -136,9 +136,10 @@ How we know the prototype is working right now:
 - `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including the new tool/intervention metric summaries across recent-session reopen surfaces.
 
 Current evidence:
-- automated tests: `231 passed in 33.53s` via `.venv/bin/pytest -q`,
-- targeted smoke-matrix regression coverage: `.venv/bin/pytest -q tests/test_smoke_scripts.py tests/test_smoke_runner.py` => `10 passed in 0.68s`,
-- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` now emits per-bundle start/pass timing lines plus `summary: 3/3 bundles passed` after the standalone, triage, and recovery bundles all finish green,
+- automated tests: `236 passed in 38.10s` via `.venv/bin/pytest -q`,
+- targeted smoke-contract regression coverage: `.venv/bin/pytest -q tests/test_smoke_scripts.py tests/test_smoke_runner.py tests/test_smoke_results.py` => `18 passed in 4.16s`,
+- runnable recovery verification: `.venv/bin/python scripts/session_recovery_smoke.py` => exit `0` with mixed detail + boolean result lines preserved across approval, restart, session-state, and live-restore checks,
+- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 27.16s`,
 - CLI verification: `.venv/bin/python -m strands_agent_tui.app --help | grep -E -- '--pick-filter|--stale-approval-days'` still succeeds.
 
 ## First five phases

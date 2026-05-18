@@ -39,6 +39,20 @@ def _load_script_module(name: str):
     return module
 
 
+def _assert_mixed_smoke_result_contract(
+    lines: list[str],
+    *,
+    detail_names: list[str],
+    check_names: list[str],
+) -> None:
+    for name in detail_names:
+        assert any(line.startswith(f"{name}: ") for line in lines)
+        assert not any(line.startswith(f"{name}= ") for line in lines)
+    for name in check_names:
+        assert f"{name}= True" in lines or f"{name}= False" in lines
+        assert not any(line.startswith(f"{name}: ") for line in lines)
+
+
 def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
     live_smoke = _load_script_module("live_smoke")
 
@@ -71,6 +85,121 @@ def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
         "live_runtime_requested= True",
         "live_runtime_text= True",
         "live_runtime_provider_mode= True",
+    ]
+
+
+def test_approval_restart_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:
+    approval_restart_smoke = _load_script_module("approval_restart_smoke")
+    output = StringIO()
+    real_emit_smoke_results = approval_restart_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        approval_restart_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = approval_restart_smoke.main()
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    _assert_mixed_smoke_result_contract(
+        lines,
+        detail_names=["saved pending", "after restart approve text", "remaining pending"],
+        check_names=[
+            "approval_restart_saved_queue",
+            "approval_restart_resumed_first_request",
+            "approval_restart_remaining_queue",
+        ],
+    )
+
+
+def test_session_state_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:
+    session_state_smoke = _load_script_module("session_state_smoke")
+    output = StringIO()
+    real_emit_smoke_results = session_state_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        session_state_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = session_state_smoke.main()
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    _assert_mixed_smoke_result_contract(
+        lines,
+        detail_names=["restored_event_filter", "restored_view", "restored_draft", "latest_visible_event"],
+        check_names=[
+            "session_state_restored_event_filter",
+            "session_state_restored_view",
+            "session_state_restored_draft",
+            "session_state_latest_visible_event",
+        ],
+    )
+
+
+def test_live_restore_smoke_wrapper_preserves_detail_lines_and_success_exit(monkeypatch) -> None:
+    live_restore_smoke = _load_script_module("live_restore_smoke")
+    output = StringIO()
+    monkeypatch.setattr(
+        live_restore_smoke,
+        "run_live_restore_smoke",
+        lambda: {
+            "summary_value": "approved write_file via live_runtime | resumed | remaining 0",
+            "live_restore_summary": True,
+            "notes_text": "updated from restored approval",
+            "live_restore_tool_event": True,
+        },
+    )
+    real_emit_smoke_results = live_restore_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        live_restore_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = live_restore_smoke.main()
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    assert lines == [
+        "summary_value: approved write_file via live_runtime | resumed | remaining 0",
+        "live_restore_summary= True",
+        "notes_text: updated from restored approval",
+        "live_restore_tool_event= True",
+    ]
+
+
+def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_exit(monkeypatch) -> None:
+    live_restore_denied_smoke = _load_script_module("live_restore_denied_smoke")
+    output = StringIO()
+    monkeypatch.setattr(
+        live_restore_denied_smoke,
+        "run_live_restore_denied_smoke",
+        lambda: {
+            "summary_value": "denied write_file via live_runtime | restored queue | remaining 0",
+            "live_restore_denied_summary": True,
+            "notes_text": "old",
+            "live_restore_denied_no_tool_event": False,
+        },
+    )
+    real_emit_smoke_results = live_restore_denied_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        live_restore_denied_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = live_restore_denied_smoke.main()
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 1
+    assert lines == [
+        "summary_value: denied write_file via live_runtime | restored queue | remaining 0",
+        "live_restore_denied_summary= True",
+        "notes_text: old",
+        "live_restore_denied_no_tool_event= False",
     ]
 
 
