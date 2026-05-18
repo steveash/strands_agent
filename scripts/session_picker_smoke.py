@@ -351,7 +351,7 @@ def main() -> None:
             matches_shell_filter_output(
                 shell_picker,
                 filter_mode="shell",
-                backlog_line="Shell backlog: 6 sessions | lanes: inspect 2, test 5 | overlap: mixed 1 session",
+                backlog_line="Shell backlog: 6 sessions | lanes: inspect 2, test 5 (oldest 45d @",
                 focus="inspect, test",
                 required_session_ids=["session-inspect", "session-pending"],
                 excluded_session_ids=["session-tool"],
@@ -391,7 +391,7 @@ def main() -> None:
             matches_shell_filter_output(
                 shell_test_picker,
                 filter_mode="shell-test",
-                backlog_line="Shell backlog: 5 sessions | lanes: inspect 1, test 5 | overlap: mixed 1 session",
+                backlog_line="Shell backlog: 5 sessions | lanes: inspect 1, test 5 (oldest 45d @",
                 focus="test",
                 required_session_ids=["session-pending", "session-aged", "session-failed-test"],
                 excluded_session_ids=["session-inspect"],

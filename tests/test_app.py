@@ -1561,7 +1561,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         shell_output = str(app.query_one("#output").render())
         assert "Filter: shell | Sort: attention" in shell_output
-        assert "Shell backlog: 4 sessions | lanes: inspect 2, test 3 | overlap: mixed 1 session" in shell_output
+        assert "Shell backlog: 4 sessions | lanes: inspect 2, test 3 (oldest 45d @" in shell_output
+        assert "| overlap: mixed 1 session" in shell_output
         assert "Shell focus: inspect, test" in shell_output
         assert "session-shell | 1 turn(s)" in shell_output
         assert "session-pending | 1 turn(s)" in shell_output
@@ -1584,7 +1585,8 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         shell_test_output = str(app.query_one("#output").render())
         assert "Filter: shell-test | Sort: attention" in shell_test_output
-        assert "Shell backlog: 3 sessions | lanes: inspect 1, test 3 | overlap: mixed 1 session" in shell_test_output
+        assert "Shell backlog: 3 sessions | lanes: inspect 1, test 3 (oldest 45d @" in shell_test_output
+        assert "| overlap: mixed 1 session" in shell_test_output
         assert "Shell focus: test" in shell_test_output
         assert "session-pending | 1 turn(s)" in shell_test_output
         assert "session-restored-pending | 1 turn(s)" in shell_test_output

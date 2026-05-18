@@ -60,6 +60,7 @@ MAX_INTERVENTION_ROLLUP_EVENTS = 6
 MAX_SHELL_STREAK_PREVIEWS = 3
 MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
+MIN_LANE_ROLLUP_AGE_SECONDS = 60
 MetricRollupT = TypeVar("MetricRollupT")
 STALE_SESSION_WARNING_SECONDS = 7 * 24 * 60 * 60
 STALE_SESSION_DANGER_SECONDS = 30 * 24 * 60 * 60
@@ -164,17 +165,23 @@ class SessionSummary:
     last_tool_preview: str = ""
     last_tool_badges: list[str] = field(default_factory=list)
     recent_tool_previews: list[str] = field(default_factory=list)
+    tool_lane_age_sort_keys: dict[str, int] = field(default_factory=dict)
+    tool_lane_timestamps: dict[str, str] = field(default_factory=dict)
     workspace_lane_badges: list[str] = field(default_factory=list)
     has_workspace_inspect_activity: bool = False
     has_workspace_edit_activity: bool = False
     last_workspace_preview: str = ""
     recent_workspace_previews: list[str] = field(default_factory=list)
+    workspace_lane_age_sort_keys: dict[str, int] = field(default_factory=dict)
+    workspace_lane_timestamps: dict[str, str] = field(default_factory=dict)
     shell_activity_badges: list[str] = field(default_factory=list)
     shell_lane_badges: list[str] = field(default_factory=list)
     has_shell_inspect_activity: bool = False
     has_shell_test_activity: bool = False
     last_shell_preview: str = ""
     recent_shell_previews: list[str] = field(default_factory=list)
+    shell_lane_age_sort_keys: dict[str, int] = field(default_factory=dict)
+    shell_lane_timestamps: dict[str, str] = field(default_factory=dict)
     failure_activity_badges: list[str] = field(default_factory=list)
     recent_failure_count: int = 0
     recent_shell_failure_count: int = 0
@@ -610,6 +617,12 @@ def _ordered_recent_sessions(
         recent_failure_count = _recent_tool_failure_count(turns)
         recent_shell_failure_count = _recent_shell_failure_count(turns)
         recent_test_failure_count, recent_tool_failure_count = _recent_failure_activity_counts(turns)
+        tool_lane_age_sort_keys, tool_lane_timestamps = _tool_lane_activity_maps(turns)
+        workspace_lane_age_sort_keys, workspace_lane_timestamps = _workspace_lane_activity_maps(
+            turns,
+            pending_approvals,
+        )
+        shell_lane_age_sort_keys, shell_lane_timestamps = _shell_lane_activity_maps(turns, pending_approvals)
         has_workspace_inspect_activity, has_workspace_edit_activity = _workspace_activity_presence(
             turns,
             pending_approvals,
@@ -668,6 +681,8 @@ def _ordered_recent_sessions(
             last_tool_preview=_latest_tool_preview(turns),
             last_tool_badges=_latest_tool_badges(turns),
             recent_tool_previews=_recent_tool_previews(turns),
+            tool_lane_age_sort_keys=tool_lane_age_sort_keys,
+            tool_lane_timestamps=tool_lane_timestamps,
             workspace_lane_badges=_workspace_lane_badges(
                 has_workspace_inspect_activity,
                 has_workspace_edit_activity,
@@ -676,12 +691,16 @@ def _ordered_recent_sessions(
             has_workspace_edit_activity=has_workspace_edit_activity,
             last_workspace_preview=_latest_workspace_preview(turns),
             recent_workspace_previews=_recent_workspace_previews(turns),
+            workspace_lane_age_sort_keys=workspace_lane_age_sort_keys,
+            workspace_lane_timestamps=workspace_lane_timestamps,
             shell_activity_badges=_shell_activity_badges(turns),
             shell_lane_badges=_shell_lane_badges(has_shell_inspect_activity, has_shell_test_activity),
             has_shell_inspect_activity=has_shell_inspect_activity,
             has_shell_test_activity=has_shell_test_activity,
             last_shell_preview=_latest_shell_preview(turns),
             recent_shell_previews=_recent_shell_previews(turns),
+            shell_lane_age_sort_keys=shell_lane_age_sort_keys,
+            shell_lane_timestamps=shell_lane_timestamps,
             failure_activity_badges=_failure_activity_badges(
                 recent_test_failure_count,
                 recent_tool_failure_count,
@@ -1161,6 +1180,44 @@ def _latest_tool_event(turns: list[TurnArtifact]):
     return next(_iter_recent_tool_events(turns), None)
 
 
+def _tool_lane_for_event(event) -> str:
+    tool_name = str(event.data.get("tool_name", "") or event.title or "").strip()
+    if not tool_name:
+        return ""
+    if _is_shell_tool_event(event):
+        return "shell"
+    if tool_name in WORKSPACE_INSPECT_TOOL_NAMES or tool_name in WORKSPACE_EDIT_TOOL_NAMES:
+        return "workspace"
+    return "other"
+
+
+def _lane_activity_maps(candidates: Sequence[tuple[str, str | None]]) -> tuple[dict[str, int], dict[str, str]]:
+    latest_by_lane: dict[str, datetime] = {}
+    for lane, raw_timestamp in candidates:
+        if not lane:
+            continue
+        parsed = _parse_iso_timestamp(raw_timestamp)
+        if parsed is None:
+            continue
+        previous = latest_by_lane.get(lane)
+        if previous is None or parsed > previous:
+            latest_by_lane[lane] = parsed
+
+    now = datetime.now(UTC)
+    lane_ages: dict[str, int] = {}
+    lane_timestamps: dict[str, str] = {}
+    for lane, parsed in latest_by_lane.items():
+        lane_ages[lane] = max(int((now - parsed).total_seconds()), 0)
+        lane_timestamps[lane] = _format_timestamp(parsed.timestamp())
+    return lane_ages, lane_timestamps
+
+
+def _tool_lane_activity_maps(turns: list[TurnArtifact]) -> tuple[dict[str, int], dict[str, str]]:
+    return _lane_activity_maps(
+        [(_tool_lane_for_event(event), str(event.timestamp or "").strip()) for event in _iter_recent_tool_events(turns)]
+    )
+
+
 def _workspace_tool_lane(tool_name: str) -> str:
     if tool_name in WORKSPACE_INSPECT_TOOL_NAMES:
         return "inspect"
@@ -1196,6 +1253,37 @@ def _recent_workspace_previews(turns: list[TurnArtifact], limit: int = MAX_TOOL_
         if len(previews) >= limit:
             break
     return previews
+
+
+def _iter_recent_workspace_edit_activity_events(turns: list[TurnArtifact]):
+    for turn in reversed(turns):
+        for event in reversed(turn.events):
+            tool_name = str(event.data.get("tool_name", "") or event.title or "").strip()
+            if tool_name not in WORKSPACE_EDIT_TOOL_NAMES:
+                continue
+            if not (str(event.data.get("approval_status", "") or "").strip() or _is_intervention_event(event)):
+                continue
+            yield event
+
+
+def _workspace_lane_activity_maps(
+    turns: list[TurnArtifact],
+    pending_approvals: list[ApprovalRequest],
+) -> tuple[dict[str, int], dict[str, str]]:
+    candidates: list[tuple[str, str | None]] = [
+        (
+            _workspace_tool_lane(str(event.data.get("tool_name", "") or event.title or "")),
+            str(event.timestamp or "").strip(),
+        )
+        for event in _iter_recent_workspace_tool_events(turns)
+    ]
+    candidates.extend(("edit", str(event.timestamp or "").strip()) for event in _iter_recent_workspace_edit_activity_events(turns))
+    candidates.extend(
+        ("edit", approval.created_at)
+        for approval in pending_approvals
+        if str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES
+    )
+    return _lane_activity_maps(candidates)
 
 
 def _latest_intervention_preview(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> str:
@@ -1421,6 +1509,42 @@ def _recent_shell_previews(turns: list[TurnArtifact], limit: int = MAX_SHELL_STR
     return previews
 
 
+def _iter_recent_shell_test_activity_events(turns: list[TurnArtifact]):
+    for turn in reversed(turns):
+        for event in reversed(turn.events):
+            if not _is_shell_tool_event(event):
+                continue
+            if not (str(event.data.get("approval_status", "") or "").strip() or _is_intervention_event(event)):
+                continue
+            if _is_test_shell_event(event):
+                yield event
+
+
+def _shell_lane_activity_maps(
+    turns: list[TurnArtifact],
+    pending_approvals: list[ApprovalRequest],
+) -> tuple[dict[str, int], dict[str, str]]:
+    candidates: list[tuple[str, str | None]] = [
+        (
+            "test" if _is_test_shell_event(event) else "inspect",
+            str(event.timestamp or "").strip(),
+        )
+        for event in _iter_recent_tool_events(turns, tool_name="run_shell_command")
+    ]
+    candidates.extend(("test", str(event.timestamp or "").strip()) for event in _iter_recent_shell_test_activity_events(turns))
+    candidates.extend(
+        ("test", approval.created_at)
+        for approval in pending_approvals
+        if str(approval.tool_name or "").strip() == "run_shell_command"
+        and _is_test_shell_command_data(
+            shell_policy="",
+            shell_command_family="",
+            command=_approval_command_from_args(approval.args),
+        )
+    )
+    return _lane_activity_maps(candidates)
+
+
 def _shell_activity_badges(turns: list[TurnArtifact], count_window: int = MAX_SHELL_ROLLUP_EVENTS) -> list[str]:
     events = list(_bounded_recent_tool_events(turns, tool_name="run_shell_command", limit=count_window))
     if not events:
@@ -1586,11 +1710,29 @@ def _is_shell_tool_event(event) -> bool:
 def _is_test_shell_event(event) -> bool:
     if not _is_shell_tool_event(event):
         return False
-    shell_policy = str(event.data.get("shell_policy", "") or "").strip()
+    return _is_test_shell_command_data(
+        shell_policy=str(event.data.get("shell_policy", "") or "").strip(),
+        shell_command_family=str(event.data.get("shell_command_family", "") or "").strip(),
+        command=str(event.data.get("command", "") or "").strip(),
+    )
+
+
+def _is_test_shell_command_data(
+    *,
+    shell_policy: str,
+    shell_command_family: str,
+    command: str,
+) -> bool:
     if shell_policy:
         return shell_policy != "inspect"
-    shell_family = str(event.data.get("shell_command_family", "") or "").strip()
-    return shell_family.startswith("pytest")
+    if shell_command_family:
+        return shell_command_family.startswith("pytest")
+    if command:
+        try:
+            return resolve_shell_command(command).family.startswith("pytest")
+        except ValueError:
+            return False
+    return False
 
 
 def _tool_event_preview(event) -> str:
@@ -2202,8 +2344,10 @@ def render_recent_session_filter_summary_lines(
             page_lane_label="tool lanes",
             page_index=page_index,
             page_size=page_size,
-            rollup_formatter=_format_simple_lane_rollup_for_display_order(TOOL_LANE_DISPLAY_ORDER),
+            rollup_formatter=_format_recent_lane_rollup_for_display_order(TOOL_LANE_DISPLAY_ORDER),
             lane_getter=_tool_lanes,
+            age_getter=_tool_lane_age_seconds,
+            timestamp_getter=_tool_lane_timestamps,
             display_order=TOOL_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
@@ -2255,8 +2399,10 @@ def render_recent_session_filter_summary_lines(
             page_lane_label="workspace lanes",
             page_index=page_index,
             page_size=page_size,
-            rollup_formatter=_format_simple_lane_rollup_for_display_order(WORKSPACE_LANE_DISPLAY_ORDER),
+            rollup_formatter=_format_recent_lane_rollup_for_display_order(WORKSPACE_LANE_DISPLAY_ORDER),
             lane_getter=_workspace_lanes,
+            age_getter=_workspace_lane_age_seconds,
+            timestamp_getter=_workspace_lane_timestamps,
             display_order=WORKSPACE_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
@@ -2275,8 +2421,10 @@ def render_recent_session_filter_summary_lines(
             page_lane_label="shell lanes",
             page_index=page_index,
             page_size=page_size,
-            rollup_formatter=_format_simple_lane_rollup_for_display_order(SHELL_LANE_DISPLAY_ORDER),
+            rollup_formatter=_format_recent_lane_rollup_for_display_order(SHELL_LANE_DISPLAY_ORDER),
             lane_getter=_shell_lanes,
+            age_getter=_shell_lane_age_seconds,
+            timestamp_getter=_shell_lane_timestamps,
             display_order=SHELL_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
@@ -2494,6 +2642,17 @@ def _format_simple_lane_rollup_for_display_order(
 ) -> Callable[[dict[str, int], dict[str, int], dict[str, str]], str]:
     return lambda lane_counts, _lane_oldest_ages, _lane_oldest_timestamps: _format_simple_lane_rollup(
         lane_counts,
+        display_order,
+    )
+
+
+def _format_recent_lane_rollup_for_display_order(
+    display_order: tuple[str, ...],
+) -> Callable[[dict[str, int], dict[str, int], dict[str, str]], str]:
+    return lambda lane_counts, lane_oldest_ages, lane_oldest_timestamps: _format_recent_lane_rollup(
+        lane_counts,
+        lane_oldest_ages,
+        lane_oldest_timestamps,
         display_order,
     )
 
@@ -2900,6 +3059,14 @@ def _tool_lanes(summary: SessionSummary) -> set[str]:
     return lanes
 
 
+def _tool_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
+    return dict(summary.tool_lane_age_sort_keys)
+
+
+def _tool_lane_timestamps(summary: SessionSummary) -> dict[str, str]:
+    return dict(summary.tool_lane_timestamps)
+
+
 def _workspace_lanes(summary: SessionSummary) -> set[str]:
     lanes: set[str] = set()
     if summary.has_workspace_inspect_activity:
@@ -2907,6 +3074,14 @@ def _workspace_lanes(summary: SessionSummary) -> set[str]:
     if summary.has_workspace_edit_activity:
         lanes.add("edit")
     return lanes
+
+
+def _workspace_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
+    return dict(summary.workspace_lane_age_sort_keys)
+
+
+def _workspace_lane_timestamps(summary: SessionSummary) -> dict[str, str]:
+    return dict(summary.workspace_lane_timestamps)
 
 
 def _workspace_filter_focus_label(filter_mode: str) -> str:
@@ -2934,6 +3109,14 @@ def _shell_lanes(summary: SessionSummary) -> set[str]:
     return lanes
 
 
+def _shell_lane_age_seconds(summary: SessionSummary) -> dict[str, int]:
+    return dict(summary.shell_lane_age_sort_keys)
+
+
+def _shell_lane_timestamps(summary: SessionSummary) -> dict[str, str]:
+    return dict(summary.shell_lane_timestamps)
+
+
 def _shell_filter_focus_label(filter_mode: str) -> str:
     if filter_mode == "shell-inspect":
         return "inspect"
@@ -2954,6 +3137,25 @@ def _summarize_shell_lanes(summaries: list[SessionSummary]) -> tuple[dict[str, i
 
 def _format_simple_lane_rollup(lane_counts: dict[str, int], display_order: tuple[str, ...]) -> str:
     return ", ".join(f"{lane} {lane_counts[lane]}" for lane in display_order if lane_counts.get(lane, 0) > 0)
+
+
+def _format_recent_lane_rollup(
+    lane_counts: dict[str, int],
+    lane_oldest_ages: dict[str, int],
+    lane_oldest_timestamps: dict[str, str],
+    display_order: tuple[str, ...],
+) -> str:
+    lane_parts: list[str] = []
+    for lane in display_order:
+        count = lane_counts.get(lane, 0)
+        if count <= 0:
+            continue
+        part = f"{lane} {count}"
+        oldest_age = lane_oldest_ages.get(lane, 0)
+        if oldest_age >= MIN_LANE_ROLLUP_AGE_SECONDS:
+            part += _format_oldest_age_clause(oldest_age, lane_oldest_timestamps.get(lane, ""))
+        lane_parts.append(part)
+    return ", ".join(lane_parts)
 
 
 def _intervention_preview_matches(summary: SessionSummary, label: str) -> bool:

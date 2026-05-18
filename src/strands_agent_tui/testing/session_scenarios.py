@@ -110,20 +110,22 @@ def seed_workspace_inspect_session(
     event_message: str = "Finished listing files",
     result_preview: str = ".: README.md",
     response: str = "done",
+    event_timestamp: str | None = None,
 ) -> SessionArtifactStore:
     store = SessionArtifactStore(Path(root), session_id=session_id)
+    event = runtime_event(
+        "tool_finished",
+        tool_name,
+        event_message,
+        data={"tool_name": tool_name, "result_preview": result_preview},
+    )
+    if event_timestamp is not None:
+        event.timestamp = event_timestamp
     append_turn(
         store,
         prompt,
         response=response,
-        events=[
-            runtime_event(
-                "tool_finished",
-                tool_name,
-                event_message,
-                data={"tool_name": tool_name, "result_preview": result_preview},
-            )
-        ],
+        events=[event],
     )
     return store
 
@@ -176,6 +178,8 @@ def seed_workspace_overlap_session(
     result_preview: str = "README.md lines 1-20",
     request_id: str = "approval-workspace-mixed",
     approval_prompt: str = "apply the edit",
+    event_timestamp: str | None = None,
+    created_at: str | None = None,
 ) -> SessionArtifactStore:
     store = seed_workspace_inspect_session(
         root,
@@ -185,6 +189,7 @@ def seed_workspace_overlap_session(
         event_message=event_message,
         result_preview=result_preview,
         response=response,
+        event_timestamp=event_timestamp,
     )
     store.save_pending_approvals(
         [
@@ -195,6 +200,7 @@ def seed_workspace_overlap_session(
                 args={"relative_path": "notes.txt", "overwrite": True},
                 source="fake_runtime",
                 prompt=approval_prompt,
+                created_at=created_at,
             )
         ]
     )
@@ -209,26 +215,28 @@ def seed_shell_inspect_session(
     command: str = "git status --short",
     result_preview: str = "git status --short -> M README.md",
     response: str = "done",
+    event_timestamp: str | None = None,
 ) -> SessionArtifactStore:
     store = SessionArtifactStore(Path(root), session_id=session_id)
+    event = runtime_event(
+        "tool_finished",
+        "run_shell_command",
+        "Finished shell command",
+        data={
+            "tool_name": "run_shell_command",
+            "command": command,
+            "shell_policy": "inspect",
+            "exit_code": 0,
+            "result_preview": result_preview,
+        },
+    )
+    if event_timestamp is not None:
+        event.timestamp = event_timestamp
     append_turn(
         store,
         prompt,
         response=response,
-        events=[
-            runtime_event(
-                "tool_finished",
-                "run_shell_command",
-                "Finished shell command",
-                data={
-                    "tool_name": "run_shell_command",
-                    "command": command,
-                    "shell_policy": "inspect",
-                    "exit_code": 0,
-                    "result_preview": result_preview,
-                },
-            )
-        ],
+        events=[event],
     )
     return store
 
@@ -276,6 +284,8 @@ def seed_shell_overlap_session(
     request_id: str = "approval-shell-mixed-rollup",
     approval_prompt: str = "rerun tests",
     pending_command: str = "pytest -q",
+    event_timestamp: str | None = None,
+    created_at: str | None = None,
 ) -> SessionArtifactStore:
     store = seed_shell_inspect_session(
         root,
@@ -284,6 +294,7 @@ def seed_shell_overlap_session(
         command=command,
         result_preview=result_preview,
         response=response,
+        event_timestamp=event_timestamp,
     )
     store.save_pending_approvals(
         [
@@ -294,6 +305,7 @@ def seed_shell_overlap_session(
                 args={"command": pending_command},
                 source="fake_runtime",
                 prompt=approval_prompt,
+                created_at=created_at,
             )
         ]
     )
@@ -325,26 +337,28 @@ def seed_shell_failure_session(
     exit_code: int = 1,
     result_preview: str = "pytest -q -> exit 1",
     event_message: str = "Shell test failed",
+    event_timestamp: str | None = None,
 ) -> SessionArtifactStore:
     store = SessionArtifactStore(Path(root), session_id=session_id)
+    event = runtime_event(
+        "tool_failed",
+        "run_shell_command",
+        event_message,
+        data={
+            "tool_name": "run_shell_command",
+            "command": command,
+            "shell_policy": shell_policy,
+            "exit_code": exit_code,
+            "result_preview": result_preview,
+        },
+    )
+    if event_timestamp is not None:
+        event.timestamp = event_timestamp
     append_turn(
         store,
         prompt,
         response=response,
-        events=[
-            runtime_event(
-                "tool_failed",
-                "run_shell_command",
-                event_message,
-                data={
-                    "tool_name": "run_shell_command",
-                    "command": command,
-                    "shell_policy": shell_policy,
-                    "exit_code": exit_code,
-                    "result_preview": result_preview,
-                },
-            )
-        ],
+        events=[event],
     )
     return store
 
@@ -358,23 +372,25 @@ def seed_workspace_failure_session(
     tool_name: str = "replace_text",
     event_message: str = "Edit failed",
     result_preview: str = "replace_text notes.txt (2 occurrences)",
+    event_timestamp: str | None = None,
 ) -> SessionArtifactStore:
     store = SessionArtifactStore(Path(root), session_id=session_id)
+    event = runtime_event(
+        "tool_failed",
+        tool_name,
+        event_message,
+        data={
+            "tool_name": tool_name,
+            "result_preview": result_preview,
+        },
+    )
+    if event_timestamp is not None:
+        event.timestamp = event_timestamp
     append_turn(
         store,
         prompt,
         response=response,
-        events=[
-            runtime_event(
-                "tool_failed",
-                tool_name,
-                event_message,
-                data={
-                    "tool_name": tool_name,
-                    "result_preview": result_preview,
-                },
-            )
-        ],
+        events=[event],
     )
     return store
 

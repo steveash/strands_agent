@@ -53,6 +53,10 @@ def _set_session_artifact_mtime(store: SessionArtifactStore, when: datetime) -> 
     _shared_set_session_artifact_mtime(store, when)
 
 
+def _format_test_timestamp(when: datetime) -> str:
+    return when.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
 def _session_summary(session_id: str, **overrides: object):
     return SessionSummary(
         session_id=session_id,
@@ -263,35 +267,134 @@ def test_render_session_picker_reports_no_matches_for_active_filter(tmp_path: Pa
 
 
 def test_render_session_picker_surfaces_workspace_rollups_and_overlap(tmp_path: Path) -> None:
-    seed_workspace_inspect_session(tmp_path)
-    seed_workspace_overlap_session(tmp_path)
-    seed_workspace_edit_session(tmp_path)
+    now = datetime.now(UTC)
+    inspect_at = now - timedelta(days=3)
+    overlap_inspect_at = now - timedelta(hours=4)
+    overlap_edit_at = now - timedelta(days=2)
+    edit_at = now - timedelta(days=5)
+
+    seed_workspace_inspect_session(tmp_path, event_timestamp=inspect_at.isoformat())
+    seed_workspace_overlap_session(
+        tmp_path,
+        event_timestamp=overlap_inspect_at.isoformat(),
+        created_at=overlap_edit_at.isoformat(),
+    )
+    seed_workspace_edit_session(tmp_path, created_at=edit_at.isoformat())
 
     inspect_rendered = render_session_picker(tmp_path, filter_mode="workspace-inspect")
     edit_rendered = render_session_picker(tmp_path, filter_mode="workspace-edit")
 
-    assert "Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session" in inspect_rendered
+    assert (
+        "Workspace backlog: 2 sessions | lanes: "
+        f"inspect 2 (oldest 3d @ {_format_test_timestamp(inspect_at)}), "
+        f"edit 1 (oldest 2d @ {_format_test_timestamp(overlap_edit_at)}) | overlap: mixed 1 session"
+        in inspect_rendered
+    )
     assert "Workspace focus: inspect" in inspect_rendered
-    assert "Workspace backlog: 2 sessions | lanes: inspect 1, edit 2 | overlap: mixed 1 session" in edit_rendered
+    assert (
+        "Workspace backlog: 2 sessions | lanes: "
+        f"inspect 1 (oldest 4h @ {_format_test_timestamp(overlap_inspect_at)}), "
+        f"edit 2 (oldest 5d @ {_format_test_timestamp(edit_at)}) | overlap: mixed 1 session"
+        in edit_rendered
+    )
     assert "Workspace focus: edit" in edit_rendered
 
 
 
 def test_render_session_picker_surfaces_shell_rollups_and_overlap(tmp_path: Path) -> None:
-    seed_shell_inspect_session(tmp_path)
-    seed_shell_overlap_session(tmp_path)
-    seed_shell_test_session(tmp_path)
+    now = datetime.now(UTC)
+    inspect_at = now - timedelta(days=3)
+    overlap_inspect_at = now - timedelta(hours=4)
+    overlap_test_at = now - timedelta(days=2)
+    test_at = now - timedelta(days=5)
+
+    seed_shell_inspect_session(tmp_path, event_timestamp=inspect_at.isoformat())
+    seed_shell_overlap_session(
+        tmp_path,
+        event_timestamp=overlap_inspect_at.isoformat(),
+        created_at=overlap_test_at.isoformat(),
+    )
+    seed_shell_test_session(tmp_path, created_at=test_at.isoformat(), turn_created_at=test_at.isoformat())
 
     shell_rendered = render_session_picker(tmp_path, filter_mode="shell")
     inspect_rendered = render_session_picker(tmp_path, filter_mode="shell-inspect")
     test_rendered = render_session_picker(tmp_path, filter_mode="shell-test")
 
-    assert "Shell backlog: 3 sessions | lanes: inspect 2, test 2 | overlap: mixed 1 session" in shell_rendered
+    assert (
+        "Shell backlog: 3 sessions | lanes: "
+        f"inspect 2 (oldest 3d @ {_format_test_timestamp(inspect_at)}), "
+        f"test 2 (oldest 5d @ {_format_test_timestamp(test_at)}) | overlap: mixed 1 session"
+        in shell_rendered
+    )
     assert "Shell focus: inspect, test" in shell_rendered
-    assert "Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session" in inspect_rendered
+    assert (
+        "Shell backlog: 2 sessions | lanes: "
+        f"inspect 2 (oldest 3d @ {_format_test_timestamp(inspect_at)}), "
+        f"test 1 (oldest 2d @ {_format_test_timestamp(overlap_test_at)}) | overlap: mixed 1 session"
+        in inspect_rendered
+    )
     assert "Shell focus: inspect" in inspect_rendered
-    assert "Shell backlog: 2 sessions | lanes: inspect 1, test 2 | overlap: mixed 1 session" in test_rendered
+    assert (
+        "Shell backlog: 2 sessions | lanes: "
+        f"inspect 1 (oldest 4h @ {_format_test_timestamp(overlap_inspect_at)}), "
+        f"test 2 (oldest 5d @ {_format_test_timestamp(test_at)}) | overlap: mixed 1 session"
+        in test_rendered
+    )
     assert "Shell focus: test" in test_rendered
+
+
+def test_render_session_picker_surfaces_tool_rollup_timestamps(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    workspace_at = now - timedelta(days=3)
+    workspace_failed_at = now - timedelta(days=7)
+    shell_failed_at = now - timedelta(days=8)
+    other_at = now - timedelta(days=2)
+
+    seed_workspace_inspect_session(
+        tmp_path,
+        session_id="session-workspace-tool-aged",
+        event_timestamp=workspace_at.isoformat(),
+    )
+    seed_workspace_failure_session(
+        tmp_path,
+        session_id="session-workspace-failure-aged",
+        event_timestamp=workspace_failed_at.isoformat(),
+    )
+    seed_shell_failure_session(
+        tmp_path,
+        session_id="session-shell-failure-aged",
+        event_timestamp=shell_failed_at.isoformat(),
+    )
+
+    other_store = SessionArtifactStore(tmp_path, session_id="session-other-tool-aged")
+    other_event = runtime_event(
+        "tool_finished",
+        "custom_tool",
+        "Finished custom tool",
+        data={"tool_name": "custom_tool", "result_preview": "custom tool output"},
+    )
+    other_event.timestamp = other_at.isoformat()
+    other_store.append_turn(
+        TurnArtifact(
+            prompt="custom tool",
+            response="ok",
+            provider="fake-strands",
+            mode="fake",
+            events=[other_event],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    rendered = render_session_picker(tmp_path, filter_mode="tool")
+
+    assert (
+        "Tool backlog: 4 sessions | lanes: "
+        f"workspace 2 (oldest 7d @ {_format_test_timestamp(workspace_failed_at)}), "
+        f"shell 1 (oldest 8d @ {_format_test_timestamp(shell_failed_at)}), "
+        f"other 1 (oldest 2d @ {_format_test_timestamp(other_at)})"
+        in rendered
+    )
+    assert "Tool focus: workspace, shell, other" in rendered
 
 
 def test_render_session_picker_surfaces_pending_approval_backlog_summary(tmp_path: Path) -> None:
