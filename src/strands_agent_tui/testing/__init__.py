@@ -68,6 +68,7 @@ from .smoke_assertions import (
     matches_workspace_filter_output,
     smoke_text_matches,
 )
+from .smoke_results import emit_smoke_check, emit_smoke_checks
 from .smoke_runner import SmokeScriptTarget, run_smoke_target, run_smoke_targets
 
 __all__ = [
@@ -137,6 +138,8 @@ __all__ = [
     "seed_workspace_overlap_session",
     "set_session_artifact_mtime",
     "SmokeScriptTarget",
+    "emit_smoke_check",
+    "emit_smoke_checks",
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",

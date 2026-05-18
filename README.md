@@ -388,10 +388,20 @@ To verify the live runtime outside the TUI:
 ```bash
 export STRANDS_AGENT_RUNTIME=live
 export STRANDS_AGENT_OPENAI_MODEL=gpt-4o-mini
-python scripts/live_smoke.py
+.venv/bin/python scripts/live_smoke.py
 ```
 
-Expected result is a short successful reply plus a provider/mode line.
+Expected result includes `live_runtime_requested= True`, `live_runtime_text= True`, and `live_runtime_provider_mode= True` after the short reply plus provider/mode line.
+
+### Standalone local smoke bundle
+
+To verify the remaining local smoke surfaces with shared fail-fast `= False` handling:
+
+```bash
+.venv/bin/python scripts/standalone_smoke.py
+```
+
+This default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together and exits non-zero on the first failing boolean result line. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
 
 ### Live approval-restore smoke check
 
@@ -411,7 +421,7 @@ To verify the compact live-view + replay-navigation rendering without launching 
 .venv/bin/python scripts/replay_smoke.py
 ```
 
-Expected result includes both a `live latest 2-4` view and a `replay 3/4` view for the same saved session fixture.
+Expected result includes both a `live latest 2-4` view and a `replay 3/4` view for the same saved session fixture, plus `replay_live_view= True` and `replay_replay_view= True`.
 
 ### Run tests
 
