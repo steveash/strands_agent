@@ -403,6 +403,16 @@ To verify the remaining local smoke surfaces with shared fail-fast `= False` han
 
 This default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together and exits non-zero on the first failing boolean result line. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
 
+### Full local smoke matrix
+
+To run the current local smoke bundles together with fail-fast handling:
+
+```bash
+.venv/bin/python scripts/smoke_matrix.py
+```
+
+This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you also want the live smoke target folded into the standalone bundle.
+
 ### Live approval-restore smoke check
 
 To verify the live runtime's restored approval metadata flow without launching the TUI:

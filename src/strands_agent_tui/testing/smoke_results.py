@@ -20,3 +20,22 @@ def emit_smoke_checks(
     for name, ok in checks:
         all_ok = emit_smoke_check(name, ok, stdout=stdout) and all_ok
     return 0 if all_ok else 1
+
+
+def emit_smoke_detail(name: str, value: object, *, stdout: TextIO = sys.stdout) -> None:
+    print(f"{name}: {value}", file=stdout)
+    stdout.flush()
+
+
+def emit_smoke_results(
+    results: Iterable[tuple[str, object]],
+    *,
+    stdout: TextIO = sys.stdout,
+) -> int:
+    all_ok = True
+    for name, value in results:
+        if isinstance(value, bool):
+            all_ok = emit_smoke_check(name, value, stdout=stdout) and all_ok
+        else:
+            emit_smoke_detail(name, value, stdout=stdout)
+    return 0 if all_ok else 1

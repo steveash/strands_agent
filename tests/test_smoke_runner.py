@@ -124,3 +124,29 @@ def test_run_smoke_targets_stops_before_later_targets_after_failure(tmp_path) ->
     assert stdout.getvalue() == "first_check= False\n"
     assert stderr.getvalue().strip() == "first smoke failed fast: first_check= False"
     assert not marker_path.exists()
+
+
+def test_run_smoke_target_passes_script_args(tmp_path) -> None:
+    script_path = _write_script(
+        tmp_path,
+        "args.py",
+        """
+        import sys
+
+        print(f"argv_tail: {sys.argv[1:]}", flush=True)
+        print("args_check= True", flush=True)
+        """,
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    exit_code = run_smoke_target(
+        SmokeScriptTarget("args", script_path, args=("all", "--flag")),
+        stdout=stdout,
+        stderr=stderr,
+        python_executable=sys.executable,
+    )
+
+    assert exit_code == 0
+    assert stdout.getvalue() == "argv_tail: ['all', '--flag']\nargs_check= True\n"
+    assert stderr.getvalue() == ""

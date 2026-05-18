@@ -14,6 +14,7 @@ from .smoke_assertions import is_failed_smoke_check_line
 class SmokeScriptTarget:
     name: str
     script_path: Path
+    args: tuple[str, ...] = ()
 
 
 SmokeFailurePredicate = Callable[[str], bool]
@@ -28,7 +29,7 @@ def run_smoke_target(
     failure_predicate: SmokeFailurePredicate = is_failed_smoke_check_line,
 ) -> int:
     process = subprocess.Popen(
-        [python_executable, str(target.script_path)],
+        [python_executable, str(target.script_path), *target.args],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

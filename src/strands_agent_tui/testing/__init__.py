@@ -68,7 +68,7 @@ from .smoke_assertions import (
     matches_workspace_filter_output,
     smoke_text_matches,
 )
-from .smoke_results import emit_smoke_check, emit_smoke_checks
+from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import SmokeScriptTarget, run_smoke_target, run_smoke_targets
 
 __all__ = [
@@ -140,6 +140,7 @@ __all__ = [
     "SmokeScriptTarget",
     "emit_smoke_check",
     "emit_smoke_checks",
+    "emit_smoke_results",
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",

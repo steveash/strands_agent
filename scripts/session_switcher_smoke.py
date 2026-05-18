@@ -359,7 +359,7 @@ async def run_smoke() -> None:
                     backlog_line="Workspace backlog: 2 sessions | lanes: inspect 2, edit 1 | overlap: mixed 1 session",
                     focus="inspect",
                     required_session_ids=["session-tool", "session-newer"],
-                    excluded_session_ids=["session-inspect"],
+                    excluded_session_ids=["session-failed-tool"],
                     required=["workspace lanes: inspect"],
                 ),
             )
@@ -372,8 +372,9 @@ async def run_smoke() -> None:
                     workspace_edit_output,
                     filter_mode="workspace-edit",
                     sort_mode="attention",
-                    backlog_line="Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 | overlap: mixed 1 session",
+                    backlog_line="Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 (oldest 6h @",
                     focus="edit",
+                    required=["| overlap: mixed 1 session"],
                 )
             )
             print(
@@ -382,7 +383,7 @@ async def run_smoke() -> None:
                     workspace_edit_output,
                     filter_mode="workspace-edit",
                     sort_mode="attention",
-                    backlog_line="Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 | overlap: mixed 1 session",
+                    backlog_line="Workspace backlog: 5 sessions | lanes: inspect 1, edit 5 (oldest 6h @",
                     focus="edit",
                     required_session_ids=[
                         "session-newer",
@@ -390,8 +391,8 @@ async def run_smoke() -> None:
                         "session-restored-edit-pending",
                         "session-denied",
                     ],
-                    excluded_session_ids=["session-inspect"],
-                    required=["workspace lanes: edit"],
+                    excluded_session_ids=["session-tool"],
+                    required=["workspace lanes: edit", "| overlap: mixed 1 session"],
                 ),
             )
             await pilot.press("h")
@@ -403,8 +404,9 @@ async def run_smoke() -> None:
                     shell_attention_output,
                     filter_mode="shell",
                     sort_mode="attention",
-                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 (oldest 45d @",
                     focus="inspect, test",
+                    required=["| overlap: mixed 1 session"],
                 )
             )
             print(
@@ -413,10 +415,11 @@ async def run_smoke() -> None:
                     shell_attention_output,
                     filter_mode="shell",
                     sort_mode="attention",
-                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 (oldest 45d @",
                     focus="inspect, test",
-                    required_session_ids=["session-newer", "session-failed-test"],
-                    excluded_session_ids=["session-tool", "session-denied"],
+                    required_session_ids=["session-newer", "session-aged", "session-failed-test", "session-restored-pending"],
+                    excluded_session_ids=["session-tool"],
+                    required=["shell: inspect 1", "| overlap: mixed 1 session"],
                 ),
             )
             await pilot.press("i")
@@ -463,8 +466,9 @@ async def run_smoke() -> None:
                     shell_test_output,
                     filter_mode="shell-test",
                     sort_mode="attention",
-                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 (oldest 45d @",
                     focus="test",
+                    required=["| overlap: mixed 1 session"],
                 )
             )
             print(
@@ -473,7 +477,7 @@ async def run_smoke() -> None:
                     shell_test_output,
                     filter_mode="shell-test",
                     sort_mode="attention",
-                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 | overlap: mixed 1 session",
+                    backlog_line="Shell backlog: 4 sessions | lanes: inspect 1, test 4 (oldest 45d @",
                     focus="test",
                     required_session_ids=[
                         "session-newer",
@@ -482,6 +486,7 @@ async def run_smoke() -> None:
                         "session-restored-pending",
                     ],
                     excluded_session_ids=["session-tool"],
+                    required=["| overlap: mixed 1 session"],
                 ),
             )
             await pilot.press("o")
