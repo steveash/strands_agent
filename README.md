@@ -119,15 +119,14 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- extended tool/workspace/shell lane rollups so backlog headers can surface `oldest … @ YYYY-MM-DD HH:MM UTC` details for aged lane activity, matching the newer approval/intervention timestamp treatment,
-- added lane-specific activity maps for tool/workspace/shell summaries in `sessions/picker.py`, including pending-approval timestamps for workspace-edit and shell-test lanes,
-- expanded fake session seed helpers so deterministic tests can inject explicit tool-event and approval timestamps,
-- updated picker/switcher tests plus the picker smoke script to lock the new timestamp-aware wording down without regressing fresh-session output.
+- added bundle-level start/pass/fail summary lines plus per-bundle timing output to `scripts/smoke_matrix.py`, so the matrix now reports which smoke bundle passed or failed without needing to scan the full interleaved stream,
+- kept the existing fail-fast behavior by running the standalone, triage, and recovery bundles sequentially through the shared smoke runner while emitting a final overall matrix summary,
+- expanded `tests/test_smoke_scripts.py` with direct regression coverage for local-vs-all bundle selection plus success/failure summary rendering.
 
 Why this matters now:
-- Steve can now see **when the oldest tool/workspace/shell lane activity actually happened** without reopening a session.
-- That makes the Strands triage surface more internally consistent: approval, intervention, stale-session, and now tool/workspace/shell rollups all speak the same age-plus-absolute-UTC language.
-- This closes the next observability backlog step and makes it easier to reason about whether a session is freshly active, quietly stale, or blocked in a specific lane.
+- Steve can now tell **which smoke bundle is healthy or broken at a glance** when running the full matrix.
+- That makes the smoke matrix a better top-level operator command for the prototype, especially as the standalone, triage, and recovery bundles keep growing.
+- This closes the README's next-iteration observability idea without weakening the existing fail-fast contract.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
@@ -137,12 +136,10 @@ How we know the prototype is working right now:
 - `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including the new tool/intervention metric summaries across recent-session reopen surfaces.
 
 Current evidence:
-- automated tests: `224 passed` via `.venv/bin/pytest -q`,
-- targeted picker/switcher regression coverage: `.venv/bin/pytest -q tests/test_app.py tests/test_sessions.py tests/test_summary_utils.py tests/test_smoke_assertions.py` => `149 passed`,
-- runnable picker observability verification: `.venv/bin/python scripts/session_picker_smoke.py` prints the existing rollup checks plus the updated timestamp-aware shell/workspace/tool summaries as `True`,
-- runnable approval observability verification: `.venv/bin/python scripts/approval_smoke.py` still prints `initial queue schema= True`, `approved queue schema= True`, and `denied queue schema= True`,
-- local unblock note: host `python` was unavailable in the shell, so validation stayed on `.venv/bin/...`; earlier inspection also fell back to `grep`/`sed` because `rg` was unavailable,
-- git publish note: the repo-specific commit/tag/push workflow remains part of the end-of-run checklist for each daily prototype pass.
+- automated tests: `231 passed in 33.53s` via `.venv/bin/pytest -q`,
+- targeted smoke-matrix regression coverage: `.venv/bin/pytest -q tests/test_smoke_scripts.py tests/test_smoke_runner.py` => `10 passed in 0.68s`,
+- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` now emits per-bundle start/pass timing lines plus `summary: 3/3 bundles passed` after the standalone, triage, and recovery bundles all finish green,
+- CLI verification: `.venv/bin/python -m strands_agent_tui.app --help | grep -E -- '--pick-filter|--stale-approval-days'` still succeeds.
 
 ## First five phases
 
@@ -411,7 +408,7 @@ To run the current local smoke bundles together with fail-fast handling:
 .venv/bin/python scripts/smoke_matrix.py
 ```
 
-This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you also want the live smoke target folded into the standalone bundle.
+This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you also want the live smoke target folded into the standalone bundle.
 
 ### Live approval-restore smoke check
 

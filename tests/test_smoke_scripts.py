@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from importlib.util import module_from_spec, spec_from_file_location
 from io import StringIO
 from pathlib import Path
@@ -59,12 +59,12 @@ def test_smoke_matrix_defaults_to_local_bundle_sequence(monkeypatch) -> None:
 
     seen = {}
 
-    def _run_smoke_targets(targets):
-        seen["names"] = [target.name for target in targets]
-        seen["args"] = [target.args for target in targets]
+    def _run_smoke_target(target, **_kwargs):
+        seen.setdefault("names", []).append(target.name)
+        seen.setdefault("args", []).append(target.args)
         return 0
 
-    monkeypatch.setattr(smoke_matrix, "run_smoke_targets", _run_smoke_targets)
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
 
     exit_code = smoke_matrix.main([])
 
@@ -80,12 +80,12 @@ def test_smoke_matrix_all_uses_live_inclusive_standalone_bundle(monkeypatch) -> 
 
     seen = {}
 
-    def _run_smoke_targets(targets):
-        seen["names"] = [target.name for target in targets]
-        seen["args"] = [target.args for target in targets]
+    def _run_smoke_target(target, **_kwargs):
+        seen.setdefault("names", []).append(target.name)
+        seen.setdefault("args", []).append(target.args)
         return 0
 
-    monkeypatch.setattr(smoke_matrix, "run_smoke_targets", _run_smoke_targets)
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
 
     exit_code = smoke_matrix.main(["all"])
 
@@ -94,3 +94,59 @@ def test_smoke_matrix_all_uses_live_inclusive_standalone_bundle(monkeypatch) -> 
         "names": ["standalone-all", "triage", "recovery"],
         "args": [("all",), (), ()],
     }
+
+
+def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
+
+    perf_values = iter([0.0, 1.0, 1.3, 2.0, 2.6, 3.0, 3.9, 4.5])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    with redirect_stdout(stdout):
+        exit_code = smoke_matrix.main([])
+
+    assert exit_code == 0
+    assert stdout.getvalue().splitlines() == [
+        "[smoke-matrix] running standalone-local",
+        "[smoke-matrix] standalone-local passed in 0.30s",
+        "[smoke-matrix] running triage",
+        "[smoke-matrix] triage passed in 0.60s",
+        "[smoke-matrix] running recovery",
+        "[smoke-matrix] recovery passed in 0.90s",
+        "[smoke-matrix] summary: 3/3 bundles passed in 4.50s",
+    ]
+
+
+def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    seen = []
+
+    def _run_smoke_target(target, **_kwargs):
+        seen.append(target.name)
+        return 1 if target.name == "triage" else 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+
+    perf_values = iter([0.0, 1.0, 1.2, 1.4, 1.9, 2.5])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main([])
+
+    assert exit_code == 1
+    assert seen == ["standalone-local", "triage"]
+    assert stdout.getvalue().splitlines() == [
+        "[smoke-matrix] running standalone-local",
+        "[smoke-matrix] standalone-local passed in 0.20s",
+        "[smoke-matrix] running triage",
+    ]
+    assert stderr.getvalue().splitlines() == [
+        "[smoke-matrix] triage failed in 0.50s",
+        "[smoke-matrix] summary: 1/3 bundles passed before failure in 2.50s",
+    ]
