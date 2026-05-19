@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, and shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, and shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -111,6 +111,7 @@ What exists now:
 - in-app session-switcher triage controls for all/pending/denied/restore/restored-approval/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting so denser recent-session summaries stay skimmable as the list grows,
 - restart-safe session-switcher restoration so reopening a session can bring back the chooser with the prior target selection preserved where possible,
 - richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers, compact restore-state badges, explicit pending-approval age cues, stale-session badges, intervention rollups/previews, workspace-lane badges/previews for inspect vs edit activity, workspace/shell/tool/intervention backlog rollup headers with focus + overlap/page summaries, compact tool-failure and intervention-family/request mix details, pending/denied approval backlog headers with queue volume + family mix + restored-queue/age cues, last-event previews, bounded recent-tool streak summaries, explicit recent shell/test outcome rollups, and overlap badges when one session spans multiple triage lanes,
+- focused workspace/shell triage views that now collapse preview snippets to the active lane instead of echoing unrelated mixed-lane history from the same saved session,
 - a selected-session preview block inside the in-app `F11` switcher so the highlighted session now exposes the same richer summary context as the launch-time picker,
 - explicit empty-filter guidance across both recent-session reopen surfaces so zero-match triage states say how many saved sessions still exist plus which keys recover all/pending/denied/restore/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test views,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
@@ -119,27 +120,26 @@ What exists now:
 - a local smoke script for validating the real runtime without committing secrets.
 
 What changed this run:
-- expanded `tests/test_smoke_scripts.py` with direct recovery-script coverage for the mixed detail-line (`name: value`) plus boolean-check (`name= True/False`) contract used by `approval_restart_smoke.py`, `session_state_smoke.py`, `live_restore_smoke.py`, and `live_restore_denied_smoke.py`,
-- added wrapper-level success/failure assertions for the live-restore recovery scripts so detail output ordering and non-zero failure exits are now locked down without depending on live runtime execution,
-- kept the existing fail-fast recovery bundle behavior intact while moving more of that contract checking into fast pytest coverage.
+- added lane-specific workspace and shell preview caches to `SessionSummary` so focused `workspace-*` and `shell-*` filters can render only the active lane's history,
+- updated picker/switcher row + selected-preview rendering to suppress off-lane `last tool` snippets when a mixed session is being viewed through a narrower workspace/shell triage lens,
+- added regression coverage proving that workspace-edit and shell-test views no longer leak inspect-only previews while workspace-inspect and shell-inspect still show the matching activity.
 
 Why this matters now:
-- Recovery-smoke regressions now fail inside pytest before they can silently break `session_recovery_smoke.py` bundle parsing.
-- That shortens feedback loops on the approval/session-state/live-restore surfaces, which now rely on a shared output contract across several scripts.
-- This closes the README-listed follow-up to harden the recovery bundle's structured smoke output.
+- The recent-session picker/switcher is becoming the operator's control plane for understanding Strands state across sessions, so mixed-lane preview noise makes the triage model harder to trust.
+- Collapsing previews to the active workspace/shell lane makes overlap sessions easier to reason about: a test-focused view now shows test context, while an inspect-focused view keeps showing inspect context.
+- This sharpens one of the core Strands learning goals here: understanding how tool activity, steering, and saved-session recovery should be surfaced without muddying adjacent state.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including the new tool/intervention metric summaries across recent-session reopen surfaces.
+- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including the new active-lane preview collapse behavior across recent-session reopen surfaces.
 
 Current evidence:
-- automated tests: `236 passed in 38.10s` via `.venv/bin/pytest -q`,
-- targeted smoke-contract regression coverage: `.venv/bin/pytest -q tests/test_smoke_scripts.py tests/test_smoke_runner.py tests/test_smoke_results.py` => `18 passed in 4.16s`,
-- runnable recovery verification: `.venv/bin/python scripts/session_recovery_smoke.py` => exit `0` with mixed detail + boolean result lines preserved across approval, restart, session-state, and live-restore checks,
-- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 27.16s`,
+- automated tests: `238 passed in 37.27s` via `.venv/bin/pytest -q`,
+- targeted focused-preview regression coverage: `.venv/bin/pytest -q tests/test_sessions.py -k 'workspace_and_shell_previews_to_active_lane or surfaces_workspace_rollups_and_overlap or surfaces_shell_rollups_and_overlap'` => `3 passed, 61 deselected in 1.04s`,
+- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 26.74s`,
 - CLI verification: `.venv/bin/python -m strands_agent_tui.app --help | grep -E -- '--pick-filter|--stale-approval-days'` still succeeds.
 
 ## First five phases
@@ -613,7 +613,7 @@ Why this stack:
 1. keep the fake runtime path green while refining the event schema around steering/intervention events
 2. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 3. decide whether the same absolute-timestamp treatment should expand beyond approval/intervention lanes into tool/workspace/shell rollups
-4. decide whether focused previews inside workspace/shell filters should collapse to the active lane instead of showing full mixed-session history
+4. decide whether lane-focused workspace/shell filters should explicitly say when a session only matches via pending approval state and has no executed events in that lane yet
 5. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 
 1. scaffold Python project + TUI entrypoint
@@ -643,7 +643,7 @@ Future daily iterations should:
 ## Next iteration ideas
 
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
-- decide whether focused previews inside workspace/shell filters should collapse to the active lane instead of showing the full mixed session history
+- decide whether lane-focused workspace/shell views should add an explicit "pending only" hint when there is no executed tool preview in the active lane yet
 - decide whether the new tool/intervention metric lines should eventually show lane-specific breakdowns when a page mixes multiple activity families
 - decide whether the stale-approval threshold should surface inside picker/switcher UI copy so operators can see the active cutoff without relying on CLI/env context
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists

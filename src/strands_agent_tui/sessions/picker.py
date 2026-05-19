@@ -172,6 +172,10 @@ class SessionSummary:
     has_workspace_edit_activity: bool = False
     last_workspace_preview: str = ""
     recent_workspace_previews: list[str] = field(default_factory=list)
+    last_workspace_inspect_preview: str = ""
+    recent_workspace_inspect_previews: list[str] = field(default_factory=list)
+    last_workspace_edit_preview: str = ""
+    recent_workspace_edit_previews: list[str] = field(default_factory=list)
     workspace_lane_age_sort_keys: dict[str, int] = field(default_factory=dict)
     workspace_lane_timestamps: dict[str, str] = field(default_factory=dict)
     shell_activity_badges: list[str] = field(default_factory=list)
@@ -180,6 +184,10 @@ class SessionSummary:
     has_shell_test_activity: bool = False
     last_shell_preview: str = ""
     recent_shell_previews: list[str] = field(default_factory=list)
+    last_shell_inspect_preview: str = ""
+    recent_shell_inspect_previews: list[str] = field(default_factory=list)
+    last_shell_test_preview: str = ""
+    recent_shell_test_previews: list[str] = field(default_factory=list)
     shell_lane_age_sort_keys: dict[str, int] = field(default_factory=dict)
     shell_lane_timestamps: dict[str, str] = field(default_factory=dict)
     failure_activity_badges: list[str] = field(default_factory=list)
@@ -193,6 +201,29 @@ class SessionSummary:
     stale_session_sort_key: int = 0
     restore_badges: list[str] = field(default_factory=list)
     draft_prompt_preview: str = ""
+
+    def _focused_workspace_preview_context(self, filter_mode: str) -> tuple[str, list[str]]:
+        if filter_mode == "workspace-inspect":
+            return self.last_workspace_inspect_preview, self.recent_workspace_inspect_previews
+        if filter_mode == "workspace-edit":
+            return self.last_workspace_edit_preview, self.recent_workspace_edit_previews
+        return self.last_workspace_preview, self.recent_workspace_previews
+
+    def _focused_shell_preview_context(self, filter_mode: str) -> tuple[str, list[str]]:
+        if filter_mode == "shell-inspect":
+            return self.last_shell_inspect_preview, self.recent_shell_inspect_previews
+        if filter_mode == "shell-test":
+            return self.last_shell_test_preview, self.recent_shell_test_previews
+        return self.last_shell_preview, self.recent_shell_previews
+
+    def _focused_tool_preview_context(self, filter_mode: str) -> tuple[str, list[str], bool]:
+        if filter_mode in {"workspace-inspect", "workspace-edit"}:
+            preview, recent = self._focused_workspace_preview_context(filter_mode)
+            return preview, recent, True
+        if filter_mode in {"shell-inspect", "shell-test"}:
+            preview, recent = self._focused_shell_preview_context(filter_mode)
+            return preview, recent, True
+        return self.last_tool_preview, self.recent_tool_previews, False
 
     def render_line(
         self,
@@ -244,10 +275,16 @@ class SessionSummary:
         )
         stale_focus_suffix = _render_stale_approval_focus_suffix(filter_mode, stale_focus_lanes)
         intervention_suffix = render_row_badges_suffix("intervention", self.intervention_badges)
-        tool_hint = render_badged_row_suffix("last tool", self.last_tool_preview, self.last_tool_badges)
+        focused_tool_preview, focused_recent_tool_previews, focused_tool_filter = self._focused_tool_preview_context(
+            filter_mode
+        )
+        if focused_tool_filter:
+            tool_hint = render_row_detail_suffix("last tool", focused_tool_preview)
+        else:
+            tool_hint = render_badged_row_suffix("last tool", self.last_tool_preview, self.last_tool_badges)
         tool_streak_suffix = render_row_detail_suffix(
             "tool streak",
-            f"{len(self.recent_tool_previews)} recent" if len(self.recent_tool_previews) > 1 else "",
+            f"{len(focused_recent_tool_previews)} recent" if len(focused_recent_tool_previews) > 1 else "",
         )
         workspace_lane_suffix = render_row_badges_suffix("workspace lanes", self.workspace_lane_badges)
         shell_suffix = render_row_badges_suffix("shell", self.shell_activity_badges)
@@ -411,23 +448,31 @@ class SessionSummary:
             render_preview_detail_line("last prompt", self.last_prompt_preview),
         )
 
-        tool_lines = render_selected_preview_section_lines(
-            render_badged_preview_line("last tool", self.last_tool_preview, self.last_tool_badges),
-            render_numbered_preview_section_lines("recent tools", self.recent_tool_previews),
+        focused_workspace_preview, focused_workspace_previews = self._focused_workspace_preview_context(filter_mode)
+        focused_shell_preview, focused_shell_previews = self._focused_shell_preview_context(filter_mode)
+        focused_tool_preview, focused_recent_tool_previews, focused_tool_filter = self._focused_tool_preview_context(
+            filter_mode
         )
+
+        tool_lines = []
+        if not focused_tool_filter:
+            tool_lines = render_selected_preview_section_lines(
+                render_badged_preview_line("last tool", self.last_tool_preview, self.last_tool_badges),
+                render_numbered_preview_section_lines("recent tools", self.recent_tool_previews),
+            )
 
         workspace_lines = render_selected_preview_section_lines(
             render_preview_badges_line("workspace lanes", self.workspace_lane_badges),
-            render_preview_detail_line("last workspace tool", self.last_workspace_preview),
-            render_numbered_preview_section_lines("recent workspace tools", self.recent_workspace_previews),
+            render_preview_detail_line("last workspace tool", focused_workspace_preview),
+            render_numbered_preview_section_lines("recent workspace tools", focused_workspace_previews),
         )
 
         shell_lines = render_selected_preview_section_lines(
             render_preview_badges_line("shell", self.shell_activity_badges),
             render_preview_badges_line("shell lanes", self.shell_lane_badges),
             render_preview_badges_line("failures", self.failure_activity_badges),
-            render_preview_detail_line("last shell", self.last_shell_preview),
-            render_numbered_preview_section_lines("recent shell outcomes", self.recent_shell_previews),
+            render_preview_detail_line("last shell", focused_shell_preview),
+            render_numbered_preview_section_lines("recent shell outcomes", focused_shell_previews),
         )
 
         event_lines = render_selected_preview_section_lines(
@@ -691,6 +736,10 @@ def _ordered_recent_sessions(
             has_workspace_edit_activity=has_workspace_edit_activity,
             last_workspace_preview=_latest_workspace_preview(turns),
             recent_workspace_previews=_recent_workspace_previews(turns),
+            last_workspace_inspect_preview=_latest_workspace_preview(turns, lane="inspect"),
+            recent_workspace_inspect_previews=_recent_workspace_previews(turns, lane="inspect"),
+            last_workspace_edit_preview=_latest_workspace_preview(turns, lane="edit"),
+            recent_workspace_edit_previews=_recent_workspace_previews(turns, lane="edit"),
             workspace_lane_age_sort_keys=workspace_lane_age_sort_keys,
             workspace_lane_timestamps=workspace_lane_timestamps,
             shell_activity_badges=_shell_activity_badges(turns),
@@ -699,6 +748,10 @@ def _ordered_recent_sessions(
             has_shell_test_activity=has_shell_test_activity,
             last_shell_preview=_latest_shell_preview(turns),
             recent_shell_previews=_recent_shell_previews(turns),
+            last_shell_inspect_preview=_latest_shell_preview(turns, lane="inspect"),
+            recent_shell_inspect_previews=_recent_shell_previews(turns, lane="inspect"),
+            last_shell_test_preview=_latest_shell_preview(turns, lane="test"),
+            recent_shell_test_previews=_recent_shell_previews(turns, lane="test"),
             shell_lane_age_sort_keys=shell_lane_age_sort_keys,
             shell_lane_timestamps=shell_lane_timestamps,
             failure_activity_badges=_failure_activity_badges(
@@ -1244,9 +1297,14 @@ def _latest_workspace_preview(turns: list[TurnArtifact], *, lane: str | None = N
     return _render_tool_event_summary(event)
 
 
-def _recent_workspace_previews(turns: list[TurnArtifact], limit: int = MAX_TOOL_STREAK_PREVIEWS) -> list[str]:
+def _recent_workspace_previews(
+    turns: list[TurnArtifact],
+    limit: int = MAX_TOOL_STREAK_PREVIEWS,
+    *,
+    lane: str | None = None,
+) -> list[str]:
     previews: list[str] = []
-    for event in _iter_recent_workspace_tool_events(turns):
+    for event in _iter_recent_workspace_tool_events(turns, lane=lane):
         rendered = _render_tool_event_summary(event)
         if rendered:
             previews.append(rendered)
@@ -1491,16 +1549,29 @@ def _queued_intervention_preview(pending_approvals: list[ApprovalRequest]) -> st
     return _truncate(" ".join(bits), MAX_TOOL_PREVIEW)
 
 
-def _latest_shell_preview(turns: list[TurnArtifact]) -> str:
-    event = next(_iter_recent_tool_events(turns, tool_name="run_shell_command"), None)
+def _iter_recent_shell_tool_events(turns: list[TurnArtifact], *, lane: str | None = None):
+    for event in _iter_recent_tool_events(turns, tool_name="run_shell_command"):
+        event_lane = "test" if _is_test_shell_event(event) else "inspect"
+        if lane is not None and event_lane != lane:
+            continue
+        yield event
+
+
+def _latest_shell_preview(turns: list[TurnArtifact], *, lane: str | None = None) -> str:
+    event = next(_iter_recent_shell_tool_events(turns, lane=lane), None)
     if event is None:
         return ""
     return _render_tool_event_summary(event)
 
 
-def _recent_shell_previews(turns: list[TurnArtifact], limit: int = MAX_SHELL_STREAK_PREVIEWS) -> list[str]:
+def _recent_shell_previews(
+    turns: list[TurnArtifact],
+    limit: int = MAX_SHELL_STREAK_PREVIEWS,
+    *,
+    lane: str | None = None,
+) -> list[str]:
     previews: list[str] = []
-    for event in _iter_recent_tool_events(turns, tool_name="run_shell_command"):
+    for event in _iter_recent_shell_tool_events(turns, lane=lane):
         rendered = _render_tool_event_summary(event)
         if rendered:
             previews.append(rendered)

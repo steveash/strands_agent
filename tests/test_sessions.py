@@ -343,6 +343,41 @@ def test_render_session_picker_surfaces_shell_rollups_and_overlap(tmp_path: Path
     assert "Shell focus: test" in test_rendered
 
 
+def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_lane(tmp_path: Path) -> None:
+    seed_workspace_inspect_session(tmp_path)
+    seed_workspace_overlap_session(tmp_path)
+    seed_workspace_edit_session(tmp_path)
+
+    workspace_inspect_rendered = render_session_picker(tmp_path, filter_mode="workspace-inspect")
+    workspace_edit_rendered = render_session_picker(tmp_path, filter_mode="workspace-edit", selected_index=1)
+
+    assert "- last workspace tool: README.md lines 1-20" in workspace_inspect_rendered
+    assert "- recent workspace tools (1):" in workspace_inspect_rendered
+    assert "README.md lines 1-20" not in workspace_edit_rendered
+    mixed_workspace_line = next(
+        line for line in workspace_edit_rendered.splitlines() if "session-workspace-mixed | 1 turn(s)" in line
+    )
+    assert "last tool:" not in mixed_workspace_line
+    assert "- last workspace tool:" not in workspace_edit_rendered
+
+    shell_root = tmp_path / "shell"
+    seed_shell_inspect_session(shell_root)
+    seed_shell_overlap_session(shell_root)
+    seed_shell_test_session(shell_root)
+
+    shell_inspect_rendered = render_session_picker(shell_root, filter_mode="shell-inspect")
+    shell_test_rendered = render_session_picker(shell_root, filter_mode="shell-test", selected_index=1)
+
+    assert "- last shell: inspect/e0 git diff --stat -> README.md | 2 +-" in shell_inspect_rendered
+    assert "- recent shell outcomes (1):" in shell_inspect_rendered
+    assert "inspect/e0 git diff --stat -> README.md | 2 +-" not in shell_test_rendered
+    mixed_shell_line = next(
+        line for line in shell_test_rendered.splitlines() if "session-shell-mixed-rollup | 1 turn(s)" in line
+    )
+    assert "last tool:" not in mixed_shell_line
+    assert "- last shell:" not in shell_test_rendered
+
+
 def test_render_session_picker_surfaces_tool_rollup_timestamps(tmp_path: Path) -> None:
     now = datetime.now(UTC)
     workspace_at = now - timedelta(days=3)
