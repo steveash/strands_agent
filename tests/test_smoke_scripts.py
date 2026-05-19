@@ -205,6 +205,36 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
     ]
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected_names"),
+    [
+        ([], ["approval", "approval-restart", "session-state", "live-restore", "live-restore-denied"]),
+        (["all"], ["approval", "approval-restart", "session-state", "live-restore", "live-restore-denied"]),
+        (["approval"], ["approval"]),
+        (["live-restore-denied"], ["live-restore-denied"]),
+    ],
+)
+def test_session_recovery_smoke_selects_expected_targets(monkeypatch, argv, expected_names) -> None:
+    session_recovery_smoke = _load_script_module("session_recovery_smoke")
+
+    seen = {}
+
+    def _run_smoke_targets(targets, **_kwargs):
+        seen["names"] = [target.name for target in targets]
+        seen["args"] = [target.args for target in targets]
+        return 0
+
+    monkeypatch.setattr(session_recovery_smoke, "run_smoke_targets", _run_smoke_targets)
+
+    exit_code = session_recovery_smoke.main(argv)
+
+    assert exit_code == 0
+    assert seen == {
+        "names": expected_names,
+        "args": [() for _ in expected_names],
+    }
+
+
 def test_smoke_matrix_defaults_to_local_bundle_sequence(monkeypatch) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
 

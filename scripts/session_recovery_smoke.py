@@ -7,6 +7,13 @@ from pathlib import Path
 from strands_agent_tui.testing import SmokeScriptTarget, run_smoke_targets
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_TARGET_NAMES = [
+    "approval",
+    "approval-restart",
+    "session-state",
+    "live-restore",
+    "live-restore-denied",
+]
 SMOKE_TARGETS = {
     "approval": SmokeScriptTarget("approval", SCRIPT_DIR / "approval_smoke.py"),
     "approval-restart": SmokeScriptTarget("approval-restart", SCRIPT_DIR / "approval_restart_smoke.py"),
@@ -29,7 +36,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    target_names = [args.target] if args.target != "all" else list(SMOKE_TARGETS)
+    target_names = [args.target] if args.target != "all" else DEFAULT_TARGET_NAMES
     return run_smoke_targets([SMOKE_TARGETS[target_name] for target_name in target_names])
 
 
