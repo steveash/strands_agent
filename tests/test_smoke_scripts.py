@@ -208,6 +208,36 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
 @pytest.mark.parametrize(
     ("argv", "expected_names"),
     [
+        ([], ["picker", "switcher"]),
+        (["both"], ["picker", "switcher"]),
+        (["picker"], ["picker"]),
+        (["switcher"], ["switcher"]),
+    ],
+)
+def test_session_triage_smoke_selects_expected_targets(monkeypatch, argv, expected_names) -> None:
+    session_triage_smoke = _load_script_module("session_triage_smoke")
+
+    seen = {}
+
+    def _run_smoke_targets(targets, **_kwargs):
+        seen["names"] = [target.name for target in targets]
+        seen["args"] = [target.args for target in targets]
+        return 0
+
+    monkeypatch.setattr(session_triage_smoke, "run_smoke_targets", _run_smoke_targets)
+
+    exit_code = session_triage_smoke.main(argv)
+
+    assert exit_code == 0
+    assert seen == {
+        "names": expected_names,
+        "args": [() for _ in expected_names],
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_names"),
+    [
         ([], ["approval", "approval-restart", "session-state", "live-restore", "live-restore-denied"]),
         (["all"], ["approval", "approval-restart", "session-state", "live-restore", "live-restore-denied"]),
         (["approval"], ["approval"]),
