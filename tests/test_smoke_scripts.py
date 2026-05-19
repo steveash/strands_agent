@@ -12,15 +12,17 @@ import pytest
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import FakeStrandsRuntime, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore
+from strands_agent_tui.sessions import SessionArtifactStore, render_session_picker
 from strands_agent_tui.testing import (
     emit_smoke_checks as real_emit_smoke_checks,
     matches_shell_filter_output,
     matches_workspace_filter_output,
     seed_approval_restore_focus_scenario,
+    seed_denied_approval_session,
     seed_pending_approval_session,
     seed_plain_session,
     seed_shell_failure_session,
+    seed_shell_inspect_session,
     seed_shell_test_session,
     seed_workspace_edit_session,
     seed_workspace_failure_session,
@@ -298,6 +300,182 @@ def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None
     assert stderr.getvalue().splitlines() == [
         "[smoke-matrix] triage failed in 0.50s",
         "[smoke-matrix] summary: 1/3 bundles passed before failure in 2.50s",
+    ]
+
+
+def _render_picker_attention_workspace_shell_outputs(tmp_path: Path) -> dict[str, str]:
+    seed_plain_session(tmp_path)
+    seed_pending_approval_session(tmp_path)
+    seed_workspace_edit_session(
+        tmp_path,
+        session_id="session-pending-edit",
+        prompt="queue the risky edit",
+        request_id="approval-0001b",
+        tool_name="write_file",
+        args={"relative_path": "notes.txt", "overwrite": True},
+        approval_prompt="queue edit",
+    )
+    seed_denied_approval_session(
+        tmp_path,
+        session_id="session-denied-test",
+        prompt="deny the risky test approval",
+    )
+    seed_approval_restore_focus_scenario(tmp_path)
+
+    aged_turn_time = datetime.now(UTC) - timedelta(days=10)
+    seed_shell_test_session(
+        tmp_path,
+        session_id="session-aged",
+        prompt="resume the stale test queue",
+        response="ok",
+        request_id="approval-aged",
+        approval_prompt="resume old tests",
+        created_at=(datetime.now(UTC) - timedelta(days=45)).isoformat(),
+        turn_created_at=aged_turn_time.isoformat(),
+    )
+    set_session_artifact_mtime(SessionArtifactStore(tmp_path, session_id="session-aged"), aged_turn_time)
+
+    seed_shell_failure_session(
+        tmp_path,
+        session_id="session-failed-test",
+        prompt="run the failing test suite",
+        response="ok",
+    )
+    seed_workspace_failure_session(
+        tmp_path,
+        session_id="session-failed-tool",
+        prompt="attempt the failing edit",
+        response="ok",
+    )
+    seed_workspace_inspect_session(tmp_path, session_id="session-tool", prompt="list files", response="ok")
+    seed_shell_inspect_session(tmp_path, session_id="session-inspect", prompt="inspect repo", response="ok")
+
+    return {
+        "workspace_inspect": render_session_picker(
+            tmp_path,
+            filter_mode="workspace-inspect",
+            sort_mode="attention",
+        ),
+        "workspace_edit": render_session_picker(
+            tmp_path,
+            filter_mode="workspace-edit",
+            sort_mode="attention",
+        ),
+        "shell": render_session_picker(tmp_path, filter_mode="shell", sort_mode="attention"),
+        "shell_inspect": render_session_picker(
+            tmp_path,
+            filter_mode="shell-inspect",
+            sort_mode="attention",
+        ),
+        "shell_test": render_session_picker(
+            tmp_path,
+            filter_mode="shell-test",
+            sort_mode="attention",
+        ),
+    }
+
+
+def _ranked_session_ids(text: str) -> list[str]:
+    session_ids: list[str] = []
+    for line in text.splitlines():
+        stripped = line.lstrip(" >")
+        prefix, separator, remainder = stripped.partition(". ")
+        if not separator or not prefix.isdigit() or not remainder.startswith("session-"):
+            continue
+        session_ids.append(remainder.split(" |", 1)[0])
+    return session_ids
+
+
+def test_session_picker_attention_workspace_and_shell_filters_match_smoke_expectations(tmp_path: Path) -> None:
+    outputs = _render_picker_attention_workspace_shell_outputs(tmp_path)
+
+    assert matches_workspace_filter_output(
+        outputs["workspace_inspect"],
+        filter_mode="workspace-inspect",
+        sort_mode="attention",
+        backlog_line="Workspace backlog: 1 session | lanes: inspect 1",
+        focus="inspect",
+        required_session_ids=["session-tool"],
+        excluded_session_ids=["session-pending", "session-failed-tool"],
+        required=["workspace lanes: inspect"],
+    )
+    assert _ranked_session_ids(outputs["workspace_inspect"]) == ["session-tool"]
+
+    assert matches_workspace_filter_output(
+        outputs["workspace_edit"],
+        filter_mode="workspace-edit",
+        sort_mode="attention",
+        backlog_line="Workspace backlog: 5 sessions | lanes: edit 5 (oldest 6h @",
+        focus="edit",
+        required_session_ids=[
+            "session-restored-edit-pending",
+            "session-pending",
+            "session-pending-edit",
+            "session-denied",
+            "session-failed-tool",
+        ],
+        excluded_session_ids=["session-tool"],
+        required=["workspace lanes: edit"],
+    )
+    assert _ranked_session_ids(outputs["workspace_edit"])[:2] == [
+        "session-restored-edit-pending",
+        "session-pending",
+    ]
+
+    assert matches_shell_filter_output(
+        outputs["shell"],
+        filter_mode="shell",
+        sort_mode="attention",
+        backlog_line="Shell backlog: 6 sessions | lanes: inspect 2, test 5 (oldest 45d @",
+        focus="inspect, test",
+        required_session_ids=[
+            "session-restored-pending",
+            "session-aged",
+            "session-pending",
+            "session-denied-test",
+            "session-failed-test",
+            "session-inspect",
+        ],
+        excluded_session_ids=["session-tool"],
+        required=["shell: inspect 1", "| overlap: mixed 1 session"],
+    )
+    assert _ranked_session_ids(outputs["shell"])[:3] == [
+        "session-restored-pending",
+        "session-aged",
+        "session-pending",
+    ]
+
+    assert matches_shell_filter_output(
+        outputs["shell_inspect"],
+        filter_mode="shell-inspect",
+        sort_mode="attention",
+        backlog_line="Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session",
+        focus="inspect",
+        required_session_ids=["session-pending", "session-inspect"],
+        excluded_session_ids=["session-tool", "session-aged", "session-restored-pending"],
+    )
+    assert _ranked_session_ids(outputs["shell_inspect"]) == ["session-pending", "session-inspect"]
+    assert "shell lanes: inspect, test" in outputs["shell_inspect"]
+
+    assert matches_shell_filter_output(
+        outputs["shell_test"],
+        filter_mode="shell-test",
+        sort_mode="attention",
+        backlog_line="Shell backlog: 5 sessions | lanes: inspect 1, test 5 (oldest 45d @",
+        focus="test",
+        required_session_ids=[
+            "session-restored-pending",
+            "session-aged",
+            "session-pending",
+            "session-denied-test",
+            "session-failed-test",
+        ],
+        excluded_session_ids=["session-tool", "session-inspect"],
+        required=["| overlap: mixed 1 session"],
+    )
+    assert _ranked_session_ids(outputs["shell_test"])[:2] == [
+        "session-restored-pending",
+        "session-aged",
     ]
 
 

@@ -156,11 +156,32 @@ def main() -> None:
         approval_stale_picker = render_session_picker(temp_dir, filter_mode="approval-stale")
         tool_picker = render_session_picker(temp_dir, filter_mode="tool")
         workspace_inspect_picker = render_session_picker(temp_dir, filter_mode="workspace-inspect")
+        workspace_inspect_attention_picker = render_session_picker(
+            temp_dir,
+            filter_mode="workspace-inspect",
+            sort_mode="attention",
+        )
         workspace_edit_picker = render_session_picker(temp_dir, filter_mode="workspace-edit")
+        workspace_edit_attention_picker = render_session_picker(
+            temp_dir,
+            filter_mode="workspace-edit",
+            sort_mode="attention",
+        )
         shell_picker = render_session_picker(temp_dir, filter_mode="shell")
+        shell_attention_picker = render_session_picker(temp_dir, filter_mode="shell", sort_mode="attention")
         intervention_picker = render_session_picker(temp_dir, filter_mode="intervention")
         shell_inspect_picker = render_session_picker(temp_dir, filter_mode="shell-inspect")
+        shell_inspect_attention_picker = render_session_picker(
+            temp_dir,
+            filter_mode="shell-inspect",
+            sort_mode="attention",
+        )
         shell_test_picker = render_session_picker(temp_dir, filter_mode="shell-test")
+        shell_test_attention_picker = render_session_picker(
+            temp_dir,
+            filter_mode="shell-test",
+            sort_mode="attention",
+        )
         attention_picker = render_session_picker(temp_dir, sort_mode="attention")
         attention_page_two_picker = render_session_picker(temp_dir, sort_mode="attention", page_index=1)
         approval_restore_attention_picker = render_session_picker(temp_dir, filter_mode="approval-restore", sort_mode="attention")
@@ -396,6 +417,99 @@ def main() -> None:
                 required_session_ids=["session-pending", "session-aged", "session-failed-test"],
                 excluded_session_ids=["session-inspect"],
             ),
+        )
+        print(
+            "picker_attention_workspace_inspect_filter=",
+            matches_workspace_filter_output(
+                workspace_inspect_attention_picker,
+                filter_mode="workspace-inspect",
+                sort_mode="attention",
+                backlog_line="Workspace backlog: 1 session | lanes: inspect 1",
+                focus="inspect",
+                required_session_ids=["session-tool"],
+                excluded_session_ids=["session-pending", "session-failed-tool"],
+                required=["workspace lanes: inspect"],
+            )
+            and "> 1. session-tool | 1 turn(s)" in workspace_inspect_attention_picker,
+        )
+        print(
+            "picker_attention_workspace_edit_filter=",
+            matches_workspace_filter_output(
+                workspace_edit_attention_picker,
+                filter_mode="workspace-edit",
+                sort_mode="attention",
+                backlog_line="Workspace backlog: 5 sessions | lanes: edit 5 (oldest 6h @",
+                focus="edit",
+                required_session_ids=[
+                    "session-restored-edit-pending",
+                    "session-pending",
+                    "session-pending-edit",
+                    "session-denied",
+                    "session-failed-tool",
+                ],
+                excluded_session_ids=["session-tool"],
+                required=["workspace lanes: edit"],
+            )
+            and "> 1. session-restored-edit-pending" in workspace_edit_attention_picker
+            and "  2. session-pending | 1 turn(s)" in workspace_edit_attention_picker,
+        )
+        print(
+            "picker_attention_shell_filter=",
+            matches_shell_filter_output(
+                shell_attention_picker,
+                filter_mode="shell",
+                sort_mode="attention",
+                backlog_line="Shell backlog: 6 sessions | lanes: inspect 2, test 5 (oldest 45d @",
+                focus="inspect, test",
+                required_session_ids=[
+                    "session-restored-pending",
+                    "session-aged",
+                    "session-pending",
+                    "session-denied-test",
+                    "session-failed-test",
+                    "session-inspect",
+                ],
+                excluded_session_ids=["session-tool"],
+                required=["shell: inspect 1", "| overlap: mixed 1 session"],
+            )
+            and "> 1. session-restored-pending" in shell_attention_picker
+            and "  2. session-aged | 1 turn(s)" in shell_attention_picker,
+        )
+        print(
+            "picker_attention_shell_inspect_filter=",
+            matches_shell_filter_output(
+                shell_inspect_attention_picker,
+                filter_mode="shell-inspect",
+                sort_mode="attention",
+                backlog_line="Shell backlog: 2 sessions | lanes: inspect 2, test 1 | overlap: mixed 1 session",
+                focus="inspect",
+                required_session_ids=["session-pending", "session-inspect"],
+                excluded_session_ids=["session-tool", "session-aged", "session-restored-pending"],
+            )
+            and "> 1. session-pending | 1 turn(s)" in shell_inspect_attention_picker
+            and "  2. session-inspect | 1 turn(s)" in shell_inspect_attention_picker
+            and "shell lanes: inspect, test" in shell_inspect_attention_picker,
+        )
+        print(
+            "picker_attention_shell_test_filter=",
+            matches_shell_filter_output(
+                shell_test_attention_picker,
+                filter_mode="shell-test",
+                sort_mode="attention",
+                backlog_line="Shell backlog: 5 sessions | lanes: inspect 1, test 5 (oldest 45d @",
+                focus="test",
+                required_session_ids=[
+                    "session-restored-pending",
+                    "session-aged",
+                    "session-pending",
+                    "session-denied-test",
+                    "session-failed-test",
+                ],
+                excluded_session_ids=["session-tool", "session-inspect"],
+                required=["| overlap: mixed 1 session"],
+            )
+            and "> 1. session-restored-pending" in shell_test_attention_picker
+            and "  2. session-aged | 1 turn(s)" in shell_test_attention_picker,
         )
         print(
             "picker_shell_overlap_badge=",
