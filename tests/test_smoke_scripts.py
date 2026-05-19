@@ -208,6 +208,37 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
 @pytest.mark.parametrize(
     ("argv", "expected_names"),
     [
+        ([], ["summary-utils", "shell-tool", "replay"]),
+        (["local"], ["summary-utils", "shell-tool", "replay"]),
+        (["all"], ["summary-utils", "shell-tool", "replay", "live"]),
+        (["summary-utils"], ["summary-utils"]),
+        (["live"], ["live"]),
+    ],
+)
+def test_standalone_smoke_selects_expected_targets(monkeypatch, argv, expected_names) -> None:
+    standalone_smoke = _load_script_module("standalone_smoke")
+
+    seen = {}
+
+    def _run_smoke_targets(targets, **_kwargs):
+        seen["names"] = [target.name for target in targets]
+        seen["args"] = [target.args for target in targets]
+        return 0
+
+    monkeypatch.setattr(standalone_smoke, "run_smoke_targets", _run_smoke_targets)
+
+    exit_code = standalone_smoke.main(argv)
+
+    assert exit_code == 0
+    assert seen == {
+        "names": expected_names,
+        "args": [() for _ in expected_names],
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_names"),
+    [
         ([], ["picker", "switcher"]),
         (["both"], ["picker", "switcher"]),
         (["picker"], ["picker"]),

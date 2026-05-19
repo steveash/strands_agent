@@ -13,7 +13,8 @@ SMOKE_TARGETS = {
     "replay": SmokeScriptTarget("replay", SCRIPT_DIR / "replay_smoke.py"),
     "live": SmokeScriptTarget("live", SCRIPT_DIR / "live_smoke.py"),
 }
-LOCAL_TARGET_NAMES = ["summary-utils", "shell-tool", "replay"]
+DEFAULT_TARGET_NAMES = ["summary-utils", "shell-tool", "replay"]
+ALL_TARGET_NAMES = [*DEFAULT_TARGET_NAMES, "live"]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -33,9 +34,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.target == "local":
-        target_names = LOCAL_TARGET_NAMES
+        target_names = DEFAULT_TARGET_NAMES
     elif args.target == "all":
-        target_names = list(SMOKE_TARGETS)
+        target_names = ALL_TARGET_NAMES
     else:
         target_names = [args.target]
     return run_smoke_targets([SMOKE_TARGETS[target_name] for target_name in target_names])
