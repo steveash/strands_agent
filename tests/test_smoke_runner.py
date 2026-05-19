@@ -4,7 +4,14 @@ import sys
 from io import StringIO
 from textwrap import dedent
 
-from strands_agent_tui.testing.smoke_runner import SmokeScriptTarget, run_smoke_target, run_smoke_targets
+import pytest
+
+from strands_agent_tui.testing.smoke_runner import (
+    SmokeScriptTarget,
+    SmokeTargetSelector,
+    run_smoke_target,
+    run_smoke_targets,
+)
 
 
 def _write_script(tmp_path, name: str, body: str):
@@ -205,6 +212,69 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
         "second smoke failed fast: second_check= False",
         "[bundle-smoke] summary: 1/2 targets passed before failure in 2.50s",
     ]
+
+
+def test_smoke_target_selector_resolves_default_alias_and_single_target(tmp_path) -> None:
+    first_script = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
+    second_script = _write_script(tmp_path, "second.py", "print('second_check= True', flush=True)\n")
+    selector = SmokeTargetSelector(
+        targets={
+            "first": SmokeScriptTarget("first", first_script),
+            "second": SmokeScriptTarget("second", second_script),
+        },
+        default_target_name="both",
+        alias_target_names={
+            "both": ("first", "second"),
+            "all": ("first", "second"),
+        },
+    )
+
+    assert selector.choices == ("first", "second", "both", "all")
+    assert selector.resolve_target_names() == ["first", "second"]
+    assert [target.name for target in selector.resolve_targets()] == ["first", "second"]
+    assert selector.resolve_target_names("second") == ["second"]
+    assert [target.name for target in selector.resolve_targets("all")] == ["first", "second"]
+
+
+@pytest.mark.parametrize(
+    ("default_target_name", "alias_target_names", "requested_target_name", "expected_message"),
+    [
+        ("missing", {}, None, "unknown default smoke target 'missing'"),
+        (
+            "all",
+            {"all": ("missing",)},
+            None,
+            "alias 'all' references unknown smoke targets: missing",
+        ),
+        ("first", {}, "missing", "unknown smoke target 'missing'"),
+    ],
+)
+def test_smoke_target_selector_validates_configuration(
+    tmp_path,
+    default_target_name,
+    alias_target_names,
+    requested_target_name,
+    expected_message,
+) -> None:
+    script_path = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
+
+    if requested_target_name is None:
+        with pytest.raises(ValueError, match=expected_message):
+            SmokeTargetSelector(
+                targets={"first": SmokeScriptTarget("first", script_path)},
+                default_target_name=default_target_name,
+                alias_target_names=alias_target_names,
+            )
+        return
+
+    selector = SmokeTargetSelector(
+        targets={"first": SmokeScriptTarget("first", script_path)},
+        default_target_name=default_target_name,
+        alias_target_names=alias_target_names,
+    )
+
+    with pytest.raises(ValueError, match=expected_message):
+        selector.resolve_targets(requested_target_name)
 
 
 def test_run_smoke_target_passes_script_args(tmp_path) -> None:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
 from typing import TextIO
@@ -16,6 +16,39 @@ class SmokeScriptTarget:
     name: str
     script_path: Path
     args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SmokeTargetSelector:
+    targets: Mapping[str, SmokeScriptTarget]
+    default_target_name: str
+    alias_target_names: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        valid_target_names = set(self.targets)
+        if self.default_target_name not in valid_target_names and self.default_target_name not in self.alias_target_names:
+            raise ValueError(f"unknown default smoke target {self.default_target_name!r}")
+        for alias_name, target_names in self.alias_target_names.items():
+            unknown_target_names = [target_name for target_name in target_names if target_name not in valid_target_names]
+            if unknown_target_names:
+                raise ValueError(
+                    f"alias {alias_name!r} references unknown smoke targets: {', '.join(unknown_target_names)}"
+                )
+
+    @property
+    def choices(self) -> tuple[str, ...]:
+        return (*self.targets.keys(), *self.alias_target_names.keys())
+
+    def resolve_target_names(self, requested_target_name: str | None = None) -> list[str]:
+        target_name = self.default_target_name if requested_target_name is None else requested_target_name
+        if target_name in self.alias_target_names:
+            return list(self.alias_target_names[target_name])
+        if target_name not in self.targets:
+            raise ValueError(f"unknown smoke target {target_name!r}")
+        return [target_name]
+
+    def resolve_targets(self, requested_target_name: str | None = None) -> list[SmokeScriptTarget]:
+        return [self.targets[target_name] for target_name in self.resolve_target_names(requested_target_name)]
 
 
 SmokeFailurePredicate = Callable[[str], bool]

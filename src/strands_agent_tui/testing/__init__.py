@@ -69,7 +69,7 @@ from .smoke_assertions import (
     smoke_text_matches,
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
-from .smoke_runner import SmokeScriptTarget, run_smoke_target, run_smoke_targets
+from .smoke_runner import SmokeScriptTarget, SmokeTargetSelector, run_smoke_target, run_smoke_targets
 
 __all__ = [
     "ApprovalRestoreRollupScenario",
@@ -138,6 +138,7 @@ __all__ = [
     "seed_workspace_overlap_session",
     "set_session_artifact_mtime",
     "SmokeScriptTarget",
+    "SmokeTargetSelector",
     "emit_smoke_check",
     "emit_smoke_checks",
     "emit_smoke_results",

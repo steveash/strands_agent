@@ -4,7 +4,7 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
-from strands_agent_tui.testing import SmokeScriptTarget, run_smoke_targets
+from strands_agent_tui.testing import SmokeScriptTarget, SmokeTargetSelector, run_smoke_targets
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SUMMARY_LABEL = "standalone-smoke"
@@ -16,6 +16,14 @@ SMOKE_TARGETS = {
 }
 DEFAULT_TARGET_NAMES = ["summary-utils", "shell-tool", "replay"]
 ALL_TARGET_NAMES = [*DEFAULT_TARGET_NAMES, "live"]
+TARGET_SELECTOR = SmokeTargetSelector(
+    targets=SMOKE_TARGETS,
+    default_target_name="local",
+    alias_target_names={
+        "local": tuple(DEFAULT_TARGET_NAMES),
+        "all": tuple(ALL_TARGET_NAMES),
+    },
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -28,20 +36,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "target",
         nargs="?",
-        choices=[*SMOKE_TARGETS, "local", "all"],
-        default="local",
+        choices=TARGET_SELECTOR.choices,
+        default=TARGET_SELECTOR.default_target_name,
         help="Which standalone smoke surface to run.",
     )
     args = parser.parse_args(argv)
 
-    if args.target == "local":
-        target_names = DEFAULT_TARGET_NAMES
-    elif args.target == "all":
-        target_names = ALL_TARGET_NAMES
-    else:
-        target_names = [args.target]
     return run_smoke_targets(
-        [SMOKE_TARGETS[target_name] for target_name in target_names],
+        TARGET_SELECTOR.resolve_targets(args.target),
         summary_label=SUMMARY_LABEL,
     )
 

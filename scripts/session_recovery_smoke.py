@@ -4,7 +4,7 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
-from strands_agent_tui.testing import SmokeScriptTarget, run_smoke_targets
+from strands_agent_tui.testing import SmokeScriptTarget, SmokeTargetSelector, run_smoke_targets
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SUMMARY_LABEL = "session-recovery-smoke"
@@ -22,6 +22,11 @@ SMOKE_TARGETS = {
     "live-restore": SmokeScriptTarget("live-restore", SCRIPT_DIR / "live_restore_smoke.py"),
     "live-restore-denied": SmokeScriptTarget("live-restore-denied", SCRIPT_DIR / "live_restore_denied_smoke.py"),
 }
+TARGET_SELECTOR = SmokeTargetSelector(
+    targets=SMOKE_TARGETS,
+    default_target_name="all",
+    alias_target_names={"all": tuple(DEFAULT_TARGET_NAMES)},
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -31,15 +36,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "target",
         nargs="?",
-        choices=[*SMOKE_TARGETS, "all"],
-        default="all",
+        choices=TARGET_SELECTOR.choices,
+        default=TARGET_SELECTOR.default_target_name,
         help="Which recovery smoke surface to run.",
     )
     args = parser.parse_args(argv)
 
-    target_names = [args.target] if args.target != "all" else DEFAULT_TARGET_NAMES
     return run_smoke_targets(
-        [SMOKE_TARGETS[target_name] for target_name in target_names],
+        TARGET_SELECTOR.resolve_targets(args.target),
         summary_label=SUMMARY_LABEL,
     )
 
