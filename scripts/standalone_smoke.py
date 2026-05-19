@@ -7,6 +7,7 @@ from pathlib import Path
 from strands_agent_tui.testing import SmokeScriptTarget, run_smoke_targets
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+SUMMARY_LABEL = "standalone-smoke"
 SMOKE_TARGETS = {
     "summary-utils": SmokeScriptTarget("summary-utils", SCRIPT_DIR / "summary_utils_smoke.py"),
     "shell-tool": SmokeScriptTarget("shell-tool", SCRIPT_DIR / "shell_tool_smoke.py"),
@@ -39,7 +40,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         target_names = ALL_TARGET_NAMES
     else:
         target_names = [args.target]
-    return run_smoke_targets([SMOKE_TARGETS[target_name] for target_name in target_names])
+    return run_smoke_targets(
+        [SMOKE_TARGETS[target_name] for target_name in target_names],
+        summary_label=SUMMARY_LABEL,
+    )
 
 
 if __name__ == "__main__":

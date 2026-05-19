@@ -241,6 +241,7 @@ def test_standalone_smoke_selects_expected_targets(monkeypatch, argv, expected_n
     [
         ([], ["picker", "switcher"]),
         (["both"], ["picker", "switcher"]),
+        (["all"], ["picker", "switcher"]),
         (["picker"], ["picker"]),
         (["switcher"], ["switcher"]),
     ],
@@ -250,9 +251,10 @@ def test_session_triage_smoke_selects_expected_targets(monkeypatch, argv, expect
 
     seen = {}
 
-    def _run_smoke_targets(targets, **_kwargs):
+    def _run_smoke_targets(targets, **kwargs):
         seen["names"] = [target.name for target in targets]
         seen["args"] = [target.args for target in targets]
+        seen["summary_label"] = kwargs.get("summary_label")
         return 0
 
     monkeypatch.setattr(session_triage_smoke, "run_smoke_targets", _run_smoke_targets)
@@ -263,6 +265,7 @@ def test_session_triage_smoke_selects_expected_targets(monkeypatch, argv, expect
     assert seen == {
         "names": expected_names,
         "args": [() for _ in expected_names],
+        "summary_label": "session-triage-smoke",
     }
 
 
@@ -280,9 +283,10 @@ def test_session_recovery_smoke_selects_expected_targets(monkeypatch, argv, expe
 
     seen = {}
 
-    def _run_smoke_targets(targets, **_kwargs):
+    def _run_smoke_targets(targets, **kwargs):
         seen["names"] = [target.name for target in targets]
         seen["args"] = [target.args for target in targets]
+        seen["summary_label"] = kwargs.get("summary_label")
         return 0
 
     monkeypatch.setattr(session_recovery_smoke, "run_smoke_targets", _run_smoke_targets)
@@ -293,6 +297,28 @@ def test_session_recovery_smoke_selects_expected_targets(monkeypatch, argv, expe
     assert seen == {
         "names": expected_names,
         "args": [() for _ in expected_names],
+        "summary_label": "session-recovery-smoke",
+    }
+
+
+def test_standalone_smoke_passes_summary_label(monkeypatch) -> None:
+    standalone_smoke = _load_script_module("standalone_smoke")
+
+    seen = {}
+
+    def _run_smoke_targets(targets, **kwargs):
+        seen["names"] = [target.name for target in targets]
+        seen["summary_label"] = kwargs.get("summary_label")
+        return 0
+
+    monkeypatch.setattr(standalone_smoke, "run_smoke_targets", _run_smoke_targets)
+
+    exit_code = standalone_smoke.main(["summary-utils"])
+
+    assert exit_code == 0
+    assert seen == {
+        "names": ["summary-utils"],
+        "summary_label": "standalone-smoke",
     }
 
 
@@ -335,6 +361,35 @@ def test_smoke_matrix_all_uses_live_inclusive_standalone_bundle(monkeypatch) -> 
     assert seen == {
         "names": ["standalone-all", "triage", "recovery"],
         "args": [("all",), (), ()],
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_names", "expected_args"),
+    [
+        (["standalone"], ["standalone-local"], [()]),
+        (["triage"], ["triage"], [()]),
+        (["recovery"], ["recovery"], [()]),
+    ],
+)
+def test_smoke_matrix_single_bundle_target_selection(monkeypatch, argv, expected_names, expected_args) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    seen = {}
+
+    def _run_smoke_target(target, **_kwargs):
+        seen.setdefault("names", []).append(target.name)
+        seen.setdefault("args", []).append(target.args)
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+
+    exit_code = smoke_matrix.main(argv)
+
+    assert exit_code == 0
+    assert seen == {
+        "names": expected_names,
+        "args": expected_args,
     }
 
 

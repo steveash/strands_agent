@@ -5,6 +5,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import TextIO
 
 from .smoke_assertions import is_failed_smoke_check_line
@@ -18,6 +19,11 @@ class SmokeScriptTarget:
 
 
 SmokeFailurePredicate = Callable[[str], bool]
+
+
+def _emit_summary_line(summary_label: str, message: str, *, stream: TextIO) -> None:
+    print(f"[{summary_label}] {message}", file=stream)
+    stream.flush()
 
 
 def run_smoke_target(
@@ -63,7 +69,12 @@ def run_smoke_targets(
     stderr: TextIO = sys.stderr,
     python_executable: str = sys.executable,
     failure_predicate: SmokeFailurePredicate = is_failed_smoke_check_line,
+    summary_label: str | None = None,
 ) -> int:
+    started_at = perf_counter()
+    passed_count = 0
+    total_count = len(targets)
+
     for target in targets:
         exit_code = run_smoke_target(
             target,
@@ -73,5 +84,21 @@ def run_smoke_targets(
             failure_predicate=failure_predicate,
         )
         if exit_code != 0:
+            if summary_label is not None:
+                elapsed = perf_counter() - started_at
+                _emit_summary_line(
+                    summary_label,
+                    f"summary: {passed_count}/{total_count} targets passed before failure in {elapsed:.2f}s",
+                    stream=stderr,
+                )
             return exit_code
+        passed_count += 1
+
+    if summary_label is not None:
+        elapsed = perf_counter() - started_at
+        _emit_summary_line(
+            summary_label,
+            f"summary: {passed_count}/{total_count} targets passed in {elapsed:.2f}s",
+            stream=stdout,
+        )
     return 0

@@ -126,6 +126,87 @@ def test_run_smoke_targets_stops_before_later_targets_after_failure(tmp_path) ->
     assert not marker_path.exists()
 
 
+def test_run_smoke_targets_emits_summary_footer_on_success(tmp_path, monkeypatch) -> None:
+    first_script = _write_script(
+        tmp_path,
+        "first.py",
+        """
+        print("first_check= True", flush=True)
+        """,
+    )
+    second_script = _write_script(
+        tmp_path,
+        "second.py",
+        """
+        print("second_check= True", flush=True)
+        """,
+    )
+
+    perf_values = iter([0.0, 1.25])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    exit_code = run_smoke_targets(
+        [
+            SmokeScriptTarget("first", first_script),
+            SmokeScriptTarget("second", second_script),
+        ],
+        stdout=stdout,
+        stderr=stderr,
+        python_executable=sys.executable,
+        summary_label="bundle-smoke",
+    )
+
+    assert exit_code == 0
+    assert stdout.getvalue() == (
+        "first_check= True\n"
+        "second_check= True\n"
+        "[bundle-smoke] summary: 2/2 targets passed in 1.25s\n"
+    )
+    assert stderr.getvalue() == ""
+
+
+def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -> None:
+    first_script = _write_script(
+        tmp_path,
+        "first.py",
+        """
+        print("first_check= True", flush=True)
+        """,
+    )
+    second_script = _write_script(
+        tmp_path,
+        "second.py",
+        """
+        print("second_check= False", flush=True)
+        """,
+    )
+
+    perf_values = iter([0.0, 2.5])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    exit_code = run_smoke_targets(
+        [
+            SmokeScriptTarget("first", first_script),
+            SmokeScriptTarget("second", second_script),
+        ],
+        stdout=stdout,
+        stderr=stderr,
+        python_executable=sys.executable,
+        summary_label="bundle-smoke",
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue() == "first_check= True\nsecond_check= False\n"
+    assert stderr.getvalue().splitlines() == [
+        "second smoke failed fast: second_check= False",
+        "[bundle-smoke] summary: 1/2 targets passed before failure in 2.50s",
+    ]
+
+
 def test_run_smoke_target_passes_script_args(tmp_path) -> None:
     script_path = _write_script(
         tmp_path,

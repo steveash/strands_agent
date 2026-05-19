@@ -399,7 +399,27 @@ To verify the remaining local smoke surfaces with shared fail-fast `= False` han
 .venv/bin/python scripts/standalone_smoke.py
 ```
 
-This default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together and exits non-zero on the first failing boolean result line. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
+This default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
+
+### Session triage smoke bundle
+
+To run the picker + switcher smoke surfaces together with shared fail-fast handling:
+
+```bash
+.venv/bin/python scripts/session_triage_smoke.py
+```
+
+This default bundle runs both triage targets, accepts either `both` or `all` for the combined picker+switcher selection, and ends with a concise `[session-triage-smoke] summary: ...` footer.
+
+### Session recovery smoke bundle
+
+To run the approval/session-state/live-restore smoke surfaces together with shared fail-fast handling:
+
+```bash
+.venv/bin/python scripts/session_recovery_smoke.py
+```
+
+This bundle runs all recovery targets by default and ends with a concise `[session-recovery-smoke] summary: ...` footer.
 
 ### Full local smoke matrix
 
