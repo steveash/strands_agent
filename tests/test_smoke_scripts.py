@@ -370,9 +370,41 @@ def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> No
 
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
+    assert captured.out == ""
     normalized_error = _normalize_help_text(captured.err)
     assert "invalid choice: 'standalone-all'" in normalized_error
     assert "{standalone,triage,recovery,local,all}" in normalized_error
+
+
+@pytest.mark.parametrize(
+    ("script_name", "invalid_target", "expected_choices"),
+    [
+        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,live,local,all}"),
+        ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
+        (
+            "session_recovery_smoke",
+            "both",
+            "{approval,approval-restart,session-state,live-restore,live-restore-denied,all}",
+        ),
+    ],
+)
+def test_smoke_wrapper_invalid_choice_errors_show_public_cli_choices(
+    script_name: str,
+    invalid_target: str,
+    expected_choices: str,
+    capsys,
+) -> None:
+    module = _load_script_module(script_name)
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main([invalid_target])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    normalized_error = _normalize_help_text(captured.err)
+    assert f"invalid choice: '{invalid_target}'" in normalized_error
+    assert expected_choices in normalized_error
 
 
 @pytest.mark.parametrize(
