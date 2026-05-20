@@ -334,14 +334,14 @@ def test_standalone_smoke_passes_summary_label(monkeypatch) -> None:
 def test_smoke_wrapper_help_documents_aliases_and_single_target_examples() -> None:
     standalone_help = _normalize_help_text(_format_script_help("standalone_smoke"))
     assert "Alias details: local -> summary-utils, shell-tool, replay all -> summary-utils, shell-tool, replay, live" in standalone_help
-    assert "local alias -> summary-utils, shell-tool, replay" in standalone_help
-    assert "standalone_smoke.py all # local bundle plus live smoke" in standalone_help
+    assert "default local alias -> summary-utils, shell-tool, replay" in standalone_help
+    assert "standalone_smoke.py all # all alias -> summary-utils, shell-tool, replay, live" in standalone_help
     assert "standalone_smoke.py replay # single target" in standalone_help
 
     triage_help = _normalize_help_text(_format_script_help("session_triage_smoke"))
     assert "Alias details: both -> picker, switcher all -> picker, switcher" in triage_help
     assert "default both alias -> picker, switcher" in triage_help
-    assert "session_triage_smoke.py all # alias for picker + switcher" in triage_help
+    assert "session_triage_smoke.py all # all alias -> picker, switcher" in triage_help
     assert "session_triage_smoke.py picker # single target" in triage_help
 
     recovery_help = _normalize_help_text(_format_script_help("session_recovery_smoke"))
@@ -355,11 +355,62 @@ def test_smoke_matrix_help_documents_bundle_examples() -> None:
     help_text = _normalize_help_text(_format_script_help("smoke_matrix"))
 
     assert "Bundle aliases: local -> standalone-local, triage, recovery all -> standalone-all, triage, recovery" in help_text
-    assert "local matrix -> standalone-local, triage, recovery" in help_text
-    assert "smoke_matrix.py standalone # standalone-local bundle only" in help_text
-    assert "smoke_matrix.py triage # session-triage bundle only" in help_text
-    assert "smoke_matrix.py recovery # session-recovery bundle only" in help_text
-    assert "smoke_matrix.py all # standalone-all, triage, recovery" in help_text
+    assert "default local alias -> standalone-local, triage, recovery" in help_text
+    assert "smoke_matrix.py standalone # single bundle" in help_text
+    assert "smoke_matrix.py triage # single bundle" in help_text
+    assert "smoke_matrix.py recovery # single bundle" in help_text
+    assert "smoke_matrix.py all # all alias -> standalone-all, triage, recovery" in help_text
+
+
+@pytest.mark.parametrize(
+    ("script_name", "required_snippets"),
+    [
+        (
+            "standalone_smoke",
+            [
+                "Which standalone smoke surface to run.",
+                "default local alias -> summary-utils, shell-tool, replay",
+                "standalone_smoke.py replay # single target",
+            ],
+        ),
+        (
+            "session_triage_smoke",
+            [
+                "Which session-triage smoke surface to run.",
+                "default both alias -> picker, switcher",
+                "session_triage_smoke.py picker # single target",
+            ],
+        ),
+        (
+            "session_recovery_smoke",
+            [
+                "Which recovery smoke surface to run.",
+                "default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied",
+                "session_recovery_smoke.py live-restore # single target",
+            ],
+        ),
+        (
+            "smoke_matrix",
+            [
+                "Which smoke bundle or bundle matrix to run.",
+                "default local alias -> standalone-local, triage, recovery",
+                "smoke_matrix.py standalone # single bundle",
+            ],
+        ),
+    ],
+)
+def test_smoke_script_main_help_exits_zero_and_prints_expected_text(script_name, required_snippets, capsys) -> None:
+    module = _load_script_module(script_name)
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main(["--help"])
+
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    normalized_help = _normalize_help_text(captured.out)
+    for snippet in required_snippets:
+        assert snippet in normalized_help
 
 
 def test_smoke_matrix_defaults_to_local_bundle_sequence(monkeypatch) -> None:

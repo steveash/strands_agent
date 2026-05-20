@@ -4,7 +4,13 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
-from strands_agent_tui.testing import SmokeScriptTarget, SmokeTargetSelector, run_smoke_targets
+from strands_agent_tui.testing import (
+    SmokeCliExample,
+    SmokeScriptTarget,
+    SmokeTargetSelector,
+    build_smoke_cli_parser,
+    run_smoke_targets,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SUMMARY_LABEL = "session-recovery-smoke"
@@ -30,27 +36,19 @@ TARGET_SELECTOR = SmokeTargetSelector(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    return build_smoke_cli_parser(
         description="Run approval/session-state/live-restore smoke scripts and fail fast on any emitted '= False' check.",
-        epilog=(
-            "Alias details:\n"
-            "  all -> approval, approval-restart, session-state, live-restore, live-restore-denied\n"
-            "\n"
-            "Examples:\n"
-            "  session_recovery_smoke.py                 # default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied\n"
-            "  session_recovery_smoke.py live-restore    # single target\n"
-            "  session_recovery_smoke.py approval        # single target"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "target",
-        nargs="?",
         choices=TARGET_SELECTOR.choices,
-        default=TARGET_SELECTOR.default_target_name,
-        help="Which recovery smoke surface to run. Alias: all -> approval, approval-restart, session-state, live-restore, live-restore-denied.",
+        default_target_name=TARGET_SELECTOR.default_target_name,
+        resolve_target_names=TARGET_SELECTOR.resolve_target_names,
+        item_help="Which recovery smoke surface to run.",
+        alias_target_names=TARGET_SELECTOR.alias_target_names,
+        examples=(
+            SmokeCliExample("session_recovery_smoke.py"),
+            SmokeCliExample("session_recovery_smoke.py live-restore", target_name="live-restore"),
+            SmokeCliExample("session_recovery_smoke.py approval", target_name="approval"),
+        ),
     )
-    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:

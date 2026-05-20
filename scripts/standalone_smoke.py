@@ -4,7 +4,13 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
-from strands_agent_tui.testing import SmokeScriptTarget, SmokeTargetSelector, run_smoke_targets
+from strands_agent_tui.testing import (
+    SmokeCliExample,
+    SmokeScriptTarget,
+    SmokeTargetSelector,
+    build_smoke_cli_parser,
+    run_smoke_targets,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SUMMARY_LABEL = "standalone-smoke"
@@ -27,31 +33,22 @@ TARGET_SELECTOR = SmokeTargetSelector(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    return build_smoke_cli_parser(
         description=(
             "Run standalone smoke scripts and fail fast on any emitted '= False' check. "
             "The default 'local' bundle excludes the live runtime target."
         ),
-        epilog=(
-            "Alias details:\n"
-            "  local -> summary-utils, shell-tool, replay\n"
-            "  all -> summary-utils, shell-tool, replay, live\n"
-            "\n"
-            "Examples:\n"
-            "  standalone_smoke.py              # local alias -> summary-utils, shell-tool, replay\n"
-            "  standalone_smoke.py all          # local bundle plus live smoke\n"
-            "  standalone_smoke.py replay       # single target"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "target",
-        nargs="?",
         choices=TARGET_SELECTOR.choices,
-        default=TARGET_SELECTOR.default_target_name,
-        help="Which standalone smoke surface to run. Aliases: local -> summary-utils, shell-tool, replay; all -> summary-utils, shell-tool, replay, live.",
+        default_target_name=TARGET_SELECTOR.default_target_name,
+        resolve_target_names=TARGET_SELECTOR.resolve_target_names,
+        item_help="Which standalone smoke surface to run.",
+        alias_target_names=TARGET_SELECTOR.alias_target_names,
+        examples=(
+            SmokeCliExample("standalone_smoke.py"),
+            SmokeCliExample("standalone_smoke.py all", target_name="all"),
+            SmokeCliExample("standalone_smoke.py replay", target_name="replay"),
+        ),
     )
-    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:

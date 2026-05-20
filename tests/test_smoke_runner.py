@@ -7,8 +7,10 @@ from textwrap import dedent
 import pytest
 
 from strands_agent_tui.testing.smoke_runner import (
+    SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
+    build_smoke_cli_parser,
     run_smoke_target,
     run_smoke_targets,
 )
@@ -234,6 +236,38 @@ def test_smoke_target_selector_resolves_default_alias_and_single_target(tmp_path
     assert [target.name for target in selector.resolve_targets()] == ["first", "second"]
     assert selector.resolve_target_names("second") == ["second"]
     assert [target.name for target in selector.resolve_targets("all")] == ["first", "second"]
+
+
+def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> None:
+    first_script = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
+    second_script = _write_script(tmp_path, "second.py", "print('second_check= True', flush=True)\n")
+    selector = SmokeTargetSelector(
+        targets={
+            "first": SmokeScriptTarget("first", first_script),
+            "second": SmokeScriptTarget("second", second_script),
+        },
+        default_target_name="both",
+        alias_target_names={"both": ("first", "second")},
+    )
+
+    parser = build_smoke_cli_parser(
+        description="Run the demo smoke bundle.",
+        choices=selector.choices,
+        default_target_name=selector.default_target_name,
+        resolve_target_names=selector.resolve_target_names,
+        item_help="Which demo smoke surface to run.",
+        alias_target_names=selector.alias_target_names,
+        examples=(
+            SmokeCliExample("demo_smoke.py"),
+            SmokeCliExample("demo_smoke.py first", target_name="first"),
+        ),
+    )
+
+    help_text = " ".join(parser.format_help().split())
+    assert "Which demo smoke surface to run. Aliases: both -> first, second." in help_text
+    assert "Alias details: both -> first, second" in help_text
+    assert "demo_smoke.py # default both alias -> first, second" in help_text
+    assert "demo_smoke.py first # single target" in help_text
 
 
 @pytest.mark.parametrize(

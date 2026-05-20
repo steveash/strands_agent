@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import argparse
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,13 @@ class SmokeScriptTarget:
     name: str
     script_path: Path
     args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SmokeCliExample:
+    command: str
+    target_name: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -52,6 +60,78 @@ class SmokeTargetSelector:
 
 
 SmokeFailurePredicate = Callable[[str], bool]
+
+
+def _format_choice_mapping(mapping: Mapping[str, Sequence[str]]) -> str:
+    return "; ".join(f"{name} -> {', '.join(target_names)}" for name, target_names in mapping.items())
+
+
+def _describe_cli_example(
+    example: SmokeCliExample,
+    *,
+    default_target_name: str,
+    alias_target_names: Mapping[str, Sequence[str]],
+    resolve_target_names: Callable[[str | None], Sequence[str]],
+    single_choice_description: str,
+) -> str:
+    if example.description is not None:
+        return example.description
+
+    requested_target_name = default_target_name if example.target_name is None else example.target_name
+    resolved_target_names = ", ".join(resolve_target_names(example.target_name))
+    if requested_target_name in alias_target_names:
+        if example.target_name is None:
+            return f"default {requested_target_name} alias -> {resolved_target_names}"
+        return f"{requested_target_name} alias -> {resolved_target_names}"
+    if example.target_name is None:
+        return f"default target -> {resolved_target_names}"
+    return single_choice_description
+
+
+def build_smoke_cli_parser(
+    *,
+    description: str,
+    choices: Sequence[str],
+    default_target_name: str,
+    resolve_target_names: Callable[[str | None], Sequence[str]],
+    item_help: str,
+    alias_target_names: Mapping[str, Sequence[str]] | None = None,
+    alias_heading: str = "Alias details",
+    examples: Sequence[SmokeCliExample] = (),
+    single_choice_description: str = "single target",
+) -> argparse.ArgumentParser:
+    alias_target_names = {} if alias_target_names is None else alias_target_names
+    epilog_lines: list[str] = []
+    if alias_target_names:
+        epilog_lines.append(f"{alias_heading}:")
+        epilog_lines.extend(f"  {name} -> {', '.join(target_names)}" for name, target_names in alias_target_names.items())
+    if examples:
+        if epilog_lines:
+            epilog_lines.append("")
+        epilog_lines.append("Examples:")
+        epilog_lines.extend(
+            f"  {example.command}  # {_describe_cli_example(example, default_target_name=default_target_name, alias_target_names=alias_target_names, resolve_target_names=resolve_target_names, single_choice_description=single_choice_description)}"
+            for example in examples
+        )
+
+    help_text = item_help
+    if alias_target_names:
+        help_text = f"{help_text} Aliases: {_format_choice_mapping(alias_target_names)}."
+
+    parser = argparse.ArgumentParser(
+        description=description,
+        epilog="\n".join(epilog_lines) if epilog_lines else None,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "target",
+        nargs="?",
+        choices=tuple(choices),
+        default=default_target_name,
+        help=help_text,
+    )
+    return parser
 
 
 def _emit_summary_line(summary_label: str, message: str, *, stream: TextIO) -> None:

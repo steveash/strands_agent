@@ -4,7 +4,13 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
-from strands_agent_tui.testing import SmokeScriptTarget, SmokeTargetSelector, run_smoke_targets
+from strands_agent_tui.testing import (
+    SmokeCliExample,
+    SmokeScriptTarget,
+    SmokeTargetSelector,
+    build_smoke_cli_parser,
+    run_smoke_targets,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SUMMARY_LABEL = "session-triage-smoke"
@@ -24,28 +30,19 @@ TARGET_SELECTOR = SmokeTargetSelector(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    return build_smoke_cli_parser(
         description="Run picker/switcher smoke scripts and fail fast on any emitted '= False' check.",
-        epilog=(
-            "Alias details:\n"
-            "  both -> picker, switcher\n"
-            "  all -> picker, switcher\n"
-            "\n"
-            "Examples:\n"
-            "  session_triage_smoke.py          # default both alias -> picker, switcher\n"
-            "  session_triage_smoke.py all      # alias for picker + switcher\n"
-            "  session_triage_smoke.py picker   # single target"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "target",
-        nargs="?",
         choices=TARGET_SELECTOR.choices,
-        default=TARGET_SELECTOR.default_target_name,
-        help="Which session-triage smoke surface to run. Aliases: both -> picker, switcher; all -> picker, switcher.",
+        default_target_name=TARGET_SELECTOR.default_target_name,
+        resolve_target_names=TARGET_SELECTOR.resolve_target_names,
+        item_help="Which session-triage smoke surface to run.",
+        alias_target_names=TARGET_SELECTOR.alias_target_names,
+        examples=(
+            SmokeCliExample("session_triage_smoke.py"),
+            SmokeCliExample("session_triage_smoke.py all", target_name="all"),
+            SmokeCliExample("session_triage_smoke.py picker", target_name="picker"),
+        ),
     )
-    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -7,7 +7,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import TextIO
 
-from strands_agent_tui.testing import SmokeScriptTarget, run_smoke_target
+from strands_agent_tui.testing import SmokeCliExample, SmokeScriptTarget, build_smoke_cli_parser, run_smoke_target
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_BUNDLES = {
@@ -18,6 +18,21 @@ SMOKE_BUNDLES = {
 }
 LOCAL_BUNDLE_NAMES = ["standalone-local", "triage", "recovery"]
 ALL_BUNDLE_NAMES = ["standalone-all", "triage", "recovery"]
+
+
+def resolve_bundle_names(requested_target_name: str | None = None) -> list[str]:
+    target_name = "local" if requested_target_name is None else requested_target_name
+    if target_name == "standalone":
+        return ["standalone-local"]
+    if target_name == "triage":
+        return ["triage"]
+    if target_name == "recovery":
+        return ["recovery"]
+    if target_name == "all":
+        return ALL_BUNDLE_NAMES
+    if target_name == "local":
+        return LOCAL_BUNDLE_NAMES
+    raise ValueError(f"unknown smoke bundle {target_name!r}")
 
 
 def _emit_bundle_summary(message: str, *, stream: TextIO) -> None:
@@ -64,49 +79,34 @@ def run_smoke_matrix(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-
-    if args.target == "standalone":
-        bundle_names = ["standalone-local"]
-    elif args.target == "triage":
-        bundle_names = ["triage"]
-    elif args.target == "recovery":
-        bundle_names = ["recovery"]
-    elif args.target == "all":
-        bundle_names = ALL_BUNDLE_NAMES
-    else:
-        bundle_names = LOCAL_BUNDLE_NAMES
-
+    bundle_names = resolve_bundle_names(args.target)
     return run_smoke_matrix([SMOKE_BUNDLES[bundle_name] for bundle_name in bundle_names])
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    return build_smoke_cli_parser(
         description=(
             "Run standalone, session-triage, and recovery smoke bundles together with fail-fast handling. "
             "The default 'local' matrix excludes the opt-in live runtime smoke target."
         ),
-        epilog=(
-            "Bundle aliases:\n"
-            "  local -> standalone-local, triage, recovery\n"
-            "  all -> standalone-all, triage, recovery\n"
-            "\n"
-            "Examples:\n"
-            "  smoke_matrix.py                 # local matrix -> standalone-local, triage, recovery\n"
-            "  smoke_matrix.py standalone      # standalone-local bundle only\n"
-            "  smoke_matrix.py triage          # session-triage bundle only\n"
-            "  smoke_matrix.py recovery        # session-recovery bundle only\n"
-            "  smoke_matrix.py all             # standalone-all, triage, recovery"
+        choices=("standalone", "triage", "recovery", "local", "all"),
+        default_target_name="local",
+        resolve_target_names=resolve_bundle_names,
+        item_help="Which smoke bundle or bundle matrix to run.",
+        alias_target_names={
+            "local": tuple(LOCAL_BUNDLE_NAMES),
+            "all": tuple(ALL_BUNDLE_NAMES),
+        },
+        alias_heading="Bundle aliases",
+        examples=(
+            SmokeCliExample("smoke_matrix.py"),
+            SmokeCliExample("smoke_matrix.py standalone", target_name="standalone", description="single bundle"),
+            SmokeCliExample("smoke_matrix.py triage", target_name="triage", description="single bundle"),
+            SmokeCliExample("smoke_matrix.py recovery", target_name="recovery", description="single bundle"),
+            SmokeCliExample("smoke_matrix.py all", target_name="all"),
         ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        single_choice_description="single bundle",
     )
-    parser.add_argument(
-        "target",
-        nargs="?",
-        choices=["standalone", "triage", "recovery", "local", "all"],
-        default="local",
-        help="Which smoke bundle or bundle matrix to run. local -> standalone-local, triage, recovery; all -> standalone-all, triage, recovery.",
-    )
-    return parser
 
 
 if __name__ == "__main__":
