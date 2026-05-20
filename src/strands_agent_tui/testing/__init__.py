@@ -70,12 +70,17 @@ from .smoke_assertions import (
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
+    SESSION_RECOVERY_SMOKE_WRAPPER,
+    SESSION_TRIAGE_SMOKE_WRAPPER,
+    STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
+    SmokeWrapperMetadata,
     build_smoke_cli_parser,
     run_smoke_target,
     run_smoke_targets,
+    summary_line_prefixes,
 )
 
 __all__ = [
@@ -144,9 +149,13 @@ __all__ = [
     "seed_workspace_inspect_session",
     "seed_workspace_overlap_session",
     "set_session_artifact_mtime",
+    "SESSION_RECOVERY_SMOKE_WRAPPER",
+    "SESSION_TRIAGE_SMOKE_WRAPPER",
+    "STANDALONE_SMOKE_WRAPPER",
     "SmokeScriptTarget",
     "SmokeTargetSelector",
     "SmokeCliExample",
+    "SmokeWrapperMetadata",
     "build_smoke_cli_parser",
     "emit_smoke_check",
     "emit_smoke_checks",
@@ -154,4 +163,5 @@ __all__ = [
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",
+    "summary_line_prefixes",
 ]

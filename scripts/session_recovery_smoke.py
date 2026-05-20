@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    SESSION_RECOVERY_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
@@ -13,7 +14,7 @@ from strands_agent_tui.testing import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SUMMARY_LABEL = "session-recovery-smoke"
+SUMMARY_LABEL = SESSION_RECOVERY_SMOKE_WRAPPER.summary_label
 DEFAULT_TARGET_NAMES = [
     "approval",
     "approval-restart",

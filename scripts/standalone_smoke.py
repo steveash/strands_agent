@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
@@ -13,7 +14,7 @@ from strands_agent_tui.testing import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SUMMARY_LABEL = "standalone-smoke"
+SUMMARY_LABEL = STANDALONE_SMOKE_WRAPPER.summary_label
 SMOKE_TARGETS = {
     "summary-utils": SmokeScriptTarget("summary-utils", SCRIPT_DIR / "summary_utils_smoke.py"),
     "shell-tool": SmokeScriptTarget("shell-tool", SCRIPT_DIR / "shell_tool_smoke.py"),

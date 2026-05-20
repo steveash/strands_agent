@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import argparse
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
@@ -24,6 +24,29 @@ class SmokeCliExample:
     command: str
     target_name: str | None = None
     description: str | None = None
+
+
+@dataclass(frozen=True)
+class SmokeWrapperMetadata:
+    summary_label: str
+
+    @property
+    def summary_line_prefix(self) -> str:
+        return f"[{self.summary_label}] summary:"
+
+
+def summary_line_prefixes(wrapper_metadata: Iterable[SmokeWrapperMetadata]) -> tuple[str, ...]:
+    prefixes: list[str] = []
+    for metadata in wrapper_metadata:
+        prefix = metadata.summary_line_prefix
+        if prefix not in prefixes:
+            prefixes.append(prefix)
+    return tuple(prefixes)
+
+
+STANDALONE_SMOKE_WRAPPER = SmokeWrapperMetadata(summary_label="standalone-smoke")
+SESSION_TRIAGE_SMOKE_WRAPPER = SmokeWrapperMetadata(summary_label="session-triage-smoke")
+SESSION_RECOVERY_SMOKE_WRAPPER = SmokeWrapperMetadata(summary_label="session-recovery-smoke")
 
 
 @dataclass(frozen=True)

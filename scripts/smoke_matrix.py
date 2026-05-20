@@ -8,11 +8,15 @@ from time import perf_counter
 from typing import TextIO
 
 from strands_agent_tui.testing import (
+    SESSION_RECOVERY_SMOKE_WRAPPER,
+    SESSION_TRIAGE_SMOKE_WRAPPER,
+    STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
     build_smoke_cli_parser,
     run_smoke_target,
+    summary_line_prefixes,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -39,10 +43,12 @@ BUNDLE_SELECTOR = SmokeTargetSelector(
         "all": tuple(ALL_BUNDLE_NAMES),
     },
 )
-SUPPRESSED_NESTED_SUMMARY_PREFIXES = (
-    "[standalone-smoke] summary:",
-    "[session-triage-smoke] summary:",
-    "[session-recovery-smoke] summary:",
+SUPPRESSED_NESTED_SUMMARY_PREFIXES = summary_line_prefixes(
+    (
+        STANDALONE_SMOKE_WRAPPER,
+        SESSION_TRIAGE_SMOKE_WRAPPER,
+        SESSION_RECOVERY_SMOKE_WRAPPER,
+    )
 )
 
 

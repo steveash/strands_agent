@@ -14,6 +14,9 @@ from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import FakeStrandsRuntime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, render_session_picker
 from strands_agent_tui.testing import (
+    SESSION_RECOVERY_SMOKE_WRAPPER,
+    SESSION_TRIAGE_SMOKE_WRAPPER,
+    STANDALONE_SMOKE_WRAPPER,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_shell_filter_output,
     matches_workspace_filter_output,
@@ -28,6 +31,7 @@ from strands_agent_tui.testing import (
     seed_workspace_failure_session,
     seed_workspace_inspect_session,
     set_session_artifact_mtime,
+    summary_line_prefixes,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -360,6 +364,18 @@ def test_smoke_matrix_help_documents_bundle_examples() -> None:
     assert "smoke_matrix.py triage # single bundle" in help_text
     assert "smoke_matrix.py recovery # single bundle" in help_text
     assert "smoke_matrix.py all # all alias -> standalone-all, triage, recovery" in help_text
+
+
+def test_smoke_matrix_uses_shared_wrapper_summary_prefixes() -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    assert smoke_matrix.SUPPRESSED_NESTED_SUMMARY_PREFIXES == summary_line_prefixes(
+        (
+            STANDALONE_SMOKE_WRAPPER,
+            SESSION_TRIAGE_SMOKE_WRAPPER,
+            SESSION_RECOVERY_SMOKE_WRAPPER,
+        )
+    )
 
 
 def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> None:

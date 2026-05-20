@@ -7,12 +7,16 @@ from textwrap import dedent
 import pytest
 
 from strands_agent_tui.testing.smoke_runner import (
+    SESSION_RECOVERY_SMOKE_WRAPPER,
+    SESSION_TRIAGE_SMOKE_WRAPPER,
+    STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
     build_smoke_cli_parser,
     run_smoke_target,
     run_smoke_targets,
+    summary_line_prefixes,
 )
 
 
@@ -243,6 +247,24 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
         "second smoke failed fast: second_check= False",
         "[bundle-smoke] summary: 1/2 targets passed before failure in 2.50s",
     ]
+
+
+def test_summary_line_prefixes_deduplicate_shared_wrapper_metadata() -> None:
+    assert STANDALONE_SMOKE_WRAPPER.summary_line_prefix == "[standalone-smoke] summary:"
+    assert SESSION_TRIAGE_SMOKE_WRAPPER.summary_line_prefix == "[session-triage-smoke] summary:"
+    assert SESSION_RECOVERY_SMOKE_WRAPPER.summary_line_prefix == "[session-recovery-smoke] summary:"
+    assert summary_line_prefixes(
+        [
+            STANDALONE_SMOKE_WRAPPER,
+            SESSION_TRIAGE_SMOKE_WRAPPER,
+            STANDALONE_SMOKE_WRAPPER,
+            SESSION_RECOVERY_SMOKE_WRAPPER,
+        ]
+    ) == (
+        "[standalone-smoke] summary:",
+        "[session-triage-smoke] summary:",
+        "[session-recovery-smoke] summary:",
+    )
 
 
 def test_smoke_target_selector_resolves_default_alias_and_single_target(tmp_path) -> None:
