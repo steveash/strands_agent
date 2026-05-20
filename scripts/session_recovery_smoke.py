@@ -29,17 +29,32 @@ TARGET_SELECTOR = SmokeTargetSelector(
 )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run approval/session-state/live-restore smoke scripts and fail fast on any emitted '= False' check.",
+        epilog=(
+            "Alias details:\n"
+            "  all -> approval, approval-restart, session-state, live-restore, live-restore-denied\n"
+            "\n"
+            "Examples:\n"
+            "  session_recovery_smoke.py                 # default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied\n"
+            "  session_recovery_smoke.py live-restore    # single target\n"
+            "  session_recovery_smoke.py approval        # single target"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "target",
         nargs="?",
         choices=TARGET_SELECTOR.choices,
         default=TARGET_SELECTOR.default_target_name,
-        help="Which recovery smoke surface to run.",
+        help="Which recovery smoke surface to run. Alias: all -> approval, approval-restart, session-state, live-restore, live-restore-denied.",
     )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     return run_smoke_targets(

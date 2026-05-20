@@ -401,6 +401,10 @@ To verify the remaining local smoke surfaces with shared fail-fast `= False` han
 
 This default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
 
+Operator shortcuts:
+- `.venv/bin/python scripts/standalone_smoke.py local` explicitly selects the default local bundle
+- `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
+
 ### Session triage smoke bundle
 
 To run the picker + switcher smoke surfaces together with shared fail-fast handling:
@@ -410,6 +414,10 @@ To run the picker + switcher smoke surfaces together with shared fail-fast handl
 ```
 
 This default bundle runs both triage targets, accepts either `both` or `all` for the combined picker+switcher selection, and ends with a concise `[session-triage-smoke] summary: ...` footer.
+
+Operator shortcuts:
+- `.venv/bin/python scripts/session_triage_smoke.py all` is an explicit alias for the default picker+switcher bundle
+- `.venv/bin/python scripts/session_triage_smoke.py picker` runs only the launch-time picker smoke
 
 ### Session recovery smoke bundle
 
@@ -421,6 +429,10 @@ To run the approval/session-state/live-restore smoke surfaces together with shar
 
 This bundle runs all recovery targets by default and ends with a concise `[session-recovery-smoke] summary: ...` footer.
 
+Operator shortcuts:
+- `.venv/bin/python scripts/session_recovery_smoke.py all` explicitly selects the full recovery bundle
+- `.venv/bin/python scripts/session_recovery_smoke.py live-restore` runs only the live-restore recovery target
+
 ### Full local smoke matrix
 
 To run the current local smoke bundles together with fail-fast handling:
@@ -430,6 +442,11 @@ To run the current local smoke bundles together with fail-fast handling:
 ```
 
 This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you also want the live smoke target folded into the standalone bundle.
+
+Operator shortcuts:
+- `.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle
+- `.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle
+- `.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle
 
 ### Live approval-restore smoke check
 

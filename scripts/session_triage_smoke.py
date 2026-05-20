@@ -23,17 +23,33 @@ TARGET_SELECTOR = SmokeTargetSelector(
 )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run picker/switcher smoke scripts and fail fast on any emitted '= False' check.",
+        epilog=(
+            "Alias details:\n"
+            "  both -> picker, switcher\n"
+            "  all -> picker, switcher\n"
+            "\n"
+            "Examples:\n"
+            "  session_triage_smoke.py          # default both alias -> picker, switcher\n"
+            "  session_triage_smoke.py all      # alias for picker + switcher\n"
+            "  session_triage_smoke.py picker   # single target"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "target",
         nargs="?",
         choices=TARGET_SELECTOR.choices,
         default=TARGET_SELECTOR.default_target_name,
-        help="Which session-triage smoke surface to run.",
+        help="Which session-triage smoke surface to run. Aliases: both -> picker, switcher; all -> picker, switcher.",
     )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     return run_smoke_targets(

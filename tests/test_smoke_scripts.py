@@ -55,6 +55,15 @@ def _assert_mixed_smoke_result_contract(
         assert not any(line.startswith(f"{name}: ") for line in lines)
 
 
+def _format_script_help(name: str) -> str:
+    module = _load_script_module(name)
+    return module.build_parser().format_help()
+
+
+def _normalize_help_text(text: str) -> str:
+    return " ".join(text.split())
+
+
 def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
     live_smoke = _load_script_module("live_smoke")
 
@@ -320,6 +329,37 @@ def test_standalone_smoke_passes_summary_label(monkeypatch) -> None:
         "names": ["summary-utils"],
         "summary_label": "standalone-smoke",
     }
+
+
+def test_smoke_wrapper_help_documents_aliases_and_single_target_examples() -> None:
+    standalone_help = _normalize_help_text(_format_script_help("standalone_smoke"))
+    assert "Alias details: local -> summary-utils, shell-tool, replay all -> summary-utils, shell-tool, replay, live" in standalone_help
+    assert "local alias -> summary-utils, shell-tool, replay" in standalone_help
+    assert "standalone_smoke.py all # local bundle plus live smoke" in standalone_help
+    assert "standalone_smoke.py replay # single target" in standalone_help
+
+    triage_help = _normalize_help_text(_format_script_help("session_triage_smoke"))
+    assert "Alias details: both -> picker, switcher all -> picker, switcher" in triage_help
+    assert "default both alias -> picker, switcher" in triage_help
+    assert "session_triage_smoke.py all # alias for picker + switcher" in triage_help
+    assert "session_triage_smoke.py picker # single target" in triage_help
+
+    recovery_help = _normalize_help_text(_format_script_help("session_recovery_smoke"))
+    assert "Alias details: all -> approval, approval-restart, session-state, live-restore, live-restore-denied" in recovery_help
+    assert "default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied" in recovery_help
+    assert "session_recovery_smoke.py live-restore # single target" in recovery_help
+    assert "session_recovery_smoke.py approval # single target" in recovery_help
+
+
+def test_smoke_matrix_help_documents_bundle_examples() -> None:
+    help_text = _normalize_help_text(_format_script_help("smoke_matrix"))
+
+    assert "Bundle aliases: local -> standalone-local, triage, recovery all -> standalone-all, triage, recovery" in help_text
+    assert "local matrix -> standalone-local, triage, recovery" in help_text
+    assert "smoke_matrix.py standalone # standalone-local bundle only" in help_text
+    assert "smoke_matrix.py triage # session-triage bundle only" in help_text
+    assert "smoke_matrix.py recovery # session-recovery bundle only" in help_text
+    assert "smoke_matrix.py all # standalone-all, triage, recovery" in help_text
 
 
 def test_smoke_matrix_defaults_to_local_bundle_sequence(monkeypatch) -> None:

@@ -26,20 +26,36 @@ TARGET_SELECTOR = SmokeTargetSelector(
 )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Run standalone smoke scripts and fail fast on any emitted '= False' check. "
             "The default 'local' bundle excludes the live runtime target."
         ),
+        epilog=(
+            "Alias details:\n"
+            "  local -> summary-utils, shell-tool, replay\n"
+            "  all -> summary-utils, shell-tool, replay, live\n"
+            "\n"
+            "Examples:\n"
+            "  standalone_smoke.py              # local alias -> summary-utils, shell-tool, replay\n"
+            "  standalone_smoke.py all          # local bundle plus live smoke\n"
+            "  standalone_smoke.py replay       # single target"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "target",
         nargs="?",
         choices=TARGET_SELECTOR.choices,
         default=TARGET_SELECTOR.default_target_name,
-        help="Which standalone smoke surface to run.",
+        help="Which standalone smoke surface to run. Aliases: local -> summary-utils, shell-tool, replay; all -> summary-utils, shell-tool, replay, live.",
     )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     return run_smoke_targets(

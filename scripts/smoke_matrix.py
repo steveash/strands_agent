@@ -62,19 +62,7 @@ def run_smoke_matrix(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run standalone, session-triage, and recovery smoke bundles together with fail-fast handling. "
-            "The default 'local' matrix excludes the opt-in live runtime smoke target."
-        ),
-    )
-    parser.add_argument(
-        "target",
-        nargs="?",
-        choices=["standalone", "triage", "recovery", "local", "all"],
-        default="local",
-        help="Which smoke bundle or bundle matrix to run.",
-    )
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.target == "standalone":
@@ -89,6 +77,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         bundle_names = LOCAL_BUNDLE_NAMES
 
     return run_smoke_matrix([SMOKE_BUNDLES[bundle_name] for bundle_name in bundle_names])
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run standalone, session-triage, and recovery smoke bundles together with fail-fast handling. "
+            "The default 'local' matrix excludes the opt-in live runtime smoke target."
+        ),
+        epilog=(
+            "Bundle aliases:\n"
+            "  local -> standalone-local, triage, recovery\n"
+            "  all -> standalone-all, triage, recovery\n"
+            "\n"
+            "Examples:\n"
+            "  smoke_matrix.py                 # local matrix -> standalone-local, triage, recovery\n"
+            "  smoke_matrix.py standalone      # standalone-local bundle only\n"
+            "  smoke_matrix.py triage          # session-triage bundle only\n"
+            "  smoke_matrix.py recovery        # session-recovery bundle only\n"
+            "  smoke_matrix.py all             # standalone-all, triage, recovery"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "target",
+        nargs="?",
+        choices=["standalone", "triage", "recovery", "local", "all"],
+        default="local",
+        help="Which smoke bundle or bundle matrix to run. local -> standalone-local, triage, recovery; all -> standalone-all, triage, recovery.",
+    )
+    return parser
 
 
 if __name__ == "__main__":
