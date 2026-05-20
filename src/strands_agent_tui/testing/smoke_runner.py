@@ -31,29 +31,39 @@ class SmokeTargetSelector:
     targets: Mapping[str, SmokeScriptTarget]
     default_target_name: str
     alias_target_names: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    choice_target_names: Mapping[str, tuple[str, ...]] | None = None
 
     def __post_init__(self) -> None:
         valid_target_names = set(self.targets)
-        if self.default_target_name not in valid_target_names and self.default_target_name not in self.alias_target_names:
+        choice_target_names = self._all_choice_target_names()
+        if self.default_target_name not in choice_target_names:
             raise ValueError(f"unknown default smoke target {self.default_target_name!r}")
-        for alias_name, target_names in self.alias_target_names.items():
+        for choice_name, target_names in choice_target_names.items():
             unknown_target_names = [target_name for target_name in target_names if target_name not in valid_target_names]
             if unknown_target_names:
+                choice_label = "alias" if choice_name in self.alias_target_names else "choice"
                 raise ValueError(
-                    f"alias {alias_name!r} references unknown smoke targets: {', '.join(unknown_target_names)}"
+                    f"{choice_label} {choice_name!r} references unknown smoke targets: {', '.join(unknown_target_names)}"
                 )
+
+    def _all_choice_target_names(self) -> Mapping[str, tuple[str, ...]]:
+        if self.choice_target_names is not None:
+            return self.choice_target_names
+        return {
+            **{target_name: (target_name,) for target_name in self.targets},
+            **self.alias_target_names,
+        }
 
     @property
     def choices(self) -> tuple[str, ...]:
-        return (*self.targets.keys(), *self.alias_target_names.keys())
+        return tuple(self._all_choice_target_names().keys())
 
     def resolve_target_names(self, requested_target_name: str | None = None) -> list[str]:
         target_name = self.default_target_name if requested_target_name is None else requested_target_name
-        if target_name in self.alias_target_names:
-            return list(self.alias_target_names[target_name])
-        if target_name not in self.targets:
+        choice_target_names = self._all_choice_target_names()
+        if target_name not in choice_target_names:
             raise ValueError(f"unknown smoke target {target_name!r}")
-        return [target_name]
+        return list(choice_target_names[target_name])
 
     def resolve_targets(self, requested_target_name: str | None = None) -> list[SmokeScriptTarget]:
         return [self.targets[target_name] for target_name in self.resolve_target_names(requested_target_name)]

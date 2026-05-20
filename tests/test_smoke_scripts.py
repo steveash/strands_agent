@@ -362,6 +362,19 @@ def test_smoke_matrix_help_documents_bundle_examples() -> None:
     assert "smoke_matrix.py all # all alias -> standalone-all, triage, recovery" in help_text
 
 
+def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    with pytest.raises(SystemExit) as exc_info:
+        smoke_matrix.main(["standalone-all"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    normalized_error = _normalize_help_text(captured.err)
+    assert "invalid choice: 'standalone-all'" in normalized_error
+    assert "{standalone,triage,recovery,local,all}" in normalized_error
+
+
 @pytest.mark.parametrize(
     ("script_name", "required_snippets"),
     [

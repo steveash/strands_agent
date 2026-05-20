@@ -238,6 +238,35 @@ def test_smoke_target_selector_resolves_default_alias_and_single_target(tmp_path
     assert [target.name for target in selector.resolve_targets("all")] == ["first", "second"]
 
 
+def test_smoke_target_selector_supports_public_choices_backed_by_hidden_target_names(tmp_path) -> None:
+    local_script = _write_script(tmp_path, "local.py", "print('local_check= True', flush=True)\n")
+    all_script = _write_script(tmp_path, "all.py", "print('all_check= True', flush=True)\n")
+    triage_script = _write_script(tmp_path, "triage.py", "print('triage_check= True', flush=True)\n")
+    selector = SmokeTargetSelector(
+        targets={
+            "standalone-local": SmokeScriptTarget("standalone-local", local_script),
+            "standalone-all": SmokeScriptTarget("standalone-all", all_script),
+            "triage": SmokeScriptTarget("triage", triage_script),
+        },
+        default_target_name="local",
+        alias_target_names={
+            "local": ("standalone-local", "triage"),
+            "all": ("standalone-all", "triage"),
+        },
+        choice_target_names={
+            "standalone": ("standalone-local",),
+            "triage": ("triage",),
+            "local": ("standalone-local", "triage"),
+            "all": ("standalone-all", "triage"),
+        },
+    )
+
+    assert selector.choices == ("standalone", "triage", "local", "all")
+    assert selector.resolve_target_names() == ["standalone-local", "triage"]
+    assert [target.name for target in selector.resolve_targets("standalone")] == ["standalone-local"]
+    assert [target.name for target in selector.resolve_targets("all")] == ["standalone-all", "triage"]
+
+
 def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> None:
     first_script = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
     second_script = _write_script(tmp_path, "second.py", "print('second_check= True', flush=True)\n")
@@ -271,22 +300,37 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
 
 
 @pytest.mark.parametrize(
-    ("default_target_name", "alias_target_names", "requested_target_name", "expected_message"),
+    (
+        "default_target_name",
+        "alias_target_names",
+        "choice_target_names",
+        "requested_target_name",
+        "expected_message",
+    ),
     [
-        ("missing", {}, None, "unknown default smoke target 'missing'"),
+        ("missing", {}, None, None, "unknown default smoke target 'missing'"),
         (
             "all",
             {"all": ("missing",)},
             None,
+            None,
             "alias 'all' references unknown smoke targets: missing",
         ),
-        ("first", {}, "missing", "unknown smoke target 'missing'"),
+        (
+            "local",
+            {},
+            {"local": ("missing",)},
+            None,
+            "choice 'local' references unknown smoke targets: missing",
+        ),
+        ("first", {}, None, "missing", "unknown smoke target 'missing'"),
     ],
 )
 def test_smoke_target_selector_validates_configuration(
     tmp_path,
     default_target_name,
     alias_target_names,
+    choice_target_names,
     requested_target_name,
     expected_message,
 ) -> None:
@@ -298,6 +342,7 @@ def test_smoke_target_selector_validates_configuration(
                 targets={"first": SmokeScriptTarget("first", script_path)},
                 default_target_name=default_target_name,
                 alias_target_names=alias_target_names,
+                choice_target_names=choice_target_names,
             )
         return
 
@@ -305,6 +350,7 @@ def test_smoke_target_selector_validates_configuration(
         targets={"first": SmokeScriptTarget("first", script_path)},
         default_target_name=default_target_name,
         alias_target_names=alias_target_names,
+        choice_target_names=choice_target_names,
     )
 
     with pytest.raises(ValueError, match=expected_message):

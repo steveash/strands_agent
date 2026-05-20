@@ -7,7 +7,13 @@ from pathlib import Path
 from time import perf_counter
 from typing import TextIO
 
-from strands_agent_tui.testing import SmokeCliExample, SmokeScriptTarget, build_smoke_cli_parser, run_smoke_target
+from strands_agent_tui.testing import (
+    SmokeCliExample,
+    SmokeScriptTarget,
+    SmokeTargetSelector,
+    build_smoke_cli_parser,
+    run_smoke_target,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_BUNDLES = {
@@ -18,21 +24,21 @@ SMOKE_BUNDLES = {
 }
 LOCAL_BUNDLE_NAMES = ["standalone-local", "triage", "recovery"]
 ALL_BUNDLE_NAMES = ["standalone-all", "triage", "recovery"]
-
-
-def resolve_bundle_names(requested_target_name: str | None = None) -> list[str]:
-    target_name = "local" if requested_target_name is None else requested_target_name
-    if target_name == "standalone":
-        return ["standalone-local"]
-    if target_name == "triage":
-        return ["triage"]
-    if target_name == "recovery":
-        return ["recovery"]
-    if target_name == "all":
-        return ALL_BUNDLE_NAMES
-    if target_name == "local":
-        return LOCAL_BUNDLE_NAMES
-    raise ValueError(f"unknown smoke bundle {target_name!r}")
+BUNDLE_SELECTOR = SmokeTargetSelector(
+    targets=SMOKE_BUNDLES,
+    default_target_name="local",
+    alias_target_names={
+        "local": tuple(LOCAL_BUNDLE_NAMES),
+        "all": tuple(ALL_BUNDLE_NAMES),
+    },
+    choice_target_names={
+        "standalone": ("standalone-local",),
+        "triage": ("triage",),
+        "recovery": ("recovery",),
+        "local": tuple(LOCAL_BUNDLE_NAMES),
+        "all": tuple(ALL_BUNDLE_NAMES),
+    },
+)
 
 
 def _emit_bundle_summary(message: str, *, stream: TextIO) -> None:
@@ -79,8 +85,7 @@ def run_smoke_matrix(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    bundle_names = resolve_bundle_names(args.target)
-    return run_smoke_matrix([SMOKE_BUNDLES[bundle_name] for bundle_name in bundle_names])
+    return run_smoke_matrix(BUNDLE_SELECTOR.resolve_targets(args.target))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -89,14 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Run standalone, session-triage, and recovery smoke bundles together with fail-fast handling. "
             "The default 'local' matrix excludes the opt-in live runtime smoke target."
         ),
-        choices=("standalone", "triage", "recovery", "local", "all"),
-        default_target_name="local",
-        resolve_target_names=resolve_bundle_names,
+        choices=BUNDLE_SELECTOR.choices,
+        default_target_name=BUNDLE_SELECTOR.default_target_name,
+        resolve_target_names=BUNDLE_SELECTOR.resolve_target_names,
         item_help="Which smoke bundle or bundle matrix to run.",
-        alias_target_names={
-            "local": tuple(LOCAL_BUNDLE_NAMES),
-            "all": tuple(ALL_BUNDLE_NAMES),
-        },
+        alias_target_names=BUNDLE_SELECTOR.alias_target_names,
         alias_heading="Bundle aliases",
         examples=(
             SmokeCliExample("smoke_matrix.py"),
