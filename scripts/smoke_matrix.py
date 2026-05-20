@@ -39,11 +39,21 @@ BUNDLE_SELECTOR = SmokeTargetSelector(
         "all": tuple(ALL_BUNDLE_NAMES),
     },
 )
+SUPPRESSED_NESTED_SUMMARY_PREFIXES = (
+    "[standalone-smoke] summary:",
+    "[session-triage-smoke] summary:",
+    "[session-recovery-smoke] summary:",
+)
 
 
 def _emit_bundle_summary(message: str, *, stream: TextIO) -> None:
     print(f"[smoke-matrix] {message}", file=stream)
     stream.flush()
+
+
+def _should_emit_bundle_output_line(line: str) -> bool:
+    normalized_line = line.rstrip("\n")
+    return not any(normalized_line.startswith(prefix) for prefix in SUPPRESSED_NESTED_SUMMARY_PREFIXES)
 
 
 def run_smoke_matrix(
@@ -61,7 +71,12 @@ def run_smoke_matrix(
     for target in targets:
         _emit_bundle_summary(f"running {target.name}", stream=stdout)
         started_at = perf_counter()
-        exit_code = run_smoke_target(target, stdout=stdout, stderr=stderr)
+        exit_code = run_smoke_target(
+            target,
+            stdout=stdout,
+            stderr=stderr,
+            output_line_filter=_should_emit_bundle_output_line,
+        )
         elapsed = perf_counter() - started_at
         if exit_code != 0:
             _emit_bundle_summary(f"{target.name} failed in {elapsed:.2f}s", stream=stderr)

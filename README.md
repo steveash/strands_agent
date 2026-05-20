@@ -442,7 +442,7 @@ To run the current local smoke bundles together with fail-fast handling:
 .venv/bin/python scripts/smoke_matrix.py
 ```
 
-This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you also want the live smoke target folded into the standalone bundle.
+This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you also want the live smoke target folded into the standalone bundle.
 
 Operator shortcuts:
 - `.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle

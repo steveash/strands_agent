@@ -73,6 +73,35 @@ def test_run_smoke_target_fails_fast_on_false_result_line(tmp_path) -> None:
     assert stderr.getvalue().strip() == "failure smoke failed fast: broken= False"
 
 
+def test_run_smoke_target_can_filter_output_lines_without_hiding_failures(tmp_path) -> None:
+    script_path = _write_script(
+        tmp_path,
+        "filtered.py",
+        """
+        import time
+
+        print("[bundle-smoke] summary: 1/1 targets passed in 0.50s", flush=True)
+        print("visible= True", flush=True)
+        print("hidden_failure= False", flush=True)
+        time.sleep(5)
+        """,
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    exit_code = run_smoke_target(
+        SmokeScriptTarget("filtered", script_path),
+        stdout=stdout,
+        stderr=stderr,
+        python_executable=sys.executable,
+        output_line_filter=lambda line: not line.startswith("[") and not line.startswith("hidden_failure="),
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue() == "visible= True\n"
+    assert stderr.getvalue().strip() == "filtered smoke failed fast: hidden_failure= False"
+
+
 def test_run_smoke_target_reports_nonzero_exit_without_false_line(tmp_path) -> None:
     script_path = _write_script(
         tmp_path,

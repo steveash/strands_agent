@@ -553,6 +553,50 @@ def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
     ]
 
 
+def test_smoke_matrix_suppresses_nested_wrapper_summary_footers(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    nested_summary_lines = {
+        "standalone-local": "[standalone-smoke] summary: 3/3 targets passed in 1.00s\n",
+        "standalone-all": "[standalone-smoke] summary: 4/4 targets passed in 1.25s\n",
+        "triage": "[session-triage-smoke] summary: 2/2 targets passed in 1.50s\n",
+        "recovery": "[session-recovery-smoke] summary: 5/5 targets passed in 2.00s\n",
+    }
+
+    def _run_smoke_target(target, **kwargs):
+        output_line_filter = kwargs["output_line_filter"]
+        stdout = kwargs["stdout"]
+        summary_line = nested_summary_lines[target.name]
+        for line in (summary_line, f"{target.name}_check= True\n"):
+            if output_line_filter is None or output_line_filter(line):
+                print(line, end="", file=stdout)
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.0, 1.25, 2.0, 2.5, 3.0, 3.75, 4.0])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    with redirect_stdout(stdout):
+        exit_code = smoke_matrix.main([])
+
+    assert exit_code == 0
+    assert stdout.getvalue().splitlines() == [
+        "[smoke-matrix] running standalone-local",
+        "standalone-local_check= True",
+        "[smoke-matrix] standalone-local passed in 0.25s",
+        "[smoke-matrix] running triage",
+        "triage_check= True",
+        "[smoke-matrix] triage passed in 0.50s",
+        "[smoke-matrix] running recovery",
+        "recovery_check= True",
+        "[smoke-matrix] recovery passed in 0.75s",
+        "[smoke-matrix] summary: 3/3 bundles passed in 4.00s",
+    ]
+    assert "[standalone-smoke] summary:" not in stdout.getvalue()
+    assert "[session-triage-smoke] summary:" not in stdout.getvalue()
+    assert "[session-recovery-smoke] summary:" not in stdout.getvalue()
+
+
 def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
 

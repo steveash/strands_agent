@@ -70,6 +70,7 @@ class SmokeTargetSelector:
 
 
 SmokeFailurePredicate = Callable[[str], bool]
+SmokeOutputLineFilter = Callable[[str], bool]
 
 
 def _format_choice_mapping(mapping: Mapping[str, Sequence[str]]) -> str:
@@ -156,6 +157,7 @@ def run_smoke_target(
     stderr: TextIO = sys.stderr,
     python_executable: str = sys.executable,
     failure_predicate: SmokeFailurePredicate = is_failed_smoke_check_line,
+    output_line_filter: SmokeOutputLineFilter | None = None,
 ) -> int:
     process = subprocess.Popen(
         [python_executable, str(target.script_path), *target.args],
@@ -168,8 +170,9 @@ def run_smoke_target(
     failed_line: str | None = None
     assert process.stdout is not None
     for line in process.stdout:
-        print(line, end="", file=stdout)
-        stdout.flush()
+        if output_line_filter is None or output_line_filter(line):
+            print(line, end="", file=stdout)
+            stdout.flush()
         if failure_predicate(line):
             failed_line = line.rstrip("\n")
             process.terminate()
