@@ -354,6 +354,8 @@ def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_
     assert "- last workspace tool: README.md lines 1-20" in workspace_inspect_rendered
     assert "- recent workspace tools (1):" in workspace_inspect_rendered
     assert "README.md lines 1-20" not in workspace_edit_rendered
+    assert "workspace focus: pending only" in workspace_edit_rendered
+    assert "- workspace focus: pending only until an edit executes" in workspace_edit_rendered
     mixed_workspace_line = next(
         line for line in workspace_edit_rendered.splitlines() if "session-workspace-mixed | 1 turn(s)" in line
     )
@@ -371,11 +373,53 @@ def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_
     assert "- last shell: inspect/e0 git diff --stat -> README.md | 2 +-" in shell_inspect_rendered
     assert "- recent shell outcomes (1):" in shell_inspect_rendered
     assert "inspect/e0 git diff --stat -> README.md | 2 +-" not in shell_test_rendered
+    assert "shell focus: pending only" in shell_test_rendered
+    assert "- shell focus: pending only until a test executes" in shell_test_rendered
     mixed_shell_line = next(
         line for line in shell_test_rendered.splitlines() if "session-shell-mixed-rollup | 1 turn(s)" in line
     )
     assert "last tool:" not in mixed_shell_line
     assert "- last shell:" not in shell_test_rendered
+
+
+def test_render_session_picker_marks_pending_only_workspace_and_shell_lane_matches(tmp_path: Path) -> None:
+    pending_edit_store = SessionArtifactStore(tmp_path, session_id="session-pending-edit-only")
+    _append_turn(pending_edit_store, "queue edit")
+    pending_edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-pending-only-edit",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit",
+            )
+        ]
+    )
+
+    pending_test_store = SessionArtifactStore(tmp_path, session_id="session-pending-test-only")
+    _append_turn(pending_test_store, "queue tests")
+    pending_test_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-pending-only-test",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="queue tests",
+            )
+        ]
+    )
+
+    workspace_edit_rendered = render_session_picker(tmp_path, filter_mode="workspace-edit")
+    shell_test_rendered = render_session_picker(tmp_path, filter_mode="shell-test")
+
+    assert "workspace focus: pending only" in workspace_edit_rendered
+    assert "- workspace focus: pending only until an edit executes" in workspace_edit_rendered
+    assert "shell focus: pending only" in shell_test_rendered
+    assert "- shell focus: pending only until a test executes" in shell_test_rendered
 
 
 def test_render_session_picker_surfaces_tool_rollup_timestamps(tmp_path: Path) -> None:
@@ -2510,10 +2554,13 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert [session.session_id for session in workspace_inspect_sessions] == ["session-tool"]
     assert [session.session_id for session in workspace_edit_sessions] == ["session-pending-edit", "session-denied"]
     assert "workspace lanes: inspect" in workspace_inspect_sessions[0].render_line(1)
-    assert "workspace lanes: edit" in workspace_edit_sessions[0].render_line(1)
+    assert "workspace lanes: edit" in workspace_edit_sessions[0].render_line(1, filter_mode="workspace-edit")
+    assert "workspace focus: pending only" in workspace_edit_sessions[0].render_line(1, filter_mode="workspace-edit")
+    assert "workspace focus: pending only" not in workspace_edit_sessions[1].render_line(2, filter_mode="workspace-edit")
     assert [session.session_id for session in shell_sessions] == ["session-shell", "session-pending"]
     assert [session.session_id for session in shell_inspect_sessions] == ["session-shell"]
     assert [session.session_id for session in shell_test_sessions] == ["session-pending"]
+    assert "shell focus: pending only" in shell_test_sessions[0].render_line(1, filter_mode="shell-test")
 
 
 def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_before_other_failures(tmp_path: Path) -> None:

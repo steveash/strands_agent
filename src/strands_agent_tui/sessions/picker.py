@@ -170,6 +170,7 @@ class SessionSummary:
     workspace_lane_badges: list[str] = field(default_factory=list)
     has_workspace_inspect_activity: bool = False
     has_workspace_edit_activity: bool = False
+    has_pending_workspace_edit_approval: bool = False
     last_workspace_preview: str = ""
     recent_workspace_previews: list[str] = field(default_factory=list)
     last_workspace_inspect_preview: str = ""
@@ -182,6 +183,7 @@ class SessionSummary:
     shell_lane_badges: list[str] = field(default_factory=list)
     has_shell_inspect_activity: bool = False
     has_shell_test_activity: bool = False
+    has_pending_shell_test_approval: bool = False
     last_shell_preview: str = ""
     recent_shell_previews: list[str] = field(default_factory=list)
     last_shell_inspect_preview: str = ""
@@ -224,6 +226,30 @@ class SessionSummary:
             preview, recent = self._focused_shell_preview_context(filter_mode)
             return preview, recent, True
         return self.last_tool_preview, self.recent_tool_previews, False
+
+    def _focused_lane_pending_only_state(self, filter_mode: str) -> tuple[str, str]:
+        if (
+            filter_mode == "workspace-edit"
+            and self.has_pending_workspace_edit_approval
+            and not self.last_workspace_edit_preview
+            and not self.recent_workspace_edit_previews
+        ):
+            return "workspace focus", "pending only"
+        if (
+            filter_mode == "shell-test"
+            and self.has_pending_shell_test_approval
+            and not self.last_shell_test_preview
+            and not self.recent_shell_test_previews
+        ):
+            return "shell focus", "pending only"
+        return "", ""
+
+    def _focused_lane_pending_only_preview_value(self, filter_mode: str) -> str:
+        if filter_mode == "workspace-edit":
+            return "pending only until an edit executes"
+        if filter_mode == "shell-test":
+            return "pending only until a test executes"
+        return ""
 
     def render_line(
         self,
@@ -286,6 +312,8 @@ class SessionSummary:
             "tool streak",
             f"{len(focused_recent_tool_previews)} recent" if len(focused_recent_tool_previews) > 1 else "",
         )
+        focused_lane_label, focused_lane_value = self._focused_lane_pending_only_state(filter_mode)
+        focused_lane_pending_only_suffix = render_row_detail_suffix(focused_lane_label, focused_lane_value)
         workspace_lane_suffix = render_row_badges_suffix("workspace lanes", self.workspace_lane_badges)
         shell_suffix = render_row_badges_suffix("shell", self.shell_activity_badges)
         shell_lane_suffix = render_row_badges_suffix("shell lanes", self.shell_lane_badges)
@@ -327,6 +355,7 @@ class SessionSummary:
                 prompt_suffix,
                 tool_hint,
                 tool_streak_suffix,
+                focused_lane_pending_only_suffix,
                 workspace_lane_suffix,
                 shell_suffix,
                 shell_lane_suffix,
@@ -453,6 +482,11 @@ class SessionSummary:
         focused_tool_preview, focused_recent_tool_previews, focused_tool_filter = self._focused_tool_preview_context(
             filter_mode
         )
+        focused_lane_label, focused_lane_value = self._focused_lane_pending_only_state(filter_mode)
+        focused_lane_preview_lines = render_preview_detail_line(
+            focused_lane_label,
+            self._focused_lane_pending_only_preview_value(filter_mode) if focused_lane_value else "",
+        )
 
         tool_lines = []
         if not focused_tool_filter:
@@ -462,12 +496,14 @@ class SessionSummary:
             )
 
         workspace_lines = render_selected_preview_section_lines(
+            focused_lane_preview_lines if filter_mode == "workspace-edit" else [],
             render_preview_badges_line("workspace lanes", self.workspace_lane_badges),
             render_preview_detail_line("last workspace tool", focused_workspace_preview),
             render_numbered_preview_section_lines("recent workspace tools", focused_workspace_previews),
         )
 
         shell_lines = render_selected_preview_section_lines(
+            focused_lane_preview_lines if filter_mode == "shell-test" else [],
             render_preview_badges_line("shell", self.shell_activity_badges),
             render_preview_badges_line("shell lanes", self.shell_lane_badges),
             render_preview_badges_line("failures", self.failure_activity_badges),
@@ -734,6 +770,10 @@ def _ordered_recent_sessions(
             ),
             has_workspace_inspect_activity=has_workspace_inspect_activity,
             has_workspace_edit_activity=has_workspace_edit_activity,
+            has_pending_workspace_edit_approval=any(
+                str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES
+                for approval in pending_approvals
+            ),
             last_workspace_preview=_latest_workspace_preview(turns),
             recent_workspace_previews=_recent_workspace_previews(turns),
             last_workspace_inspect_preview=_latest_workspace_preview(turns, lane="inspect"),
@@ -746,6 +786,15 @@ def _ordered_recent_sessions(
             shell_lane_badges=_shell_lane_badges(has_shell_inspect_activity, has_shell_test_activity),
             has_shell_inspect_activity=has_shell_inspect_activity,
             has_shell_test_activity=has_shell_test_activity,
+            has_pending_shell_test_approval=any(
+                str(approval.tool_name or "").strip() == "run_shell_command"
+                and _is_test_shell_command_data(
+                    shell_policy="",
+                    shell_command_family="",
+                    command=_approval_command_from_args(approval.args),
+                )
+                for approval in pending_approvals
+            ),
             last_shell_preview=_latest_shell_preview(turns),
             recent_shell_previews=_recent_shell_previews(turns),
             last_shell_inspect_preview=_latest_shell_preview(turns, lane="inspect"),
