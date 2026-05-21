@@ -129,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
         resolve_target_names=BUNDLE_SELECTOR.resolve_target_names,
         item_help="Which smoke bundle or bundle matrix to run.",
         alias_target_names=BUNDLE_SELECTOR.alias_target_names,
+        resolve_display_names=BUNDLE_SELECTOR.resolve_display_names,
         alias_heading="Bundle aliases",
         examples=(
             SmokeCliExample("smoke_matrix.py"),

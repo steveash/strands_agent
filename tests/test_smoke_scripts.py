@@ -358,12 +358,12 @@ def test_smoke_wrapper_help_documents_aliases_and_single_target_examples() -> No
 def test_smoke_matrix_help_documents_bundle_examples() -> None:
     help_text = _normalize_help_text(_format_script_help("smoke_matrix"))
 
-    assert "Bundle aliases: local -> standalone-local, triage, recovery all -> standalone-all, triage, recovery" in help_text
-    assert "default local alias -> standalone-local, triage, recovery" in help_text
+    assert "Bundle aliases: local -> standalone, triage, recovery all -> standalone, triage, recovery" in help_text
+    assert "default local alias -> standalone, triage, recovery" in help_text
     assert "smoke_matrix.py standalone # single bundle" in help_text
     assert "smoke_matrix.py triage # single bundle" in help_text
     assert "smoke_matrix.py recovery # single bundle" in help_text
-    assert "smoke_matrix.py all # all alias -> standalone-all, triage, recovery" in help_text
+    assert "smoke_matrix.py all # all alias -> standalone, triage, recovery" in help_text
 
 
 def test_smoke_matrix_uses_shared_wrapper_summary_prefixes() -> None:
@@ -454,7 +454,7 @@ def test_smoke_wrapper_invalid_choice_errors_show_public_cli_choices(
             "smoke_matrix",
             [
                 "Which smoke bundle or bundle matrix to run.",
-                "default local alias -> standalone-local, triage, recovery",
+                "default local alias -> standalone, triage, recovery",
                 "smoke_matrix.py standalone # single bundle",
             ],
         ),
@@ -666,6 +666,34 @@ def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None
     assert stderr.getvalue().splitlines() == [
         "[smoke-matrix] triage failed in 0.50s",
         "[smoke-matrix] summary: 1/3 bundles passed before failure in 2.50s",
+    ]
+
+
+def test_smoke_matrix_preserves_public_bundle_labels_in_fail_fast_stderr(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    def _run_smoke_target(target, **kwargs):
+        stderr = kwargs["stderr"]
+        if target.name == "standalone-all":
+            print(f"{target.display_label} smoke failed fast: standalone_check= False", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.0, 1.6, 2.2])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main(["all"])
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == ["[smoke-matrix] running standalone"]
+    assert stderr.getvalue().splitlines() == [
+        "standalone smoke failed fast: standalone_check= False",
+        "[smoke-matrix] standalone failed in 0.60s",
+        "[smoke-matrix] summary: 0/3 bundles passed before failure in 2.20s",
     ]
 
 

@@ -60,6 +60,7 @@ class SmokeTargetSelector:
     default_target_name: str
     alias_target_names: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     choice_target_names: Mapping[str, tuple[str, ...]] | None = None
+    choice_display_names: Mapping[str, tuple[str, ...]] | None = None
 
     def __post_init__(self) -> None:
         valid_target_names = set(self.targets)
@@ -73,6 +74,15 @@ class SmokeTargetSelector:
                 raise ValueError(
                     f"{choice_label} {choice_name!r} references unknown smoke targets: {', '.join(unknown_target_names)}"
                 )
+        if self.choice_display_names is not None:
+            unknown_choice_names = [
+                choice_name for choice_name in self.choice_display_names if choice_name not in choice_target_names
+            ]
+            if unknown_choice_names:
+                raise ValueError(
+                    "choice display names reference unknown smoke choices: "
+                    + ", ".join(sorted(unknown_choice_names))
+                )
 
     def _all_choice_target_names(self) -> Mapping[str, tuple[str, ...]]:
         if self.choice_target_names is not None:
@@ -80,6 +90,14 @@ class SmokeTargetSelector:
         return {
             **{target_name: (target_name,) for target_name in self.targets},
             **self.alias_target_names,
+        }
+
+    def _all_choice_display_names(self) -> Mapping[str, tuple[str, ...]]:
+        if self.choice_display_names is not None:
+            return self.choice_display_names
+        return {
+            choice_name: tuple(self.targets[target_name].display_label for target_name in target_names)
+            for choice_name, target_names in self._all_choice_target_names().items()
         }
 
     @property
@@ -93,6 +111,13 @@ class SmokeTargetSelector:
             raise ValueError(f"unknown smoke target {target_name!r}")
         return list(choice_target_names[target_name])
 
+    def resolve_display_names(self, requested_target_name: str | None = None) -> list[str]:
+        target_name = self.default_target_name if requested_target_name is None else requested_target_name
+        choice_display_names = self._all_choice_display_names()
+        if target_name not in choice_display_names:
+            raise ValueError(f"unknown smoke target {target_name!r}")
+        return list(choice_display_names[target_name])
+
     def resolve_targets(self, requested_target_name: str | None = None) -> list[SmokeScriptTarget]:
         return [self.targets[target_name] for target_name in self.resolve_target_names(requested_target_name)]
 
@@ -101,23 +126,19 @@ SmokeFailurePredicate = Callable[[str], bool]
 SmokeOutputLineFilter = Callable[[str], bool]
 
 
-def _format_choice_mapping(mapping: Mapping[str, Sequence[str]]) -> str:
-    return "; ".join(f"{name} -> {', '.join(target_names)}" for name, target_names in mapping.items())
-
-
 def _describe_cli_example(
     example: SmokeCliExample,
     *,
     default_target_name: str,
     alias_target_names: Mapping[str, Sequence[str]],
-    resolve_target_names: Callable[[str | None], Sequence[str]],
+    resolve_display_names: Callable[[str | None], Sequence[str]],
     single_choice_description: str,
 ) -> str:
     if example.description is not None:
         return example.description
 
     requested_target_name = default_target_name if example.target_name is None else example.target_name
-    resolved_target_names = ", ".join(resolve_target_names(example.target_name))
+    resolved_target_names = ", ".join(resolve_display_names(example.target_name))
     if requested_target_name in alias_target_names:
         if example.target_name is None:
             return f"default {requested_target_name} alias -> {resolved_target_names}"
@@ -135,27 +156,35 @@ def build_smoke_cli_parser(
     resolve_target_names: Callable[[str | None], Sequence[str]],
     item_help: str,
     alias_target_names: Mapping[str, Sequence[str]] | None = None,
+    resolve_display_names: Callable[[str | None], Sequence[str]] | None = None,
     alias_heading: str = "Alias details",
     examples: Sequence[SmokeCliExample] = (),
     single_choice_description: str = "single target",
 ) -> argparse.ArgumentParser:
     alias_target_names = {} if alias_target_names is None else alias_target_names
+    resolve_display_names = resolve_target_names if resolve_display_names is None else resolve_display_names
     epilog_lines: list[str] = []
     if alias_target_names:
         epilog_lines.append(f"{alias_heading}:")
-        epilog_lines.extend(f"  {name} -> {', '.join(target_names)}" for name, target_names in alias_target_names.items())
+        epilog_lines.extend(
+            f"  {name} -> {', '.join(resolve_display_names(name))}" for name in alias_target_names
+        )
     if examples:
         if epilog_lines:
             epilog_lines.append("")
         epilog_lines.append("Examples:")
         epilog_lines.extend(
-            f"  {example.command}  # {_describe_cli_example(example, default_target_name=default_target_name, alias_target_names=alias_target_names, resolve_target_names=resolve_target_names, single_choice_description=single_choice_description)}"
+            f"  {example.command}  # {_describe_cli_example(example, default_target_name=default_target_name, alias_target_names=alias_target_names, resolve_display_names=resolve_display_names, single_choice_description=single_choice_description)}"
             for example in examples
         )
 
     help_text = item_help
     if alias_target_names:
-        help_text = f"{help_text} Aliases: {_format_choice_mapping(alias_target_names)}."
+        help_text = (
+            f"{help_text} Aliases: "
+            + "; ".join(f"{name} -> {', '.join(resolve_display_names(name))}" for name in alias_target_names)
+            + "."
+        )
 
     parser = argparse.ArgumentParser(
         description=description,

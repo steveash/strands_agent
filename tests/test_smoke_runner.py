@@ -319,8 +319,8 @@ def test_smoke_target_selector_supports_public_choices_backed_by_hidden_target_n
     triage_script = _write_script(tmp_path, "triage.py", "print('triage_check= True', flush=True)\n")
     selector = SmokeTargetSelector(
         targets={
-            "standalone-local": SmokeScriptTarget("standalone-local", local_script),
-            "standalone-all": SmokeScriptTarget("standalone-all", all_script),
+            "standalone-local": SmokeScriptTarget("standalone-local", local_script, display_name="standalone"),
+            "standalone-all": SmokeScriptTarget("standalone-all", all_script, display_name="standalone"),
             "triage": SmokeScriptTarget("triage", triage_script),
         },
         default_target_name="local",
@@ -338,7 +338,9 @@ def test_smoke_target_selector_supports_public_choices_backed_by_hidden_target_n
 
     assert selector.choices == ("standalone", "triage", "local", "all")
     assert selector.resolve_target_names() == ["standalone-local", "triage"]
+    assert selector.resolve_display_names() == ["standalone", "triage"]
     assert [target.name for target in selector.resolve_targets("standalone")] == ["standalone-local"]
+    assert selector.resolve_display_names("all") == ["standalone", "triage"]
     assert [target.name for target in selector.resolve_targets("all")] == ["standalone-all", "triage"]
 
 
@@ -347,8 +349,8 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
     second_script = _write_script(tmp_path, "second.py", "print('second_check= True', flush=True)\n")
     selector = SmokeTargetSelector(
         targets={
-            "first": SmokeScriptTarget("first", first_script),
-            "second": SmokeScriptTarget("second", second_script),
+            "first": SmokeScriptTarget("first", first_script, display_name="demofirst"),
+            "second": SmokeScriptTarget("second", second_script, display_name="demosecond"),
         },
         default_target_name="both",
         alias_target_names={"both": ("first", "second")},
@@ -359,6 +361,7 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
         choices=selector.choices,
         default_target_name=selector.default_target_name,
         resolve_target_names=selector.resolve_target_names,
+        resolve_display_names=selector.resolve_display_names,
         item_help="Which demo smoke surface to run.",
         alias_target_names=selector.alias_target_names,
         examples=(
@@ -368,9 +371,9 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
     )
 
     help_text = " ".join(parser.format_help().split())
-    assert "Which demo smoke surface to run. Aliases: both -> first, second." in help_text
-    assert "Alias details: both -> first, second" in help_text
-    assert "demo_smoke.py # default both alias -> first, second" in help_text
+    assert "Which demo smoke surface to run. Aliases: both -> demofirst, demosecond." in help_text
+    assert "Alias details: both -> demofirst, demosecond" in help_text
+    assert "demo_smoke.py # default both alias -> demofirst, demosecond" in help_text
     assert "demo_smoke.py first # single target" in help_text
 
 
@@ -379,14 +382,16 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
         "default_target_name",
         "alias_target_names",
         "choice_target_names",
+        "choice_display_names",
         "requested_target_name",
         "expected_message",
     ),
     [
-        ("missing", {}, None, None, "unknown default smoke target 'missing'"),
+        ("missing", {}, None, None, None, "unknown default smoke target 'missing'"),
         (
             "all",
             {"all": ("missing",)},
+            None,
             None,
             None,
             "alias 'all' references unknown smoke targets: missing",
@@ -396,9 +401,18 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
             {},
             {"local": ("missing",)},
             None,
+            None,
             "choice 'local' references unknown smoke targets: missing",
         ),
-        ("first", {}, None, "missing", "unknown smoke target 'missing'"),
+        (
+            "first",
+            {},
+            None,
+            {"missing": ("first",)},
+            None,
+            "choice display names reference unknown smoke choices: missing",
+        ),
+        ("first", {}, None, None, "missing", "unknown smoke target 'missing'"),
     ],
 )
 def test_smoke_target_selector_validates_configuration(
@@ -406,6 +420,7 @@ def test_smoke_target_selector_validates_configuration(
     default_target_name,
     alias_target_names,
     choice_target_names,
+    choice_display_names,
     requested_target_name,
     expected_message,
 ) -> None:
@@ -418,6 +433,7 @@ def test_smoke_target_selector_validates_configuration(
                 default_target_name=default_target_name,
                 alias_target_names=alias_target_names,
                 choice_target_names=choice_target_names,
+                choice_display_names=choice_display_names,
             )
         return
 
@@ -426,6 +442,7 @@ def test_smoke_target_selector_validates_configuration(
         default_target_name=default_target_name,
         alias_target_names=alias_target_names,
         choice_target_names=choice_target_names,
+        choice_display_names=choice_display_names,
     )
 
     with pytest.raises(ValueError, match=expected_message):
