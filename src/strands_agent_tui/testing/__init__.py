@@ -69,6 +69,10 @@ from .smoke_assertions import (
     smoke_text_matches,
 )
 from .smoke_cli_assertions import (
+    SMOKE_CLI_DOC_SPECS,
+    SmokeCliDocSpec,
+    markdown_section_text,
+    matches_markdown_section,
     matches_public_cli_help,
     matches_public_cli_invalid_choice,
     normalize_cli_text,
@@ -132,6 +136,10 @@ __all__ = [
     "matches_switcher_selected_preview_output",
     "matches_tool_filter_output",
     "matches_workspace_filter_output",
+    "SMOKE_CLI_DOC_SPECS",
+    "SmokeCliDocSpec",
+    "markdown_section_text",
+    "matches_markdown_section",
     "matches_public_cli_help",
     "matches_public_cli_invalid_choice",
     "normalize_cli_text",

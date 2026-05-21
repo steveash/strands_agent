@@ -16,8 +16,10 @@ from strands_agent_tui.sessions import SessionArtifactStore, render_session_pick
 from strands_agent_tui.testing import (
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_WRAPPER,
+    SMOKE_CLI_DOC_SPECS,
     STANDALONE_SMOKE_WRAPPER,
     emit_smoke_checks as real_emit_smoke_checks,
+    matches_markdown_section,
     matches_public_cli_help,
     matches_public_cli_invalid_choice,
     matches_shell_filter_output,
@@ -37,6 +39,8 @@ from strands_agent_tui.testing import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
+README_PATH = Path(__file__).resolve().parent.parent / "README.md"
+README_TEXT = README_PATH.read_text(encoding="utf-8")
 
 
 def _load_script_module(name: str):
@@ -337,48 +341,13 @@ def test_standalone_smoke_passes_summary_label(monkeypatch) -> None:
     }
 
 
-def test_smoke_wrapper_help_documents_aliases_and_single_target_examples() -> None:
-    _assert_script_help_contains(
-        "standalone_smoke",
-        [
-            "Alias details: local -> summary-utils, shell-tool, replay all -> summary-utils, shell-tool, replay, live",
-            "default local alias -> summary-utils, shell-tool, replay",
-            "standalone_smoke.py all # all alias -> summary-utils, shell-tool, replay, live",
-            "standalone_smoke.py replay # single target",
-        ],
-    )
-    _assert_script_help_contains(
-        "session_triage_smoke",
-        [
-            "Alias details: both -> picker, switcher all -> picker, switcher",
-            "default both alias -> picker, switcher",
-            "session_triage_smoke.py all # all alias -> picker, switcher",
-            "session_triage_smoke.py picker # single target",
-        ],
-    )
-    _assert_script_help_contains(
-        "session_recovery_smoke",
-        [
-            "Alias details: all -> approval, approval-restart, session-state, live-restore, live-restore-denied",
-            "default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied",
-            "session_recovery_smoke.py live-restore # single target",
-            "session_recovery_smoke.py approval # single target",
-        ],
-    )
-
-
-def test_smoke_matrix_help_documents_bundle_examples() -> None:
-    _assert_script_help_contains(
-        "smoke_matrix",
-        [
-            "Bundle aliases: local -> standalone, triage, recovery all -> standalone (live-inclusive), triage, recovery",
-            "default local alias -> standalone, triage, recovery",
-            "The default 'local' matrix excludes the opt-in live runtime smoke target, and the 'all' alias swaps in the live-inclusive standalone bundle.",
-            "smoke_matrix.py standalone # single bundle",
-            "smoke_matrix.py triage # single bundle",
-            "smoke_matrix.py recovery # single bundle",
-            "smoke_matrix.py all # all alias -> standalone (live-inclusive), triage, recovery",
-        ],
+@pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
+def test_smoke_wrapper_help_and_readme_docs_stay_in_sync(doc_spec) -> None:
+    _assert_script_help_contains(doc_spec.script_name, list(doc_spec.help_required_snippets))
+    assert matches_markdown_section(
+        README_TEXT,
+        heading=doc_spec.readme_section_heading,
+        required_snippets=doc_spec.readme_required_snippets,
     )
 
 
@@ -443,45 +412,9 @@ def test_smoke_wrapper_invalid_choice_errors_show_public_cli_choices(
     )
 
 
-@pytest.mark.parametrize(
-    ("script_name", "required_snippets"),
-    [
-        (
-            "standalone_smoke",
-            [
-                "Which standalone smoke surface to run.",
-                "default local alias -> summary-utils, shell-tool, replay",
-                "standalone_smoke.py replay # single target",
-            ],
-        ),
-        (
-            "session_triage_smoke",
-            [
-                "Which session-triage smoke surface to run.",
-                "default both alias -> picker, switcher",
-                "session_triage_smoke.py picker # single target",
-            ],
-        ),
-        (
-            "session_recovery_smoke",
-            [
-                "Which recovery smoke surface to run.",
-                "default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied",
-                "session_recovery_smoke.py live-restore # single target",
-            ],
-        ),
-        (
-            "smoke_matrix",
-            [
-                "Which smoke bundle or bundle matrix to run.",
-                "default local alias -> standalone, triage, recovery",
-                "smoke_matrix.py standalone # single bundle",
-            ],
-        ),
-    ],
-)
-def test_smoke_script_main_help_exits_zero_and_prints_expected_text(script_name, required_snippets, capsys) -> None:
-    module = _load_script_module(script_name)
+@pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
+def test_smoke_script_main_help_exits_zero_and_prints_expected_text(doc_spec, capsys) -> None:
+    module = _load_script_module(doc_spec.script_name)
 
     with pytest.raises(SystemExit) as exc_info:
         module.main(["--help"])
@@ -489,7 +422,7 @@ def test_smoke_script_main_help_exits_zero_and_prints_expected_text(script_name,
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     assert captured.err == ""
-    assert matches_public_cli_help(captured.out, required_snippets=required_snippets)
+    assert matches_public_cli_help(captured.out, required_snippets=doc_spec.help_required_snippets)
 
 
 def test_smoke_matrix_defaults_to_local_bundle_sequence(monkeypatch) -> None:

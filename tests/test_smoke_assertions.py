@@ -1,8 +1,10 @@
 from textwrap import dedent
 
 from strands_agent_tui.testing import (
+    SMOKE_CLI_DOC_SPECS,
     failed_smoke_check_lines,
     is_failed_smoke_check_line,
+    markdown_section_text,
     matches_approval_restore_age_output,
     matches_approval_restore_badges_output,
     matches_approval_restore_focus_output,
@@ -19,6 +21,7 @@ from strands_agent_tui.testing import (
     matches_denied_page_rollup_output,
     matches_denied_preview_output,
     matches_intervention_filter_output,
+    matches_markdown_section,
     matches_pending_age_output,
     matches_pending_filter_output,
     matches_pending_page_rollup_output,
@@ -83,6 +86,41 @@ def test_smoke_cli_helpers_normalize_public_help_and_invalid_choice_copy() -> No
         error_text,
         invalid_target="standalone-all",
         expected_choices="{standalone,triage,recovery,local,all}",
+    )
+
+
+def test_smoke_cli_doc_specs_extract_markdown_sections_and_reuse_shared_snippets() -> None:
+    markdown = dedent(
+        """
+        ## Smoke docs
+
+        ### Standalone local smoke bundle
+        Intro line.
+        `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `live`).
+
+        ### Session triage smoke bundle
+        Intro line.
+        `.venv/bin/python scripts/session_triage_smoke.py both` explicitly re-runs the default picker+switcher alias.
+        """
+    ).strip()
+
+    standalone_spec = next(spec for spec in SMOKE_CLI_DOC_SPECS if spec.script_name == "standalone_smoke")
+    triage_spec = next(spec for spec in SMOKE_CLI_DOC_SPECS if spec.script_name == "session_triage_smoke")
+
+    assert markdown_section_text(markdown, heading=standalone_spec.readme_section_heading) == (
+        "Intro line.\n"
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias "
+        "(`summary_utils`, `shell_tool`, `replay`, `live`)."
+    )
+    assert matches_markdown_section(
+        markdown,
+        heading=standalone_spec.readme_section_heading,
+        required_snippets=[standalone_spec.readme_required_snippets[3]],
+    )
+    assert matches_markdown_section(
+        markdown,
+        heading=triage_spec.readme_section_heading,
+        required_snippets=[triage_spec.readme_required_snippets[2]],
     )
 
 
