@@ -512,12 +512,12 @@ def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
 
     assert exit_code == 0
     assert stdout.getvalue().splitlines() == [
-        "[smoke-matrix] running standalone",
-        "[smoke-matrix] standalone passed in 0.30s",
-        "[smoke-matrix] running triage",
-        "[smoke-matrix] triage passed in 0.60s",
-        "[smoke-matrix] running recovery",
-        "[smoke-matrix] recovery passed in 0.90s",
+        summary_metadata.running_line(item_name="standalone"),
+        summary_metadata.passed_line(item_name="standalone", elapsed_seconds=0.3),
+        summary_metadata.running_line(item_name="triage"),
+        summary_metadata.passed_line(item_name="triage", elapsed_seconds=0.6),
+        summary_metadata.running_line(item_name="recovery"),
+        summary_metadata.passed_line(item_name="recovery", elapsed_seconds=0.9),
         summary_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.5),
     ]
 
@@ -537,12 +537,12 @@ def test_smoke_matrix_all_bundle_uses_public_standalone_label(monkeypatch) -> No
 
     assert exit_code == 0
     assert stdout.getvalue().splitlines() == [
-        "[smoke-matrix] running standalone",
-        "[smoke-matrix] standalone passed in 0.40s",
-        "[smoke-matrix] running triage",
-        "[smoke-matrix] triage passed in 0.70s",
-        "[smoke-matrix] running recovery",
-        "[smoke-matrix] recovery passed in 1.00s",
+        summary_metadata.running_line(item_name="standalone"),
+        summary_metadata.passed_line(item_name="standalone", elapsed_seconds=0.4),
+        summary_metadata.running_line(item_name="triage"),
+        summary_metadata.passed_line(item_name="triage", elapsed_seconds=0.7),
+        summary_metadata.running_line(item_name="recovery"),
+        summary_metadata.passed_line(item_name="recovery", elapsed_seconds=1.0),
         summary_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.8),
     ]
 
@@ -577,15 +577,15 @@ def test_smoke_matrix_suppresses_nested_wrapper_summary_footers(monkeypatch) -> 
     summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
 
     assert stdout.getvalue().splitlines() == [
-        "[smoke-matrix] running standalone",
+        summary_metadata.running_line(item_name="standalone"),
         "standalone-local_check= True",
-        "[smoke-matrix] standalone passed in 0.25s",
-        "[smoke-matrix] running triage",
+        summary_metadata.passed_line(item_name="standalone", elapsed_seconds=0.25),
+        summary_metadata.running_line(item_name="triage"),
         "triage_check= True",
-        "[smoke-matrix] triage passed in 0.50s",
-        "[smoke-matrix] running recovery",
+        summary_metadata.passed_line(item_name="triage", elapsed_seconds=0.5),
+        summary_metadata.running_line(item_name="recovery"),
         "recovery_check= True",
-        "[smoke-matrix] recovery passed in 0.75s",
+        summary_metadata.passed_line(item_name="recovery", elapsed_seconds=0.75),
         summary_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.0),
     ]
     assert "[standalone-smoke] summary:" not in stdout.getvalue()
@@ -614,15 +614,15 @@ def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None
 
     assert exit_code == 1
     assert seen == ["standalone-local", "triage"]
-    assert stdout.getvalue().splitlines() == [
-        "[smoke-matrix] running standalone",
-        "[smoke-matrix] standalone passed in 0.20s",
-        "[smoke-matrix] running triage",
-    ]
     summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    assert stdout.getvalue().splitlines() == [
+        summary_metadata.running_line(item_name="standalone"),
+        summary_metadata.passed_line(item_name="standalone", elapsed_seconds=0.2),
+        summary_metadata.running_line(item_name="triage"),
+    ]
 
     assert stderr.getvalue().splitlines() == [
-        "[smoke-matrix] triage failed in 0.50s",
+        summary_metadata.failed_line(item_name="triage", elapsed_seconds=0.5),
         summary_metadata.failure_summary_line(passed_count=1, total_count=3, elapsed_seconds=2.5),
     ]
 
@@ -647,12 +647,12 @@ def test_smoke_matrix_preserves_public_bundle_labels_in_fail_fast_stderr(monkeyp
         exit_code = smoke_matrix.main(["all"])
 
     assert exit_code == 1
-    assert stdout.getvalue().splitlines() == ["[smoke-matrix] running standalone"]
     summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
 
     assert stderr.getvalue().splitlines() == [
         "standalone smoke failed fast: standalone_check= False",
-        "[smoke-matrix] standalone failed in 0.60s",
+        summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.6),
         summary_metadata.failure_summary_line(passed_count=0, total_count=3, elapsed_seconds=2.2),
     ]
 

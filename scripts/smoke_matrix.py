@@ -5,7 +5,6 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 from time import perf_counter
-from typing import TextIO
 
 from strands_agent_tui.testing import (
     SESSION_RECOVERY_SMOKE_WRAPPER,
@@ -70,8 +69,8 @@ SUPPRESSED_NESTED_SUMMARY_PREFIXES = summary_line_prefixes(
 SMOKE_MATRIX_SUMMARY = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
 
 
-def _emit_bundle_summary(message: str, *, stream: TextIO) -> None:
-    print(f"[smoke-matrix] {message}", file=stream)
+def _emit_matrix_line(message: str, *, stream) -> None:
+    print(SMOKE_MATRIX_SUMMARY.format_line(message), file=stream)
     stream.flush()
 
 
@@ -93,7 +92,7 @@ def run_smoke_matrix(
     total_count = len(targets)
 
     for target in targets:
-        _emit_bundle_summary(f"running {target.display_label}", stream=stdout)
+        _emit_matrix_line(SMOKE_MATRIX_SUMMARY.running_message(item_name=target.display_label), stream=stdout)
         started_at = perf_counter()
         exit_code = run_smoke_target(
             target,
@@ -103,9 +102,12 @@ def run_smoke_matrix(
         )
         elapsed = perf_counter() - started_at
         if exit_code != 0:
-            _emit_bundle_summary(f"{target.display_label} failed in {elapsed:.2f}s", stream=stderr)
+            _emit_matrix_line(
+                SMOKE_MATRIX_SUMMARY.failed_message(item_name=target.display_label, elapsed_seconds=elapsed),
+                stream=stderr,
+            )
             total_elapsed = perf_counter() - total_started_at
-            _emit_bundle_summary(
+            _emit_matrix_line(
                 SMOKE_MATRIX_SUMMARY.failure_summary_message(
                     passed_count=passed_count,
                     total_count=total_count,
@@ -115,10 +117,13 @@ def run_smoke_matrix(
             )
             return exit_code
         passed_count += 1
-        _emit_bundle_summary(f"{target.display_label} passed in {elapsed:.2f}s", stream=stdout)
+        _emit_matrix_line(
+            SMOKE_MATRIX_SUMMARY.passed_message(item_name=target.display_label, elapsed_seconds=elapsed),
+            stream=stdout,
+        )
 
     total_elapsed = perf_counter() - total_started_at
-    _emit_bundle_summary(
+    _emit_matrix_line(
         SMOKE_MATRIX_SUMMARY.success_summary_message(
             passed_count=passed_count,
             total_count=total_count,

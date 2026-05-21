@@ -278,15 +278,24 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
     ]
 
 
-def test_smoke_wrapper_metadata_formats_shared_summary_lines() -> None:
+def test_smoke_wrapper_metadata_formats_shared_summary_and_progress_lines() -> None:
     wrapper_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
     bundle_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
 
+    assert wrapper_metadata.line_prefix == "[bundle-smoke]"
+    assert wrapper_metadata.format_line("custom message") == "[bundle-smoke] custom message"
     assert wrapper_metadata.success_summary_line(passed_count=2, total_count=2, elapsed_seconds=1.25) == (
         "[bundle-smoke] summary: 2/2 targets passed in 1.25s"
     )
     assert wrapper_metadata.failure_summary_line(passed_count=1, total_count=2, elapsed_seconds=2.5) == (
         "[bundle-smoke] summary: 1/2 targets passed before failure in 2.50s"
+    )
+    assert bundle_metadata.running_line(item_name="standalone") == "[smoke-matrix] running standalone"
+    assert bundle_metadata.passed_line(item_name="standalone", elapsed_seconds=0.3) == (
+        "[smoke-matrix] standalone passed in 0.30s"
+    )
+    assert bundle_metadata.failed_line(item_name="triage", elapsed_seconds=0.5) == (
+        "[smoke-matrix] triage failed in 0.50s"
     )
     assert bundle_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.5) == (
         "[smoke-matrix] summary: 3/3 bundles passed in 4.50s"
