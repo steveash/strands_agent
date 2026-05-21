@@ -31,13 +31,50 @@ class SmokeCliExample:
     description: str | None = None
 
 
+def format_smoke_summary_message(
+    *,
+    passed_count: int,
+    total_count: int,
+    elapsed_seconds: float,
+    item_label: str = "targets",
+    before_failure: bool = False,
+) -> str:
+    if before_failure:
+        return f"summary: {passed_count}/{total_count} {item_label} passed before failure in {elapsed_seconds:.2f}s"
+    return f"summary: {passed_count}/{total_count} {item_label} passed in {elapsed_seconds:.2f}s"
+
+
 @dataclass(frozen=True)
 class SmokeWrapperMetadata:
     summary_label: str
+    summary_item_label: str = "targets"
 
     @property
     def summary_line_prefix(self) -> str:
         return f"[{self.summary_label}] summary:"
+
+    def success_summary_message(self, *, passed_count: int, total_count: int, elapsed_seconds: float) -> str:
+        return format_smoke_summary_message(
+            passed_count=passed_count,
+            total_count=total_count,
+            elapsed_seconds=elapsed_seconds,
+            item_label=self.summary_item_label,
+        )
+
+    def failure_summary_message(self, *, passed_count: int, total_count: int, elapsed_seconds: float) -> str:
+        return format_smoke_summary_message(
+            passed_count=passed_count,
+            total_count=total_count,
+            elapsed_seconds=elapsed_seconds,
+            item_label=self.summary_item_label,
+            before_failure=True,
+        )
+
+    def success_summary_line(self, *, passed_count: int, total_count: int, elapsed_seconds: float) -> str:
+        return f"[{self.summary_label}] {self.success_summary_message(passed_count=passed_count, total_count=total_count, elapsed_seconds=elapsed_seconds)}"
+
+    def failure_summary_line(self, *, passed_count: int, total_count: int, elapsed_seconds: float) -> str:
+        return f"[{self.summary_label}] {self.failure_summary_message(passed_count=passed_count, total_count=total_count, elapsed_seconds=elapsed_seconds)}"
 
 
 def summary_line_prefixes(wrapper_metadata: Iterable[SmokeWrapperMetadata]) -> tuple[str, ...]:
@@ -254,6 +291,7 @@ def run_smoke_targets(
     failure_predicate: SmokeFailurePredicate = is_failed_smoke_check_line,
     summary_label: str | None = None,
 ) -> int:
+    summary_metadata = SmokeWrapperMetadata(summary_label) if summary_label is not None else None
     started_at = perf_counter()
     passed_count = 0
     total_count = len(targets)
@@ -267,21 +305,29 @@ def run_smoke_targets(
             failure_predicate=failure_predicate,
         )
         if exit_code != 0:
-            if summary_label is not None:
+            if summary_metadata is not None:
                 elapsed = perf_counter() - started_at
                 _emit_summary_line(
-                    summary_label,
-                    f"summary: {passed_count}/{total_count} targets passed before failure in {elapsed:.2f}s",
+                    summary_metadata.summary_label,
+                    summary_metadata.failure_summary_message(
+                        passed_count=passed_count,
+                        total_count=total_count,
+                        elapsed_seconds=elapsed,
+                    ),
                     stream=stderr,
                 )
             return exit_code
         passed_count += 1
 
-    if summary_label is not None:
+    if summary_metadata is not None:
         elapsed = perf_counter() - started_at
         _emit_summary_line(
-            summary_label,
-            f"summary: {passed_count}/{total_count} targets passed in {elapsed:.2f}s",
+            summary_metadata.summary_label,
+            summary_metadata.success_summary_message(
+                passed_count=passed_count,
+                total_count=total_count,
+                elapsed_seconds=elapsed,
+            ),
             stream=stdout,
         )
     return 0

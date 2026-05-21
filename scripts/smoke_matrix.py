@@ -14,6 +14,7 @@ from strands_agent_tui.testing import (
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
+    SmokeWrapperMetadata,
     build_smoke_cli_parser,
     run_smoke_target,
     summary_line_prefixes,
@@ -66,6 +67,7 @@ SUPPRESSED_NESTED_SUMMARY_PREFIXES = summary_line_prefixes(
         SESSION_RECOVERY_SMOKE_WRAPPER,
     )
 )
+SMOKE_MATRIX_SUMMARY = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
 
 
 def _emit_bundle_summary(message: str, *, stream: TextIO) -> None:
@@ -104,7 +106,11 @@ def run_smoke_matrix(
             _emit_bundle_summary(f"{target.display_label} failed in {elapsed:.2f}s", stream=stderr)
             total_elapsed = perf_counter() - total_started_at
             _emit_bundle_summary(
-                f"summary: {passed_count}/{total_count} bundles passed before failure in {total_elapsed:.2f}s",
+                SMOKE_MATRIX_SUMMARY.failure_summary_message(
+                    passed_count=passed_count,
+                    total_count=total_count,
+                    elapsed_seconds=total_elapsed,
+                ),
                 stream=stderr,
             )
             return exit_code
@@ -113,7 +119,11 @@ def run_smoke_matrix(
 
     total_elapsed = perf_counter() - total_started_at
     _emit_bundle_summary(
-        f"summary: {passed_count}/{total_count} bundles passed in {total_elapsed:.2f}s",
+        SMOKE_MATRIX_SUMMARY.success_summary_message(
+            passed_count=passed_count,
+            total_count=total_count,
+            elapsed_seconds=total_elapsed,
+        ),
         stream=stdout,
     )
     return 0

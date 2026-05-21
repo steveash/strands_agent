@@ -13,6 +13,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
+    SmokeWrapperMetadata,
     build_smoke_cli_parser,
     run_smoke_target,
     run_smoke_targets,
@@ -224,11 +225,13 @@ def test_run_smoke_targets_emits_summary_footer_on_success(tmp_path, monkeypatch
         summary_label="bundle-smoke",
     )
 
+    bundle_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
+
     assert exit_code == 0
     assert stdout.getvalue() == (
         "first_check= True\n"
         "second_check= True\n"
-        "[bundle-smoke] summary: 2/2 targets passed in 1.25s\n"
+        f"{bundle_metadata.success_summary_line(passed_count=2, total_count=2, elapsed_seconds=1.25)}\n"
     )
     assert stderr.getvalue() == ""
 
@@ -265,12 +268,30 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
         summary_label="bundle-smoke",
     )
 
+    bundle_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
+
     assert exit_code == 1
     assert stdout.getvalue() == "first_check= True\nsecond_check= False\n"
     assert stderr.getvalue().splitlines() == [
         "second smoke failed fast: second_check= False",
-        "[bundle-smoke] summary: 1/2 targets passed before failure in 2.50s",
+        bundle_metadata.failure_summary_line(passed_count=1, total_count=2, elapsed_seconds=2.5),
     ]
+
+
+def test_smoke_wrapper_metadata_formats_shared_summary_lines() -> None:
+    wrapper_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
+    bundle_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+
+    assert wrapper_metadata.success_summary_line(passed_count=2, total_count=2, elapsed_seconds=1.25) == (
+        "[bundle-smoke] summary: 2/2 targets passed in 1.25s"
+    )
+    assert wrapper_metadata.failure_summary_line(passed_count=1, total_count=2, elapsed_seconds=2.5) == (
+        "[bundle-smoke] summary: 1/2 targets passed before failure in 2.50s"
+    )
+    assert bundle_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.5) == (
+        "[smoke-matrix] summary: 3/3 bundles passed in 4.50s"
+    )
+
 
 
 def test_summary_line_prefixes_deduplicate_shared_wrapper_metadata() -> None:

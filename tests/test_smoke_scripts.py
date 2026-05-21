@@ -18,6 +18,7 @@ from strands_agent_tui.testing import (
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
     STANDALONE_SMOKE_WRAPPER,
+    SmokeWrapperMetadata,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
     matches_public_cli_help,
@@ -498,6 +499,7 @@ def test_smoke_matrix_single_bundle_target_selection(monkeypatch, argv, expected
 
 def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
+    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
 
@@ -516,12 +518,13 @@ def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
         "[smoke-matrix] triage passed in 0.60s",
         "[smoke-matrix] running recovery",
         "[smoke-matrix] recovery passed in 0.90s",
-        "[smoke-matrix] summary: 3/3 bundles passed in 4.50s",
+        summary_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.5),
     ]
 
 
 def test_smoke_matrix_all_bundle_uses_public_standalone_label(monkeypatch) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
+    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
 
@@ -540,7 +543,7 @@ def test_smoke_matrix_all_bundle_uses_public_standalone_label(monkeypatch) -> No
         "[smoke-matrix] triage passed in 0.70s",
         "[smoke-matrix] running recovery",
         "[smoke-matrix] recovery passed in 1.00s",
-        "[smoke-matrix] summary: 3/3 bundles passed in 4.80s",
+        summary_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.8),
     ]
 
 
@@ -571,6 +574,8 @@ def test_smoke_matrix_suppresses_nested_wrapper_summary_footers(monkeypatch) -> 
         exit_code = smoke_matrix.main([])
 
     assert exit_code == 0
+    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+
     assert stdout.getvalue().splitlines() == [
         "[smoke-matrix] running standalone",
         "standalone-local_check= True",
@@ -581,7 +586,7 @@ def test_smoke_matrix_suppresses_nested_wrapper_summary_footers(monkeypatch) -> 
         "[smoke-matrix] running recovery",
         "recovery_check= True",
         "[smoke-matrix] recovery passed in 0.75s",
-        "[smoke-matrix] summary: 3/3 bundles passed in 4.00s",
+        summary_metadata.success_summary_line(passed_count=3, total_count=3, elapsed_seconds=4.0),
     ]
     assert "[standalone-smoke] summary:" not in stdout.getvalue()
     assert "[session-triage-smoke] summary:" not in stdout.getvalue()
@@ -614,9 +619,11 @@ def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None
         "[smoke-matrix] standalone passed in 0.20s",
         "[smoke-matrix] running triage",
     ]
+    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+
     assert stderr.getvalue().splitlines() == [
         "[smoke-matrix] triage failed in 0.50s",
-        "[smoke-matrix] summary: 1/3 bundles passed before failure in 2.50s",
+        summary_metadata.failure_summary_line(passed_count=1, total_count=3, elapsed_seconds=2.5),
     ]
 
 
@@ -641,10 +648,12 @@ def test_smoke_matrix_preserves_public_bundle_labels_in_fail_fast_stderr(monkeyp
 
     assert exit_code == 1
     assert stdout.getvalue().splitlines() == ["[smoke-matrix] running standalone"]
+    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+
     assert stderr.getvalue().splitlines() == [
         "standalone smoke failed fast: standalone_check= False",
         "[smoke-matrix] standalone failed in 0.60s",
-        "[smoke-matrix] summary: 0/3 bundles passed before failure in 2.20s",
+        summary_metadata.failure_summary_line(passed_count=0, total_count=3, elapsed_seconds=2.2),
     ]
 
 
