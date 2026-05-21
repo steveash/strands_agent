@@ -18,6 +18,8 @@ from strands_agent_tui.testing import (
     SESSION_TRIAGE_SMOKE_WRAPPER,
     STANDALONE_SMOKE_WRAPPER,
     emit_smoke_checks as real_emit_smoke_checks,
+    matches_public_cli_help,
+    matches_public_cli_invalid_choice,
     matches_shell_filter_output,
     matches_workspace_filter_output,
     seed_approval_restore_focus_scenario,
@@ -64,8 +66,8 @@ def _format_script_help(name: str) -> str:
     return module.build_parser().format_help()
 
 
-def _normalize_help_text(text: str) -> str:
-    return " ".join(text.split())
+def _assert_script_help_contains(script_name: str, required_snippets: list[str]) -> None:
+    assert matches_public_cli_help(_format_script_help(script_name), required_snippets=required_snippets)
 
 
 def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
@@ -336,34 +338,48 @@ def test_standalone_smoke_passes_summary_label(monkeypatch) -> None:
 
 
 def test_smoke_wrapper_help_documents_aliases_and_single_target_examples() -> None:
-    standalone_help = _normalize_help_text(_format_script_help("standalone_smoke"))
-    assert "Alias details: local -> summary-utils, shell-tool, replay all -> summary-utils, shell-tool, replay, live" in standalone_help
-    assert "default local alias -> summary-utils, shell-tool, replay" in standalone_help
-    assert "standalone_smoke.py all # all alias -> summary-utils, shell-tool, replay, live" in standalone_help
-    assert "standalone_smoke.py replay # single target" in standalone_help
-
-    triage_help = _normalize_help_text(_format_script_help("session_triage_smoke"))
-    assert "Alias details: both -> picker, switcher all -> picker, switcher" in triage_help
-    assert "default both alias -> picker, switcher" in triage_help
-    assert "session_triage_smoke.py all # all alias -> picker, switcher" in triage_help
-    assert "session_triage_smoke.py picker # single target" in triage_help
-
-    recovery_help = _normalize_help_text(_format_script_help("session_recovery_smoke"))
-    assert "Alias details: all -> approval, approval-restart, session-state, live-restore, live-restore-denied" in recovery_help
-    assert "default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied" in recovery_help
-    assert "session_recovery_smoke.py live-restore # single target" in recovery_help
-    assert "session_recovery_smoke.py approval # single target" in recovery_help
+    _assert_script_help_contains(
+        "standalone_smoke",
+        [
+            "Alias details: local -> summary-utils, shell-tool, replay all -> summary-utils, shell-tool, replay, live",
+            "default local alias -> summary-utils, shell-tool, replay",
+            "standalone_smoke.py all # all alias -> summary-utils, shell-tool, replay, live",
+            "standalone_smoke.py replay # single target",
+        ],
+    )
+    _assert_script_help_contains(
+        "session_triage_smoke",
+        [
+            "Alias details: both -> picker, switcher all -> picker, switcher",
+            "default both alias -> picker, switcher",
+            "session_triage_smoke.py all # all alias -> picker, switcher",
+            "session_triage_smoke.py picker # single target",
+        ],
+    )
+    _assert_script_help_contains(
+        "session_recovery_smoke",
+        [
+            "Alias details: all -> approval, approval-restart, session-state, live-restore, live-restore-denied",
+            "default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied",
+            "session_recovery_smoke.py live-restore # single target",
+            "session_recovery_smoke.py approval # single target",
+        ],
+    )
 
 
 def test_smoke_matrix_help_documents_bundle_examples() -> None:
-    help_text = _normalize_help_text(_format_script_help("smoke_matrix"))
-
-    assert "Bundle aliases: local -> standalone, triage, recovery all -> standalone, triage, recovery" in help_text
-    assert "default local alias -> standalone, triage, recovery" in help_text
-    assert "smoke_matrix.py standalone # single bundle" in help_text
-    assert "smoke_matrix.py triage # single bundle" in help_text
-    assert "smoke_matrix.py recovery # single bundle" in help_text
-    assert "smoke_matrix.py all # all alias -> standalone, triage, recovery" in help_text
+    _assert_script_help_contains(
+        "smoke_matrix",
+        [
+            "Bundle aliases: local -> standalone, triage, recovery all -> standalone (live-inclusive), triage, recovery",
+            "default local alias -> standalone, triage, recovery",
+            "The default 'local' matrix excludes the opt-in live runtime smoke target, and the 'all' alias swaps in the live-inclusive standalone bundle.",
+            "smoke_matrix.py standalone # single bundle",
+            "smoke_matrix.py triage # single bundle",
+            "smoke_matrix.py recovery # single bundle",
+            "smoke_matrix.py all # all alias -> standalone (live-inclusive), triage, recovery",
+        ],
+    )
 
 
 def test_smoke_matrix_uses_shared_wrapper_summary_prefixes() -> None:
@@ -387,9 +403,11 @@ def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> No
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    normalized_error = _normalize_help_text(captured.err)
-    assert "invalid choice: 'standalone-all'" in normalized_error
-    assert "{standalone,triage,recovery,local,all}" in normalized_error
+    assert matches_public_cli_invalid_choice(
+        captured.err,
+        invalid_target="standalone-all",
+        expected_choices="{standalone,triage,recovery,local,all}",
+    )
 
 
 @pytest.mark.parametrize(
@@ -418,9 +436,11 @@ def test_smoke_wrapper_invalid_choice_errors_show_public_cli_choices(
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    normalized_error = _normalize_help_text(captured.err)
-    assert f"invalid choice: '{invalid_target}'" in normalized_error
-    assert expected_choices in normalized_error
+    assert matches_public_cli_invalid_choice(
+        captured.err,
+        invalid_target=invalid_target,
+        expected_choices=expected_choices,
+    )
 
 
 @pytest.mark.parametrize(
@@ -469,9 +489,7 @@ def test_smoke_script_main_help_exits_zero_and_prints_expected_text(script_name,
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     assert captured.err == ""
-    normalized_help = _normalize_help_text(captured.out)
-    for snippet in required_snippets:
-        assert snippet in normalized_help
+    assert matches_public_cli_help(captured.out, required_snippets=required_snippets)
 
 
 def test_smoke_matrix_defaults_to_local_bundle_sequence(monkeypatch) -> None:

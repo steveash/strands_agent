@@ -51,6 +51,13 @@ BUNDLE_SELECTOR = SmokeTargetSelector(
         "local": tuple(LOCAL_BUNDLE_NAMES),
         "all": tuple(ALL_BUNDLE_NAMES),
     },
+    choice_display_names={
+        "standalone": ("standalone",),
+        "triage": ("triage",),
+        "recovery": ("recovery",),
+        "local": ("standalone", "triage", "recovery"),
+        "all": ("standalone (live-inclusive)", "triage", "recovery"),
+    },
 )
 SUPPRESSED_NESTED_SUMMARY_PREFIXES = summary_line_prefixes(
     (
@@ -122,7 +129,8 @@ def build_parser() -> argparse.ArgumentParser:
     return build_smoke_cli_parser(
         description=(
             "Run standalone, session-triage, and recovery smoke bundles together with fail-fast handling. "
-            "The default 'local' matrix excludes the opt-in live runtime smoke target."
+            "The default 'local' matrix excludes the opt-in live runtime smoke target, and the 'all' alias "
+            "swaps in the live-inclusive standalone bundle."
         ),
         choices=BUNDLE_SELECTOR.choices,
         default_target_name=BUNDLE_SELECTOR.default_target_name,

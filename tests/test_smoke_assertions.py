@@ -23,6 +23,8 @@ from strands_agent_tui.testing import (
     matches_pending_filter_output,
     matches_pending_page_rollup_output,
     matches_picker_default_output,
+    matches_public_cli_help,
+    matches_public_cli_invalid_choice,
     matches_queue_breakdown_output,
     matches_shell_filter_output,
     matches_stale_backlog_output,
@@ -36,6 +38,7 @@ from strands_agent_tui.testing import (
     matches_switcher_selected_preview_output,
     matches_tool_filter_output,
     matches_workspace_filter_output,
+    normalize_cli_text,
     smoke_text_matches,
 )
 
@@ -62,6 +65,25 @@ def test_smoke_failure_helpers_detect_false_result_lines() -> None:
         "picker_tool_filter= False",
         "switcher_tool_filter= False",
     ]
+
+
+def test_smoke_cli_helpers_normalize_public_help_and_invalid_choice_copy() -> None:
+    help_text = "Usage: smoke_matrix.py [-h] {standalone,triage,recovery,local,all}\n\n  smoke_matrix.py all  # all alias -> standalone (live-inclusive), triage, recovery\n"
+    error_text = "usage: smoke_matrix.py [-h] {standalone,triage,recovery,local,all}\nsmoke_matrix.py: error: argument target: invalid choice: 'standalone-all' (choose from 'standalone', 'triage', 'recovery', 'local', 'all')\n"
+
+    assert normalize_cli_text(help_text) == (
+        "Usage: smoke_matrix.py [-h] {standalone,triage,recovery,local,all} "
+        "smoke_matrix.py all # all alias -> standalone (live-inclusive), triage, recovery"
+    )
+    assert matches_public_cli_help(
+        help_text,
+        required_snippets=["all alias -> standalone (live-inclusive), triage, recovery"],
+    )
+    assert matches_public_cli_invalid_choice(
+        error_text,
+        invalid_target="standalone-all",
+        expected_choices="{standalone,triage,recovery,local,all}",
+    )
 
 
 def test_approval_restore_smoke_helpers_share_focus_age_and_preview_checks() -> None:

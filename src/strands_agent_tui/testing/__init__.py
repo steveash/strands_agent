@@ -68,6 +68,11 @@ from .smoke_assertions import (
     matches_workspace_filter_output,
     smoke_text_matches,
 )
+from .smoke_cli_assertions import (
+    matches_public_cli_help,
+    matches_public_cli_invalid_choice,
+    normalize_cli_text,
+)
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
     SESSION_RECOVERY_SMOKE_WRAPPER,
@@ -127,6 +132,9 @@ __all__ = [
     "matches_switcher_selected_preview_output",
     "matches_tool_filter_output",
     "matches_workspace_filter_output",
+    "matches_public_cli_help",
+    "matches_public_cli_invalid_choice",
+    "normalize_cli_text",
     "seed_denied_approval_session",
     "seed_approval_restore_overlap_session",
     "seed_approval_restore_rollup_scenario",

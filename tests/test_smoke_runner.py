@@ -334,13 +334,19 @@ def test_smoke_target_selector_supports_public_choices_backed_by_hidden_target_n
             "local": ("standalone-local", "triage"),
             "all": ("standalone-all", "triage"),
         },
+        choice_display_names={
+            "standalone": ("standalone",),
+            "triage": ("triage",),
+            "local": ("standalone", "triage"),
+            "all": ("standalone (live-inclusive)", "triage"),
+        },
     )
 
     assert selector.choices == ("standalone", "triage", "local", "all")
     assert selector.resolve_target_names() == ["standalone-local", "triage"]
     assert selector.resolve_display_names() == ["standalone", "triage"]
     assert [target.name for target in selector.resolve_targets("standalone")] == ["standalone-local"]
-    assert selector.resolve_display_names("all") == ["standalone", "triage"]
+    assert selector.resolve_display_names("all") == ["standalone (live-inclusive)", "triage"]
     assert [target.name for target in selector.resolve_targets("all")] == ["standalone-all", "triage"]
 
 
