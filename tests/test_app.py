@@ -1556,6 +1556,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-denied | 1 turn(s)" in workspace_edit_output
         assert "workspace lanes: edit" in workspace_edit_output
         assert "workspace focus: pending only" in workspace_edit_output
+        assert "Workspace edit queue mix: pending-only: 2 sessions | restored pending-only: 1 session" in workspace_edit_output
         assert "session-shell | 1 turn(s)" not in workspace_edit_output
 
         await pilot.press("h")
@@ -1593,6 +1594,7 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "session-restored-pending | 1 turn(s)" in shell_test_output
         assert "shell lanes: inspect, test" in shell_test_output
         assert "shell focus: pending only" in shell_test_output
+        assert "Shell test queue mix: pending-only: 3 sessions | restored pending-only: 1 session" in shell_test_output
         assert "session-shell | 1 turn(s)" not in shell_test_output
         assert "session-tool | 1 turn(s)" not in shell_test_output
 

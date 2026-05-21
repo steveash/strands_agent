@@ -171,6 +171,7 @@ class SessionSummary:
     has_workspace_inspect_activity: bool = False
     has_workspace_edit_activity: bool = False
     has_pending_workspace_edit_approval: bool = False
+    has_restored_pending_workspace_edit_approval: bool = False
     last_workspace_preview: str = ""
     recent_workspace_previews: list[str] = field(default_factory=list)
     last_workspace_inspect_preview: str = ""
@@ -184,6 +185,7 @@ class SessionSummary:
     has_shell_inspect_activity: bool = False
     has_shell_test_activity: bool = False
     has_pending_shell_test_approval: bool = False
+    has_restored_pending_shell_test_approval: bool = False
     last_shell_preview: str = ""
     recent_shell_previews: list[str] = field(default_factory=list)
     last_shell_inspect_preview: str = ""
@@ -250,6 +252,18 @@ class SessionSummary:
         if filter_mode == "shell-test":
             return "pending only until a test executes"
         return ""
+
+    def has_pending_only_lane_match(self, filter_mode: str) -> bool:
+        return bool(self._focused_lane_pending_only_state(filter_mode)[1])
+
+    def has_restored_pending_only_lane_match(self, filter_mode: str) -> bool:
+        if not self.has_pending_only_lane_match(filter_mode):
+            return False
+        if filter_mode == "workspace-edit":
+            return self.has_restored_pending_workspace_edit_approval
+        if filter_mode == "shell-test":
+            return self.has_restored_pending_shell_test_approval
+        return False
 
     def render_line(
         self,
@@ -565,6 +579,12 @@ class ToolFilterMetrics:
 
 
 @dataclass(slots=True)
+class PendingOnlyLaneMetrics:
+    pending_only_sessions: int
+    restored_pending_only_sessions: int
+
+
+@dataclass(slots=True)
 class InterventionActivitySummary:
     family_counts: dict[str, int]
     unique_count: int
@@ -774,6 +794,11 @@ def _ordered_recent_sessions(
                 str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES
                 for approval in pending_approvals
             ),
+            has_restored_pending_workspace_edit_approval=any(
+                str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES
+                and approval.restored_from_session
+                for approval in pending_approvals
+            ),
             last_workspace_preview=_latest_workspace_preview(turns),
             recent_workspace_previews=_recent_workspace_previews(turns),
             last_workspace_inspect_preview=_latest_workspace_preview(turns, lane="inspect"),
@@ -788,6 +813,16 @@ def _ordered_recent_sessions(
             has_shell_test_activity=has_shell_test_activity,
             has_pending_shell_test_approval=any(
                 str(approval.tool_name or "").strip() == "run_shell_command"
+                and _is_test_shell_command_data(
+                    shell_policy="",
+                    shell_command_family="",
+                    command=_approval_command_from_args(approval.args),
+                )
+                for approval in pending_approvals
+            ),
+            has_restored_pending_shell_test_approval=any(
+                str(approval.tool_name or "").strip() == "run_shell_command"
+                and approval.restored_from_session
                 and _is_test_shell_command_data(
                     shell_policy="",
                     shell_command_family="",
@@ -2511,7 +2546,7 @@ def render_recent_session_filter_summary_lines(
 
     if filter_mode in {"workspace-inspect", "workspace-edit"} and summaries:
         focus_lanes = ["edit"] if filter_mode == "workspace-edit" else ["inspect"]
-        return _render_lane_filter_summary_lines(
+        lines = _render_lane_filter_summary_lines(
             summaries,
             backlog_label="Workspace backlog",
             focus_label="Workspace focus",
@@ -2526,6 +2561,18 @@ def render_recent_session_filter_summary_lines(
             display_order=WORKSPACE_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
+        if filter_mode == "workspace-edit":
+            return _append_metric_detail_lines(
+                lines,
+                summaries,
+                detail_label="Workspace edit queue mix",
+                page_metric_label="workspace edit queue mix",
+                page_index=page_index,
+                page_size=page_size,
+                summarize_metrics=_summarize_workspace_edit_pending_only_metrics,
+                format_metrics=_format_pending_only_lane_metrics,
+            )
+        return lines
 
     if filter_mode in {"shell", "shell-inspect", "shell-test"} and summaries:
         shell_focus_lanes = (
@@ -2533,7 +2580,7 @@ def render_recent_session_filter_summary_lines(
             if filter_mode == "shell-inspect"
             else ["test"] if filter_mode == "shell-test" else list(SHELL_LANE_DISPLAY_ORDER)
         )
-        return _render_lane_filter_summary_lines(
+        lines = _render_lane_filter_summary_lines(
             summaries,
             backlog_label="Shell backlog",
             focus_label="Shell focus",
@@ -2548,6 +2595,18 @@ def render_recent_session_filter_summary_lines(
             display_order=SHELL_LANE_DISPLAY_ORDER,
             include_overlap_summary=True,
         )
+        if filter_mode == "shell-test":
+            return _append_metric_detail_lines(
+                lines,
+                summaries,
+                detail_label="Shell test queue mix",
+                page_metric_label="shell test queue mix",
+                page_index=page_index,
+                page_size=page_size,
+                summarize_metrics=_summarize_shell_test_pending_only_metrics,
+                format_metrics=_format_pending_only_lane_metrics,
+            )
+        return lines
 
     stale_filter_lanes = _stale_approval_filter_lanes(filter_mode)
     if stale_filter_lanes is None or not summaries:
@@ -3080,6 +3139,46 @@ def _format_tool_filter_metrics(metrics: ToolFilterMetrics) -> list[str]:
     return [
         _render_tool_failure_metric(metrics.total_test_failures, metrics.total_tool_failures),
         _render_session_count_metric("failing", metrics.failing_sessions),
+    ]
+
+
+def _summarize_pending_only_lane_metrics(
+    summaries: list[SessionSummary],
+    *,
+    filter_mode: str,
+) -> PendingOnlyLaneMetrics:
+    pending_only_sessions = 0
+    restored_pending_only_sessions = 0
+
+    for summary in summaries:
+        if not summary.has_pending_only_lane_match(filter_mode):
+            continue
+        pending_only_sessions += 1
+        if summary.has_restored_pending_only_lane_match(filter_mode):
+            restored_pending_only_sessions += 1
+
+    return PendingOnlyLaneMetrics(
+        pending_only_sessions=pending_only_sessions,
+        restored_pending_only_sessions=restored_pending_only_sessions,
+    )
+
+
+def _summarize_workspace_edit_pending_only_metrics(
+    summaries: list[SessionSummary],
+) -> PendingOnlyLaneMetrics:
+    return _summarize_pending_only_lane_metrics(summaries, filter_mode="workspace-edit")
+
+
+def _summarize_shell_test_pending_only_metrics(
+    summaries: list[SessionSummary],
+) -> PendingOnlyLaneMetrics:
+    return _summarize_pending_only_lane_metrics(summaries, filter_mode="shell-test")
+
+
+def _format_pending_only_lane_metrics(metrics: PendingOnlyLaneMetrics) -> list[str]:
+    return [
+        _render_session_count_metric("pending-only", metrics.pending_only_sessions),
+        _render_session_count_metric("restored pending-only", metrics.restored_pending_only_sessions),
     ]
 
 

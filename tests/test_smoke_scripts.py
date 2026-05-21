@@ -781,7 +781,10 @@ def test_session_picker_attention_workspace_and_shell_filters_match_smoke_expect
             "session-failed-tool",
         ],
         excluded_session_ids=["session-tool"],
-        required=["workspace lanes: edit"],
+        required=[
+            "workspace lanes: edit",
+            "Workspace edit queue mix: pending-only: 2 sessions | restored pending-only: 1 session",
+        ],
     )
     assert _ranked_session_ids(outputs["workspace_edit"])[:2] == [
         "session-restored-edit-pending",
@@ -837,7 +840,10 @@ def test_session_picker_attention_workspace_and_shell_filters_match_smoke_expect
             "session-failed-test",
         ],
         excluded_session_ids=["session-tool", "session-inspect"],
-        required=["| overlap: mixed 1 session"],
+        required=[
+            "| overlap: mixed 1 session",
+            "Shell test queue mix: pending-only: 3 sessions | restored pending-only: 1 session",
+        ],
     )
     assert _ranked_session_ids(outputs["shell_test"])[:2] == [
         "session-restored-pending",
@@ -978,7 +984,11 @@ async def test_session_switcher_attention_workspace_and_shell_filters_match_smok
             "session-denied",
         ],
         excluded_session_ids=["session-tool"],
-        required=["workspace lanes: edit", "| overlap: mixed 1 session"],
+        required=[
+            "workspace lanes: edit",
+            "| overlap: mixed 1 session",
+            "Workspace edit queue mix: pending-only: 2 sessions | restored pending-only: 1 session",
+        ],
     )
     assert matches_shell_filter_output(
         outputs["shell"],
@@ -1024,5 +1034,8 @@ async def test_session_switcher_attention_workspace_and_shell_filters_match_smok
             "session-restored-pending",
         ],
         excluded_session_ids=["session-tool"],
-        required=["| overlap: mixed 1 session"],
+        required=[
+            "| overlap: mixed 1 session",
+            "Shell test queue mix: pending-only: 3 sessions | restored pending-only: 1 session",
+        ],
     )

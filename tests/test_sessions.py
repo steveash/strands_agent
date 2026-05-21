@@ -298,6 +298,7 @@ def test_render_session_picker_surfaces_workspace_rollups_and_overlap(tmp_path: 
         in edit_rendered
     )
     assert "Workspace focus: edit" in edit_rendered
+    assert "Workspace edit queue mix: pending-only: 2 sessions" in edit_rendered
 
 
 
@@ -341,6 +342,7 @@ def test_render_session_picker_surfaces_shell_rollups_and_overlap(tmp_path: Path
         in test_rendered
     )
     assert "Shell focus: test" in test_rendered
+    assert "Shell test queue mix: pending-only: 2 sessions" in test_rendered
 
 
 def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_lane(tmp_path: Path) -> None:
@@ -356,6 +358,7 @@ def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_
     assert "README.md lines 1-20" not in workspace_edit_rendered
     assert "workspace focus: pending only" in workspace_edit_rendered
     assert "- workspace focus: pending only until an edit executes" in workspace_edit_rendered
+    assert "Workspace edit queue mix: pending-only: 2 sessions" in workspace_edit_rendered
     mixed_workspace_line = next(
         line for line in workspace_edit_rendered.splitlines() if "session-workspace-mixed | 1 turn(s)" in line
     )
@@ -375,6 +378,7 @@ def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_
     assert "inspect/e0 git diff --stat -> README.md | 2 +-" not in shell_test_rendered
     assert "shell focus: pending only" in shell_test_rendered
     assert "- shell focus: pending only until a test executes" in shell_test_rendered
+    assert "Shell test queue mix: pending-only: 2 sessions" in shell_test_rendered
     mixed_shell_line = next(
         line for line in shell_test_rendered.splitlines() if "session-shell-mixed-rollup | 1 turn(s)" in line
     )
@@ -418,8 +422,10 @@ def test_render_session_picker_marks_pending_only_workspace_and_shell_lane_match
 
     assert "workspace focus: pending only" in workspace_edit_rendered
     assert "- workspace focus: pending only until an edit executes" in workspace_edit_rendered
+    assert "Workspace edit queue mix: pending-only: 1 session" in workspace_edit_rendered
     assert "shell focus: pending only" in shell_test_rendered
     assert "- shell focus: pending only until a test executes" in shell_test_rendered
+    assert "Shell test queue mix: pending-only: 1 session" in shell_test_rendered
 
 
 def test_render_session_picker_surfaces_tool_rollup_timestamps(tmp_path: Path) -> None:
@@ -2557,10 +2563,13 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert "workspace lanes: edit" in workspace_edit_sessions[0].render_line(1, filter_mode="workspace-edit")
     assert "workspace focus: pending only" in workspace_edit_sessions[0].render_line(1, filter_mode="workspace-edit")
     assert "workspace focus: pending only" not in workspace_edit_sessions[1].render_line(2, filter_mode="workspace-edit")
+    assert workspace_edit_sessions[0].has_pending_only_lane_match("workspace-edit") is True
+    assert workspace_edit_sessions[1].has_pending_only_lane_match("workspace-edit") is False
     assert [session.session_id for session in shell_sessions] == ["session-shell", "session-pending"]
     assert [session.session_id for session in shell_inspect_sessions] == ["session-shell"]
     assert [session.session_id for session in shell_test_sessions] == ["session-pending"]
     assert "shell focus: pending only" in shell_test_sessions[0].render_line(1, filter_mode="shell-test")
+    assert shell_test_sessions[0].has_pending_only_lane_match("shell-test") is True
 
 
 def test_list_recent_sessions_attention_sort_prioritizes_denied_test_approvals_before_other_failures(tmp_path: Path) -> None:
