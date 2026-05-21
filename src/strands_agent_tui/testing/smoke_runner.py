@@ -17,6 +17,11 @@ class SmokeScriptTarget:
     name: str
     script_path: Path
     args: tuple[str, ...] = ()
+    display_name: str | None = None
+
+    @property
+    def display_label(self) -> str:
+        return self.display_name or self.name
 
 
 @dataclass(frozen=True)
@@ -203,10 +208,10 @@ def run_smoke_target(
 
     return_code = process.wait()
     if failed_line is not None:
-        print(f"{target.name} smoke failed fast: {failed_line}", file=stderr)
+        print(f"{target.display_label} smoke failed fast: {failed_line}", file=stderr)
         return 1
     if return_code != 0:
-        print(f"{target.name} smoke exited with status {return_code}", file=stderr)
+        print(f"{target.display_label} smoke exited with status {return_code}", file=stderr)
         return return_code
     return 0
 

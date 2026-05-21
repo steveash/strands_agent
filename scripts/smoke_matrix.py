@@ -21,10 +21,19 @@ from strands_agent_tui.testing import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_BUNDLES = {
-    "standalone-local": SmokeScriptTarget("standalone-local", SCRIPT_DIR / "standalone_smoke.py"),
-    "standalone-all": SmokeScriptTarget("standalone-all", SCRIPT_DIR / "standalone_smoke.py", args=("all",)),
-    "triage": SmokeScriptTarget("triage", SCRIPT_DIR / "session_triage_smoke.py"),
-    "recovery": SmokeScriptTarget("recovery", SCRIPT_DIR / "session_recovery_smoke.py"),
+    "standalone-local": SmokeScriptTarget(
+        "standalone-local",
+        SCRIPT_DIR / "standalone_smoke.py",
+        display_name="standalone",
+    ),
+    "standalone-all": SmokeScriptTarget(
+        "standalone-all",
+        SCRIPT_DIR / "standalone_smoke.py",
+        args=("all",),
+        display_name="standalone",
+    ),
+    "triage": SmokeScriptTarget("triage", SCRIPT_DIR / "session_triage_smoke.py", display_name="triage"),
+    "recovery": SmokeScriptTarget("recovery", SCRIPT_DIR / "session_recovery_smoke.py", display_name="recovery"),
 }
 LOCAL_BUNDLE_NAMES = ["standalone-local", "triage", "recovery"]
 ALL_BUNDLE_NAMES = ["standalone-all", "triage", "recovery"]
@@ -75,7 +84,7 @@ def run_smoke_matrix(
     total_count = len(targets)
 
     for target in targets:
-        _emit_bundle_summary(f"running {target.name}", stream=stdout)
+        _emit_bundle_summary(f"running {target.display_label}", stream=stdout)
         started_at = perf_counter()
         exit_code = run_smoke_target(
             target,
@@ -85,7 +94,7 @@ def run_smoke_matrix(
         )
         elapsed = perf_counter() - started_at
         if exit_code != 0:
-            _emit_bundle_summary(f"{target.name} failed in {elapsed:.2f}s", stream=stderr)
+            _emit_bundle_summary(f"{target.display_label} failed in {elapsed:.2f}s", stream=stderr)
             total_elapsed = perf_counter() - total_started_at
             _emit_bundle_summary(
                 f"summary: {passed_count}/{total_count} bundles passed before failure in {total_elapsed:.2f}s",
@@ -93,7 +102,7 @@ def run_smoke_matrix(
             )
             return exit_code
         passed_count += 1
-        _emit_bundle_summary(f"{target.name} passed in {elapsed:.2f}s", stream=stdout)
+        _emit_bundle_summary(f"{target.display_label} passed in {elapsed:.2f}s", stream=stdout)
 
     total_elapsed = perf_counter() - total_started_at
     _emit_bundle_summary(

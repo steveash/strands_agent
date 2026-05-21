@@ -130,6 +130,30 @@ def test_run_smoke_target_reports_nonzero_exit_without_false_line(tmp_path) -> N
     assert stderr.getvalue().strip() == "nonzero smoke exited with status 3"
 
 
+def test_run_smoke_target_uses_display_label_for_error_messages(tmp_path) -> None:
+    script_path = _write_script(
+        tmp_path,
+        "nonzero.py",
+        """
+        print("starting", flush=True)
+        raise SystemExit(3)
+        """,
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    exit_code = run_smoke_target(
+        SmokeScriptTarget("nonzero", script_path, display_name="standalone"),
+        stdout=stdout,
+        stderr=stderr,
+        python_executable=sys.executable,
+    )
+
+    assert exit_code == 3
+    assert stdout.getvalue() == "starting\n"
+    assert stderr.getvalue().strip() == "standalone smoke exited with status 3"
+
+
 def test_run_smoke_targets_stops_before_later_targets_after_failure(tmp_path) -> None:
     marker_path = tmp_path / "second-ran.txt"
     failing_script = _write_script(

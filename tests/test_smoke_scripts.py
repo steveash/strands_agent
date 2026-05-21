@@ -559,13 +559,37 @@ def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
 
     assert exit_code == 0
     assert stdout.getvalue().splitlines() == [
-        "[smoke-matrix] running standalone-local",
-        "[smoke-matrix] standalone-local passed in 0.30s",
+        "[smoke-matrix] running standalone",
+        "[smoke-matrix] standalone passed in 0.30s",
         "[smoke-matrix] running triage",
         "[smoke-matrix] triage passed in 0.60s",
         "[smoke-matrix] running recovery",
         "[smoke-matrix] recovery passed in 0.90s",
         "[smoke-matrix] summary: 3/3 bundles passed in 4.50s",
+    ]
+
+
+def test_smoke_matrix_all_bundle_uses_public_standalone_label(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
+
+    perf_values = iter([0.0, 1.0, 1.4, 2.0, 2.7, 3.0, 4.0, 4.8])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    with redirect_stdout(stdout):
+        exit_code = smoke_matrix.main(["all"])
+
+    assert exit_code == 0
+    assert stdout.getvalue().splitlines() == [
+        "[smoke-matrix] running standalone",
+        "[smoke-matrix] standalone passed in 0.40s",
+        "[smoke-matrix] running triage",
+        "[smoke-matrix] triage passed in 0.70s",
+        "[smoke-matrix] running recovery",
+        "[smoke-matrix] recovery passed in 1.00s",
+        "[smoke-matrix] summary: 3/3 bundles passed in 4.80s",
     ]
 
 
@@ -597,9 +621,9 @@ def test_smoke_matrix_suppresses_nested_wrapper_summary_footers(monkeypatch) -> 
 
     assert exit_code == 0
     assert stdout.getvalue().splitlines() == [
-        "[smoke-matrix] running standalone-local",
+        "[smoke-matrix] running standalone",
         "standalone-local_check= True",
-        "[smoke-matrix] standalone-local passed in 0.25s",
+        "[smoke-matrix] standalone passed in 0.25s",
         "[smoke-matrix] running triage",
         "triage_check= True",
         "[smoke-matrix] triage passed in 0.50s",
@@ -635,8 +659,8 @@ def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None
     assert exit_code == 1
     assert seen == ["standalone-local", "triage"]
     assert stdout.getvalue().splitlines() == [
-        "[smoke-matrix] running standalone-local",
-        "[smoke-matrix] standalone-local passed in 0.20s",
+        "[smoke-matrix] running standalone",
+        "[smoke-matrix] standalone passed in 0.20s",
         "[smoke-matrix] running triage",
     ]
     assert stderr.getvalue().splitlines() == [
