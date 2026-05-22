@@ -9,6 +9,7 @@ import pytest
 from strands_agent_tui.testing.smoke_runner import (
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_WRAPPER,
+    SMOKE_MATRIX_WRAPPER,
     STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
@@ -212,6 +213,7 @@ def test_run_smoke_targets_emits_summary_footer_on_success(tmp_path, monkeypatch
     perf_values = iter([0.0, 1.25])
     monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
 
+    bundle_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
     stdout = StringIO()
     stderr = StringIO()
     exit_code = run_smoke_targets(
@@ -222,10 +224,8 @@ def test_run_smoke_targets_emits_summary_footer_on_success(tmp_path, monkeypatch
         stdout=stdout,
         stderr=stderr,
         python_executable=sys.executable,
-        summary_label="bundle-smoke",
+        wrapper_metadata=bundle_metadata,
     )
-
-    bundle_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
 
     assert exit_code == 0
     assert stdout.getvalue() == (
@@ -255,6 +255,7 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
     perf_values = iter([0.0, 2.5])
     monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
 
+    bundle_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
     stdout = StringIO()
     stderr = StringIO()
     exit_code = run_smoke_targets(
@@ -265,10 +266,8 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
         stdout=stdout,
         stderr=stderr,
         python_executable=sys.executable,
-        summary_label="bundle-smoke",
+        wrapper_metadata=bundle_metadata,
     )
-
-    bundle_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
 
     assert exit_code == 1
     assert stdout.getvalue() == "first_check= True\nsecond_check= False\n"
@@ -280,7 +279,7 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
 
 def test_smoke_wrapper_metadata_formats_shared_summary_and_progress_lines() -> None:
     wrapper_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
-    bundle_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    bundle_metadata = SMOKE_MATRIX_WRAPPER
 
     assert wrapper_metadata.line_prefix == "[bundle-smoke]"
     assert wrapper_metadata.format_line("custom message") == "[bundle-smoke] custom message"
@@ -307,18 +306,34 @@ def test_summary_line_prefixes_deduplicate_shared_wrapper_metadata() -> None:
     assert STANDALONE_SMOKE_WRAPPER.summary_line_prefix == "[standalone-smoke] summary:"
     assert SESSION_TRIAGE_SMOKE_WRAPPER.summary_line_prefix == "[session-triage-smoke] summary:"
     assert SESSION_RECOVERY_SMOKE_WRAPPER.summary_line_prefix == "[session-recovery-smoke] summary:"
+    assert SMOKE_MATRIX_WRAPPER.summary_line_prefix == "[smoke-matrix] summary:"
     assert summary_line_prefixes(
         [
             STANDALONE_SMOKE_WRAPPER,
             SESSION_TRIAGE_SMOKE_WRAPPER,
             STANDALONE_SMOKE_WRAPPER,
             SESSION_RECOVERY_SMOKE_WRAPPER,
+            SMOKE_MATRIX_WRAPPER,
         ]
     ) == (
         "[standalone-smoke] summary:",
         "[session-triage-smoke] summary:",
         "[session-recovery-smoke] summary:",
+        "[smoke-matrix] summary:",
     )
+
+
+
+def test_run_smoke_targets_rejects_conflicting_wrapper_metadata_and_summary_label(tmp_path) -> None:
+    script_path = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
+
+    with pytest.raises(ValueError, match="wrapper_metadata.summary_label does not match summary_label"):
+        run_smoke_targets(
+            [SmokeScriptTarget("first", script_path)],
+            python_executable=sys.executable,
+            wrapper_metadata=STANDALONE_SMOKE_WRAPPER,
+            summary_label="session-triage-smoke",
+        )
 
 
 def test_smoke_target_selector_resolves_default_alias_and_single_target(tmp_path) -> None:

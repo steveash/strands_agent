@@ -14,7 +14,6 @@ from strands_agent_tui.testing import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SUMMARY_LABEL = STANDALONE_SMOKE_WRAPPER.summary_label
 SMOKE_TARGETS = {
     "summary-utils": SmokeScriptTarget("summary-utils", SCRIPT_DIR / "summary_utils_smoke.py"),
     "shell-tool": SmokeScriptTarget("shell-tool", SCRIPT_DIR / "shell_tool_smoke.py"),
@@ -58,7 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     return run_smoke_targets(
         TARGET_SELECTOR.resolve_targets(args.target),
-        summary_label=SUMMARY_LABEL,
+        wrapper_metadata=STANDALONE_SMOKE_WRAPPER,
     )
 
 

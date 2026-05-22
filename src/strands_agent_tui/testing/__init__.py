@@ -81,6 +81,7 @@ from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_resul
 from .smoke_runner import (
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_WRAPPER,
+    SMOKE_MATRIX_WRAPPER,
     STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
@@ -167,6 +168,7 @@ __all__ = [
     "set_session_artifact_mtime",
     "SESSION_RECOVERY_SMOKE_WRAPPER",
     "SESSION_TRIAGE_SMOKE_WRAPPER",
+    "SMOKE_MATRIX_WRAPPER",
     "STANDALONE_SMOKE_WRAPPER",
     "SmokeScriptTarget",
     "SmokeTargetSelector",

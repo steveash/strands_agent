@@ -14,7 +14,6 @@ from strands_agent_tui.testing import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SUMMARY_LABEL = SESSION_RECOVERY_SMOKE_WRAPPER.summary_label
 DEFAULT_TARGET_NAMES = [
     "approval",
     "approval-restart",
@@ -58,7 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     return run_smoke_targets(
         TARGET_SELECTOR.resolve_targets(args.target),
-        summary_label=SUMMARY_LABEL,
+        wrapper_metadata=SESSION_RECOVERY_SMOKE_WRAPPER,
     )
 
 

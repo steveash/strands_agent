@@ -17,8 +17,8 @@ from strands_agent_tui.testing import (
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
+    SMOKE_MATRIX_WRAPPER,
     STANDALONE_SMOKE_WRAPPER,
-    SmokeWrapperMetadata,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
     matches_public_cli_help,
@@ -274,7 +274,7 @@ def test_session_triage_smoke_selects_expected_targets(monkeypatch, argv, expect
     def _run_smoke_targets(targets, **kwargs):
         seen["names"] = [target.name for target in targets]
         seen["args"] = [target.args for target in targets]
-        seen["summary_label"] = kwargs.get("summary_label")
+        seen["wrapper_metadata"] = kwargs.get("wrapper_metadata")
         return 0
 
     monkeypatch.setattr(session_triage_smoke, "run_smoke_targets", _run_smoke_targets)
@@ -285,7 +285,7 @@ def test_session_triage_smoke_selects_expected_targets(monkeypatch, argv, expect
     assert seen == {
         "names": expected_names,
         "args": [() for _ in expected_names],
-        "summary_label": "session-triage-smoke",
+        "wrapper_metadata": SESSION_TRIAGE_SMOKE_WRAPPER,
     }
 
 
@@ -306,7 +306,7 @@ def test_session_recovery_smoke_selects_expected_targets(monkeypatch, argv, expe
     def _run_smoke_targets(targets, **kwargs):
         seen["names"] = [target.name for target in targets]
         seen["args"] = [target.args for target in targets]
-        seen["summary_label"] = kwargs.get("summary_label")
+        seen["wrapper_metadata"] = kwargs.get("wrapper_metadata")
         return 0
 
     monkeypatch.setattr(session_recovery_smoke, "run_smoke_targets", _run_smoke_targets)
@@ -317,18 +317,18 @@ def test_session_recovery_smoke_selects_expected_targets(monkeypatch, argv, expe
     assert seen == {
         "names": expected_names,
         "args": [() for _ in expected_names],
-        "summary_label": "session-recovery-smoke",
+        "wrapper_metadata": SESSION_RECOVERY_SMOKE_WRAPPER,
     }
 
 
-def test_standalone_smoke_passes_summary_label(monkeypatch) -> None:
+def test_standalone_smoke_passes_shared_wrapper_metadata(monkeypatch) -> None:
     standalone_smoke = _load_script_module("standalone_smoke")
 
     seen = {}
 
     def _run_smoke_targets(targets, **kwargs):
         seen["names"] = [target.name for target in targets]
-        seen["summary_label"] = kwargs.get("summary_label")
+        seen["wrapper_metadata"] = kwargs.get("wrapper_metadata")
         return 0
 
     monkeypatch.setattr(standalone_smoke, "run_smoke_targets", _run_smoke_targets)
@@ -338,7 +338,7 @@ def test_standalone_smoke_passes_summary_label(monkeypatch) -> None:
     assert exit_code == 0
     assert seen == {
         "names": ["summary-utils"],
-        "summary_label": "standalone-smoke",
+        "wrapper_metadata": STANDALONE_SMOKE_WRAPPER,
     }
 
 
@@ -499,7 +499,7 @@ def test_smoke_matrix_single_bundle_target_selection(monkeypatch, argv, expected
 
 def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
-    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
 
@@ -524,7 +524,7 @@ def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
 
 def test_smoke_matrix_all_bundle_uses_public_standalone_label(monkeypatch) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
-    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
 
@@ -574,7 +574,7 @@ def test_smoke_matrix_suppresses_nested_wrapper_summary_footers(monkeypatch) -> 
         exit_code = smoke_matrix.main([])
 
     assert exit_code == 0
-    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
 
     assert stdout.getvalue().splitlines() == [
         summary_metadata.running_line(item_name="standalone"),
@@ -614,7 +614,7 @@ def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None
 
     assert exit_code == 1
     assert seen == ["standalone-local", "triage"]
-    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
     assert stdout.getvalue().splitlines() == [
         summary_metadata.running_line(item_name="standalone"),
         summary_metadata.passed_line(item_name="standalone", elapsed_seconds=0.2),
@@ -647,7 +647,7 @@ def test_smoke_matrix_preserves_public_bundle_labels_in_fail_fast_stderr(monkeyp
         exit_code = smoke_matrix.main(["all"])
 
     assert exit_code == 1
-    summary_metadata = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
     assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
 
     assert stderr.getvalue().splitlines() == [

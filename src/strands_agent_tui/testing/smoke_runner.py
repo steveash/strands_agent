@@ -126,6 +126,7 @@ def summary_line_prefixes(wrapper_metadata: Iterable[SmokeWrapperMetadata]) -> t
 STANDALONE_SMOKE_WRAPPER = SmokeWrapperMetadata(summary_label="standalone-smoke")
 SESSION_TRIAGE_SMOKE_WRAPPER = SmokeWrapperMetadata(summary_label="session-triage-smoke")
 SESSION_RECOVERY_SMOKE_WRAPPER = SmokeWrapperMetadata(summary_label="session-recovery-smoke")
+SMOKE_MATRIX_WRAPPER = SmokeWrapperMetadata(summary_label="smoke-matrix", summary_item_label="bundles")
 
 
 @dataclass(frozen=True)
@@ -319,6 +320,23 @@ def run_smoke_target(
     return 0
 
 
+def _resolve_wrapper_metadata(
+    *,
+    wrapper_metadata: SmokeWrapperMetadata | None,
+    summary_label: str | None,
+) -> SmokeWrapperMetadata | None:
+    if wrapper_metadata is not None:
+        if summary_label is not None and wrapper_metadata.summary_label != summary_label:
+            raise ValueError(
+                "wrapper_metadata.summary_label does not match summary_label: "
+                f"{wrapper_metadata.summary_label!r} != {summary_label!r}"
+            )
+        return wrapper_metadata
+    if summary_label is None:
+        return None
+    return SmokeWrapperMetadata(summary_label=summary_label)
+
+
 def run_smoke_targets(
     targets: Sequence[SmokeScriptTarget],
     *,
@@ -326,9 +344,10 @@ def run_smoke_targets(
     stderr: TextIO = sys.stderr,
     python_executable: str = sys.executable,
     failure_predicate: SmokeFailurePredicate = is_failed_smoke_check_line,
+    wrapper_metadata: SmokeWrapperMetadata | None = None,
     summary_label: str | None = None,
 ) -> int:
-    summary_metadata = SmokeWrapperMetadata(summary_label) if summary_label is not None else None
+    summary_metadata = _resolve_wrapper_metadata(wrapper_metadata=wrapper_metadata, summary_label=summary_label)
     started_at = perf_counter()
     passed_count = 0
     total_count = len(targets)

@@ -14,7 +14,6 @@ from strands_agent_tui.testing import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SUMMARY_LABEL = SESSION_TRIAGE_SMOKE_WRAPPER.summary_label
 DEFAULT_TARGET_NAMES = ["picker", "switcher"]
 SMOKE_TARGETS = {
     "picker": SmokeScriptTarget("picker", SCRIPT_DIR / "session_picker_smoke.py"),
@@ -52,7 +51,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     return run_smoke_targets(
         TARGET_SELECTOR.resolve_targets(args.target),
-        summary_label=SUMMARY_LABEL,
+        wrapper_metadata=SESSION_TRIAGE_SMOKE_WRAPPER,
     )
 
 
