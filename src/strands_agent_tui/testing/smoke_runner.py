@@ -315,6 +315,7 @@ class SmokeWrapperCliSpec:
     examples: tuple[SmokeCliExample, ...] = ()
     wrapper_metadata: SmokeWrapperMetadata | None = None
     readme_section_heading: str | None = None
+    help_required_snippets_extra: tuple[str, ...] = ()
     readme_intro_snippets: tuple[str, ...] = ()
     alias_heading: str = "Alias details"
     single_choice_description: str = "single target"
@@ -360,7 +361,7 @@ class SmokeWrapperCliSpec:
 
     def help_required_snippets(self) -> tuple[str, ...]:
         selector = self._build_doc_selector()
-        snippets = [self.item_help]
+        snippets = [self.item_help, *self.help_required_snippets_extra]
         if selector.alias_target_names:
             snippets.append(
                 f"{self.alias_heading}: "
@@ -532,6 +533,98 @@ SESSION_RECOVERY_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     wrapper_metadata=SESSION_RECOVERY_SMOKE_WRAPPER,
     readme_section_heading="Session recovery smoke bundle",
     readme_intro_snippets=("bundle runs all recovery targets by default",),
+)
+
+SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
+    script_name="smoke_matrix",
+    description=(
+        "Run standalone, session-triage, and recovery smoke bundles together with fail-fast handling. "
+        "The default 'local' matrix excludes the opt-in live runtime smoke target, and the 'all' alias "
+        "swaps in the live-inclusive standalone bundle."
+    ),
+    item_help="Which smoke bundle or bundle matrix to run.",
+    target_templates=(
+        SmokeScriptTargetTemplate(
+            "standalone-local",
+            "standalone_smoke.py",
+            display_name="standalone",
+        ),
+        SmokeScriptTargetTemplate(
+            "standalone-all",
+            "standalone_smoke.py",
+            args=("all",),
+            display_name="standalone",
+        ),
+        SmokeScriptTargetTemplate("triage", "session_triage_smoke.py", display_name="triage"),
+        SmokeScriptTargetTemplate("recovery", "session_recovery_smoke.py", display_name="recovery"),
+    ),
+    default_target_name="local",
+    alias_target_names={
+        "local": ("standalone-local", "triage", "recovery"),
+        "all": ("standalone-all", "triage", "recovery"),
+    },
+    choice_target_names={
+        "standalone": ("standalone-local",),
+        "triage": ("triage",),
+        "recovery": ("recovery",),
+        "local": ("standalone-local", "triage", "recovery"),
+        "all": ("standalone-all", "triage", "recovery"),
+    },
+    choice_display_names={
+        "standalone": ("standalone",),
+        "triage": ("triage",),
+        "recovery": ("recovery",),
+        "local": ("standalone", "triage", "recovery"),
+        "all": ("standalone (live-inclusive)", "triage", "recovery"),
+    },
+    examples=(
+        SmokeCliExample("smoke_matrix.py"),
+        SmokeCliExample(
+            "smoke_matrix.py local",
+            target_name="local",
+            readme_description=(
+                "explicitly re-runs the default local matrix "
+                "(`standalone`, `triage`, `recovery`)"
+            ),
+        ),
+        SmokeCliExample(
+            "smoke_matrix.py all",
+            target_name="all",
+            readme_description=(
+                "swaps in the live-inclusive standalone bundle "
+                "(`standalone (live-inclusive)`, `triage`, `recovery`)"
+            ),
+        ),
+        SmokeCliExample(
+            "smoke_matrix.py standalone",
+            target_name="standalone",
+            description="single bundle",
+            readme_description="runs only the standalone local bundle",
+        ),
+        SmokeCliExample(
+            "smoke_matrix.py triage",
+            target_name="triage",
+            description="single bundle",
+            readme_description="runs only the session-triage bundle",
+        ),
+        SmokeCliExample(
+            "smoke_matrix.py recovery",
+            target_name="recovery",
+            description="single bundle",
+            readme_description="runs only the recovery bundle",
+        ),
+    ),
+    wrapper_metadata=SMOKE_MATRIX_WRAPPER,
+    readme_section_heading="Full local smoke matrix",
+    help_required_snippets_extra=(
+        "The default 'local' matrix excludes the opt-in live runtime smoke target, and the 'all' alias swaps in the live-inclusive standalone bundle.",
+    ),
+    readme_intro_snippets=(
+        "default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together",
+        "Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.",
+    ),
+    alias_heading="Bundle aliases",
+    single_choice_description="single bundle",
 )
 
 

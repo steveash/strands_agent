@@ -7,6 +7,7 @@ from textwrap import dedent
 import pytest
 
 from strands_agent_tui.testing.smoke_runner import (
+    SMOKE_MATRIX_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_CLI_SPEC,
@@ -435,10 +436,12 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
     standalone_parser = STANDALONE_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)
     triage_parser = SESSION_TRIAGE_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)
     recovery_parser = SESSION_RECOVERY_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)
+    matrix_parser = SMOKE_MATRIX_CLI_SPEC.build_parser(script_dir=tmp_path)
 
     standalone_help = " ".join(standalone_parser.format_help().split())
     triage_help = " ".join(triage_parser.format_help().split())
     recovery_help = " ".join(recovery_parser.format_help().split())
+    matrix_help = " ".join(matrix_parser.format_help().split())
 
     assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay" in standalone_help
     assert "session_triage_smoke.py both # both alias -> picker, switcher" in triage_help
@@ -446,6 +449,8 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
         "session_recovery_smoke.py all # all alias -> approval, approval-restart, session-state, "
         "live-restore, live-restore-denied"
     ) in recovery_help
+    assert "smoke_matrix.py local # local alias -> standalone, triage, recovery" in matrix_help
+    assert "smoke_matrix.py all # all alias -> standalone (live-inclusive), triage, recovery" in matrix_help
 
     assert STANDALONE_SMOKE_CLI_SPEC.readme_required_snippets() == (
         ".venv/bin/python scripts/standalone_smoke.py",
@@ -453,6 +458,16 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
         "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`)",
         "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `live`)",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
+    )
+    assert SMOKE_MATRIX_CLI_SPEC.readme_required_snippets() == (
+        ".venv/bin/python scripts/smoke_matrix.py",
+        "default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together",
+        "Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.",
+        "`.venv/bin/python scripts/smoke_matrix.py local` explicitly re-runs the default local matrix (`standalone`, `triage`, `recovery`)",
+        "`.venv/bin/python scripts/smoke_matrix.py all` swaps in the live-inclusive standalone bundle (`standalone (live-inclusive)`, `triage`, `recovery`)",
+        "`.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle",
+        "`.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle",
+        "`.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle",
     )
 
 

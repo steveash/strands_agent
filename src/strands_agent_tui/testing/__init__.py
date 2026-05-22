@@ -79,6 +79,7 @@ from .smoke_cli_assertions import (
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
+    SMOKE_MATRIX_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_CLI_SPEC,
@@ -175,6 +176,7 @@ __all__ = [
     "SESSION_RECOVERY_SMOKE_WRAPPER",
     "SESSION_TRIAGE_SMOKE_CLI_SPEC",
     "SESSION_TRIAGE_SMOKE_WRAPPER",
+    "SMOKE_MATRIX_CLI_SPEC",
     "SMOKE_MATRIX_WRAPPER",
     "STANDALONE_SMOKE_CLI_SPEC",
     "STANDALONE_SMOKE_WRAPPER",

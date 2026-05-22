@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .smoke_runner import (
+    SMOKE_MATRIX_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
     SESSION_TRIAGE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_CLI_SPEC,
@@ -34,29 +35,7 @@ SMOKE_CLI_DOC_SPECS = (
     build_smoke_cli_doc_spec(STANDALONE_SMOKE_CLI_SPEC),
     build_smoke_cli_doc_spec(SESSION_TRIAGE_SMOKE_CLI_SPEC),
     build_smoke_cli_doc_spec(SESSION_RECOVERY_SMOKE_CLI_SPEC),
-    SmokeCliDocSpec(
-        script_name="smoke_matrix",
-        readme_section_heading="Full local smoke matrix",
-        help_required_snippets=(
-            "Which smoke bundle or bundle matrix to run.",
-            "Bundle aliases: local -> standalone, triage, recovery all -> standalone (live-inclusive), triage, recovery",
-            "default local alias -> standalone, triage, recovery",
-            "The default 'local' matrix excludes the opt-in live runtime smoke target, and the 'all' alias swaps in the live-inclusive standalone bundle.",
-            "smoke_matrix.py standalone # single bundle",
-            "smoke_matrix.py triage # single bundle",
-            "smoke_matrix.py recovery # single bundle",
-            "smoke_matrix.py all # all alias -> standalone (live-inclusive), triage, recovery",
-        ),
-        readme_required_snippets=(
-            ".venv/bin/python scripts/smoke_matrix.py",
-            "default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together",
-            "`.venv/bin/python scripts/smoke_matrix.py local` explicitly re-runs the default local matrix (`standalone`, `triage`, `recovery`)",
-            "`.venv/bin/python scripts/smoke_matrix.py all` swaps in the live-inclusive standalone bundle (`standalone (live-inclusive)`, `triage`, `recovery`)",
-            "`.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle",
-            "`.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle",
-            "`.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle",
-        ),
-    ),
+    build_smoke_cli_doc_spec(SMOKE_MATRIX_CLI_SPEC),
 )
 
 
