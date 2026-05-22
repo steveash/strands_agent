@@ -344,6 +344,29 @@ class SmokeWrapperCliSpec:
             choice_display_names=self.choice_display_names,
         )
 
+    def resolve_target_names(self, requested_target_name: str | None = None) -> tuple[str, ...]:
+        return tuple(self._build_doc_selector().resolve_target_names(requested_target_name))
+
+    def resolve_display_names(self, requested_target_name: str | None = None) -> tuple[str, ...]:
+        return tuple(self._build_doc_selector().resolve_display_names(requested_target_name))
+
+    def resolve_targets(
+        self,
+        *,
+        script_dir: Path,
+        requested_target_name: str | None = None,
+    ) -> tuple[SmokeScriptTarget, ...]:
+        return tuple(self.build_target_selector(script_dir=script_dir).resolve_targets(requested_target_name))
+
+    def default_target_names(self) -> tuple[str, ...]:
+        return self.resolve_target_names()
+
+    def default_display_names(self) -> tuple[str, ...]:
+        return self.resolve_display_names()
+
+    def default_targets(self, *, script_dir: Path) -> tuple[SmokeScriptTarget, ...]:
+        return self.resolve_targets(script_dir=script_dir)
+
     def build_parser(self, *, script_dir: Path) -> argparse.ArgumentParser:
         selector = self.build_target_selector(script_dir=script_dir)
         return build_smoke_cli_parser(
@@ -638,6 +661,13 @@ SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME = {spec.script_name: spec for spec in SMO
 NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS = tuple(
     spec for spec in SMOKE_WRAPPER_CLI_SPECS if spec.script_name != SMOKE_MATRIX_CLI_SPEC.script_name
 )
+
+
+def smoke_wrapper_cli_spec(script_name: str) -> SmokeWrapperCliSpec:
+    spec = SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME.get(script_name)
+    if spec is None:
+        raise ValueError(f"unknown smoke wrapper cli spec {script_name!r}")
+    return spec
 
 
 def smoke_wrapper_metadata_from_specs(

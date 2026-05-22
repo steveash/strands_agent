@@ -9,18 +9,17 @@ from typing import TextIO
 
 from strands_agent_tui.testing import (
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
-    SMOKE_MATRIX_CLI_SPEC,
     SMOKE_MATRIX_WRAPPER,
     SmokeScriptTarget,
     run_smoke_target,
+    smoke_wrapper_cli_spec,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-TARGET_SELECTOR = SMOKE_MATRIX_CLI_SPEC.build_target_selector(script_dir=SCRIPT_DIR)
-SMOKE_BUNDLES = TARGET_SELECTOR.targets
-LOCAL_BUNDLE_NAMES = list(SMOKE_MATRIX_CLI_SPEC.alias_target_names["local"])
-ALL_BUNDLE_NAMES = list(SMOKE_MATRIX_CLI_SPEC.alias_target_names["all"])
-BUNDLE_SELECTOR = TARGET_SELECTOR
+CLI_SPEC = smoke_wrapper_cli_spec("smoke_matrix")
+SMOKE_BUNDLES = CLI_SPEC.build_targets(script_dir=SCRIPT_DIR)
+LOCAL_BUNDLE_NAMES = list(CLI_SPEC.default_target_names())
+ALL_BUNDLE_NAMES = list(CLI_SPEC.resolve_target_names("all"))
 SUPPRESSED_NESTED_SUMMARY_PREFIXES = NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES
 
 
@@ -92,11 +91,11 @@ def run_smoke_matrix(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return run_smoke_matrix(BUNDLE_SELECTOR.resolve_targets(args.target))
+    return run_smoke_matrix(CLI_SPEC.resolve_targets(script_dir=SCRIPT_DIR, requested_target_name=args.target))
 
 
 def build_parser() -> argparse.ArgumentParser:
-    return SMOKE_MATRIX_CLI_SPEC.build_parser(script_dir=SCRIPT_DIR)
+    return CLI_SPEC.build_parser(script_dir=SCRIPT_DIR)
 
 
 if __name__ == "__main__":

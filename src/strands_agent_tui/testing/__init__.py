@@ -102,6 +102,7 @@ from .smoke_runner import (
     build_smoke_cli_parser,
     run_smoke_target,
     run_smoke_targets,
+    smoke_wrapper_cli_spec,
     smoke_wrapper_metadata_from_specs,
     summary_line_prefixes,
 )
@@ -206,6 +207,7 @@ __all__ = [
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",
+    "smoke_wrapper_cli_spec",
     "smoke_wrapper_metadata_from_specs",
     "summary_line_prefixes",
 ]
