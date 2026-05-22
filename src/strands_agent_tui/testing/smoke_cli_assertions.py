@@ -3,6 +3,13 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from .smoke_runner import (
+    SESSION_RECOVERY_SMOKE_CLI_SPEC,
+    SESSION_TRIAGE_SMOKE_CLI_SPEC,
+    STANDALONE_SMOKE_CLI_SPEC,
+    SmokeWrapperCliSpec,
+)
+
 
 @dataclass(frozen=True)
 class SmokeCliDocSpec:
@@ -12,61 +19,21 @@ class SmokeCliDocSpec:
     readme_required_snippets: tuple[str, ...]
 
 
+def build_smoke_cli_doc_spec(spec: SmokeWrapperCliSpec) -> SmokeCliDocSpec:
+    if spec.readme_section_heading is None:
+        raise ValueError(f"readme_section_heading is required for {spec.script_name}")
+    return SmokeCliDocSpec(
+        script_name=spec.script_name,
+        readme_section_heading=spec.readme_section_heading,
+        help_required_snippets=spec.help_required_snippets(),
+        readme_required_snippets=spec.readme_required_snippets(),
+    )
+
+
 SMOKE_CLI_DOC_SPECS = (
-    SmokeCliDocSpec(
-        script_name="standalone_smoke",
-        readme_section_heading="Standalone local smoke bundle",
-        help_required_snippets=(
-            "Which standalone smoke surface to run.",
-            "Alias details: local -> summary-utils, shell-tool, replay all -> summary-utils, shell-tool, replay, live",
-            "default local alias -> summary-utils, shell-tool, replay",
-            "standalone_smoke.py all # all alias -> summary-utils, shell-tool, replay, live",
-            "standalone_smoke.py replay # single target",
-        ),
-        readme_required_snippets=(
-            ".venv/bin/python scripts/standalone_smoke.py",
-            "default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together",
-            "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`)",
-            "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `live`)",
-            "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
-        ),
-    ),
-    SmokeCliDocSpec(
-        script_name="session_triage_smoke",
-        readme_section_heading="Session triage smoke bundle",
-        help_required_snippets=(
-            "Which session-triage smoke surface to run.",
-            "Alias details: both -> picker, switcher all -> picker, switcher",
-            "default both alias -> picker, switcher",
-            "session_triage_smoke.py all # all alias -> picker, switcher",
-            "session_triage_smoke.py picker # single target",
-        ),
-        readme_required_snippets=(
-            ".venv/bin/python scripts/session_triage_smoke.py",
-            "default bundle runs both triage targets",
-            "`.venv/bin/python scripts/session_triage_smoke.py both` explicitly re-runs the default picker+switcher alias",
-            "`.venv/bin/python scripts/session_triage_smoke.py all` is an explicit alias for the same picker+switcher bundle",
-            "`.venv/bin/python scripts/session_triage_smoke.py picker` runs only the launch-time picker smoke",
-        ),
-    ),
-    SmokeCliDocSpec(
-        script_name="session_recovery_smoke",
-        readme_section_heading="Session recovery smoke bundle",
-        help_required_snippets=(
-            "Which recovery smoke surface to run.",
-            "Alias details: all -> approval, approval-restart, session-state, live-restore, live-restore-denied",
-            "default all alias -> approval, approval-restart, session-state, live-restore, live-restore-denied",
-            "session_recovery_smoke.py live-restore # single target",
-            "session_recovery_smoke.py approval # single target",
-        ),
-        readme_required_snippets=(
-            ".venv/bin/python scripts/session_recovery_smoke.py",
-            "bundle runs all recovery targets by default",
-            "`.venv/bin/python scripts/session_recovery_smoke.py all` explicitly selects the full recovery bundle (`approval`, `approval-restart`, `session-state`, `live-restore`, `live-restore-denied`)",
-            "`.venv/bin/python scripts/session_recovery_smoke.py live-restore` runs only the live-restore recovery target",
-            "`.venv/bin/python scripts/session_recovery_smoke.py approval` runs only the approval smoke target",
-        ),
-    ),
+    build_smoke_cli_doc_spec(STANDALONE_SMOKE_CLI_SPEC),
+    build_smoke_cli_doc_spec(SESSION_TRIAGE_SMOKE_CLI_SPEC),
+    build_smoke_cli_doc_spec(SESSION_RECOVERY_SMOKE_CLI_SPEC),
     SmokeCliDocSpec(
         script_name="smoke_matrix",
         readme_section_heading="Full local smoke matrix",

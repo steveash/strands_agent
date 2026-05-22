@@ -7,9 +7,12 @@ from textwrap import dedent
 import pytest
 
 from strands_agent_tui.testing.smoke_runner import (
+    SESSION_RECOVERY_SMOKE_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_WRAPPER,
+    SESSION_TRIAGE_SMOKE_CLI_SPEC,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_MATRIX_WRAPPER,
+    STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
     SmokeScriptTarget,
@@ -426,6 +429,31 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
     assert "Alias details: both -> demofirst, demosecond" in help_text
     assert "demo_smoke.py # default both alias -> demofirst, demosecond" in help_text
     assert "demo_smoke.py first # single target" in help_text
+
+
+def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> None:
+    standalone_parser = STANDALONE_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)
+    triage_parser = SESSION_TRIAGE_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)
+    recovery_parser = SESSION_RECOVERY_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)
+
+    standalone_help = " ".join(standalone_parser.format_help().split())
+    triage_help = " ".join(triage_parser.format_help().split())
+    recovery_help = " ".join(recovery_parser.format_help().split())
+
+    assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay" in standalone_help
+    assert "session_triage_smoke.py both # both alias -> picker, switcher" in triage_help
+    assert (
+        "session_recovery_smoke.py all # all alias -> approval, approval-restart, session-state, "
+        "live-restore, live-restore-denied"
+    ) in recovery_help
+
+    assert STANDALONE_SMOKE_CLI_SPEC.readme_required_snippets() == (
+        ".venv/bin/python scripts/standalone_smoke.py",
+        "default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
+    )
 
 
 @pytest.mark.parametrize(
