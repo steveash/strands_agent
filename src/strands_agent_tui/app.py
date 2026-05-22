@@ -552,7 +552,9 @@ class StrandsAgentApp(App):
             "Session Switcher",
             f"Current session: {self.artifact_store.session_id}",
             f"Artifacts root: {self.artifact_store.root}",
-            render_switcher_controls_line(),
+            render_switcher_controls_line(
+                stale_cutoff=format_stale_approval_cutoff(self.config.stale_approval_warning_seconds)
+            ),
             render_recent_session_page_banner(
                 filter_mode=self.session_switcher_filter_mode,
                 sort_mode=self.session_switcher_sort_mode,
@@ -576,6 +578,7 @@ class StrandsAgentApp(App):
                         available_count=available_count,
                         filter_mode=self.session_switcher_filter_mode,
                         surface="switcher",
+                        stale_cutoff=format_stale_approval_cutoff(self.config.stale_approval_warning_seconds),
                     )
                 )
             return "\n".join(lines)

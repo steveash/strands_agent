@@ -932,6 +932,8 @@ def render_session_picker(
         else ""
     )
 
+    stale_cutoff = format_stale_approval_cutoff(stale_approval_warning_seconds)
+
     lines = [
         f"Recent sessions under {resolved_root}:",
         render_recent_session_page_banner(
@@ -952,6 +954,7 @@ def render_session_picker(
                 available_count=available_count,
                 filter_mode=filter_mode,
                 surface="picker",
+                stale_cutoff=stale_cutoff,
             )
         )
     else:
@@ -983,7 +986,7 @@ def render_session_picker(
     lines.extend(
         [
             "",
-            render_picker_controls_line(),
+            render_picker_controls_line(stale_cutoff=stale_cutoff),
             "Press Enter to reopen the highlighted session.",
         ]
     )
@@ -1059,7 +1062,12 @@ def pick_session(
                 stale_approval_warning_seconds=stale_approval_warning_seconds,
             )
         )
-        prompt = render_picker_selection_prompt() if current_summaries else render_picker_empty_filter_prompt()
+        stale_cutoff = format_stale_approval_cutoff(stale_approval_warning_seconds)
+        prompt = (
+            render_picker_selection_prompt(stale_cutoff=stale_cutoff)
+            if current_summaries
+            else render_picker_empty_filter_prompt(stale_cutoff=stale_cutoff)
+        )
         selection = input_fn(prompt).strip()
         if not selection:
             if current_summaries:
@@ -1239,12 +1247,20 @@ def pick_session(
             if current_summaries:
                 output_fn(render_picker_invalid_selection_message(selection, len(current_summaries)))
             else:
-                output_fn(render_picker_empty_filter_visible_guidance())
+                output_fn(
+                    render_picker_empty_filter_visible_guidance(
+                        stale_cutoff=format_stale_approval_cutoff(stale_approval_warning_seconds)
+                    )
+                )
             continue
         if current_summaries:
             output_fn(render_picker_invalid_key_guidance(len(current_summaries)))
         else:
-            output_fn(render_picker_empty_filter_adjust_guidance())
+            output_fn(
+                render_picker_empty_filter_adjust_guidance(
+                    stale_cutoff=format_stale_approval_cutoff(stale_approval_warning_seconds)
+                )
+            )
 
 
 def _session_activity_timestamp(session_dir: Path, turns: list[TurnArtifact] | None = None) -> float:
@@ -2636,11 +2652,13 @@ def render_recent_session_empty_state_lines(
     available_count: int,
     filter_mode: str,
     surface: str = "picker",
+    stale_cutoff: str = "",
 ) -> list[str]:
     return render_recent_session_empty_state_lines_helper(
         available_count=available_count,
         filter_mode=filter_mode,
         surface=surface,
+        stale_cutoff=stale_cutoff,
     )
 
 

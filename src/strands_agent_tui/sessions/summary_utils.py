@@ -262,10 +262,25 @@ def render_compact_badge_preview_lines(
     return [*focus_lines, f"- {plural_label}: {'; '.join(focused_badges)}"]
 
 
-def render_recent_session_filter_jump_line() -> str:
+def _stale_cutoff_inline_suffix(stale_cutoff: str) -> str:
+    normalized = stale_cutoff.strip()
+    if not normalized:
+        return ""
+    return f" | stale cutoff: {normalized}"
+
+
+def _stale_cutoff_parenthetical(stale_cutoff: str) -> str:
+    normalized = stale_cutoff.strip()
+    if not normalized:
+        return ""
+    return f" (stale cutoff: {normalized})"
+
+
+def render_recent_session_filter_jump_line(*, stale_cutoff: str = "") -> str:
     return (
         "Try A to show all sessions, or "
         f"{RECENT_SESSION_TRIAGE_JUMP_KEYS} to jump between {RECENT_SESSION_TRIAGE_LABELS}"
+        f"{_stale_cutoff_parenthetical(stale_cutoff)}"
     )
 
 
@@ -274,6 +289,7 @@ def render_recent_session_empty_state_lines(
     available_count: int,
     filter_mode: str,
     surface: str = "picker",
+    stale_cutoff: str = "",
 ) -> list[str]:
     surface = "switcher" if surface == "switcher" else "picker"
     lines = [f"No saved sessions match the active {surface} filter."]
@@ -281,14 +297,16 @@ def render_recent_session_empty_state_lines(
     verb = "exists" if available_count == 1 else "exist"
     lines.append(f"{available_count} saved {session_label} still {verb} under this root.")
     if filter_mode != "all":
-        lines.append(render_recent_session_filter_jump_line())
+        lines.append(render_recent_session_filter_jump_line(stale_cutoff=stale_cutoff))
     if surface == "picker":
         lines.append(
             "Press Enter or N to start a fresh session while keeping this picker context for the next reopen."
+            f"{_stale_cutoff_inline_suffix(stale_cutoff)}"
         )
     else:
         lines.append(
             "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists."
+            f"{_stale_cutoff_inline_suffix(stale_cutoff)}"
         )
         lines.append("Enter switches the highlighted session once a visible row exists again.")
     return lines
@@ -438,28 +456,29 @@ def render_badged_row_suffix(
     return render_row_detail_suffix(label, rendered_value)
 
 
-def render_picker_controls_line() -> str:
+def render_picker_controls_line(*, stale_cutoff: str = "") -> str:
     return (
         "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, "
         "O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, "
         "E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, "
-        "N new session"
+        f"N new session{_stale_cutoff_inline_suffix(stale_cutoff)}"
     )
 
 
-def render_switcher_controls_line() -> str:
+def render_switcher_controls_line(*, stale_cutoff: str = "") -> str:
     return (
         "Keys: ↑/↓ or J/K move, PgUp/PgDn or bracket keys page, Enter switch, 1-8 quick switch, "
         "A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, "
         "X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, "
-        "I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel"
+        f"I inspect shell, Y shell tests, S sort, N new session, Esc/F11 cancel{_stale_cutoff_inline_suffix(stale_cutoff)}"
     )
 
 
-def render_picker_selection_prompt() -> str:
+def render_picker_selection_prompt(*, stale_cutoff: str = "") -> str:
     return (
         "Select visible session number, press Enter to reopen highlighted, N for new session, or use "
-        f"{RECENT_SESSION_PICKER_PROMPT_KEYS} to triage/page: "
+        f"{RECENT_SESSION_PICKER_PROMPT_KEYS} to triage/page"
+        f"{_stale_cutoff_parenthetical(stale_cutoff)}: "
     )
 
 
@@ -474,22 +493,25 @@ def render_picker_invalid_key_guidance(visible_count: int) -> str:
     return f"Invalid selection. Use 1-{visible_count}, {RECENT_SESSION_PICKER_SELECTION_KEYS}."
 
 
-def render_picker_empty_filter_prompt() -> str:
+def render_picker_empty_filter_prompt(*, stale_cutoff: str = "") -> str:
     return (
         "No sessions match this filter. Press Enter or N for a new session, or use "
-        f"{RECENT_SESSION_TRIAGE_CHANGE_KEYS} to change triage: "
+        f"{RECENT_SESSION_TRIAGE_CHANGE_KEYS} to change triage"
+        f"{_stale_cutoff_parenthetical(stale_cutoff)}: "
     )
 
 
-def render_picker_empty_filter_visible_guidance() -> str:
+def render_picker_empty_filter_visible_guidance(*, stale_cutoff: str = "") -> str:
     return (
         "No sessions are visible with the active filter. Press A to show all sessions, or "
-        f"{RECENT_SESSION_TRIAGE_KEEP_KEYS} to keep triaging; Enter or N starts a new session."
+        f"{RECENT_SESSION_TRIAGE_KEEP_KEYS} to keep triaging; Enter or N starts a new session"
+        f"{_stale_cutoff_parenthetical(stale_cutoff)}."
     )
 
 
-def render_picker_empty_filter_adjust_guidance() -> str:
+def render_picker_empty_filter_adjust_guidance(*, stale_cutoff: str = "") -> str:
     return (
         "No sessions match the active filter. Use "
-        f"{RECENT_SESSION_TRIAGE_CHANGE_KEYS} to adjust triage, or press Enter/N to start a new session."
+        f"{RECENT_SESSION_TRIAGE_CHANGE_KEYS} to adjust triage, or press Enter/N to start a new session"
+        f"{_stale_cutoff_parenthetical(stale_cutoff)}."
     )

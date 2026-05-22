@@ -173,7 +173,7 @@ def test_render_session_picker_lists_recent_sessions(tmp_path: Path) -> None:
     assert "- artifact dir:" in rendered
     assert "- last prompt: review demo" in rendered
     assert (
-        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session"
+        "Picker controls: J/K preview, A all, P pending, D denied, R restore, V restored approvals, O stale approvals, Q stale pending, X stale denied, U stale restored, T tool, W workspace inspect, E workspace edits, G intervention, H shell, I inspect shell, Y shell tests, S sort, [ prev page, ] next page, N new session | stale cutoff: approvals >= 7d old"
         in rendered
     )
     assert "Press Enter to reopen the highlighted session." in rendered
@@ -680,7 +680,7 @@ def test_pick_session_empty_filter_prompt_highlights_triage_and_new_session_path
 
     assert summary is None
     assert prompts == [
-        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to change triage: "
+        "No sessions match this filter. Press Enter or N for a new session, or use A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to change triage (stale cutoff: approvals >= 7d old): "
     ]
     assert any("No saved sessions match the active picker filter." in line for line in captured)
     assert any("Try A to show all sessions" in line for line in captured)
@@ -703,7 +703,7 @@ def test_pick_session_invalid_key_guidance_uses_visible_row_count(tmp_path: Path
 
     assert summary is None
     assert prompts[0] == (
-        "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page: "
+        "Select visible session number, press Enter to reopen highlighted, N for new session, or use J/K/A/P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y/S/[ / ] to triage/page (stale cutoff: approvals >= 7d old): "
     )
     assert "Invalid selection. Use 1-1, J, K, A, P, D, R, V, O, Q, X, U, T, W, E, G, H, I, Y, S, [, ], Enter, or N." in captured
     assert not any("Invalid selection. Use 1-8" in line for line in captured)
