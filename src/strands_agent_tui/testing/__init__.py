@@ -70,13 +70,16 @@ from .smoke_assertions import (
 )
 from .smoke_cli_assertions import (
     SMOKE_CLI_DOC_SPECS,
+    SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME,
     SmokeCliDocSpec,
+    build_smoke_cli_doc_spec_registry,
     build_smoke_cli_doc_specs,
     markdown_section_text,
     matches_markdown_section,
     matches_public_cli_help,
     matches_public_cli_invalid_choice,
     normalize_cli_text,
+    smoke_cli_doc_spec,
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
@@ -152,13 +155,16 @@ __all__ = [
     "matches_tool_filter_output",
     "matches_workspace_filter_output",
     "SMOKE_CLI_DOC_SPECS",
+    "SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME",
     "SmokeCliDocSpec",
+    "build_smoke_cli_doc_spec_registry",
     "build_smoke_cli_doc_specs",
     "markdown_section_text",
     "matches_markdown_section",
     "matches_public_cli_help",
     "matches_public_cli_invalid_choice",
     "normalize_cli_text",
+    "smoke_cli_doc_spec",
     "seed_denied_approval_session",
     "seed_approval_restore_overlap_session",
     "seed_approval_restore_rollup_scenario",

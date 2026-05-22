@@ -1,7 +1,12 @@
 from textwrap import dedent
 
+import pytest
+
 from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_SPECS,
+    SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME,
+    SmokeCliDocSpec,
+    build_smoke_cli_doc_spec_registry,
     failed_smoke_check_lines,
     is_failed_smoke_check_line,
     markdown_section_text,
@@ -42,6 +47,7 @@ from strands_agent_tui.testing import (
     matches_tool_filter_output,
     matches_workspace_filter_output,
     normalize_cli_text,
+    smoke_cli_doc_spec,
     smoke_text_matches,
 )
 
@@ -89,6 +95,30 @@ def test_smoke_cli_helpers_normalize_public_help_and_invalid_choice_copy() -> No
     )
 
 
+def test_smoke_cli_doc_spec_registry_tracks_shared_order_and_lookup_helper() -> None:
+    assert tuple(SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME) == tuple(
+        spec.script_name for spec in SMOKE_CLI_DOC_SPECS
+    )
+    assert tuple(smoke_cli_doc_spec(spec.script_name) for spec in SMOKE_CLI_DOC_SPECS) == SMOKE_CLI_DOC_SPECS
+
+    with pytest.raises(ValueError, match="unknown smoke cli doc spec 'missing_smoke'"):
+        smoke_cli_doc_spec("missing_smoke")
+
+
+
+def test_build_smoke_cli_doc_spec_registry_rejects_duplicate_script_names() -> None:
+    spec = SmokeCliDocSpec(
+        script_name="standalone_smoke",
+        readme_section_heading="Standalone local smoke bundle",
+        help_required_snippets=("standalone help",),
+        readme_required_snippets=("standalone readme",),
+    )
+
+    with pytest.raises(ValueError, match="duplicate smoke cli doc spec 'standalone_smoke'"):
+        build_smoke_cli_doc_spec_registry((spec, spec))
+
+
+
 def test_smoke_cli_doc_specs_extract_markdown_sections_and_reuse_shared_snippets() -> None:
     markdown = dedent(
         """
@@ -104,8 +134,8 @@ def test_smoke_cli_doc_specs_extract_markdown_sections_and_reuse_shared_snippets
         """
     ).strip()
 
-    standalone_spec = next(spec for spec in SMOKE_CLI_DOC_SPECS if spec.script_name == "standalone_smoke")
-    triage_spec = next(spec for spec in SMOKE_CLI_DOC_SPECS if spec.script_name == "session_triage_smoke")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    triage_spec = smoke_cli_doc_spec("session_triage_smoke")
 
     assert markdown_section_text(markdown, heading=standalone_spec.readme_section_heading) == (
         "Intro line.\n"

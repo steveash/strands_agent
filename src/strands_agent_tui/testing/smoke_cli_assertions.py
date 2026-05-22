@@ -29,7 +29,26 @@ def build_smoke_cli_doc_specs(specs: Iterable[SmokeWrapperCliSpec]) -> tuple[Smo
     return tuple(build_smoke_cli_doc_spec(spec) for spec in specs)
 
 
+def build_smoke_cli_doc_spec_registry(
+    specs: Iterable[SmokeCliDocSpec],
+) -> dict[str, SmokeCliDocSpec]:
+    registry: dict[str, SmokeCliDocSpec] = {}
+    for spec in specs:
+        if spec.script_name in registry:
+            raise ValueError(f"duplicate smoke cli doc spec {spec.script_name!r}")
+        registry[spec.script_name] = spec
+    return registry
+
+
 SMOKE_CLI_DOC_SPECS = build_smoke_cli_doc_specs(SMOKE_WRAPPER_CLI_SPECS)
+SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME = build_smoke_cli_doc_spec_registry(SMOKE_CLI_DOC_SPECS)
+
+
+def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:
+    spec = SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME.get(script_name)
+    if spec is None:
+        raise ValueError(f"unknown smoke cli doc spec {script_name!r}")
+    return spec
 
 
 def normalize_cli_text(text: str) -> str:

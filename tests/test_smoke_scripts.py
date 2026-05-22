@@ -38,6 +38,7 @@ from strands_agent_tui.testing import (
     seed_workspace_failure_session,
     seed_workspace_inspect_session,
     set_session_artifact_mtime,
+    smoke_cli_doc_spec,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -72,7 +73,9 @@ def _format_script_help(name: str) -> str:
     return module.build_parser().format_help()
 
 
-def _assert_script_help_contains(script_name: str, required_snippets: list[str]) -> None:
+def _assert_script_help_contains(script_name: str, required_snippets: list[str] | None = None) -> None:
+    if required_snippets is None:
+        required_snippets = list(smoke_cli_doc_spec(script_name).help_required_snippets)
     assert matches_public_cli_help(_format_script_help(script_name), required_snippets=required_snippets)
 
 
@@ -345,7 +348,7 @@ def test_standalone_smoke_passes_shared_wrapper_metadata(monkeypatch) -> None:
 
 @pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
 def test_smoke_wrapper_help_and_readme_docs_stay_in_sync(doc_spec) -> None:
-    _assert_script_help_contains(doc_spec.script_name, list(doc_spec.help_required_snippets))
+    _assert_script_help_contains(doc_spec.script_name)
     assert matches_markdown_section(
         README_TEXT,
         heading=doc_spec.readme_section_heading,
