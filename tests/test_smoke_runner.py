@@ -7,12 +7,17 @@ from textwrap import dedent
 import pytest
 
 from strands_agent_tui.testing.smoke_runner import (
+    NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS,
+    NON_MATRIX_SMOKE_WRAPPER_METADATA,
+    NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
     SMOKE_MATRIX_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_CLI_SPEC,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_MATRIX_WRAPPER,
+    SMOKE_WRAPPER_CLI_SPECS,
+    SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME,
     STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
@@ -22,6 +27,7 @@ from strands_agent_tui.testing.smoke_runner import (
     build_smoke_cli_parser,
     run_smoke_target,
     run_smoke_targets,
+    smoke_wrapper_metadata_from_specs,
     summary_line_prefixes,
 )
 
@@ -430,6 +436,48 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
     assert "Alias details: both -> demofirst, demosecond" in help_text
     assert "demo_smoke.py # default both alias -> demofirst, demosecond" in help_text
     assert "demo_smoke.py first # single target" in help_text
+
+
+def test_smoke_wrapper_cli_spec_registry_tracks_shared_order_and_metadata() -> None:
+    assert SMOKE_WRAPPER_CLI_SPECS == (
+        STANDALONE_SMOKE_CLI_SPEC,
+        SESSION_TRIAGE_SMOKE_CLI_SPEC,
+        SESSION_RECOVERY_SMOKE_CLI_SPEC,
+        SMOKE_MATRIX_CLI_SPEC,
+    )
+    assert SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME == {
+        "standalone_smoke": STANDALONE_SMOKE_CLI_SPEC,
+        "session_triage_smoke": SESSION_TRIAGE_SMOKE_CLI_SPEC,
+        "session_recovery_smoke": SESSION_RECOVERY_SMOKE_CLI_SPEC,
+        "smoke_matrix": SMOKE_MATRIX_CLI_SPEC,
+    }
+    assert NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS == (
+        STANDALONE_SMOKE_CLI_SPEC,
+        SESSION_TRIAGE_SMOKE_CLI_SPEC,
+        SESSION_RECOVERY_SMOKE_CLI_SPEC,
+    )
+    assert smoke_wrapper_metadata_from_specs(
+        (
+            STANDALONE_SMOKE_CLI_SPEC,
+            SMOKE_MATRIX_CLI_SPEC,
+            STANDALONE_SMOKE_CLI_SPEC,
+            SESSION_TRIAGE_SMOKE_CLI_SPEC,
+        )
+    ) == (
+        STANDALONE_SMOKE_WRAPPER,
+        SMOKE_MATRIX_WRAPPER,
+        SESSION_TRIAGE_SMOKE_WRAPPER,
+    )
+    assert NON_MATRIX_SMOKE_WRAPPER_METADATA == (
+        STANDALONE_SMOKE_WRAPPER,
+        SESSION_TRIAGE_SMOKE_WRAPPER,
+        SESSION_RECOVERY_SMOKE_WRAPPER,
+    )
+    assert NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES == (
+        "[standalone-smoke] summary:",
+        "[session-triage-smoke] summary:",
+        "[session-recovery-smoke] summary:",
+    )
 
 
 def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> None:

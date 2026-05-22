@@ -71,6 +71,7 @@ from .smoke_assertions import (
 from .smoke_cli_assertions import (
     SMOKE_CLI_DOC_SPECS,
     SmokeCliDocSpec,
+    build_smoke_cli_doc_specs,
     markdown_section_text,
     matches_markdown_section,
     matches_public_cli_help,
@@ -79,12 +80,17 @@ from .smoke_cli_assertions import (
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
+    NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS,
+    NON_MATRIX_SMOKE_WRAPPER_METADATA,
+    NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
     SMOKE_MATRIX_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_CLI_SPEC,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_MATRIX_WRAPPER,
+    SMOKE_WRAPPER_CLI_SPECS,
+    SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME,
     STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
@@ -96,6 +102,7 @@ from .smoke_runner import (
     build_smoke_cli_parser,
     run_smoke_target,
     run_smoke_targets,
+    smoke_wrapper_metadata_from_specs,
     summary_line_prefixes,
 )
 
@@ -145,6 +152,7 @@ __all__ = [
     "matches_workspace_filter_output",
     "SMOKE_CLI_DOC_SPECS",
     "SmokeCliDocSpec",
+    "build_smoke_cli_doc_specs",
     "markdown_section_text",
     "matches_markdown_section",
     "matches_public_cli_help",
@@ -172,12 +180,17 @@ __all__ = [
     "seed_workspace_inspect_session",
     "seed_workspace_overlap_session",
     "set_session_artifact_mtime",
+    "NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS",
+    "NON_MATRIX_SMOKE_WRAPPER_METADATA",
+    "NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES",
     "SESSION_RECOVERY_SMOKE_CLI_SPEC",
     "SESSION_RECOVERY_SMOKE_WRAPPER",
     "SESSION_TRIAGE_SMOKE_CLI_SPEC",
     "SESSION_TRIAGE_SMOKE_WRAPPER",
     "SMOKE_MATRIX_CLI_SPEC",
     "SMOKE_MATRIX_WRAPPER",
+    "SMOKE_WRAPPER_CLI_SPECS",
+    "SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME",
     "STANDALONE_SMOKE_CLI_SPEC",
     "STANDALONE_SMOKE_WRAPPER",
     "SmokeScriptTarget",
@@ -193,5 +206,6 @@ __all__ = [
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",
+    "smoke_wrapper_metadata_from_specs",
     "summary_line_prefixes",
 ]

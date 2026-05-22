@@ -3,13 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from .smoke_runner import (
-    SMOKE_MATRIX_CLI_SPEC,
-    SESSION_RECOVERY_SMOKE_CLI_SPEC,
-    SESSION_TRIAGE_SMOKE_CLI_SPEC,
-    STANDALONE_SMOKE_CLI_SPEC,
-    SmokeWrapperCliSpec,
-)
+from .smoke_runner import SMOKE_WRAPPER_CLI_SPECS, SmokeWrapperCliSpec
 
 
 @dataclass(frozen=True)
@@ -31,12 +25,11 @@ def build_smoke_cli_doc_spec(spec: SmokeWrapperCliSpec) -> SmokeCliDocSpec:
     )
 
 
-SMOKE_CLI_DOC_SPECS = (
-    build_smoke_cli_doc_spec(STANDALONE_SMOKE_CLI_SPEC),
-    build_smoke_cli_doc_spec(SESSION_TRIAGE_SMOKE_CLI_SPEC),
-    build_smoke_cli_doc_spec(SESSION_RECOVERY_SMOKE_CLI_SPEC),
-    build_smoke_cli_doc_spec(SMOKE_MATRIX_CLI_SPEC),
-)
+def build_smoke_cli_doc_specs(specs: Iterable[SmokeWrapperCliSpec]) -> tuple[SmokeCliDocSpec, ...]:
+    return tuple(build_smoke_cli_doc_spec(spec) for spec in specs)
+
+
+SMOKE_CLI_DOC_SPECS = build_smoke_cli_doc_specs(SMOKE_WRAPPER_CLI_SPECS)
 
 
 def normalize_cli_text(text: str) -> str:

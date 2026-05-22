@@ -8,14 +8,11 @@ from time import perf_counter
 from typing import TextIO
 
 from strands_agent_tui.testing import (
+    NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
     SMOKE_MATRIX_CLI_SPEC,
-    SESSION_RECOVERY_SMOKE_WRAPPER,
-    SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_MATRIX_WRAPPER,
     SmokeScriptTarget,
-    STANDALONE_SMOKE_WRAPPER,
     run_smoke_target,
-    summary_line_prefixes,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -24,13 +21,7 @@ SMOKE_BUNDLES = TARGET_SELECTOR.targets
 LOCAL_BUNDLE_NAMES = list(SMOKE_MATRIX_CLI_SPEC.alias_target_names["local"])
 ALL_BUNDLE_NAMES = list(SMOKE_MATRIX_CLI_SPEC.alias_target_names["all"])
 BUNDLE_SELECTOR = TARGET_SELECTOR
-SUPPRESSED_NESTED_SUMMARY_PREFIXES = summary_line_prefixes(
-    (
-        STANDALONE_SMOKE_WRAPPER,
-        SESSION_TRIAGE_SMOKE_WRAPPER,
-        SESSION_RECOVERY_SMOKE_WRAPPER,
-    )
-)
+SUPPRESSED_NESTED_SUMMARY_PREFIXES = NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES
 
 
 def _emit_matrix_line(message: str, *, stream) -> None:

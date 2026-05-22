@@ -628,6 +628,33 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
 )
 
 
+SMOKE_WRAPPER_CLI_SPECS = (
+    STANDALONE_SMOKE_CLI_SPEC,
+    SESSION_TRIAGE_SMOKE_CLI_SPEC,
+    SESSION_RECOVERY_SMOKE_CLI_SPEC,
+    SMOKE_MATRIX_CLI_SPEC,
+)
+SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME = {spec.script_name: spec for spec in SMOKE_WRAPPER_CLI_SPECS}
+NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS = tuple(
+    spec for spec in SMOKE_WRAPPER_CLI_SPECS if spec.script_name != SMOKE_MATRIX_CLI_SPEC.script_name
+)
+
+
+def smoke_wrapper_metadata_from_specs(
+    specs: Iterable[SmokeWrapperCliSpec],
+) -> tuple[SmokeWrapperMetadata, ...]:
+    metadata: list[SmokeWrapperMetadata] = []
+    for spec in specs:
+        wrapper_metadata = spec.wrapper_metadata
+        if wrapper_metadata is not None and wrapper_metadata not in metadata:
+            metadata.append(wrapper_metadata)
+    return tuple(metadata)
+
+
+NON_MATRIX_SMOKE_WRAPPER_METADATA = smoke_wrapper_metadata_from_specs(NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS)
+NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES = summary_line_prefixes(NON_MATRIX_SMOKE_WRAPPER_METADATA)
+
+
 def _emit_wrapper_line(metadata: SmokeWrapperMetadata, message: str, *, stream: TextIO) -> None:
     print(metadata.format_line(message), file=stream)
     stream.flush()

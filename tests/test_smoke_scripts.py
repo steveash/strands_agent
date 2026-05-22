@@ -14,10 +14,12 @@ from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import FakeStrandsRuntime, runtime_event
 from strands_agent_tui.sessions import SessionArtifactStore, render_session_picker
 from strands_agent_tui.testing import (
+    NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_MATRIX_WRAPPER,
+    SMOKE_WRAPPER_CLI_SPECS,
     STANDALONE_SMOKE_WRAPPER,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
@@ -36,7 +38,6 @@ from strands_agent_tui.testing import (
     seed_workspace_failure_session,
     seed_workspace_inspect_session,
     set_session_artifact_mtime,
-    summary_line_prefixes,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -352,16 +353,17 @@ def test_smoke_wrapper_help_and_readme_docs_stay_in_sync(doc_spec) -> None:
     )
 
 
+def test_smoke_cli_doc_specs_follow_shared_wrapper_registry_order() -> None:
+    assert [doc_spec.script_name for doc_spec in SMOKE_CLI_DOC_SPECS] == [
+        spec.script_name for spec in SMOKE_WRAPPER_CLI_SPECS
+    ]
+
+
+
 def test_smoke_matrix_uses_shared_wrapper_summary_prefixes() -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
 
-    assert smoke_matrix.SUPPRESSED_NESTED_SUMMARY_PREFIXES == summary_line_prefixes(
-        (
-            STANDALONE_SMOKE_WRAPPER,
-            SESSION_TRIAGE_SMOKE_WRAPPER,
-            SESSION_RECOVERY_SMOKE_WRAPPER,
-        )
-    )
+    assert smoke_matrix.SUPPRESSED_NESTED_SUMMARY_PREFIXES == NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES
 
 
 def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> None:
