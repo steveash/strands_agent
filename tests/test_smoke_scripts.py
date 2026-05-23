@@ -376,11 +376,36 @@ def test_smoke_cli_docs_smoke_reports_doc_parity_for_all_wrappers(monkeypatch) -
     assert exit_code == 0
     for doc_spec in SMOKE_CLI_DOC_SPECS:
         prefix = doc_spec.script_name
+        assert (
+            f"{prefix}_diagnostic: help ok; README {doc_spec.readme_section_heading!r} ok"
+            in lines
+        )
         assert f"{prefix}_help_missing: none" in lines
         assert f"{prefix}_readme_missing: none" in lines
         assert f"{prefix}_help= True" in lines
         assert f"{prefix}_readme= True" in lines
         assert f"{prefix}_doc_parity= True" in lines
+
+
+def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> None:
+    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    broken_markdown = README_TEXT.replace(
+        standalone_spec.readme_required_snippets[4],
+        "missing standalone docs snippet",
+        1,
+    )
+
+    results = dict(smoke_cli_docs_smoke.run_smoke_cli_docs_smoke(markdown=broken_markdown))
+
+    assert results["standalone_smoke_diagnostic"].startswith(
+        f"help ok; README {standalone_spec.readme_section_heading!r} missing:"
+    )
+    assert standalone_spec.readme_required_snippets[4] in results["standalone_smoke_diagnostic"]
+    assert results["standalone_smoke_help"] is True
+    assert results["standalone_smoke_readme"] is False
+    assert results["standalone_smoke_doc_parity"] is False
+
 
 
 def test_smoke_cli_doc_specs_follow_shared_wrapper_registry_order() -> None:

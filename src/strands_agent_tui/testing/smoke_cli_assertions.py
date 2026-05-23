@@ -6,9 +6,14 @@ from dataclasses import dataclass
 from .smoke_runner import SMOKE_WRAPPER_CLI_SPECS, SmokeWrapperCliSpec
 
 
+def _render_missing_snippets(snippets: tuple[str, ...]) -> str:
+    return " | ".join(snippets)
+
+
 @dataclass(frozen=True)
 class SmokeCliDocParityResult:
     script_name: str
+    readme_section_heading: str
     missing_help_snippets: tuple[str, ...]
     missing_readme_snippets: tuple[str, ...]
 
@@ -23,6 +28,29 @@ class SmokeCliDocParityResult:
     @property
     def matches(self) -> bool:
         return self.help_matches and self.readme_matches
+
+    @property
+    def help_diagnostic(self) -> str:
+        if self.help_matches:
+            return "help ok"
+        return f"--help missing: {_render_missing_snippets(self.missing_help_snippets)}"
+
+    @property
+    def readme_diagnostic(self) -> str:
+        if self.readme_matches:
+            return f"README {self.readme_section_heading!r} ok"
+        return (
+            f"README {self.readme_section_heading!r} missing: "
+            f"{_render_missing_snippets(self.missing_readme_snippets)}"
+        )
+
+    @property
+    def diagnostic_lines(self) -> tuple[str, str]:
+        return (self.help_diagnostic, self.readme_diagnostic)
+
+    @property
+    def diagnostic_summary(self) -> str:
+        return "; ".join(self.diagnostic_lines)
 
 
 @dataclass(frozen=True)
@@ -100,6 +128,7 @@ def collect_smoke_cli_doc_parity(
     spec = smoke_cli_doc_spec(script_name)
     return SmokeCliDocParityResult(
         script_name=script_name,
+        readme_section_heading=spec.readme_section_heading,
         missing_help_snippets=missing_public_cli_help_snippets(
             help_text,
             required_snippets=spec.help_required_snippets,
@@ -124,6 +153,20 @@ def matches_smoke_cli_readme_for_script(markdown: str, *, script_name: str) -> b
         heading=spec.readme_section_heading,
         required_snippets=spec.readme_required_snippets,
     )
+
+
+def smoke_cli_doc_parity_diagnostic(
+    *,
+    script_name: str,
+    help_text: str,
+    markdown: str,
+) -> str:
+    return collect_smoke_cli_doc_parity(
+        script_name=script_name,
+        help_text=help_text,
+        markdown=markdown,
+    ).diagnostic_summary
+
 
 
 def matches_smoke_cli_doc_parity(

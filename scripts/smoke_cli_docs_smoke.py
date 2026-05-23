@@ -35,6 +35,7 @@ def run_smoke_cli_docs_smoke(*, markdown: str | None = None) -> list[tuple[str, 
         prefix = doc_spec.script_name
         results.extend(
             [
+                (f"{prefix}_diagnostic", parity.diagnostic_summary),
                 (f"{prefix}_help_missing", _render_missing_snippets(parity.missing_help_snippets)),
                 (f"{prefix}_readme_missing", _render_missing_snippets(parity.missing_readme_snippets)),
                 (f"{prefix}_help", parity.help_matches),

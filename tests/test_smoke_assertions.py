@@ -53,6 +53,7 @@ from strands_agent_tui.testing import (
     matches_tool_filter_output,
     matches_workspace_filter_output,
     normalize_cli_text,
+    smoke_cli_doc_parity_diagnostic,
     smoke_cli_doc_spec,
     smoke_text_matches,
 )
@@ -206,11 +207,59 @@ def test_smoke_cli_doc_parity_helpers_report_missing_help_and_readme_snippets() 
     )
 
     assert parity.script_name == "standalone_smoke"
+    assert parity.readme_section_heading == standalone_spec.readme_section_heading
     assert parity.missing_help_snippets == standalone_spec.help_required_snippets[1:]
     assert parity.missing_readme_snippets == standalone_spec.readme_required_snippets[0:1] + standalone_spec.readme_required_snippets[2:]
+    assert parity.help_diagnostic == (
+        "--help missing: " + " | ".join(standalone_spec.help_required_snippets[1:])
+    )
+    assert parity.readme_diagnostic == (
+        f"README {standalone_spec.readme_section_heading!r} missing: "
+        + " | ".join(standalone_spec.readme_required_snippets[0:1] + standalone_spec.readme_required_snippets[2:])
+    )
+    assert parity.diagnostic_summary == (
+        f"{parity.help_diagnostic}; {parity.readme_diagnostic}"
+    )
+    assert smoke_cli_doc_parity_diagnostic(
+        script_name="standalone_smoke",
+        help_text=help_text,
+        markdown=markdown,
+    ) == parity.diagnostic_summary
     assert not parity.help_matches
     assert not parity.readme_matches
     assert not parity.matches
+
+
+def test_smoke_cli_doc_parity_diagnostic_reports_ok_surfaces_when_docs_match() -> None:
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    help_text = "\n".join(standalone_spec.help_required_snippets)
+    markdown = dedent(
+        f"""
+        ## Smoke docs
+
+        ### {standalone_spec.readme_section_heading}
+        {standalone_spec.readme_required_snippets[0]}.
+        {standalone_spec.readme_required_snippets[1]}.
+        {standalone_spec.readme_required_snippets[2]}.
+        {standalone_spec.readme_required_snippets[3]}.
+        {standalone_spec.readme_required_snippets[4]}.
+        {standalone_spec.readme_required_snippets[5]}.
+        """
+    ).strip()
+
+    parity = collect_smoke_cli_doc_parity(
+        script_name="standalone_smoke",
+        help_text=help_text,
+        markdown=markdown,
+    )
+
+    assert parity.help_diagnostic == "help ok"
+    assert parity.readme_diagnostic == f"README {standalone_spec.readme_section_heading!r} ok"
+    assert parity.diagnostic_lines == ("help ok", f"README {standalone_spec.readme_section_heading!r} ok")
+    assert parity.diagnostic_summary == (
+        f"help ok; README {standalone_spec.readme_section_heading!r} ok"
+    )
+
 
 
 def test_approval_restore_smoke_helpers_share_focus_age_and_preview_checks() -> None:
