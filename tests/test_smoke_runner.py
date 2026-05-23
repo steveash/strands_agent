@@ -511,7 +511,7 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
     recovery_help = " ".join(recovery_parser.format_help().split())
     matrix_help = " ".join(matrix_parser.format_help().split())
 
-    assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay" in standalone_help
+    assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay, docs" in standalone_help
     assert "session_triage_smoke.py both # both alias -> picker, switcher" in triage_help
     assert (
         "session_recovery_smoke.py all # all alias -> approval, approval-restart, session-state, "
@@ -522,9 +522,10 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
 
     assert STANDALONE_SMOKE_CLI_SPEC.readme_required_snippets() == (
         ".venv/bin/python scripts/standalone_smoke.py",
-        "default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together",
-        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`)",
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `live`)",
+        "default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
     assert SMOKE_MATRIX_CLI_SPEC.readme_required_snippets() == (

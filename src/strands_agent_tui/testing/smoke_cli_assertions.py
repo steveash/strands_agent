@@ -7,6 +7,25 @@ from .smoke_runner import SMOKE_WRAPPER_CLI_SPECS, SmokeWrapperCliSpec
 
 
 @dataclass(frozen=True)
+class SmokeCliDocParityResult:
+    script_name: str
+    missing_help_snippets: tuple[str, ...]
+    missing_readme_snippets: tuple[str, ...]
+
+    @property
+    def help_matches(self) -> bool:
+        return not self.missing_help_snippets
+
+    @property
+    def readme_matches(self) -> bool:
+        return not self.missing_readme_snippets
+
+    @property
+    def matches(self) -> bool:
+        return self.help_matches and self.readme_matches
+
+
+@dataclass(frozen=True)
 class SmokeCliDocSpec:
     script_name: str
     readme_section_heading: str
@@ -51,6 +70,75 @@ def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:
     return spec
 
 
+def missing_required_snippets(text: str, *, required_snippets: Iterable[str]) -> tuple[str, ...]:
+    normalized = normalize_cli_text(text)
+    return tuple(snippet for snippet in required_snippets if snippet not in normalized)
+
+
+def missing_public_cli_help_snippets(text: str, *, required_snippets: Iterable[str]) -> tuple[str, ...]:
+    return missing_required_snippets(text, required_snippets=required_snippets)
+
+
+def missing_markdown_section_snippets(
+    markdown: str,
+    *,
+    heading: str,
+    required_snippets: Iterable[str],
+) -> tuple[str, ...]:
+    return missing_required_snippets(
+        markdown_section_text(markdown, heading=heading),
+        required_snippets=required_snippets,
+    )
+
+
+def collect_smoke_cli_doc_parity(
+    *,
+    script_name: str,
+    help_text: str,
+    markdown: str,
+) -> SmokeCliDocParityResult:
+    spec = smoke_cli_doc_spec(script_name)
+    return SmokeCliDocParityResult(
+        script_name=script_name,
+        missing_help_snippets=missing_public_cli_help_snippets(
+            help_text,
+            required_snippets=spec.help_required_snippets,
+        ),
+        missing_readme_snippets=missing_markdown_section_snippets(
+            markdown,
+            heading=spec.readme_section_heading,
+            required_snippets=spec.readme_required_snippets,
+        ),
+    )
+
+
+def matches_smoke_cli_help_for_script(text: str, *, script_name: str) -> bool:
+    spec = smoke_cli_doc_spec(script_name)
+    return not missing_public_cli_help_snippets(text, required_snippets=spec.help_required_snippets)
+
+
+def matches_smoke_cli_readme_for_script(markdown: str, *, script_name: str) -> bool:
+    spec = smoke_cli_doc_spec(script_name)
+    return not missing_markdown_section_snippets(
+        markdown,
+        heading=spec.readme_section_heading,
+        required_snippets=spec.readme_required_snippets,
+    )
+
+
+def matches_smoke_cli_doc_parity(
+    *,
+    script_name: str,
+    help_text: str,
+    markdown: str,
+) -> bool:
+    return collect_smoke_cli_doc_parity(
+        script_name=script_name,
+        help_text=help_text,
+        markdown=markdown,
+    ).matches
+
+
 def normalize_cli_text(text: str) -> str:
     return " ".join(text.split())
 
@@ -90,8 +178,11 @@ def matches_markdown_section(
     heading: str,
     required_snippets: Iterable[str],
 ) -> bool:
-    normalized = normalize_cli_text(markdown_section_text(markdown, heading=heading))
-    return all(snippet in normalized for snippet in required_snippets)
+    return not missing_markdown_section_snippets(
+        markdown,
+        heading=heading,
+        required_snippets=required_snippets,
+    )
 
 
 def matches_public_cli_invalid_choice(
@@ -109,5 +200,4 @@ def matches_public_cli_help(
     *,
     required_snippets: Iterable[str],
 ) -> bool:
-    normalized = normalize_cli_text(text)
-    return all(snippet in normalized for snippet in required_snippets)
+    return not missing_public_cli_help_snippets(text, required_snippets=required_snippets)

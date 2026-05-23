@@ -120,31 +120,32 @@ What exists now:
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - attention sorting that now pulls sessions with pending approvals first, recently denied approvals next, then recent tool failures above generic restore/tool activity so blocked or broken work stays easier to spot,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
-- a local smoke script for validating the real runtime without committing secrets.
+- a local smoke script for validating the real runtime without committing secrets,
+- and a standalone `smoke_cli_docs` smoke target that audits smoke-wrapper `--help` text against the README and emits actionable missing-snippet diagnostics.
 
 What changed this run:
-- surfaced the active stale-approval cutoff directly in picker/switcher control legends so the `O` / `Q` / `X` / `U` stale triage keys explain themselves even outside stale-only views,
-- threaded the same cutoff hint through interactive picker prompts and empty-filter guidance so CLI/env threshold overrides stay visible while triaging or reopening sessions,
-- extended summary-helper, picker, and switcher tests to lock the new stale-cutoff copy paths.
+- added shared smoke CLI doc-parity helpers that can report exactly which `--help` or README snippets drifted for each public smoke wrapper,
+- added `scripts/smoke_cli_docs_smoke.py` and folded it into the default standalone/local smoke bundle so docs parity is checked during normal runnable verification,
+- updated standalone smoke docs plus smoke-runner/assertion/script tests to lock the new `docs` target and its emitted parity diagnostics.
 
 Why this matters now:
-- The stale triage features were already powerful, but the operator still had to remember the current cutoff from CLI flags or env vars.
-- Echoing the active cutoff inside the reopen UX makes the Strands intervention backlog easier to reason about when comparing fresh vs stale approvals.
-- This keeps the learning surface honest: guardrail semantics are now visible in the same place Steve uses them.
+- The smoke wrappers are part of the operator surface for understanding and verifying the Strands prototype, so help/readme drift quietly erodes the learning loop.
+- Turning docs parity into a runnable smoke target keeps the verification story honest: the commands Steve runs and the commands the README describes now share an explicit contract.
+- Actionable missing-snippet diagnostics make future breakage cheaper to debug than a generic boolean mismatch.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
-- runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata,
-- `pytest` currently passes for the expanded Phase 2/3/4/5 seam, including stale-cutoff copy propagation across picker prompts, legends, and switcher views.
+- smoke infrastructure tests now also verify wrapper help/readme parity, missing-snippet diagnostics, the new `smoke_cli_docs` target, and the standalone bundle's updated public target selection,
+- runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
 
 Current evidence:
-- automated tests: `290 passed in 37.85s` via `.venv/bin/pytest -q`,
-- focused reopen/switcher coverage: `.venv/bin/pytest -q tests/test_summary_utils.py tests/test_sessions.py tests/test_app.py` => `142 passed in 32.78s`,
-- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 31.90s`,
-- smoke assertions now include `summary_control_legends`, `summary_picker_selection_guidance`, `picker_stale_cutoff_copy`, `picker_custom_stale_cutoff_copy`, `switcher_stale_cutoff_copy`, and `switcher_custom_stale_cutoff_copy`,
-- self-unblock note: no unblock was required beyond normal verification; the repo stayed runnable while the copy changes propagated cleanly through the picker, switcher, and smoke surfaces.
+- automated tests: `299 passed in 38.98s` via `.venv/bin/pytest -q`,
+- focused smoke infra coverage: `.venv/bin/pytest -q tests/test_smoke_assertions.py tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `85 passed in 5.23s`,
+- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 29.49s`,
+- the smoke matrix now includes `standalone_smoke_help_missing`, `standalone_smoke_readme_missing`, and matching parity lines for all four public smoke wrappers,
+- self-unblock note: no unblock was required beyond normal verification; the repo stayed runnable while the new docs smoke target was added to the default standalone bundle.
 
 ## First five phases
 
@@ -403,11 +404,12 @@ To verify the remaining local smoke surfaces with shared fail-fast `= False` han
 .venv/bin/python scripts/standalone_smoke.py
 ```
 
-This default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
+This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
 
 Operator shortcuts:
-- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`)
-- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `live`)
+- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)
+- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)
+- `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
 
 ### Session triage smoke bundle
@@ -688,6 +690,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
+- decide whether the new `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
 - decide whether the new tool/intervention metric lines should eventually show lane-specific breakdowns when a page mixes multiple activity families
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists

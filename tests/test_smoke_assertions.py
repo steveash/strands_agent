@@ -10,6 +10,7 @@ from strands_agent_tui.testing import (
     failed_smoke_check_lines,
     is_failed_smoke_check_line,
     markdown_section_text,
+    collect_smoke_cli_doc_parity,
     matches_approval_restore_age_output,
     matches_approval_restore_badges_output,
     matches_approval_restore_focus_output,
@@ -33,6 +34,11 @@ from strands_agent_tui.testing import (
     matches_picker_default_output,
     matches_public_cli_help,
     matches_public_cli_invalid_choice,
+    matches_smoke_cli_doc_parity,
+    matches_smoke_cli_help_for_script,
+    matches_smoke_cli_readme_for_script,
+    missing_markdown_section_snippets,
+    missing_public_cli_help_snippets,
     matches_queue_breakdown_output,
     matches_shell_filter_output,
     matches_stale_backlog_output,
@@ -120,27 +126,32 @@ def test_build_smoke_cli_doc_spec_registry_rejects_duplicate_script_names() -> N
 
 
 def test_smoke_cli_doc_specs_extract_markdown_sections_and_reuse_shared_snippets() -> None:
-    markdown = dedent(
-        """
-        ## Smoke docs
-
-        ### Standalone local smoke bundle
-        Intro line.
-        `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `live`).
-
-        ### Session triage smoke bundle
-        Intro line.
-        `.venv/bin/python scripts/session_triage_smoke.py both` explicitly re-runs the default picker+switcher alias.
-        """
-    ).strip()
-
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
     triage_spec = smoke_cli_doc_spec("session_triage_smoke")
+    markdown = dedent(
+        f"""
+        ## Smoke docs
+
+        ### {standalone_spec.readme_section_heading}
+        {standalone_spec.readme_required_snippets[1]}.
+        {standalone_spec.readme_required_snippets[2]}.
+        {standalone_spec.readme_required_snippets[3]}.
+        {standalone_spec.readme_required_snippets[4]}.
+        {standalone_spec.readme_required_snippets[5]}.
+
+        ### {triage_spec.readme_section_heading}
+        Intro line.
+        {triage_spec.readme_required_snippets[2]}.
+        """
+    ).strip()
+    help_text = "\n".join(standalone_spec.help_required_snippets)
 
     assert markdown_section_text(markdown, heading=standalone_spec.readme_section_heading) == (
-        "Intro line.\n"
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias "
-        "(`summary_utils`, `shell_tool`, `replay`, `live`)."
+        f"{standalone_spec.readme_required_snippets[1]}.\n"
+        f"{standalone_spec.readme_required_snippets[2]}.\n"
+        f"{standalone_spec.readme_required_snippets[3]}.\n"
+        f"{standalone_spec.readme_required_snippets[4]}.\n"
+        f"{standalone_spec.readme_required_snippets[5]}."
     )
     assert matches_markdown_section(
         markdown,
@@ -152,6 +163,54 @@ def test_smoke_cli_doc_specs_extract_markdown_sections_and_reuse_shared_snippets
         heading=triage_spec.readme_section_heading,
         required_snippets=[triage_spec.readme_required_snippets[2]],
     )
+    assert matches_smoke_cli_help_for_script(help_text, script_name="standalone_smoke")
+    assert matches_smoke_cli_readme_for_script(markdown, script_name="standalone_smoke")
+    assert matches_smoke_cli_doc_parity(
+        script_name="standalone_smoke",
+        help_text=help_text,
+        markdown=markdown,
+    )
+    assert not matches_smoke_cli_doc_parity(
+        script_name="session_triage_smoke",
+        help_text=help_text,
+        markdown=markdown,
+    )
+
+
+def test_smoke_cli_doc_parity_helpers_report_missing_help_and_readme_snippets() -> None:
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    help_text = standalone_spec.help_required_snippets[0]
+    markdown = dedent(
+        f"""
+        ## Smoke docs
+
+        ### {standalone_spec.readme_section_heading}
+        {standalone_spec.readme_required_snippets[1]}.
+        """
+    ).strip()
+
+    assert missing_public_cli_help_snippets(
+        help_text,
+        required_snippets=standalone_spec.help_required_snippets,
+    ) == standalone_spec.help_required_snippets[1:]
+    assert missing_markdown_section_snippets(
+        markdown,
+        heading=standalone_spec.readme_section_heading,
+        required_snippets=standalone_spec.readme_required_snippets,
+    ) == standalone_spec.readme_required_snippets[0:1] + standalone_spec.readme_required_snippets[2:]
+
+    parity = collect_smoke_cli_doc_parity(
+        script_name="standalone_smoke",
+        help_text=help_text,
+        markdown=markdown,
+    )
+
+    assert parity.script_name == "standalone_smoke"
+    assert parity.missing_help_snippets == standalone_spec.help_required_snippets[1:]
+    assert parity.missing_readme_snippets == standalone_spec.readme_required_snippets[0:1] + standalone_spec.readme_required_snippets[2:]
+    assert not parity.help_matches
+    assert not parity.readme_matches
+    assert not parity.matches
 
 
 def test_approval_restore_smoke_helpers_share_focus_age_and_preview_checks() -> None:

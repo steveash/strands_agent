@@ -25,6 +25,8 @@ from strands_agent_tui.testing import (
     matches_markdown_section,
     matches_public_cli_help,
     matches_public_cli_invalid_choice,
+    matches_smoke_cli_doc_parity,
+    matches_smoke_cli_help_for_script,
     matches_shell_filter_output,
     matches_workspace_filter_output,
     seed_approval_restore_focus_scenario,
@@ -74,9 +76,11 @@ def _format_script_help(name: str) -> str:
 
 
 def _assert_script_help_contains(script_name: str, required_snippets: list[str] | None = None) -> None:
+    help_text = _format_script_help(script_name)
     if required_snippets is None:
-        required_snippets = list(smoke_cli_doc_spec(script_name).help_required_snippets)
-    assert matches_public_cli_help(_format_script_help(script_name), required_snippets=required_snippets)
+        assert matches_smoke_cli_help_for_script(help_text, script_name=script_name)
+        return
+    assert matches_public_cli_help(help_text, required_snippets=required_snippets)
 
 
 def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
@@ -232,10 +236,11 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
 @pytest.mark.parametrize(
     ("argv", "expected_names"),
     [
-        ([], ["summary-utils", "shell-tool", "replay"]),
-        (["local"], ["summary-utils", "shell-tool", "replay"]),
-        (["all"], ["summary-utils", "shell-tool", "replay", "live"]),
+        ([], ["summary-utils", "shell-tool", "replay", "docs"]),
+        (["local"], ["summary-utils", "shell-tool", "replay", "docs"]),
+        (["all"], ["summary-utils", "shell-tool", "replay", "docs", "live"]),
         (["summary-utils"], ["summary-utils"]),
+        (["docs"], ["docs"]),
         (["live"], ["live"]),
     ],
 )
@@ -348,12 +353,34 @@ def test_standalone_smoke_passes_shared_wrapper_metadata(monkeypatch) -> None:
 
 @pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
 def test_smoke_wrapper_help_and_readme_docs_stay_in_sync(doc_spec) -> None:
-    _assert_script_help_contains(doc_spec.script_name)
-    assert matches_markdown_section(
-        README_TEXT,
-        heading=doc_spec.readme_section_heading,
-        required_snippets=doc_spec.readme_required_snippets,
+    assert matches_smoke_cli_doc_parity(
+        script_name=doc_spec.script_name,
+        help_text=_format_script_help(doc_spec.script_name),
+        markdown=README_TEXT,
     )
+
+
+def test_smoke_cli_docs_smoke_reports_doc_parity_for_all_wrappers(monkeypatch) -> None:
+    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
+    output = StringIO()
+    real_emit_smoke_results = smoke_cli_docs_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        smoke_cli_docs_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = smoke_cli_docs_smoke.main()
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    for doc_spec in SMOKE_CLI_DOC_SPECS:
+        prefix = doc_spec.script_name
+        assert f"{prefix}_help_missing: none" in lines
+        assert f"{prefix}_readme_missing: none" in lines
+        assert f"{prefix}_help= True" in lines
+        assert f"{prefix}_readme= True" in lines
+        assert f"{prefix}_doc_parity= True" in lines
 
 
 def test_smoke_cli_doc_specs_follow_shared_wrapper_registry_order() -> None:
@@ -388,7 +415,7 @@ def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> No
 @pytest.mark.parametrize(
     ("script_name", "invalid_target", "expected_choices"),
     [
-        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,live,local,all}"),
+        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,docs,live,local,all}"),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
             "session_recovery_smoke",

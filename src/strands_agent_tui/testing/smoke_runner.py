@@ -435,12 +435,13 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("summary-utils", "summary_utils_smoke.py"),
         SmokeScriptTargetTemplate("shell-tool", "shell_tool_smoke.py"),
         SmokeScriptTargetTemplate("replay", "replay_smoke.py"),
+        SmokeScriptTargetTemplate("docs", "smoke_cli_docs_smoke.py"),
         SmokeScriptTargetTemplate("live", "live_smoke.py"),
     ),
     default_target_name="local",
     alias_target_names={
-        "local": ("summary-utils", "shell-tool", "replay"),
-        "all": ("summary-utils", "shell-tool", "replay", "live"),
+        "local": ("summary-utils", "shell-tool", "replay", "docs"),
+        "all": ("summary-utils", "shell-tool", "replay", "docs", "live"),
     },
     examples=(
         SmokeCliExample("standalone_smoke.py"),
@@ -449,7 +450,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="local",
             readme_description=(
                 "explicitly re-runs the default `local` alias "
-                "(`summary_utils`, `shell_tool`, `replay`)"
+                "(`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)"
             ),
         ),
         SmokeCliExample(
@@ -457,8 +458,13 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="all",
             readme_description=(
                 "runs the live-inclusive alias "
-                "(`summary_utils`, `shell_tool`, `replay`, `live`)"
+                "(`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)"
             ),
+        ),
+        SmokeCliExample(
+            "standalone_smoke.py docs",
+            target_name="docs",
+            readme_description="runs just the smoke CLI docs parity target",
         ),
         SmokeCliExample(
             "standalone_smoke.py replay",
@@ -469,7 +475,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     wrapper_metadata=STANDALONE_SMOKE_WRAPPER,
     readme_section_heading="Standalone local smoke bundle",
     readme_intro_snippets=(
-        "default `local` bundle runs `summary_utils`, `shell_tool`, and `replay` smokes together",
+        "default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together",
     ),
 )
 
