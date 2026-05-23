@@ -410,6 +410,8 @@ Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)
 - `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)
 - `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
+- `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)
+- `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
 
 ### Session triage smoke bundle

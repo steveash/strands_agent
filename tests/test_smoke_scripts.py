@@ -360,6 +360,23 @@ def test_smoke_wrapper_help_and_readme_docs_stay_in_sync(doc_spec) -> None:
     )
 
 
+def test_smoke_cli_docs_smoke_build_parser_lists_public_targets_and_examples() -> None:
+    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
+
+    help_text = " ".join(smoke_cli_docs_smoke.build_parser().format_help().split())
+
+    assert (
+        "Which smoke-wrapper docs surface to audit. Aliases: all -> standalone_smoke, "
+        "session_triage_smoke, session_recovery_smoke, smoke_matrix."
+    ) in help_text
+    assert (
+        "smoke_cli_docs_smoke.py # default all alias -> standalone_smoke, "
+        "session_triage_smoke, session_recovery_smoke, smoke_matrix"
+    ) in help_text
+    assert "smoke_cli_docs_smoke.py standalone_smoke # single smoke wrapper" in help_text
+    assert "smoke_cli_docs_smoke.py smoke_matrix # single smoke wrapper" in help_text
+
+
 def test_smoke_cli_docs_smoke_reports_doc_parity_for_all_wrappers(monkeypatch) -> None:
     smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
     output = StringIO()
@@ -370,10 +387,13 @@ def test_smoke_cli_docs_smoke_reports_doc_parity_for_all_wrappers(monkeypatch) -
         lambda results: real_emit_smoke_results(results, stdout=output),
     )
 
-    exit_code = smoke_cli_docs_smoke.main()
+    exit_code = smoke_cli_docs_smoke.main([])
     lines = output.getvalue().splitlines()
 
     assert exit_code == 0
+    assert smoke_cli_docs_smoke.DEFAULT_TARGET_NAMES == [
+        doc_spec.script_name for doc_spec in SMOKE_CLI_DOC_SPECS
+    ]
     for doc_spec in SMOKE_CLI_DOC_SPECS:
         prefix = doc_spec.script_name
         assert (
@@ -387,6 +407,25 @@ def test_smoke_cli_docs_smoke_reports_doc_parity_for_all_wrappers(monkeypatch) -
         assert f"{prefix}_doc_parity= True" in lines
 
 
+def test_smoke_cli_docs_smoke_supports_single_wrapper_target(monkeypatch) -> None:
+    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
+    output = StringIO()
+    real_emit_smoke_results = smoke_cli_docs_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        smoke_cli_docs_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = smoke_cli_docs_smoke.main(["standalone_smoke"])
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    assert all(line.startswith("standalone_smoke_") for line in lines)
+    assert len(lines) == 6
+    assert "standalone_smoke_doc_parity= True" in lines
+
+
 def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> None:
     smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
@@ -396,8 +435,21 @@ def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> 
         1,
     )
 
-    results = dict(smoke_cli_docs_smoke.run_smoke_cli_docs_smoke(markdown=broken_markdown))
+    results = dict(
+        smoke_cli_docs_smoke.run_smoke_cli_docs_smoke(
+            markdown=broken_markdown,
+            requested_target_name="standalone_smoke",
+        )
+    )
 
+    assert set(results) == {
+        "standalone_smoke_diagnostic",
+        "standalone_smoke_help_missing",
+        "standalone_smoke_readme_missing",
+        "standalone_smoke_help",
+        "standalone_smoke_readme",
+        "standalone_smoke_doc_parity",
+    }
     assert results["standalone_smoke_diagnostic"].startswith(
         f"help ok; README {standalone_spec.readme_section_heading!r} missing:"
     )
@@ -405,6 +457,23 @@ def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> 
     assert results["standalone_smoke_help"] is True
     assert results["standalone_smoke_readme"] is False
     assert results["standalone_smoke_doc_parity"] is False
+
+
+
+def test_smoke_cli_docs_smoke_invalid_choice_errors_show_public_cli_choices(capsys) -> None:
+    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
+
+    with pytest.raises(SystemExit) as exc_info:
+        smoke_cli_docs_smoke.main(["docs"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert matches_public_cli_invalid_choice(
+        captured.err,
+        invalid_target="docs",
+        expected_choices="{standalone_smoke,session_triage_smoke,session_recovery_smoke,smoke_matrix,all}",
+    )
 
 
 
