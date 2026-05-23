@@ -320,8 +320,13 @@ class SmokeWrapperCliSpec:
     examples: tuple[SmokeCliExample, ...] = ()
     wrapper_metadata: SmokeWrapperMetadata | None = None
     readme_section_heading: str | None = None
+    readme_section_intro: str | None = None
     help_required_snippets_extra: tuple[str, ...] = ()
     readme_intro_snippets: tuple[str, ...] = ()
+    readme_intro_paragraphs: tuple[str, ...] = ()
+    readme_extra_shortcut_snippets: tuple[str, ...] = ()
+    readme_extra_shortcut_insert_at: int | None = None
+    readme_shortcut_heading: str = "Operator shortcuts:"
     alias_heading: str = "Alias details"
     single_choice_description: str = "single target"
 
@@ -419,6 +424,14 @@ class SmokeWrapperCliSpec:
             return self._format_readme_command(self.examples[0].command)
         return self._format_readme_command(f"{self.script_name}.py")
 
+    def readme_reference_block(self) -> str:
+        return f"```bash\n{self.readme_reference_command()}\n```"
+
+    def readme_intro_blocks(self) -> tuple[str, ...]:
+        if self.readme_intro_paragraphs:
+            return self.readme_intro_paragraphs
+        return self.readme_intro_snippets
+
     def readme_shortcut_snippets(self) -> tuple[str, ...]:
         snippets: list[str] = []
         for example in self.examples[1:]:
@@ -427,14 +440,45 @@ class SmokeWrapperCliSpec:
                 snippets.append(snippet)
         return tuple(snippets)
 
+    def readme_all_shortcut_snippets(self) -> tuple[str, ...]:
+        snippets = list(self.readme_shortcut_snippets())
+        if not self.readme_extra_shortcut_snippets:
+            return tuple(snippets)
+        insert_at = len(snippets) if self.readme_extra_shortcut_insert_at is None else self.readme_extra_shortcut_insert_at
+        snippets[insert_at:insert_at] = list(self.readme_extra_shortcut_snippets)
+        return tuple(snippets)
+
     def readme_operator_shortcut_lines(self) -> tuple[str, ...]:
-        return tuple(f"- {snippet}" for snippet in self.readme_shortcut_snippets())
+        return tuple(f"- {snippet}" for snippet in self.readme_all_shortcut_snippets())
+
+    def render_readme_section_body(self) -> str:
+        if self.readme_section_intro is None:
+            raise ValueError(f"readme_section_intro is required for {self.script_name}")
+
+        lines = [self.readme_section_intro, "", *self.readme_reference_block().splitlines()]
+        intro_blocks = self.readme_intro_blocks()
+        if intro_blocks:
+            lines.append("")
+            for index, paragraph in enumerate(intro_blocks):
+                if index:
+                    lines.append("")
+                lines.append(paragraph)
+
+        shortcut_lines = self.readme_operator_shortcut_lines()
+        if shortcut_lines:
+            lines.extend(("", self.readme_shortcut_heading, *shortcut_lines))
+        return "\n".join(lines)
+
+    def render_readme_section(self) -> str:
+        if self.readme_section_heading is None:
+            raise ValueError(f"readme_section_heading is required for {self.script_name}")
+        return f"### {self.readme_section_heading}\n\n{self.render_readme_section_body()}"
 
     def readme_required_snippets(self) -> tuple[str, ...]:
         return (
-            self.readme_reference_command(),
-            *self.readme_intro_snippets,
-            *self.readme_shortcut_snippets(),
+            self.readme_reference_block(),
+            *self.readme_intro_blocks(),
+            *self.readme_all_shortcut_snippets(),
         )
 
 
@@ -488,9 +532,15 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     ),
     wrapper_metadata=STANDALONE_SMOKE_WRAPPER,
     readme_section_heading="Standalone local smoke bundle",
-    readme_intro_snippets=(
-        "default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together",
+    readme_section_intro="To verify the remaining local smoke surfaces with shared fail-fast `= False` handling:",
+    readme_intro_paragraphs=(
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
     ),
+    readme_extra_shortcut_snippets=(
+        "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
+        "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
+    ),
+    readme_extra_shortcut_insert_at=3,
 )
 
 SESSION_TRIAGE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
@@ -526,7 +576,10 @@ SESSION_TRIAGE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     ),
     wrapper_metadata=SESSION_TRIAGE_SMOKE_WRAPPER,
     readme_section_heading="Session triage smoke bundle",
-    readme_intro_snippets=("default bundle runs both triage targets",),
+    readme_section_intro="To run the picker + switcher smoke surfaces together with shared fail-fast handling:",
+    readme_intro_paragraphs=(
+        "This default bundle runs both triage targets, accepts either `both` or `all` for the combined picker+switcher selection, and ends with a concise `[session-triage-smoke] summary: ...` footer.",
+    ),
 )
 
 SESSION_RECOVERY_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
@@ -575,7 +628,10 @@ SESSION_RECOVERY_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     ),
     wrapper_metadata=SESSION_RECOVERY_SMOKE_WRAPPER,
     readme_section_heading="Session recovery smoke bundle",
-    readme_intro_snippets=("bundle runs all recovery targets by default",),
+    readme_section_intro="To run the approval/session-state/live-restore smoke surfaces together with shared fail-fast handling:",
+    readme_intro_paragraphs=(
+        "This bundle runs all recovery targets by default and ends with a concise `[session-recovery-smoke] summary: ...` footer.",
+    ),
 )
 
 SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
@@ -639,16 +695,16 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
             ),
         ),
         SmokeCliExample(
-            "smoke_matrix.py standalone",
-            target_name="standalone",
-            description="single bundle",
-            readme_description="runs only the standalone local bundle",
-        ),
-        SmokeCliExample(
             "smoke_matrix.py triage",
             target_name="triage",
             description="single bundle",
             readme_description="runs only the session-triage bundle",
+        ),
+        SmokeCliExample(
+            "smoke_matrix.py standalone",
+            target_name="standalone",
+            description="single bundle",
+            readme_description="runs only the standalone local bundle",
         ),
         SmokeCliExample(
             "smoke_matrix.py recovery",
@@ -659,12 +715,12 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
     ),
     wrapper_metadata=SMOKE_MATRIX_WRAPPER,
     readme_section_heading="Full local smoke matrix",
+    readme_section_intro="To run the current local smoke bundles together with fail-fast handling:",
     help_required_snippets_extra=(
         "The default 'local' matrix excludes the opt-in live runtime smoke target, and the 'all' alias swaps in the live-inclusive standalone bundle.",
     ),
-    readme_intro_snippets=(
-        "default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together",
-        "Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.",
+    readme_intro_paragraphs=(
+        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.",
     ),
     alias_heading="Bundle aliases",
     single_choice_description="single bundle",

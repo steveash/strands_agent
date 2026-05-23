@@ -170,7 +170,7 @@ def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:
 
 def missing_required_snippets(text: str, *, required_snippets: Iterable[str]) -> tuple[str, ...]:
     normalized = normalize_cli_text(text)
-    return tuple(snippet for snippet in required_snippets if snippet not in normalized)
+    return tuple(snippet for snippet in required_snippets if normalize_cli_text(snippet) not in normalized)
 
 
 def missing_public_cli_help_snippets(text: str, *, required_snippets: Iterable[str]) -> tuple[str, ...]:

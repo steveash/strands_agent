@@ -508,8 +508,16 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
+    assert STANDALONE_SMOKE_CLI_SPEC.readme_all_shortcut_snippets() == (
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
+        "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
+        "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
+        "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
+    )
     assert STANDALONE_SMOKE_CLI_SPEC.readme_operator_shortcut_lines() == tuple(
-        f"- {snippet}" for snippet in STANDALONE_SMOKE_CLI_SPEC.readme_shortcut_snippets()
+        f"- {snippet}" for snippet in STANDALONE_SMOKE_CLI_SPEC.readme_all_shortcut_snippets()
     )
 
 
@@ -534,22 +542,79 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
     assert "smoke_matrix.py all # all alias -> standalone (live-inclusive), triage, recovery" in matrix_help
 
     assert STANDALONE_SMOKE_CLI_SPEC.readme_required_snippets() == (
-        ".venv/bin/python scripts/standalone_smoke.py",
-        "default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together",
+        "```bash\n.venv/bin/python scripts/standalone_smoke.py\n```",
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
         "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)",
         "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)",
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
+        "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
+        "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
     assert SMOKE_MATRIX_CLI_SPEC.readme_required_snippets() == (
-        ".venv/bin/python scripts/smoke_matrix.py",
-        "default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together",
-        "Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.",
+        "```bash\n.venv/bin/python scripts/smoke_matrix.py\n```",
+        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.",
         "`.venv/bin/python scripts/smoke_matrix.py local` explicitly re-runs the default local matrix (`standalone`, `triage`, `recovery`)",
         "`.venv/bin/python scripts/smoke_matrix.py all` swaps in the live-inclusive standalone bundle (`standalone (live-inclusive)`, `triage`, `recovery`)",
-        "`.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle",
         "`.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle",
+        "`.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle",
         "`.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle",
+    )
+
+
+def test_smoke_wrapper_cli_specs_render_readme_sections() -> None:
+    assert STANDALONE_SMOKE_CLI_SPEC.render_readme_section() == (
+        "### Standalone local smoke bundle\n\n"
+        "To verify the remaining local smoke surfaces with shared fail-fast `= False` handling:\n\n"
+        "```bash\n"
+        ".venv/bin/python scripts/standalone_smoke.py\n"
+        "```\n\n"
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.\n\n"
+        "Operator shortcuts:\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target\n"
+        "- `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)\n"
+        "- `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target"
+    )
+    assert SESSION_TRIAGE_SMOKE_CLI_SPEC.render_readme_section() == (
+        "### Session triage smoke bundle\n\n"
+        "To run the picker + switcher smoke surfaces together with shared fail-fast handling:\n\n"
+        "```bash\n"
+        ".venv/bin/python scripts/session_triage_smoke.py\n"
+        "```\n\n"
+        "This default bundle runs both triage targets, accepts either `both` or `all` for the combined picker+switcher selection, and ends with a concise `[session-triage-smoke] summary: ...` footer.\n\n"
+        "Operator shortcuts:\n"
+        "- `.venv/bin/python scripts/session_triage_smoke.py both` explicitly re-runs the default picker+switcher alias\n"
+        "- `.venv/bin/python scripts/session_triage_smoke.py all` is an explicit alias for the same picker+switcher bundle\n"
+        "- `.venv/bin/python scripts/session_triage_smoke.py picker` runs only the launch-time picker smoke"
+    )
+    assert SESSION_RECOVERY_SMOKE_CLI_SPEC.render_readme_section() == (
+        "### Session recovery smoke bundle\n\n"
+        "To run the approval/session-state/live-restore smoke surfaces together with shared fail-fast handling:\n\n"
+        "```bash\n"
+        ".venv/bin/python scripts/session_recovery_smoke.py\n"
+        "```\n\n"
+        "This bundle runs all recovery targets by default and ends with a concise `[session-recovery-smoke] summary: ...` footer.\n\n"
+        "Operator shortcuts:\n"
+        "- `.venv/bin/python scripts/session_recovery_smoke.py all` explicitly selects the full recovery bundle (`approval`, `approval-restart`, `session-state`, `live-restore`, `live-restore-denied`)\n"
+        "- `.venv/bin/python scripts/session_recovery_smoke.py live-restore` runs only the live-restore recovery target\n"
+        "- `.venv/bin/python scripts/session_recovery_smoke.py approval` runs only the approval smoke target"
+    )
+    assert SMOKE_MATRIX_CLI_SPEC.render_readme_section() == (
+        "### Full local smoke matrix\n\n"
+        "To run the current local smoke bundles together with fail-fast handling:\n\n"
+        "```bash\n"
+        ".venv/bin/python scripts/smoke_matrix.py\n"
+        "```\n\n"
+        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.\n\n"
+        "Operator shortcuts:\n"
+        "- `.venv/bin/python scripts/smoke_matrix.py local` explicitly re-runs the default local matrix (`standalone`, `triage`, `recovery`)\n"
+        "- `.venv/bin/python scripts/smoke_matrix.py all` swaps in the live-inclusive standalone bundle (`standalone (live-inclusive)`, `triage`, `recovery`)\n"
+        "- `.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle\n"
+        "- `.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle\n"
+        "- `.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle"
     )
 
 

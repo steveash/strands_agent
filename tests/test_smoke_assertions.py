@@ -1,4 +1,5 @@
 from textwrap import dedent
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +9,7 @@ from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME,
+    SMOKE_WRAPPER_CLI_SPECS,
     SmokeCliDocSpec,
     SmokeCliExample,
     build_smoke_cli_doc_audit_parser,
@@ -61,8 +63,13 @@ from strands_agent_tui.testing import (
     normalize_cli_text,
     smoke_cli_doc_parity_diagnostic,
     smoke_cli_doc_spec,
+    smoke_wrapper_cli_spec,
     smoke_text_matches,
 )
+
+
+README_PATH = Path(__file__).resolve().parent.parent / "README.md"
+README_TEXT = README_PATH.read_text(encoding="utf-8")
 
 
 def test_smoke_text_matches_supports_required_and_excluded_snippets() -> None:
@@ -160,30 +167,20 @@ def test_build_smoke_cli_doc_spec_registry_rejects_duplicate_script_names() -> N
 def test_smoke_cli_doc_specs_extract_markdown_sections_and_reuse_shared_snippets() -> None:
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
     triage_spec = smoke_cli_doc_spec("session_triage_smoke")
-    markdown = dedent(
-        f"""
-        ## Smoke docs
-
-        ### {standalone_spec.readme_section_heading}
-        {standalone_spec.readme_required_snippets[1]}.
-        {standalone_spec.readme_required_snippets[2]}.
-        {standalone_spec.readme_required_snippets[3]}.
-        {standalone_spec.readme_required_snippets[4]}.
-        {standalone_spec.readme_required_snippets[5]}.
-
-        ### {triage_spec.readme_section_heading}
-        Intro line.
-        {triage_spec.readme_required_snippets[2]}.
-        """
-    ).strip()
+    standalone_lines = standalone_spec.readme_required_snippets
+    triage_lines = ("Intro line.", triage_spec.readme_required_snippets[2])
+    markdown = (
+        "## Smoke docs\n\n"
+        f"### {standalone_spec.readme_section_heading}\n"
+        + "\n".join(standalone_lines)
+        + "\n\n"
+        f"### {triage_spec.readme_section_heading}\n"
+        + "\n".join(triage_lines)
+    )
     help_text = "\n".join(standalone_spec.help_required_snippets)
 
-    assert markdown_section_text(markdown, heading=standalone_spec.readme_section_heading) == (
-        f"{standalone_spec.readme_required_snippets[1]}.\n"
-        f"{standalone_spec.readme_required_snippets[2]}.\n"
-        f"{standalone_spec.readme_required_snippets[3]}.\n"
-        f"{standalone_spec.readme_required_snippets[4]}.\n"
-        f"{standalone_spec.readme_required_snippets[5]}."
+    assert markdown_section_text(markdown, heading=standalone_spec.readme_section_heading) == "\n".join(
+        standalone_lines
     )
     assert matches_markdown_section(
         markdown,
@@ -217,7 +214,7 @@ def test_smoke_cli_doc_parity_helpers_report_missing_help_and_readme_snippets() 
         ## Smoke docs
 
         ### {standalone_spec.readme_section_heading}
-        {standalone_spec.readme_required_snippets[1]}.
+        {standalone_spec.readme_required_snippets[1]}
         """
     ).strip()
 
@@ -264,19 +261,11 @@ def test_smoke_cli_doc_parity_helpers_report_missing_help_and_readme_snippets() 
 def test_smoke_cli_doc_parity_diagnostic_reports_ok_surfaces_when_docs_match() -> None:
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
     help_text = "\n".join(standalone_spec.help_required_snippets)
-    markdown = dedent(
-        f"""
-        ## Smoke docs
-
-        ### {standalone_spec.readme_section_heading}
-        {standalone_spec.readme_required_snippets[0]}.
-        {standalone_spec.readme_required_snippets[1]}.
-        {standalone_spec.readme_required_snippets[2]}.
-        {standalone_spec.readme_required_snippets[3]}.
-        {standalone_spec.readme_required_snippets[4]}.
-        {standalone_spec.readme_required_snippets[5]}.
-        """
-    ).strip()
+    markdown = (
+        "## Smoke docs\n\n"
+        f"### {standalone_spec.readme_section_heading}\n"
+        + "\n".join(standalone_spec.readme_required_snippets)
+    )
 
     parity = collect_smoke_cli_doc_parity(
         script_name="standalone_smoke",
@@ -290,6 +279,16 @@ def test_smoke_cli_doc_parity_diagnostic_reports_ok_surfaces_when_docs_match() -
     assert parity.diagnostic_summary == (
         f"help ok; README {standalone_spec.readme_section_heading!r} ok"
     )
+
+
+def test_smoke_wrapper_cli_specs_render_exact_canonical_readme_sections() -> None:
+    assert [doc_spec.script_name for doc_spec in SMOKE_CLI_DOC_SPECS] == [
+        spec.script_name for spec in SMOKE_WRAPPER_CLI_SPECS
+    ]
+
+    for doc_spec in SMOKE_CLI_DOC_SPECS:
+        spec = smoke_wrapper_cli_spec(doc_spec.script_name)
+        assert markdown_section_text(README_TEXT, heading=doc_spec.readme_section_heading) == spec.render_readme_section_body()
 
 
 
