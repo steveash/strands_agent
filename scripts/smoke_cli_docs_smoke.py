@@ -57,6 +57,7 @@ def run_smoke_cli_docs_smoke(
                 (f"{prefix}_diagnostic", parity.diagnostic_summary),
                 (f"{prefix}_help_missing", _render_missing_snippets(parity.missing_help_snippets)),
                 (f"{prefix}_readme_missing", _render_missing_snippets(parity.missing_readme_snippets)),
+                (f"{prefix}_readme_diff", parity.readme_diff_summary),
                 (f"{prefix}_help", parity.help_matches),
                 (f"{prefix}_readme", parity.readme_matches),
                 (f"{prefix}_doc_parity", parity.matches),

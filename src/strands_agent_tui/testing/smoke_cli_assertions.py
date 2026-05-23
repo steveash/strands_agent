@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Iterable
 from dataclasses import dataclass
+from difflib import unified_diff
 from pathlib import Path
 
 from .smoke_runner import (
@@ -12,6 +13,7 @@ from .smoke_runner import (
     SmokeTargetSelector,
     SmokeWrapperCliSpec,
     build_smoke_cli_parser,
+    smoke_wrapper_cli_spec,
 )
 
 
@@ -25,6 +27,7 @@ class SmokeCliDocParityResult:
     readme_section_heading: str
     missing_help_snippets: tuple[str, ...]
     missing_readme_snippets: tuple[str, ...]
+    readme_diff_lines: tuple[str, ...] = ()
 
     @property
     def help_matches(self) -> bool:
@@ -32,7 +35,7 @@ class SmokeCliDocParityResult:
 
     @property
     def readme_matches(self) -> bool:
-        return not self.missing_readme_snippets
+        return not self.missing_readme_snippets and not self.readme_diff_lines
 
     @property
     def matches(self) -> bool:
@@ -45,13 +48,22 @@ class SmokeCliDocParityResult:
         return f"--help missing: {_render_missing_snippets(self.missing_help_snippets)}"
 
     @property
+    def readme_diff_summary(self) -> str:
+        if not self.readme_diff_lines:
+            return "none"
+        return " | ".join(self.readme_diff_lines)
+
+    @property
     def readme_diagnostic(self) -> str:
         if self.readme_matches:
             return f"README {self.readme_section_heading!r} ok"
-        return (
-            f"README {self.readme_section_heading!r} missing: "
-            f"{_render_missing_snippets(self.missing_readme_snippets)}"
-        )
+
+        parts: list[str] = []
+        if self.missing_readme_snippets:
+            parts.append(f"missing: {_render_missing_snippets(self.missing_readme_snippets)}")
+        if self.readme_diff_lines:
+            parts.append(f"diff: {self.readme_diff_summary}")
+        return f"README {self.readme_section_heading!r} " + "; ".join(parts)
 
     @property
     def diagnostic_lines(self) -> tuple[str, str]:
@@ -189,6 +201,29 @@ def missing_markdown_section_snippets(
     )
 
 
+def expected_smoke_cli_readme_section_body(script_name: str) -> str:
+    return smoke_wrapper_cli_spec(script_name).render_readme_section_body()
+
+
+
+def smoke_cli_readme_diff_lines(markdown: str, *, script_name: str) -> tuple[str, ...]:
+    spec = smoke_cli_doc_spec(script_name)
+    expected = expected_smoke_cli_readme_section_body(script_name)
+    actual = markdown_section_text(markdown, heading=spec.readme_section_heading)
+    if actual == expected:
+        return ()
+    return tuple(
+        unified_diff(
+            expected.splitlines(),
+            actual.splitlines(),
+            fromfile="expected",
+            tofile="README",
+            lineterm="",
+        )
+    )
+
+
+
 def collect_smoke_cli_doc_parity(
     *,
     script_name: str,
@@ -208,6 +243,7 @@ def collect_smoke_cli_doc_parity(
             heading=spec.readme_section_heading,
             required_snippets=spec.readme_required_snippets,
         ),
+        readme_diff_lines=smoke_cli_readme_diff_lines(markdown, script_name=script_name),
     )
 
 
@@ -217,12 +253,7 @@ def matches_smoke_cli_help_for_script(text: str, *, script_name: str) -> bool:
 
 
 def matches_smoke_cli_readme_for_script(markdown: str, *, script_name: str) -> bool:
-    spec = smoke_cli_doc_spec(script_name)
-    return not missing_markdown_section_snippets(
-        markdown,
-        heading=spec.readme_section_heading,
-        required_snippets=spec.readme_required_snippets,
-    )
+    return not smoke_cli_readme_diff_lines(markdown, script_name=script_name)
 
 
 def smoke_cli_doc_parity_diagnostic(

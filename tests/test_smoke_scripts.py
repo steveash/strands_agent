@@ -402,6 +402,7 @@ def test_smoke_cli_docs_smoke_reports_doc_parity_for_all_wrappers(monkeypatch) -
         )
         assert f"{prefix}_help_missing: none" in lines
         assert f"{prefix}_readme_missing: none" in lines
+        assert f"{prefix}_readme_diff: none" in lines
         assert f"{prefix}_help= True" in lines
         assert f"{prefix}_readme= True" in lines
         assert f"{prefix}_doc_parity= True" in lines
@@ -422,7 +423,8 @@ def test_smoke_cli_docs_smoke_supports_single_wrapper_target(monkeypatch) -> Non
 
     assert exit_code == 0
     assert all(line.startswith("standalone_smoke_") for line in lines)
-    assert len(lines) == 6
+    assert len(lines) == 7
+    assert "standalone_smoke_readme_diff: none" in lines
     assert "standalone_smoke_doc_parity= True" in lines
 
 
@@ -446,6 +448,7 @@ def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> 
         "standalone_smoke_diagnostic",
         "standalone_smoke_help_missing",
         "standalone_smoke_readme_missing",
+        "standalone_smoke_readme_diff",
         "standalone_smoke_help",
         "standalone_smoke_readme",
         "standalone_smoke_doc_parity",
@@ -454,6 +457,7 @@ def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> 
         f"help ok; README {standalone_spec.readme_section_heading!r} missing:"
     )
     assert standalone_spec.readme_required_snippets[4] in results["standalone_smoke_diagnostic"]
+    assert results["standalone_smoke_readme_diff"].startswith("--- expected | +++ README | @@ ")
     assert results["standalone_smoke_help"] is True
     assert results["standalone_smoke_readme"] is False
     assert results["standalone_smoke_doc_parity"] is False
@@ -504,6 +508,30 @@ def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> No
         invalid_target="standalone-all",
         expected_choices="{standalone,triage,recovery,local,all}",
     )
+
+
+def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippets() -> None:
+    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
+    spec = smoke_cli_doc_spec("standalone_smoke")
+    drifted_markdown = README_TEXT.replace("Operator shortcuts:", "Shortcut notes:", 1)
+
+    results = dict(
+        smoke_cli_docs_smoke.run_smoke_cli_docs_smoke(
+            markdown=drifted_markdown,
+            requested_target_name="standalone_smoke",
+        )
+    )
+
+    assert results["standalone_smoke_help_missing"] == "none"
+    assert results["standalone_smoke_readme_missing"] == "none"
+    assert results["standalone_smoke_readme_diff"].startswith("--- expected | +++ README | @@ ")
+    assert "-Operator shortcuts:" in results["standalone_smoke_readme_diff"]
+    assert "+Shortcut notes:" in results["standalone_smoke_readme_diff"]
+    assert results["standalone_smoke_diagnostic"].startswith(
+        f"help ok; README {spec.readme_section_heading!r} diff: --- expected | +++ README | @@ "
+    )
+    assert results["standalone_smoke_readme"] is False
+    assert results["standalone_smoke_doc_parity"] is False
 
 
 @pytest.mark.parametrize(
