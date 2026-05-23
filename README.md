@@ -145,7 +145,7 @@ Current evidence:
 - focused smoke infra coverage: `.venv/bin/pytest -q tests/test_smoke_assertions.py tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `85 passed in 5.23s`,
 - runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 29.49s`,
 - the smoke matrix now includes `standalone_smoke_help_missing`, `standalone_smoke_readme_missing`, and matching parity lines for all four public smoke wrappers,
-- self-unblock note: no unblock was required beyond normal verification; the repo stayed runnable while the new docs smoke target was added to the default standalone bundle.
+- self-unblock note: local verification, commits, and the annotated tag succeeded, but `git push origin main` / tag push were blocked by the cron session's non-interactive exec approval policy; this can be finished from an approved interactive session without changing repo contents.
 
 ## First five phases
 
