@@ -500,6 +500,19 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
         smoke_wrapper_cli_spec("missing_smoke")
 
 
+def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None:
+    assert STANDALONE_SMOKE_CLI_SPEC.readme_reference_command() == ".venv/bin/python scripts/standalone_smoke.py"
+    assert STANDALONE_SMOKE_CLI_SPEC.readme_shortcut_snippets() == (
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
+        "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
+    )
+    assert STANDALONE_SMOKE_CLI_SPEC.readme_operator_shortcut_lines() == tuple(
+        f"- {snippet}" for snippet in STANDALONE_SMOKE_CLI_SPEC.readme_shortcut_snippets()
+    )
+
+
 def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> None:
     standalone_parser = STANDALONE_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)
     triage_parser = SESSION_TRIAGE_SMOKE_CLI_SPEC.build_parser(script_dir=tmp_path)

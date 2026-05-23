@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import argparse
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
-from .smoke_runner import SMOKE_WRAPPER_CLI_SPECS, SmokeWrapperCliSpec
+from .smoke_runner import (
+    SMOKE_WRAPPER_CLI_SPECS,
+    SmokeCliExample,
+    SmokeScriptTarget,
+    SmokeTargetSelector,
+    SmokeWrapperCliSpec,
+    build_smoke_cli_parser,
+)
 
 
 def _render_missing_snippets(snippets: tuple[str, ...]) -> str:
@@ -89,6 +98,67 @@ def build_smoke_cli_doc_spec_registry(
 
 SMOKE_CLI_DOC_SPECS = build_smoke_cli_doc_specs(SMOKE_WRAPPER_CLI_SPECS)
 SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME = build_smoke_cli_doc_spec_registry(SMOKE_CLI_DOC_SPECS)
+SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME = "smoke_cli_docs_smoke"
+
+
+def build_smoke_cli_doc_audit_selector() -> SmokeTargetSelector:
+    return SmokeTargetSelector(
+        targets={
+            spec.script_name: SmokeScriptTarget(spec.script_name, Path(f"{spec.script_name}.py"))
+            for spec in SMOKE_CLI_DOC_SPECS
+        },
+        default_target_name="all",
+        alias_target_names={"all": tuple(spec.script_name for spec in SMOKE_CLI_DOC_SPECS)},
+    )
+
+
+SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR = build_smoke_cli_doc_audit_selector()
+SMOKE_CLI_DOC_AUDIT_TARGET_NAMES = tuple(SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.targets)
+DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES = tuple(SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.resolve_target_names())
+
+
+def build_smoke_cli_doc_audit_examples() -> tuple[SmokeCliExample, ...]:
+    commands = [SmokeCliExample(f"{SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME}.py")]
+    if SMOKE_CLI_DOC_AUDIT_TARGET_NAMES:
+        commands.append(
+            SmokeCliExample(
+                f"{SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME}.py {SMOKE_CLI_DOC_AUDIT_TARGET_NAMES[0]}",
+                target_name=SMOKE_CLI_DOC_AUDIT_TARGET_NAMES[0],
+            )
+        )
+    if len(SMOKE_CLI_DOC_AUDIT_TARGET_NAMES) > 1:
+        commands.append(
+            SmokeCliExample(
+                f"{SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME}.py {SMOKE_CLI_DOC_AUDIT_TARGET_NAMES[-1]}",
+                target_name=SMOKE_CLI_DOC_AUDIT_TARGET_NAMES[-1],
+            )
+        )
+    return tuple(commands)
+
+
+SMOKE_CLI_DOC_AUDIT_EXAMPLES = build_smoke_cli_doc_audit_examples()
+
+
+def resolve_smoke_cli_doc_target_names(requested_target_name: str | None = None) -> tuple[str, ...]:
+    return tuple(SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.resolve_target_names(requested_target_name))
+
+
+
+def build_smoke_cli_doc_audit_parser() -> argparse.ArgumentParser:
+    selector = SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR
+    return build_smoke_cli_parser(
+        description=(
+            "Audit smoke-wrapper `--help` text against the README and fail on missing public-doc snippets."
+        ),
+        choices=selector.choices,
+        default_target_name=selector.default_target_name,
+        resolve_target_names=selector.resolve_target_names,
+        resolve_display_names=selector.resolve_display_names,
+        item_help="Which smoke-wrapper docs surface to audit.",
+        alias_target_names=selector.alias_target_names,
+        examples=SMOKE_CLI_DOC_AUDIT_EXAMPLES,
+        single_choice_description="single smoke wrapper",
+    )
 
 
 def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:

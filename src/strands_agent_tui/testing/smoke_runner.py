@@ -31,6 +31,11 @@ class SmokeCliExample:
     description: str | None = None
     readme_description: str | None = None
 
+    def render_readme_snippet(self, *, format_command: Callable[[str], str]) -> str | None:
+        if self.readme_description is None:
+            return None
+        return f"`{format_command(self.command)}` {self.readme_description}"
+
 
 @dataclass(frozen=True)
 class SmokeScriptTargetTemplate:
@@ -409,19 +414,28 @@ class SmokeWrapperCliSpec:
     def _format_readme_command(self, command: str) -> str:
         return f".venv/bin/python scripts/{command}"
 
-    def readme_required_snippets(self) -> tuple[str, ...]:
-        snippets: list[str] = []
+    def readme_reference_command(self) -> str:
         if self.examples:
-            snippets.append(self._format_readme_command(self.examples[0].command))
-        else:
-            snippets.append(self._format_readme_command(f"{self.script_name}.py"))
-        snippets.extend(self.readme_intro_snippets)
-        snippets.extend(
-            f"`{self._format_readme_command(example.command)}` {example.readme_description}"
-            for example in self.examples[1:]
-            if example.readme_description is not None
-        )
+            return self._format_readme_command(self.examples[0].command)
+        return self._format_readme_command(f"{self.script_name}.py")
+
+    def readme_shortcut_snippets(self) -> tuple[str, ...]:
+        snippets: list[str] = []
+        for example in self.examples[1:]:
+            snippet = example.render_readme_snippet(format_command=self._format_readme_command)
+            if snippet is not None:
+                snippets.append(snippet)
         return tuple(snippets)
+
+    def readme_operator_shortcut_lines(self) -> tuple[str, ...]:
+        return tuple(f"- {snippet}" for snippet in self.readme_shortcut_snippets())
+
+    def readme_required_snippets(self) -> tuple[str, ...]:
+        return (
+            self.readme_reference_command(),
+            *self.readme_intro_snippets,
+            *self.readme_shortcut_snippets(),
+        )
 
 
 STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(

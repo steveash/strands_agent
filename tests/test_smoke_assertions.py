@@ -3,9 +3,15 @@ from textwrap import dedent
 import pytest
 
 from strands_agent_tui.testing import (
+    DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
+    SMOKE_CLI_DOC_AUDIT_EXAMPLES,
+    SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME,
     SmokeCliDocSpec,
+    SmokeCliExample,
+    build_smoke_cli_doc_audit_parser,
+    build_smoke_cli_doc_audit_selector,
     build_smoke_cli_doc_spec_registry,
     failed_smoke_check_lines,
     is_failed_smoke_check_line,
@@ -111,6 +117,31 @@ def test_smoke_cli_doc_spec_registry_tracks_shared_order_and_lookup_helper() -> 
     with pytest.raises(ValueError, match="unknown smoke cli doc spec 'missing_smoke'"):
         smoke_cli_doc_spec("missing_smoke")
 
+
+
+def test_smoke_cli_doc_audit_selector_and_parser_follow_wrapper_registry() -> None:
+    selector = build_smoke_cli_doc_audit_selector()
+
+    assert SMOKE_CLI_DOC_AUDIT_TARGET_NAMES == tuple(spec.script_name for spec in SMOKE_CLI_DOC_SPECS)
+    assert DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES == SMOKE_CLI_DOC_AUDIT_TARGET_NAMES
+    assert selector.choices == (*SMOKE_CLI_DOC_AUDIT_TARGET_NAMES, "all")
+    assert selector.resolve_target_names() == list(SMOKE_CLI_DOC_AUDIT_TARGET_NAMES)
+    assert SMOKE_CLI_DOC_AUDIT_EXAMPLES == (
+        SmokeCliExample("smoke_cli_docs_smoke.py"),
+        SmokeCliExample("smoke_cli_docs_smoke.py standalone_smoke", target_name="standalone_smoke"),
+        SmokeCliExample("smoke_cli_docs_smoke.py smoke_matrix", target_name="smoke_matrix"),
+    )
+
+    help_text = build_smoke_cli_doc_audit_parser().format_help()
+    assert matches_public_cli_help(
+        help_text,
+        required_snippets=[
+            "Which smoke-wrapper docs surface to audit. Aliases: all -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix.",
+            "smoke_cli_docs_smoke.py # default all alias -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",
+            "smoke_cli_docs_smoke.py standalone_smoke # single smoke wrapper",
+            "smoke_cli_docs_smoke.py smoke_matrix # single smoke wrapper",
+        ],
+    )
 
 
 def test_build_smoke_cli_doc_spec_registry_rejects_duplicate_script_names() -> None:

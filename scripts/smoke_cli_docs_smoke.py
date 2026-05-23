@@ -5,19 +5,19 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
-    SMOKE_CLI_DOC_SPECS,
-    SmokeCliExample,
-    build_smoke_cli_parser,
+    DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
+    SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
+    build_smoke_cli_doc_audit_parser,
     collect_smoke_cli_doc_parity,
     emit_smoke_results,
+    resolve_smoke_cli_doc_target_names,
     smoke_wrapper_cli_spec,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 README_PATH = SCRIPT_DIR.parent / "README.md"
-DOC_TARGET_NAMES = tuple(doc_spec.script_name for doc_spec in SMOKE_CLI_DOC_SPECS)
-DOC_ALIAS_TARGET_NAMES = {"all": DOC_TARGET_NAMES}
-DEFAULT_TARGET_NAMES = list(DOC_TARGET_NAMES)
+DOC_TARGET_NAMES = SMOKE_CLI_DOC_AUDIT_TARGET_NAMES
+DEFAULT_TARGET_NAMES = list(DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES)
 
 
 def load_readme_text() -> str:
@@ -29,32 +29,11 @@ def _render_missing_snippets(snippets: tuple[str, ...]) -> str:
 
 
 def resolve_target_names(requested_target_name: str | None = None) -> tuple[str, ...]:
-    target_name = "all" if requested_target_name is None else requested_target_name
-    if target_name == "all":
-        return DOC_TARGET_NAMES
-    if target_name not in DOC_TARGET_NAMES:
-        raise ValueError(f"unknown smoke cli docs target {target_name!r}")
-    return (target_name,)
+    return resolve_smoke_cli_doc_target_names(requested_target_name)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    return build_smoke_cli_parser(
-        description=(
-            "Audit smoke-wrapper `--help` text against the README and fail on missing public-doc snippets."
-        ),
-        choices=(*DOC_TARGET_NAMES, "all"),
-        default_target_name="all",
-        resolve_target_names=resolve_target_names,
-        resolve_display_names=resolve_target_names,
-        item_help="Which smoke-wrapper docs surface to audit.",
-        alias_target_names=DOC_ALIAS_TARGET_NAMES,
-        examples=(
-            SmokeCliExample("smoke_cli_docs_smoke.py"),
-            SmokeCliExample("smoke_cli_docs_smoke.py standalone_smoke", target_name="standalone_smoke"),
-            SmokeCliExample("smoke_cli_docs_smoke.py smoke_matrix", target_name="smoke_matrix"),
-        ),
-        single_choice_description="single smoke wrapper",
-    )
+    return build_smoke_cli_doc_audit_parser()
 
 
 def run_smoke_cli_docs_smoke(
