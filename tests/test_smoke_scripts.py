@@ -624,6 +624,10 @@ def test_smoke_cli_docs_fix_build_parser_lists_public_targets_examples_and_flags
         "session_triage_smoke, session_recovery_smoke, smoke_matrix"
     ) in help_text
     assert (
+        "smoke_cli_docs_fix.py standalone_smoke --diff # preview a single smoke wrapper README section diff without writing it"
+        in help_text
+    )
+    assert (
         "smoke_cli_docs_fix.py standalone_smoke # repair a single smoke wrapper README section in place"
         in help_text
     )
@@ -632,6 +636,7 @@ def test_smoke_cli_docs_fix_build_parser_lists_public_targets_examples_and_flags
         in help_text
     )
     assert "--readme-path README_PATH" in help_text
+    assert "--diff" in help_text
     assert "--stdout" in help_text
 
 
@@ -655,6 +660,28 @@ def test_smoke_cli_docs_fix_stdout_prints_repaired_readme_without_writing(tmp_pa
     assert captured.err == ""
     assert captured.out == README_TEXT
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
+
+
+def test_smoke_cli_docs_fix_diff_previews_selected_section_without_writing(tmp_path, capsys) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    readme_path = tmp_path / "README.md"
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="broken standalone docs",
+    )
+    readme_path.write_text(drifted_markdown, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_fix.main(["standalone_smoke", "--readme-path", str(readme_path), "--diff"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert captured.out.startswith("### standalone_smoke\n--- expected\n+++ README\n@@ ")
+    assert "+broken standalone docs" in captured.out
+    assert readme_path.read_text(encoding="utf-8") == drifted_markdown
+
 
 
 def test_smoke_cli_docs_fix_repairs_selected_section_in_place(tmp_path, capsys) -> None:
@@ -692,6 +719,34 @@ def test_smoke_cli_docs_fix_repairs_selected_section_in_place(tmp_path, capsys) 
             render_smoke_cli_readme_section("session_triage_smoke", body_only=True)
         ],
     )
+
+
+def test_smoke_cli_docs_fix_diff_reports_when_readme_is_already_up_to_date(tmp_path, capsys) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+    readme_path = tmp_path / "README.md"
+    readme_path.write_text(README_TEXT, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_fix.main(["standalone_smoke", "--readme-path", str(readme_path), "--diff"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert captured.out == f"smoke README already up to date: {readme_path}\n"
+    assert readme_path.read_text(encoding="utf-8") == README_TEXT
+
+
+
+def test_smoke_cli_docs_fix_rejects_diff_stdout_combination(capsys) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+
+    with pytest.raises(SystemExit) as exc_info:
+        smoke_cli_docs_fix.main(["standalone_smoke", "--diff", "--stdout"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "--diff cannot be combined with --stdout" in captured.err
+
 
 
 def test_smoke_cli_docs_fix_invalid_choice_errors_show_public_cli_choices(capsys) -> None:

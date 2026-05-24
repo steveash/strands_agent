@@ -6,6 +6,7 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     build_smoke_cli_doc_fix_parser,
+    collect_smoke_cli_readme_diffs,
     repair_smoke_cli_readme_sections,
 )
 
@@ -31,11 +32,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.diff and args.stdout:
+        parser.error("--diff cannot be combined with --stdout")
+
     readme_path = Path(args.readme_path)
     original_markdown, repaired_markdown, repaired_script_names = repair_readme(
         readme_path,
         requested_target_name=args.target,
     )
+
+    if args.diff:
+        diff_sections = collect_smoke_cli_readme_diffs(
+            original_markdown,
+            requested_target_name=args.target,
+        )
+        if not diff_sections:
+            print(f"smoke README already up to date: {readme_path}")
+            return 0
+        for index, (script_name, diff_lines) in enumerate(diff_sections):
+            if index:
+                print()
+            print(f"### {script_name}")
+            for line in diff_lines:
+                print(line)
+        return 0
 
     if args.stdout:
         print(repaired_markdown, end="" if repaired_markdown.endswith("\n") else "\n")

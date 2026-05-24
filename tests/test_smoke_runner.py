@@ -516,6 +516,7 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper",
+        "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke --diff` previews the standalone wrapper README diff before writing metadata-backed repairs",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
@@ -555,6 +556,7 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper",
+        "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke --diff` previews the standalone wrapper README diff before writing metadata-backed repairs",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
@@ -586,6 +588,7 @@ def test_smoke_wrapper_cli_specs_render_readme_sections() -> None:
         "- `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper\n"
+        "- `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke --diff` previews the standalone wrapper README diff before writing metadata-backed repairs\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place\n"
         "- `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target"

@@ -176,6 +176,11 @@ def build_smoke_cli_doc_fix_examples() -> tuple[SmokeCliExample, ...]:
     return (
         SmokeCliExample(f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py"),
         SmokeCliExample(
+            f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py standalone_smoke --diff",
+            target_name="standalone_smoke",
+            description="preview a single smoke wrapper README section diff without writing it",
+        ),
+        SmokeCliExample(
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py standalone_smoke",
             target_name="standalone_smoke",
             description="repair a single smoke wrapper README section in place",
@@ -267,6 +272,11 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("README.md"),
         help="Path to the README file to repair in place (default: README.md).",
+    )
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="Print unified diffs for only the drifted selected README sections without writing changes.",
     )
     parser.add_argument(
         "--stdout",
@@ -361,6 +371,19 @@ def repair_smoke_cli_readme_sections(
         repaired_script_names.append(script_name)
 
     return updated_markdown, tuple(repaired_script_names)
+
+
+
+def collect_smoke_cli_readme_diffs(
+    markdown: str,
+    *,
+    requested_target_name: str | None = None,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    return tuple(
+        (script_name, diff_lines)
+        for script_name in resolve_smoke_cli_doc_target_names(requested_target_name)
+        if (diff_lines := smoke_cli_readme_diff_lines(markdown, script_name=script_name))
+    )
 
 
 def missing_required_snippets(text: str, *, required_snippets: Iterable[str]) -> tuple[str, ...]:

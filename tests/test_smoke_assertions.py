@@ -24,6 +24,7 @@ from strands_agent_tui.testing import (
     is_failed_smoke_check_line,
     markdown_section_text,
     collect_smoke_cli_doc_parity,
+    collect_smoke_cli_readme_diffs,
     matches_approval_restore_age_output,
     matches_approval_restore_badges_output,
     matches_approval_restore_focus_output,
@@ -72,6 +73,7 @@ from strands_agent_tui.testing import (
     render_smoke_cli_readme_sections,
     smoke_cli_doc_parity_diagnostic,
     smoke_cli_doc_spec,
+    smoke_cli_readme_diff_lines,
     smoke_wrapper_cli_spec,
     smoke_text_matches,
 )
@@ -195,6 +197,11 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
     assert build_smoke_cli_doc_fix_examples() == (
         SmokeCliExample("smoke_cli_docs_fix.py"),
         SmokeCliExample(
+            "smoke_cli_docs_fix.py standalone_smoke --diff",
+            target_name="standalone_smoke",
+            description="preview a single smoke wrapper README section diff without writing it",
+        ),
+        SmokeCliExample(
             "smoke_cli_docs_fix.py standalone_smoke",
             target_name="standalone_smoke",
             description="repair a single smoke wrapper README section in place",
@@ -211,9 +218,11 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
         required_snippets=[
             "Which smoke-wrapper README surface to repair. Aliases: all -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix.",
             "smoke_cli_docs_fix.py # default all alias -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",
+            "smoke_cli_docs_fix.py standalone_smoke --diff # preview a single smoke wrapper README section diff without writing it",
             "smoke_cli_docs_fix.py standalone_smoke # repair a single smoke wrapper README section in place",
             "smoke_cli_docs_fix.py all --stdout # print the fully repaired README to stdout instead of writing it",
             "--readme-path README_PATH",
+            "--diff",
             "--stdout",
         ],
     )
@@ -292,6 +301,35 @@ def test_repair_smoke_cli_readme_sections_returns_no_changes_when_readme_already
 
     assert repaired_markdown == README_TEXT
     assert repaired_script_names == ()
+
+
+
+def test_collect_smoke_cli_readme_diffs_returns_only_selected_drifted_targets() -> None:
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    triage_spec = smoke_cli_doc_spec("session_triage_smoke")
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="broken standalone docs",
+    )
+    drifted_markdown = replace_markdown_section(
+        drifted_markdown,
+        heading=triage_spec.readme_section_heading,
+        body="broken triage docs",
+    )
+
+    assert collect_smoke_cli_readme_diffs(
+        drifted_markdown,
+        requested_target_name="standalone_smoke",
+    ) == (("standalone_smoke", smoke_cli_readme_diff_lines(drifted_markdown, script_name="standalone_smoke")),)
+    assert collect_smoke_cli_readme_diffs(
+        drifted_markdown,
+        requested_target_name="all",
+    ) == (
+        ("standalone_smoke", smoke_cli_readme_diff_lines(drifted_markdown, script_name="standalone_smoke")),
+        ("session_triage_smoke", smoke_cli_readme_diff_lines(drifted_markdown, script_name="session_triage_smoke")),
+    )
+    assert collect_smoke_cli_readme_diffs(README_TEXT, requested_target_name="all") == ()
 
 
 
