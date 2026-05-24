@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+import argparse
+from collections.abc import Sequence
+from pathlib import Path
+
+from strands_agent_tui.testing import (
+    build_smoke_cli_doc_fix_parser,
+    repair_smoke_cli_readme_sections,
+)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    return build_smoke_cli_doc_fix_parser()
+
+
+def repair_readme(
+    readme_path: Path,
+    *,
+    requested_target_name: str | None = None,
+) -> tuple[str, str, tuple[str, ...]]:
+    original_markdown = readme_path.read_text(encoding="utf-8")
+    repaired_markdown, repaired_script_names = repair_smoke_cli_readme_sections(
+        original_markdown,
+        requested_target_name=requested_target_name,
+    )
+    return original_markdown, repaired_markdown, repaired_script_names
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    readme_path = Path(args.readme_path)
+    original_markdown, repaired_markdown, repaired_script_names = repair_readme(
+        readme_path,
+        requested_target_name=args.target,
+    )
+
+    if args.stdout:
+        print(repaired_markdown, end="" if repaired_markdown.endswith("\n") else "\n")
+        return 0
+
+    if repaired_markdown != original_markdown:
+        readme_path.write_text(repaired_markdown, encoding="utf-8")
+        repaired_names = ", ".join(repaired_script_names)
+        print(
+            f"repaired {len(repaired_script_names)} smoke README section(s) in {readme_path}: {repaired_names}"
+        )
+    else:
+        print(f"smoke README already up to date: {readme_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -7,6 +7,7 @@ from strands_agent_tui.testing import (
     DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_AUDIT_EXAMPLES,
     SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
+    SMOKE_CLI_DOC_FIX_EXAMPLES,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME,
     SMOKE_WRAPPER_CLI_SPECS,
@@ -14,6 +15,8 @@ from strands_agent_tui.testing import (
     SmokeCliExample,
     build_smoke_cli_doc_audit_parser,
     build_smoke_cli_doc_audit_selector,
+    build_smoke_cli_doc_fix_examples,
+    build_smoke_cli_doc_fix_parser,
     build_smoke_cli_doc_render_examples,
     build_smoke_cli_doc_render_parser,
     build_smoke_cli_doc_spec_registry,
@@ -50,6 +53,8 @@ from strands_agent_tui.testing import (
     missing_markdown_section_snippets,
     missing_public_cli_help_snippets,
     matches_queue_breakdown_output,
+    repair_smoke_cli_readme_sections,
+    replace_markdown_section,
     matches_shell_filter_output,
     matches_stale_backlog_output,
     matches_stale_cutoff_output,
@@ -184,6 +189,36 @@ def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> N
     )
 
 
+def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None:
+    help_text = build_smoke_cli_doc_fix_parser().format_help()
+
+    assert build_smoke_cli_doc_fix_examples() == (
+        SmokeCliExample("smoke_cli_docs_fix.py"),
+        SmokeCliExample(
+            "smoke_cli_docs_fix.py standalone_smoke",
+            target_name="standalone_smoke",
+            description="repair a single smoke wrapper README section in place",
+        ),
+        SmokeCliExample(
+            "smoke_cli_docs_fix.py all --stdout",
+            target_name="all",
+            description="print the fully repaired README to stdout instead of writing it",
+        ),
+    )
+    assert SMOKE_CLI_DOC_FIX_EXAMPLES == build_smoke_cli_doc_fix_examples()
+    assert matches_public_cli_help(
+        help_text,
+        required_snippets=[
+            "Which smoke-wrapper README surface to repair. Aliases: all -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix.",
+            "smoke_cli_docs_fix.py # default all alias -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",
+            "smoke_cli_docs_fix.py standalone_smoke # repair a single smoke wrapper README section in place",
+            "smoke_cli_docs_fix.py all --stdout # print the fully repaired README to stdout instead of writing it",
+            "--readme-path README_PATH",
+            "--stdout",
+        ],
+    )
+
+
 
 def test_render_smoke_cli_readme_sections_support_full_section_and_body_views() -> None:
     assert render_smoke_cli_readme_section("standalone_smoke") == smoke_wrapper_cli_spec(
@@ -201,6 +236,62 @@ def test_render_smoke_cli_readme_sections_support_full_section_and_body_views() 
     assert [
         script_name for script_name, _ in render_smoke_cli_readme_sections(requested_target_name="all")
     ] == list(DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES)
+
+
+def test_replace_markdown_section_rewrites_only_the_selected_section_body() -> None:
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    triage_spec = smoke_cli_doc_spec("session_triage_smoke")
+    markdown = (
+        "## Smoke docs\n\n"
+        f"### {standalone_spec.readme_section_heading}\n\nold standalone\n\n"
+        f"### {triage_spec.readme_section_heading}\n\nkeep triage\n"
+    )
+
+    updated = replace_markdown_section(
+        markdown,
+        heading=standalone_spec.readme_section_heading,
+        body="new standalone\n\nwith detail",
+    )
+
+    assert markdown_section_text(updated, heading=standalone_spec.readme_section_heading) == (
+        "new standalone\n\nwith detail"
+    )
+    assert markdown_section_text(updated, heading=triage_spec.readme_section_heading) == "keep triage"
+
+
+def test_repair_smoke_cli_readme_sections_updates_only_drifted_targets() -> None:
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    triage_spec = smoke_cli_doc_spec("session_triage_smoke")
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="broken standalone docs",
+    )
+
+    repaired_markdown, repaired_script_names = repair_smoke_cli_readme_sections(
+        drifted_markdown,
+        requested_target_name="standalone_smoke",
+    )
+
+    assert repaired_script_names == ("standalone_smoke",)
+    assert (
+        markdown_section_text(repaired_markdown, heading=standalone_spec.readme_section_heading)
+        == smoke_wrapper_cli_spec("standalone_smoke").render_readme_section_body()
+    )
+    assert (
+        markdown_section_text(repaired_markdown, heading=triage_spec.readme_section_heading)
+        == markdown_section_text(README_TEXT, heading=triage_spec.readme_section_heading)
+    )
+
+
+def test_repair_smoke_cli_readme_sections_returns_no_changes_when_readme_already_matches() -> None:
+    repaired_markdown, repaired_script_names = repair_smoke_cli_readme_sections(
+        README_TEXT,
+        requested_target_name="all",
+    )
+
+    assert repaired_markdown == README_TEXT
+    assert repaired_script_names == ()
 
 
 

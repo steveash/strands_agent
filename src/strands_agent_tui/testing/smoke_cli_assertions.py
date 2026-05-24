@@ -150,6 +150,7 @@ def build_smoke_cli_doc_audit_examples() -> tuple[SmokeCliExample, ...]:
 
 SMOKE_CLI_DOC_AUDIT_EXAMPLES = build_smoke_cli_doc_audit_examples()
 SMOKE_CLI_DOC_RENDER_SCRIPT_NAME = "smoke_cli_docs_render"
+SMOKE_CLI_DOC_FIX_SCRIPT_NAME = "smoke_cli_docs_fix"
 
 
 def build_smoke_cli_doc_render_examples() -> tuple[SmokeCliExample, ...]:
@@ -169,6 +170,25 @@ def build_smoke_cli_doc_render_examples() -> tuple[SmokeCliExample, ...]:
 
 
 SMOKE_CLI_DOC_RENDER_EXAMPLES = build_smoke_cli_doc_render_examples()
+
+
+def build_smoke_cli_doc_fix_examples() -> tuple[SmokeCliExample, ...]:
+    return (
+        SmokeCliExample(f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py"),
+        SmokeCliExample(
+            f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py standalone_smoke",
+            target_name="standalone_smoke",
+            description="repair a single smoke wrapper README section in place",
+        ),
+        SmokeCliExample(
+            f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py all --stdout",
+            target_name="all",
+            description="print the fully repaired README to stdout instead of writing it",
+        ),
+    )
+
+
+SMOKE_CLI_DOC_FIX_EXAMPLES = build_smoke_cli_doc_fix_examples()
 
 
 def resolve_smoke_cli_doc_target_names(requested_target_name: str | None = None) -> tuple[str, ...]:
@@ -229,6 +249,33 @@ def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
+    selector = SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR
+    parser = build_smoke_cli_parser(
+        description="Repair smoke-wrapper README sections in place from shared metadata.",
+        choices=selector.choices,
+        default_target_name=selector.default_target_name,
+        resolve_target_names=selector.resolve_target_names,
+        resolve_display_names=selector.resolve_display_names,
+        item_help="Which smoke-wrapper README surface to repair.",
+        alias_target_names=selector.alias_target_names,
+        examples=SMOKE_CLI_DOC_FIX_EXAMPLES,
+        single_choice_description="single smoke wrapper section repair",
+    )
+    parser.add_argument(
+        "--readme-path",
+        type=Path,
+        default=Path("README.md"),
+        help="Path to the README file to repair in place (default: README.md).",
+    )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Print the fully repaired README to stdout instead of writing the README path.",
+    )
+    return parser
+
+
 
 def render_smoke_cli_readme_section(script_name: str, *, body_only: bool = False) -> str:
     spec = smoke_wrapper_cli_spec(script_name)
@@ -250,6 +297,70 @@ def render_smoke_cli_readme_sections(
         )
         for script_name in resolve_smoke_cli_doc_target_names(requested_target_name)
     )
+
+
+def markdown_section_bounds(markdown: str, *, heading: str) -> tuple[int, int]:
+    lines = markdown.splitlines()
+    section_level: int | None = None
+    start_index: int | None = None
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        hashes, _, title = stripped.partition(" ")
+        if title == heading:
+            section_level = len(hashes)
+            start_index = index + 1
+            break
+
+    if section_level is None or start_index is None:
+        raise ValueError(f"markdown heading not found: {heading!r}")
+
+    end_index = len(lines)
+    for index in range(start_index, len(lines)):
+        stripped = lines[index].strip()
+        if stripped.startswith("#"):
+            hashes, _, title = stripped.partition(" ")
+            if title and len(hashes) <= section_level:
+                end_index = index
+                break
+    return start_index, end_index
+
+
+def replace_markdown_section(markdown: str, *, heading: str, body: str) -> str:
+    lines = markdown.splitlines()
+    start_index, end_index = markdown_section_bounds(markdown, heading=heading)
+    body_lines = body.splitlines()
+    updated = "\n".join([*lines[:start_index], *body_lines, *lines[end_index:]])
+    if markdown.endswith("\n"):
+        updated += "\n"
+    return updated
+
+
+def repair_smoke_cli_readme_sections(
+    markdown: str,
+    *,
+    requested_target_name: str | None = None,
+) -> tuple[str, tuple[str, ...]]:
+    updated_markdown = markdown
+    repaired_script_names: list[str] = []
+
+    for script_name, rendered_body in render_smoke_cli_readme_sections(
+        requested_target_name=requested_target_name,
+        body_only=True,
+    ):
+        spec = smoke_cli_doc_spec(script_name)
+        if markdown_section_text(updated_markdown, heading=spec.readme_section_heading) == rendered_body:
+            continue
+        updated_markdown = replace_markdown_section(
+            updated_markdown,
+            heading=spec.readme_section_heading,
+            body=rendered_body,
+        )
+        repaired_script_names.append(script_name)
+
+    return updated_markdown, tuple(repaired_script_names)
 
 
 def missing_required_snippets(text: str, *, required_snippets: Iterable[str]) -> tuple[str, ...]:

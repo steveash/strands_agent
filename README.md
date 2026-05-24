@@ -399,7 +399,6 @@ export STRANDS_AGENT_OPENAI_MODEL=gpt-4o-mini
 Expected result includes `live_runtime_requested= True`, `live_runtime_text= True`, and `live_runtime_provider_mode= True` after the short reply plus provider/mode line.
 
 ### Standalone local smoke bundle
-
 To verify the remaining local smoke surfaces with shared fail-fast `= False` handling:
 
 ```bash
@@ -416,8 +415,9 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle
 - `.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix
 - `.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper
+- `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata
+- `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
-
 ### Session triage smoke bundle
 
 To run the picker + switcher smoke surfaces together with shared fail-fast handling:

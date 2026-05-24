@@ -541,6 +541,8 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper",
+        "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
+        "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
     ),
     readme_extra_shortcut_insert_at=3,
 )
