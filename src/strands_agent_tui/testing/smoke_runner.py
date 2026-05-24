@@ -543,6 +543,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke --diff` previews the standalone wrapper README diff before writing metadata-backed repairs",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all --check` exits non-zero when any public smoke wrapper README section drifts",
+        "`.venv/bin/python scripts/smoke_cli_docs_fix.py all --check --json` emits machine-readable drift results for CI without scraping prose summaries",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
     ),

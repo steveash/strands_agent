@@ -186,6 +186,11 @@ def build_smoke_cli_doc_fix_examples() -> tuple[SmokeCliExample, ...]:
             description="exit non-zero when any selected smoke wrapper README section drifts",
         ),
         SmokeCliExample(
+            f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py all --check --json",
+            target_name="all",
+            description="emit machine-readable JSON drift results for CI without scraping prose",
+        ),
+        SmokeCliExample(
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py standalone_smoke",
             target_name="standalone_smoke",
             description="repair a single smoke wrapper README section in place",
@@ -287,6 +292,11 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="Exit non-zero when any selected README section drifts without writing changes.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable JSON drift report (requires --check and/or --diff).",
     )
     parser.add_argument(
         "--stdout",

@@ -207,6 +207,11 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
             description="exit non-zero when any selected smoke wrapper README section drifts",
         ),
         SmokeCliExample(
+            "smoke_cli_docs_fix.py all --check --json",
+            target_name="all",
+            description="emit machine-readable JSON drift results for CI without scraping prose",
+        ),
+        SmokeCliExample(
             "smoke_cli_docs_fix.py standalone_smoke",
             target_name="standalone_smoke",
             description="repair a single smoke wrapper README section in place",
@@ -225,11 +230,13 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
             "smoke_cli_docs_fix.py # default all alias -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",
             "smoke_cli_docs_fix.py standalone_smoke --diff # preview a single smoke wrapper README section diff without writing it",
             "smoke_cli_docs_fix.py all --check # exit non-zero when any selected smoke wrapper README section drifts",
+            "smoke_cli_docs_fix.py all --check --json # emit machine-readable JSON drift results for CI without scraping prose",
             "smoke_cli_docs_fix.py standalone_smoke # repair a single smoke wrapper README section in place",
             "smoke_cli_docs_fix.py all --stdout # print the fully repaired README to stdout instead of writing it",
             "--readme-path README_PATH",
             "--diff",
             "--check",
+            "--json",
             "--stdout",
         ],
     )

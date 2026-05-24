@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime, timedelta
 from importlib.util import module_from_spec, spec_from_file_location
@@ -632,6 +633,10 @@ def test_smoke_cli_docs_fix_build_parser_lists_public_targets_examples_and_flags
         in help_text
     )
     assert (
+        "smoke_cli_docs_fix.py all --check --json # emit machine-readable JSON drift results for CI without scraping prose"
+        in help_text
+    )
+    assert (
         "smoke_cli_docs_fix.py standalone_smoke # repair a single smoke wrapper README section in place"
         in help_text
     )
@@ -642,6 +647,7 @@ def test_smoke_cli_docs_fix_build_parser_lists_public_targets_examples_and_flags
     assert "--readme-path README_PATH" in help_text
     assert "--diff" in help_text
     assert "--check" in help_text
+    assert "--json" in help_text
     assert "--stdout" in help_text
 
 
@@ -737,6 +743,75 @@ def test_smoke_cli_docs_fix_diff_and_check_report_drift_without_writing(tmp_path
 
 
 
+def test_smoke_cli_docs_fix_check_json_reports_machine_readable_drift_without_writing(
+    tmp_path, capsys
+) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    readme_path = tmp_path / "README.md"
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="broken standalone docs",
+    )
+    readme_path.write_text(drifted_markdown, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_fix.main(
+        ["standalone_smoke", "--readme-path", str(readme_path), "--check", "--json"]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.err == ""
+    assert readme_path.read_text(encoding="utf-8") == drifted_markdown
+    payload = json.loads(captured.out)
+    assert payload == {
+        "check": True,
+        "diff": False,
+        "drift_count": 1,
+        "drifted_sections": [{"script_name": "standalone_smoke"}],
+        "drifted_targets": ["standalone_smoke"],
+        "readme_path": str(readme_path),
+        "requested_target": "standalone_smoke",
+        "selected_targets": ["standalone_smoke"],
+        "up_to_date": False,
+    }
+
+
+
+def test_smoke_cli_docs_fix_diff_and_check_json_include_machine_readable_diffs(tmp_path, capsys) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    readme_path = tmp_path / "README.md"
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="broken standalone docs",
+    )
+    readme_path.write_text(drifted_markdown, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_fix.main(
+        ["standalone_smoke", "--readme-path", str(readme_path), "--diff", "--check", "--json"]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.err == ""
+    assert readme_path.read_text(encoding="utf-8") == drifted_markdown
+    payload = json.loads(captured.out)
+    assert payload["check"] is True
+    assert payload["diff"] is True
+    assert payload["drift_count"] == 1
+    assert payload["drifted_targets"] == ["standalone_smoke"]
+    assert payload["selected_targets"] == ["standalone_smoke"]
+    assert payload["up_to_date"] is False
+    assert payload["drifted_sections"][0]["script_name"] == "standalone_smoke"
+    assert payload["drifted_sections"][0]["diff_lines"][0] == "--- expected"
+    assert payload["drifted_sections"][0]["diff_lines"][1] == "+++ README"
+    assert any(line.startswith("@@ ") for line in payload["drifted_sections"][0]["diff_lines"])
+
+
+
 def test_smoke_cli_docs_fix_repairs_selected_section_in_place(tmp_path, capsys) -> None:
     smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
@@ -803,6 +878,36 @@ def test_smoke_cli_docs_fix_check_reports_when_readme_is_already_up_to_date(tmp_
 
 
 
+def test_smoke_cli_docs_fix_check_json_reports_when_readme_is_already_up_to_date(
+    tmp_path, capsys
+) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+    readme_path = tmp_path / "README.md"
+    readme_path.write_text(README_TEXT, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_fix.main(
+        ["standalone_smoke", "--readme-path", str(readme_path), "--check", "--json"]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert readme_path.read_text(encoding="utf-8") == README_TEXT
+    payload = json.loads(captured.out)
+    assert payload == {
+        "check": True,
+        "diff": False,
+        "drift_count": 0,
+        "drifted_sections": [],
+        "drifted_targets": [],
+        "readme_path": str(readme_path),
+        "requested_target": "standalone_smoke",
+        "selected_targets": ["standalone_smoke"],
+        "up_to_date": True,
+    }
+
+
+
 def test_smoke_cli_docs_fix_rejects_diff_stdout_combination(capsys) -> None:
     smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
 
@@ -825,6 +930,32 @@ def test_smoke_cli_docs_fix_rejects_check_stdout_combination(capsys) -> None:
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "--check cannot be combined with --stdout" in captured.err
+
+
+
+def test_smoke_cli_docs_fix_rejects_json_stdout_combination(capsys) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+
+    with pytest.raises(SystemExit) as exc_info:
+        smoke_cli_docs_fix.main(["standalone_smoke", "--json", "--stdout"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "--json cannot be combined with --stdout" in captured.err
+
+
+
+def test_smoke_cli_docs_fix_rejects_json_without_check_or_diff(capsys) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+
+    with pytest.raises(SystemExit) as exc_info:
+        smoke_cli_docs_fix.main(["standalone_smoke", "--json"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "--json requires --check and/or --diff" in captured.err
 
 
 
