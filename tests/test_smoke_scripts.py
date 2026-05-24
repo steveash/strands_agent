@@ -558,8 +558,14 @@ def test_smoke_cli_docs_render_build_parser_lists_public_targets_examples_and_fl
         "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview # export all rendered smoke wrapper sections"
         in help_text
     )
+    assert (
+        "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview # export only the drifted rendered smoke wrapper sections"
+        in help_text
+    )
     assert "--body-only" in help_text
     assert "--output-dir OUTPUT_DIR" in help_text
+    assert "--readme-path README_PATH" in help_text
+    assert "--drift-only" in help_text
 
 
 
@@ -592,6 +598,78 @@ def test_smoke_cli_docs_render_exports_selected_sections(tmp_path, capsys) -> No
         path = tmp_path / f"{script_name}.md"
         assert str(path) in output_lines
         assert path.read_text(encoding="utf-8") == text + "\n"
+
+
+def test_smoke_cli_docs_render_drift_only_prints_only_drifted_sections(tmp_path, capsys) -> None:
+    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    readme_path = tmp_path / "README.md"
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="broken standalone docs",
+    )
+    readme_path.write_text(drifted_markdown, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_render.main(
+        ["all", "--drift-only", "--readme-path", str(readme_path)]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert captured.out == render_smoke_cli_readme_section("standalone_smoke") + "\n"
+
+
+def test_smoke_cli_docs_render_drift_only_exports_only_drifted_sections(tmp_path, capsys) -> None:
+    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    readme_path = tmp_path / "README.md"
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="broken standalone docs",
+    )
+    readme_path.write_text(drifted_markdown, encoding="utf-8")
+    output_dir = tmp_path / "rendered"
+
+    exit_code = smoke_cli_docs_render.main(
+        [
+            "all",
+            "--drift-only",
+            "--readme-path",
+            str(readme_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    output_lines = captured.out.splitlines()
+    expected_path = output_dir / "standalone_smoke.md"
+    assert output_lines == [
+        str(expected_path),
+        f"wrote 1 rendered smoke README sections to {output_dir}",
+    ]
+    assert expected_path.read_text(encoding="utf-8") == render_smoke_cli_readme_section("standalone_smoke") + "\n"
+    assert not (output_dir / "session_triage_smoke.md").exists()
+
+
+def test_smoke_cli_docs_render_drift_only_reports_when_readme_is_up_to_date(tmp_path, capsys) -> None:
+    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
+    readme_path = tmp_path / "README.md"
+    readme_path.write_text(README_TEXT, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_render.main(
+        ["all", "--drift-only", "--readme-path", str(readme_path)]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert captured.out == f"smoke README already up to date: {readme_path}\n"
 
 
 

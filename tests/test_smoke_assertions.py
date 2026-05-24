@@ -177,6 +177,11 @@ def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> N
             target_name="all",
             description="export all rendered smoke wrapper sections",
         ),
+        SmokeCliExample(
+            "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview",
+            target_name="all",
+            description="export only the drifted rendered smoke wrapper sections",
+        ),
     )
     assert matches_public_cli_help(
         help_text,
@@ -185,8 +190,11 @@ def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> N
             "smoke_cli_docs_render.py # default all alias -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",
             "smoke_cli_docs_render.py standalone_smoke --body-only # single smoke wrapper body preview",
             "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview # export all rendered smoke wrapper sections",
+            "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview # export only the drifted rendered smoke wrapper sections",
             "--body-only",
             "--output-dir OUTPUT_DIR",
+            "--readme-path README_PATH",
+            "--drift-only",
         ],
     )
 

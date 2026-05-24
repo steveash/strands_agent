@@ -166,6 +166,11 @@ def build_smoke_cli_doc_render_examples() -> tuple[SmokeCliExample, ...]:
             target_name="all",
             description="export all rendered smoke wrapper sections",
         ),
+        SmokeCliExample(
+            f"{SMOKE_CLI_DOC_RENDER_SCRIPT_NAME}.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview",
+            target_name="all",
+            description="export only the drifted rendered smoke wrapper sections",
+        ),
     )
 
 
@@ -260,6 +265,20 @@ def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         help="Write one <script_name>.md file per selected smoke wrapper instead of printing to stdout.",
+    )
+    parser.add_argument(
+        "--readme-path",
+        type=Path,
+        default=Path("README.md"),
+        help=(
+            "README used to decide which selected sections drift when --drift-only is set "
+            "(default: README.md)."
+        ),
+    )
+    parser.add_argument(
+        "--drift-only",
+        action="store_true",
+        help="Render only the selected smoke-wrapper sections whose README content currently drifts.",
     )
     return parser
 
