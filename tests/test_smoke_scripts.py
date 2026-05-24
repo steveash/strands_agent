@@ -120,6 +120,58 @@ def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
     ]
 
 
+def test_approval_smoke_emits_timeline_summary_checks(monkeypatch) -> None:
+    approval_smoke = _load_script_module("approval_smoke")
+    output = StringIO()
+    real_emit_smoke_results = approval_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        approval_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = approval_smoke.main()
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    _assert_mixed_smoke_result_contract(
+        lines,
+        detail_names=[
+            "initial text",
+            "initial pending",
+            "initial events",
+            "initial intervention summaries",
+            "after approve text",
+            "next pending",
+            "after approve events",
+            "after approve intervention summaries",
+            "after deny text",
+            "final pending",
+            "after deny events",
+            "after deny intervention summaries",
+        ],
+        check_names=[
+            "initial approval schema",
+            "initial queue schema",
+            "timeline_pending_summary",
+            "approved execution schema",
+            "approved queue schema",
+            "timeline_approved_summary",
+            "denied schema",
+            "denied queue schema",
+            "timeline_denied_summary",
+        ],
+    )
+    assert any(
+        "approval pending edit via fake_runtime | queue 1/2 | path notes.txt | next replace_text" in line
+        for line in lines
+        if line.startswith("initial intervention summaries:")
+    )
+    assert "timeline_pending_summary= True" in lines
+    assert "timeline_approved_summary= True" in lines
+    assert "timeline_denied_summary= True" in lines
+
+
 def test_approval_restart_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:
     approval_restart_smoke = _load_script_module("approval_restart_smoke")
     output = StringIO()

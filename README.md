@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views, explicit stale-cutoff hints in picker/switcher legends and prompts, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, and shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views, explicit stale-cutoff hints in picker/switcher legends and prompts, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, and compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -95,7 +95,7 @@ What exists now:
 - approval-aware fake runtime flows that can demonstrate multiple queued approvals in sequence without needing live credentials,
 - live-runtime tool wiring that can queue confirm-needed mutations, wait for explicit approval, execute the approved tool, and then continue the Strands conversation with a follow-up prompt,
 - approval lifecycle events that now carry shared `steering_stage`, `approval_tool_family`, and synthetic continuation metadata so fake/live approval recovery can be inspected with the same mental model,
-- a dedicated event timeline pane for runtime milestones, tool activity, failures, and compact structured event data,
+- a dedicated event timeline pane for runtime milestones, tool activity, failures, compact human-readable summary lines, and raw structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence/intervention views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
 - structured event payloads with timestamps and metadata for both fake and live runtime paths,
@@ -124,28 +124,29 @@ What exists now:
 - and a standalone `smoke_cli_docs` smoke target that audits smoke-wrapper `--help` text against the README and emits actionable missing-snippet diagnostics.
 
 What changed this run:
-- added shared smoke CLI doc-parity helpers that can report exactly which `--help` or README snippets drifted for each public smoke wrapper,
-- added `scripts/smoke_cli_docs_smoke.py` and folded it into the default standalone/local smoke bundle so docs parity is checked during normal runnable verification,
-- updated standalone smoke docs plus smoke-runner/assertion/script tests to lock the new `docs` target and its emitted parity diagnostics.
+- added `src/strands_agent_tui/timeline.py`, a shared event-timeline renderer/formatter that turns raw runtime/tool/intervention metadata into compact `summary:` lines for the TUI,
+- updated the TUI event pane to surface approval queue/source/resume context plus tool/result previews without losing the raw structured `data:` payloads,
+- expanded `scripts/approval_smoke.py` so the deterministic approval walkthrough now asserts readable intervention summaries in addition to raw schema fields,
+- added `tests/test_timeline.py` and extended app/smoke-script coverage to lock the new timeline rendering contract.
 
 Why this matters now:
-- The smoke wrappers are part of the operator surface for understanding and verifying the Strands prototype, so help/readme drift quietly erodes the learning loop.
-- Turning docs parity into a runnable smoke target keeps the verification story honest: the commands Steve runs and the commands the README describes now share an explicit contract.
-- Actionable missing-snippet diagnostics make future breakage cheaper to debug than a generic boolean mismatch.
+- The product goal is to make the Strands loop visible and hackable, and raw event dicts alone are too noisy for rapid understanding.
+- Compact event summaries make approval provenance, queue movement, and post-approval continuation behavior legible at a glance.
+- Using the same formatter in the TUI and smoke checks gives Steve one inspectable event language across fake-runtime learning and real runtime debugging.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, and default artifact-root derivation,
+- unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, and event-timeline summary formatting/filtering,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
-- app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
-- smoke infrastructure tests now also verify wrapper help/readme parity, missing-snippet diagnostics, the new `smoke_cli_docs` target, and the standalone bundle's updated public target selection,
+- app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates plus compact summary lines, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
+- smoke infrastructure tests verify wrapper help/readme parity, missing-snippet diagnostics, public smoke target selection, and the approval smoke's readable intervention-summary contract,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
 
 Current evidence:
-- automated tests: `299 passed in 38.98s` via `.venv/bin/pytest -q`,
-- focused smoke infra coverage: `.venv/bin/pytest -q tests/test_smoke_assertions.py tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `85 passed in 5.23s`,
-- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 29.49s`,
-- the smoke matrix now includes `standalone_smoke_help_missing`, `standalone_smoke_readme_missing`, and matching parity lines for all four public smoke wrappers,
-- self-unblock note: local verification, commits, and the annotated tag succeeded, but `git push origin main` / tag push were blocked by the cron session's non-interactive exec approval policy; this can be finished from an approved interactive session without changing repo contents.
+- automated tests: `322 passed in 37.36s` via `.venv/bin/pytest -q`,
+- focused timeline/app/smoke coverage: `.venv/bin/pytest -q tests/test_timeline.py tests/test_app.py tests/test_smoke_scripts.py` => `103 passed in 34.34s`,
+- approval walkthrough verification: `.venv/bin/python scripts/approval_smoke.py` => `timeline_pending_summary= True`, `timeline_approved_summary= True`, `timeline_denied_summary= True`,
+- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 27.38s`,
+- self-unblock note: local verification succeeded; git commit/tag/push status is updated at the end of each daily report for the current cron run.
 
 ## First five phases
 
@@ -241,6 +242,7 @@ Make the Strands loop legible by exposing intermediate events, tool uses, failur
 - persisted event payloads that now include timestamps, structured metadata, and real live-tool lifecycle entries when the Strands runtime uses workspace tools,
 - response metadata capture so replay artifacts retain model/runtime context without scraping prose,
 - event-pane filtering and explicit persistence events so replay/debugging concepts are also visible in the live TUI,
+- compact `summary:` lines in the event pane for tool results, response completions, and approval/intervention queue context while preserving raw structured event payloads underneath,
 - steering decision events in the same timeline so policy behavior is inspectable without reading code.
 
 **Why this matters**
@@ -557,6 +559,9 @@ Inside the TUI, use these shortcuts to focus the event pane:
 - `F3` tool events
 - `F4` failure events
 - `F5` persistence events
+- `F12` intervention / approval events
+
+Each event row now also includes a compact `summary:` line when the formatter can derive something higher-signal than the raw detail string, for example approval queue position/source, resumed-after-approval state, shell command previews, or artifact/session-state save context.
 
 This is intentionally simple, but it already makes it much easier to inspect Strands loop behavior without losing the complete turn transcript.
 
@@ -575,7 +580,7 @@ For a deterministic walkthrough without launching the full TUI:
 .venv/bin/python scripts/approval_smoke.py
 ```
 
-Expected result shows an initial queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied.
+Expected result shows an initial queued `write_file` approval, an approve/resume step, then a follow-on `replace_text` approval that can be denied. It now also prints readable intervention summary checks such as `timeline_pending_summary= True`, `timeline_approved_summary= True`, and `timeline_denied_summary= True` so the event language itself is under smoke coverage.
 
 ### Current steering policy seam
 
@@ -694,10 +699,10 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- decide whether the new `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public
+- decide whether the event timeline should add collapsible/raw-detail toggles now that compact `summary:` lines exist
+- add a timeline-focused smoke path for persistence/runtime summaries, not just approval/intervention summaries
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
-- decide whether the new tool/intervention metric lines should eventually show lane-specific breakdowns when a page mixes multiple activity families
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether the new queue-mix metric lines should also carry oldest-pending age or timestamp cues for approval-heavy edit/test backlogs
-- decide whether stale-focused backlog summaries should echo the configured cutoff in every metric line or whether the current banner/legend/prompt placement is enough
-- keep tightening the fake/live event schema around steering and intervention milestones
+- keep tightening the fake/live event schema around steering and intervention milestones so timeline summaries stay portable across runtimes
+- decide whether the `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public

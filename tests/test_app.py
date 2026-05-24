@@ -88,9 +88,12 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert "Approval: none" in rendered_status
         assert "Filter: all (6/6 events)" in rendered_events
         assert "(intervention) kind=steering_decision | fake-policy" in rendered_events
+        assert "summary: tool list_files -> Deterministic fake tool event for workspace inspection." in rendered_events
         assert "(tool) kind=tool_started | list_files" in rendered_events
         assert "data: source='fake_runtime', tool_name='list_files'" in rendered_events
         assert "(tool) kind=tool_finished | list_files" in rendered_events
+        assert "summary: tool list_files -> .: README.md" in rendered_events
+        assert "summary: response fake-strands/fake | pending 0" in rendered_events
         assert "(persistence) kind=artifact_saved | Session artifact saved" in rendered_events
         assert len(app.history) == 1
         assert len(app.events) == 6
@@ -475,6 +478,7 @@ async def test_app_renders_pending_approval_banner_for_risky_mutation(tmp_path: 
         assert "Approval: pending:write_file(1/1)" in rendered_status
         assert "Approval pending: write_file (approval-0001) | queue: 1/1" in rendered_approval
         assert "kind=steering_confirmation_required | write_file" in rendered_events
+        assert "summary: approval pending edit via fake_runtime | queue 1/1 | path notes.txt" in rendered_events
         assert "approval_id='approval-0001'" in rendered_events
         assert "approval_queue_total=1" in rendered_events
         assert app.pending_approval is not None

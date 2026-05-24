@@ -33,6 +33,7 @@ from strands_agent_tui.sessions.summary_utils import (
     render_recent_session_page_banner,
     render_switcher_controls_line,
 )
+from strands_agent_tui.timeline import EVENT_FILTER_MODES, filter_events, render_event_timeline
 
 
 def _positive_int_arg(value: str) -> int:
@@ -616,35 +617,10 @@ class StrandsAgentApp(App):
         return "\n".join(lines)
 
     def render_events(self) -> str:
-        filtered_events = self.filtered_events()
-        if not self.events:
-            return (
-                "Event Timeline\n\n"
-                "No events yet.\n"
-                "Tool calls, runtime milestones, and failures will appear here."
-            )
-
-        lines = [
-            "Event Timeline",
-            f"Filter: {self.event_filter} ({len(filtered_events)}/{len(self.events)} events)",
-            "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence, F12 intervention",
-            "",
-        ]
-        for index, item in enumerate(filtered_events[-12:], start=max(len(filtered_events) - 11, 1)):
-            timestamp = item.timestamp[11:19] if item.timestamp else "--:--:--"
-            lines.append(f"{index}. [{timestamp}] ({item.category}) kind={item.kind} | {item.title}")
-            if item.data:
-                compact_data = ", ".join(f"{key}={value!r}" for key, value in sorted(item.data.items()))
-                lines.append(f"   {item.detail}")
-                lines.append(f"   data: {compact_data}")
-            else:
-                lines.append(f"   {item.detail}")
-        return "\n".join(lines)
+        return render_event_timeline(self.events, event_filter=self.event_filter)
 
     def filtered_events(self) -> list[RuntimeEvent]:
-        if self.event_filter == "all":
-            return self.events
-        return [event for event in self.events if event.category == self.event_filter]
+        return filter_events(self.events, self.event_filter)
 
     def action_set_event_filter(self, value: str) -> None:
         self.event_filter = self._sanitize_event_filter(value)
@@ -1112,7 +1088,7 @@ class StrandsAgentApp(App):
         self._sync_session_state(emit_pending_events=False)
 
     def _sanitize_event_filter(self, value: str) -> str:
-        return value if value in {"all", "runtime", "tool", "failure", "persistence", "intervention"} else "all"
+        return value if value in EVENT_FILTER_MODES else "all"
 
     def _normalize_history_focus_index(self, value: int | None) -> int | None:
         if value is None or not self.history:

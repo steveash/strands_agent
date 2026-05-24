@@ -1,5 +1,10 @@
 from strands_agent_tui.runtime import FakeStrandsRuntime
 from strands_agent_tui.testing import emit_smoke_results
+from strands_agent_tui.timeline import render_event_timeline
+
+
+def _summary_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip().startswith("summary:")]
 
 
 def main() -> int:
@@ -7,10 +12,13 @@ def main() -> int:
 
     first = runtime.run("overwrite the notes file and replace all stale values")
     pending_event = next((event for event in first.events if event.kind == "steering_confirmation_required"), None)
+    initial_timeline = render_event_timeline(first.events, event_filter="intervention")
+    initial_summaries = _summary_lines(initial_timeline)
     results: list[tuple[str, object]] = [
         ("initial text", first.text),
         ("initial pending", first.pending_approval.summary() if first.pending_approval else "none"),
         ("initial events", [event.kind for event in first.events]),
+        ("initial intervention summaries", initial_summaries),
         (
             "initial approval schema",
             pending_event is not None
@@ -26,6 +34,10 @@ def main() -> int:
             and pending_event.data.get("approval_queue_after_current") == 1
             and pending_event.data.get("next_pending_tool") == "replace_text",
         ),
+        (
+            "timeline_pending_summary",
+            any("approval pending edit via fake_runtime | queue 1/2 | path notes.txt | next replace_text" in line for line in initial_summaries),
+        ),
     ]
 
     approved = None
@@ -36,11 +48,14 @@ def main() -> int:
             (event for event in approved.events if event.kind == "approval_follow_up_prepared"),
             None,
         )
+        approved_timeline = render_event_timeline(approved.events, event_filter="intervention")
+        approved_summaries = _summary_lines(approved_timeline)
         results.extend(
             [
                 ("after approve text", approved.text),
                 ("next pending", approved.pending_approval.summary() if approved.pending_approval else "none"),
                 ("after approve events", [event.kind for event in approved.events]),
+                ("after approve intervention summaries", approved_summaries),
                 (
                     "approved execution schema",
                     approved_tool_event is not None
@@ -54,6 +69,15 @@ def main() -> int:
                     and approved_follow_up_event.data.get("approval_queue_total") == 2
                     and approved_follow_up_event.data.get("approval_queue_after_current") == 1
                     and approved_follow_up_event.data.get("next_pending_tool") == "replace_text",
+                ),
+                (
+                    "timeline_approved_summary",
+                    any(
+                        "approval approved edit via fake_runtime | queue 1/2 | path notes.txt" in line
+                        and "resumed" in line
+                        for line in approved_summaries
+                    )
+                    and any("approval pending edit via fake_runtime | queue 1/1 | path notes.txt" in line for line in approved_summaries),
                 ),
             ]
         )
@@ -75,11 +99,14 @@ def main() -> int:
             (event for event in denied.events if event.kind == "approval_follow_up_prepared"),
             None,
         )
+        denied_timeline = render_event_timeline(denied.events, event_filter="intervention")
+        denied_summaries = _summary_lines(denied_timeline)
         results.extend(
             [
                 ("after deny text", denied.text),
                 ("final pending", denied.pending_approval.summary() if denied.pending_approval else "none"),
                 ("after deny events", [event.kind for event in denied.events]),
+                ("after deny intervention summaries", denied_summaries),
                 (
                     "denied schema",
                     denied_event is not None
@@ -91,6 +118,10 @@ def main() -> int:
                     denied_follow_up_event is not None
                     and denied_follow_up_event.data.get("approval_queue_total") == 1
                     and denied_follow_up_event.data.get("approval_queue_after_current") == 0,
+                ),
+                (
+                    "timeline_denied_summary",
+                    any("approval denied edit via fake_runtime | queue 1/1 | path notes.txt" in line for line in denied_summaries),
                 ),
             ]
         )
