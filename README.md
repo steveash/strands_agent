@@ -412,6 +412,8 @@ Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle
+- `.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix
+- `.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
 
 ### Session triage smoke bundle

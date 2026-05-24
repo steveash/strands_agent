@@ -14,6 +14,8 @@ from strands_agent_tui.testing import (
     SmokeCliExample,
     build_smoke_cli_doc_audit_parser,
     build_smoke_cli_doc_audit_selector,
+    build_smoke_cli_doc_render_examples,
+    build_smoke_cli_doc_render_parser,
     build_smoke_cli_doc_spec_registry,
     failed_smoke_check_lines,
     is_failed_smoke_check_line,
@@ -61,6 +63,8 @@ from strands_agent_tui.testing import (
     matches_tool_filter_output,
     matches_workspace_filter_output,
     normalize_cli_text,
+    render_smoke_cli_readme_section,
+    render_smoke_cli_readme_sections,
     smoke_cli_doc_parity_diagnostic,
     smoke_cli_doc_spec,
     smoke_wrapper_cli_spec,
@@ -149,6 +153,55 @@ def test_smoke_cli_doc_audit_selector_and_parser_follow_wrapper_registry() -> No
             "smoke_cli_docs_smoke.py smoke_matrix # single smoke wrapper",
         ],
     )
+
+
+def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> None:
+    help_text = build_smoke_cli_doc_render_parser().format_help()
+
+    assert build_smoke_cli_doc_render_examples() == (
+        SmokeCliExample("smoke_cli_docs_render.py"),
+        SmokeCliExample(
+            "smoke_cli_docs_render.py standalone_smoke --body-only",
+            target_name="standalone_smoke",
+            description="single smoke wrapper body preview",
+        ),
+        SmokeCliExample(
+            "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview",
+            target_name="all",
+            description="export all rendered smoke wrapper sections",
+        ),
+    )
+    assert matches_public_cli_help(
+        help_text,
+        required_snippets=[
+            "Which smoke-wrapper README surface to render. Aliases: all -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix.",
+            "smoke_cli_docs_render.py # default all alias -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",
+            "smoke_cli_docs_render.py standalone_smoke --body-only # single smoke wrapper body preview",
+            "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview # export all rendered smoke wrapper sections",
+            "--body-only",
+            "--output-dir OUTPUT_DIR",
+        ],
+    )
+
+
+
+def test_render_smoke_cli_readme_sections_support_full_section_and_body_views() -> None:
+    assert render_smoke_cli_readme_section("standalone_smoke") == smoke_wrapper_cli_spec(
+        "standalone_smoke"
+    ).render_readme_section()
+    assert render_smoke_cli_readme_section(
+        "standalone_smoke", body_only=True
+    ) == smoke_wrapper_cli_spec("standalone_smoke").render_readme_section_body()
+    assert render_smoke_cli_readme_sections(requested_target_name="standalone_smoke", body_only=True) == (
+        (
+            "standalone_smoke",
+            smoke_wrapper_cli_spec("standalone_smoke").render_readme_section_body(),
+        ),
+    )
+    assert [
+        script_name for script_name, _ in render_smoke_cli_readme_sections(requested_target_name="all")
+    ] == list(DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES)
+
 
 
 def test_build_smoke_cli_doc_spec_registry_rejects_duplicate_script_names() -> None:

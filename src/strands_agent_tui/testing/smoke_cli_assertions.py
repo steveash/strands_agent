@@ -149,6 +149,26 @@ def build_smoke_cli_doc_audit_examples() -> tuple[SmokeCliExample, ...]:
 
 
 SMOKE_CLI_DOC_AUDIT_EXAMPLES = build_smoke_cli_doc_audit_examples()
+SMOKE_CLI_DOC_RENDER_SCRIPT_NAME = "smoke_cli_docs_render"
+
+
+def build_smoke_cli_doc_render_examples() -> tuple[SmokeCliExample, ...]:
+    return (
+        SmokeCliExample(f"{SMOKE_CLI_DOC_RENDER_SCRIPT_NAME}.py"),
+        SmokeCliExample(
+            f"{SMOKE_CLI_DOC_RENDER_SCRIPT_NAME}.py standalone_smoke --body-only",
+            target_name="standalone_smoke",
+            description="single smoke wrapper body preview",
+        ),
+        SmokeCliExample(
+            f"{SMOKE_CLI_DOC_RENDER_SCRIPT_NAME}.py all --output-dir artifacts/smoke-cli-docs-preview",
+            target_name="all",
+            description="export all rendered smoke wrapper sections",
+        ),
+    )
+
+
+SMOKE_CLI_DOC_RENDER_EXAMPLES = build_smoke_cli_doc_render_examples()
 
 
 def resolve_smoke_cli_doc_target_names(requested_target_name: str | None = None) -> tuple[str, ...]:
@@ -178,6 +198,58 @@ def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:
     if spec is None:
         raise ValueError(f"unknown smoke cli doc spec {script_name!r}")
     return spec
+
+
+
+def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
+    selector = SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR
+    parser = build_smoke_cli_parser(
+        description=(
+            "Render the expected smoke-wrapper README sections from shared metadata for preview or export."
+        ),
+        choices=selector.choices,
+        default_target_name=selector.default_target_name,
+        resolve_target_names=selector.resolve_target_names,
+        resolve_display_names=selector.resolve_display_names,
+        item_help="Which smoke-wrapper README surface to render.",
+        alias_target_names=selector.alias_target_names,
+        examples=SMOKE_CLI_DOC_RENDER_EXAMPLES,
+        single_choice_description="single smoke wrapper body preview",
+    )
+    parser.add_argument(
+        "--body-only",
+        action="store_true",
+        help="Render only the section body without the leading markdown heading.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Write one <script_name>.md file per selected smoke wrapper instead of printing to stdout.",
+    )
+    return parser
+
+
+
+def render_smoke_cli_readme_section(script_name: str, *, body_only: bool = False) -> str:
+    spec = smoke_wrapper_cli_spec(script_name)
+    if body_only:
+        return spec.render_readme_section_body()
+    return spec.render_readme_section()
+
+
+
+def render_smoke_cli_readme_sections(
+    *,
+    requested_target_name: str | None = None,
+    body_only: bool = False,
+) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (
+            script_name,
+            render_smoke_cli_readme_section(script_name, body_only=body_only),
+        )
+        for script_name in resolve_smoke_cli_doc_target_names(requested_target_name)
+    )
 
 
 def missing_required_snippets(text: str, *, required_snippets: Iterable[str]) -> tuple[str, ...]:

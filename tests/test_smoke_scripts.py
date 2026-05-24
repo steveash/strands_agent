@@ -29,6 +29,8 @@ from strands_agent_tui.testing import (
     matches_smoke_cli_help_for_script,
     matches_shell_filter_output,
     matches_workspace_filter_output,
+    render_smoke_cli_readme_section,
+    render_smoke_cli_readme_sections,
     seed_approval_restore_focus_scenario,
     seed_denied_approval_session,
     seed_pending_approval_session,
@@ -469,6 +471,81 @@ def test_smoke_cli_docs_smoke_invalid_choice_errors_show_public_cli_choices(caps
 
     with pytest.raises(SystemExit) as exc_info:
         smoke_cli_docs_smoke.main(["docs"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert matches_public_cli_invalid_choice(
+        captured.err,
+        invalid_target="docs",
+        expected_choices="{standalone_smoke,session_triage_smoke,session_recovery_smoke,smoke_matrix,all}",
+    )
+
+
+
+def test_smoke_cli_docs_render_build_parser_lists_public_targets_examples_and_flags() -> None:
+    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
+
+    help_text = " ".join(smoke_cli_docs_render.build_parser().format_help().split())
+
+    assert (
+        "Which smoke-wrapper README surface to render. Aliases: all -> standalone_smoke, "
+        "session_triage_smoke, session_recovery_smoke, smoke_matrix."
+    ) in help_text
+    assert (
+        "smoke_cli_docs_render.py # default all alias -> standalone_smoke, "
+        "session_triage_smoke, session_recovery_smoke, smoke_matrix"
+    ) in help_text
+    assert (
+        "smoke_cli_docs_render.py standalone_smoke --body-only # single smoke wrapper body preview"
+        in help_text
+    )
+    assert (
+        "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview # export all rendered smoke wrapper sections"
+        in help_text
+    )
+    assert "--body-only" in help_text
+    assert "--output-dir OUTPUT_DIR" in help_text
+
+
+
+def test_smoke_cli_docs_render_supports_single_wrapper_body_preview(capsys) -> None:
+    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
+
+    exit_code = smoke_cli_docs_render.main(["standalone_smoke", "--body-only"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert captured.out == render_smoke_cli_readme_section("standalone_smoke", body_only=True) + "\n"
+
+
+
+def test_smoke_cli_docs_render_exports_selected_sections(tmp_path, capsys) -> None:
+    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
+
+    exit_code = smoke_cli_docs_render.main(["all", "--output-dir", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    rendered_sections = render_smoke_cli_readme_sections(requested_target_name="all")
+    output_lines = captured.out.splitlines()
+    assert output_lines[-1] == (
+        f"wrote {len(rendered_sections)} rendered smoke README sections to {tmp_path}"
+    )
+    for script_name, text in rendered_sections:
+        path = tmp_path / f"{script_name}.md"
+        assert str(path) in output_lines
+        assert path.read_text(encoding="utf-8") == text + "\n"
+
+
+
+def test_smoke_cli_docs_render_invalid_choice_errors_show_public_cli_choices(capsys) -> None:
+    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
+
+    with pytest.raises(SystemExit) as exc_info:
+        smoke_cli_docs_render.main(["docs"])
 
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
