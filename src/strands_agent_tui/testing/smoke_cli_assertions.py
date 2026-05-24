@@ -181,6 +181,11 @@ def build_smoke_cli_doc_fix_examples() -> tuple[SmokeCliExample, ...]:
             description="preview a single smoke wrapper README section diff without writing it",
         ),
         SmokeCliExample(
+            f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py all --check",
+            target_name="all",
+            description="exit non-zero when any selected smoke wrapper README section drifts",
+        ),
+        SmokeCliExample(
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py standalone_smoke",
             target_name="standalone_smoke",
             description="repair a single smoke wrapper README section in place",
@@ -277,6 +282,11 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         "--diff",
         action="store_true",
         help="Print unified diffs for only the drifted selected README sections without writing changes.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit non-zero when any selected README section drifts without writing changes.",
     )
     parser.add_argument(
         "--stdout",

@@ -34,6 +34,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.diff and args.stdout:
         parser.error("--diff cannot be combined with --stdout")
+    if args.check and args.stdout:
+        parser.error("--check cannot be combined with --stdout")
 
     readme_path = Path(args.readme_path)
     original_markdown, repaired_markdown, repaired_script_names = repair_readme(
@@ -55,11 +57,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"### {script_name}")
             for line in diff_lines:
                 print(line)
+        if args.check:
+            drifted_names = ", ".join(script_name for script_name, _ in diff_sections)
+            print(
+                f"smoke README drift detected in {len(diff_sections)} section(s) for {readme_path}: {drifted_names}"
+            )
+            return 1
         return 0
 
     if args.stdout:
         print(repaired_markdown, end="" if repaired_markdown.endswith("\n") else "\n")
         return 0
+
+    if args.check:
+        if repaired_markdown == original_markdown:
+            print(f"smoke README already up to date: {readme_path}")
+            return 0
+        repaired_names = ", ".join(repaired_script_names)
+        print(
+            f"smoke README drift detected in {len(repaired_script_names)} section(s) for {readme_path}: {repaired_names}"
+        )
+        return 1
 
     if repaired_markdown != original_markdown:
         readme_path.write_text(repaired_markdown, encoding="utf-8")
