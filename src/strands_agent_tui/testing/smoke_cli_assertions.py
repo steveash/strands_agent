@@ -174,7 +174,7 @@ def build_smoke_cli_doc_render_examples() -> tuple[SmokeCliExample, ...]:
         SmokeCliExample(
             f"{SMOKE_CLI_DOC_RENDER_SCRIPT_NAME}.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch",
             target_name="all",
-            description="persist drift-only review artifacts as rendered sections plus JSON manifest and unified diff files",
+            description="persist drift-only review artifacts as rendered sections plus JSON manifest summaries/checksums and unified diff files",
         ),
     )
 

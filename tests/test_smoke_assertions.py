@@ -185,7 +185,7 @@ def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> N
         SmokeCliExample(
             "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch",
             target_name="all",
-            description="persist drift-only review artifacts as rendered sections plus JSON manifest and unified diff files",
+            description="persist drift-only review artifacts as rendered sections plus JSON manifest summaries/checksums and unified diff files",
         ),
     )
     assert matches_public_cli_help(
@@ -196,7 +196,7 @@ def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> N
             "smoke_cli_docs_render.py standalone_smoke --body-only # single smoke wrapper body preview",
             "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview # export all rendered smoke wrapper sections",
             "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview # export only the drifted rendered smoke wrapper sections",
-            "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch # persist drift-only review artifacts as rendered sections plus JSON manifest and unified diff files",
+            "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch # persist drift-only review artifacts as rendered sections plus JSON manifest summaries/checksums and unified diff files",
             "--body-only",
             "--output-dir OUTPUT_DIR",
             "--readme-path README_PATH",

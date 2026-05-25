@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime, timedelta
@@ -596,7 +597,7 @@ def test_smoke_cli_docs_render_build_parser_lists_public_targets_examples_and_fl
         in help_text
     )
     assert (
-        "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch # persist drift-only review artifacts as rendered sections plus JSON manifest and unified diff files"
+        "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch # persist drift-only review artifacts as rendered sections plus JSON manifest summaries/checksums and unified diff files"
         in help_text
     )
     assert "--body-only" in help_text
@@ -735,15 +736,22 @@ def test_smoke_cli_docs_render_drift_only_review_artifacts_write_manifest_and_di
         str(expected_path),
         f"wrote 1 rendered smoke README sections to {output_dir}",
     ]
-    assert expected_path.read_text(encoding="utf-8") == render_smoke_cli_readme_section("standalone_smoke") + "\n"
+    rendered_text = render_smoke_cli_readme_section("standalone_smoke")
+    assert expected_path.read_text(encoding="utf-8") == rendered_text + "\n"
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest_payload["body_only"] is False
     assert manifest_payload["diff_output_path"] == str(diff_path)
+    assert manifest_payload["diff_bundle_sha256"] == hashlib.sha256(
+        diff_path.read_text(encoding="utf-8").encode("utf-8")
+    ).hexdigest()
     assert manifest_payload["drift_count"] == 1
     assert manifest_payload["drift_only"] is True
     assert manifest_payload["manifest_path"] == str(manifest_path)
     assert manifest_payload["output_dir"] == str(output_dir)
     assert manifest_payload["readme_path"] == str(readme_path)
+    assert manifest_payload["rendered_bundle_sha256"] == hashlib.sha256(
+        f"### standalone_smoke\n{rendered_text}".encode("utf-8")
+    ).hexdigest()
     assert manifest_payload["rendered_count"] == 1
     assert manifest_payload["rendered_targets"] == ["standalone_smoke"]
     assert manifest_payload["requested_target"] == "all"
@@ -756,9 +764,29 @@ def test_smoke_cli_docs_render_drift_only_review_artifacts_write_manifest_and_di
     assert manifest_payload["up_to_date"] is False
     assert manifest_payload["sections"][0]["script_name"] == "standalone_smoke"
     assert manifest_payload["sections"][0]["output_path"] == str(expected_path)
+    assert manifest_payload["sections"][0]["rendered_summary"] == "### Standalone local smoke bundle"
+    assert manifest_payload["sections"][0]["rendered_line_count"] == len(rendered_text.splitlines())
+    assert manifest_payload["sections"][0]["rendered_char_count"] == len(rendered_text)
+    assert manifest_payload["sections"][0]["rendered_sha256"] == hashlib.sha256(
+        rendered_text.encode("utf-8")
+    ).hexdigest()
     assert manifest_payload["sections"][0]["diff_lines"][0] == "--- expected"
     assert manifest_payload["sections"][0]["diff_lines"][1] == "+++ README"
     diff_text = diff_path.read_text(encoding="utf-8")
+    assert manifest_payload["sections"][0]["diff_sha256"] == hashlib.sha256(
+        "\n".join(manifest_payload["sections"][0]["diff_lines"]).encode("utf-8")
+    ).hexdigest()
+    section_diff_lines = manifest_payload["sections"][0]["diff_lines"]
+    assert manifest_payload["sections"][0]["diff_stats"] == {
+        "added_line_count": sum(
+            1 for line in section_diff_lines if line.startswith("+") and not line.startswith("+++")
+        ),
+        "hunk_count": sum(1 for line in section_diff_lines if line.startswith("@@ ")),
+        "line_count": len(section_diff_lines),
+        "removed_line_count": sum(
+            1 for line in section_diff_lines if line.startswith("-") and not line.startswith("---")
+        ),
+    }
     assert diff_text.startswith("### standalone_smoke\n--- expected\n+++ README\n@@ ")
     assert diff_text.endswith("\n")
 
@@ -792,12 +820,14 @@ def test_smoke_cli_docs_render_drift_only_review_artifacts_can_report_up_to_date
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest_payload == {
         "body_only": False,
+        "diff_bundle_sha256": None,
         "diff_output_path": str(diff_path),
         "drift_count": 0,
         "drift_only": True,
         "manifest_path": str(manifest_path),
         "output_dir": None,
         "readme_path": str(readme_path),
+        "rendered_bundle_sha256": None,
         "rendered_count": 0,
         "rendered_targets": [],
         "requested_target": "all",

@@ -122,20 +122,18 @@ What exists now:
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets,
 - a standalone `smoke_cli_docs` smoke target that audits smoke-wrapper `--help` text against the README and emits actionable missing-snippet diagnostics,
-- drift-only smoke-doc rendering that can now emit review artifacts (`.md` sections, JSON manifest, unified diff) for multi-wrapper README repairs,
+- drift-only smoke-doc rendering that can now emit review artifacts (`.md` sections, JSON manifest summaries/checksums, unified diff) for multi-wrapper README repairs,
 - repair/check smoke-doc tooling that can now persist machine-readable drift/repair reports to disk for CI or manual review,
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- repaired the standalone smoke-wrapper README parity drift by extending the shared smoke-doc registry/tests to cover the new render/fix examples already documented in `README.md`,
-- added `--manifest-output` and `--diff-output` to `scripts/smoke_cli_docs_render.py` so drift-only review runs can persist rendered sections plus artifact metadata instead of only printing paths,
-- added `--json-output` to `scripts/smoke_cli_docs_fix.py` so both drift checks and repair runs can write machine-readable reports while keeping the normal console UX,
-- added `scripts/timeline_smoke.py` plus targeted tests to prove the compact runtime/persistence timeline summaries and filter counts stay stable.
+- extended `scripts/smoke_cli_docs_render.py` so drift-only review manifests now carry bundle-level plus per-section SHA256 checksums, compact rendered summaries, and diff stats alongside the rendered sections and unified diff artifact,
+- refreshed shared smoke-doc metadata/README shortcuts plus manifest regression coverage so the new review fields stay locked to the public operator workflow.
 
 Why this matters now:
-- Steve can now inspect Strands-adjacent smoke-doc drift the same way he inspects agent behavior: as concrete artifacts instead of ephemeral terminal output.
-- The new timeline smoke path turns the event timeline into a first-class learning surface, not just a TUI widget, by proving what runtime and persistence summaries should look like.
-- Shared CLI metadata plus persisted review artifacts make the repo easier to automate without letting README/help text silently drift.
+- CI and review automation can now compare smoke-doc repair intent through hashes and compact stats before opening every rendered markdown artifact.
+- Human reviewers still get one quick summary line per drifted section, so the manifest stays skimmable while remaining machine-friendly.
+- Shared CLI metadata plus persisted review artifacts keep README/help drift visible without turning smoke-doc checks into brittle prose scraping.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, event-timeline summary formatting/filtering, and smoke-doc artifact/report generation,
@@ -145,11 +143,10 @@ How we know the prototype is working right now:
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
 
 Current evidence:
-- automated tests: `356 passed in 37.20s` via `.venv/bin/pytest -q`,
-- focused smoke/timeline coverage: `.venv/bin/pytest -q tests/test_timeline.py tests/test_smoke_scripts.py tests/test_smoke_runner.py` => `117 passed in 5.08s`,
-- timeline walkthrough verification: `.venv/bin/python scripts/timeline_smoke.py` => `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, `timeline_filter_counts= True`,
-- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 26.66s`,
-- self-unblock note: fixed a failing `standalone_smoke` README/help parity assertion first, then reran the full suite to get the repo back to green before adding the new timeline smoke coverage.
+- automated tests: `356 passed in 37.32s` via `.venv/bin/pytest -q`,
+- focused smoke-doc coverage: `.venv/bin/pytest -q tests/test_smoke_scripts.py tests/test_smoke_runner.py tests/test_smoke_assertions.py` => `135 passed in 4.63s`,
+- runnable drift-artifact verification: a temporary drifted README fixture run through `scripts/smoke_cli_docs_render.py ... --manifest-output ... --diff-output ...` produced `manifest_drift_count= 1`, non-empty bundle hashes, `manifest_rendered_summary= ### Standalone local smoke bundle`, and diff stats `{'added_line_count': 1, 'hunk_count': 1, 'line_count': 8, 'removed_line_count': 1}`,
+- timeline walkthrough verification: `.venv/bin/python scripts/timeline_smoke.py` still reports `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, and `timeline_filter_counts= True`.
 
 ## First five phases
 
@@ -419,7 +416,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix
 - `.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper
 - `.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview` exports only the currently drifted smoke wrapper README sections
-- `.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch` persists drift-only review artifacts as rendered sections plus JSON manifest and unified diff files
+- `.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch` persists drift-only review artifacts as rendered sections plus JSON manifest summaries/checksums and unified diff files
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke --diff` previews the standalone wrapper README diff before writing metadata-backed repairs
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all --check` exits non-zero when any public smoke wrapper README section drifts
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all --check --json` emits machine-readable drift results for CI without scraping prose summaries
