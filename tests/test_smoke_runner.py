@@ -503,17 +503,20 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
 def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None:
     assert STANDALONE_SMOKE_CLI_SPEC.readme_reference_command() == ".venv/bin/python scripts/standalone_smoke.py"
     assert STANDALONE_SMOKE_CLI_SPEC.readme_shortcut_snippets() == (
-        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)",
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
+        "`.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
     assert STANDALONE_SMOKE_CLI_SPEC.readme_all_shortcut_snippets() == (
-        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)",
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
+        "`.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end",
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
+        "`.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix JSON artifacts end-to-end with fail-fast contract checks",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview` exports only the currently drifted smoke wrapper README sections",
@@ -542,7 +545,7 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
     recovery_help = " ".join(recovery_parser.format_help().split())
     matrix_help = " ".join(matrix_parser.format_help().split())
 
-    assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay, docs" in standalone_help
+    assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay, docs, docs-artifacts" in standalone_help
     assert "session_triage_smoke.py both # both alias -> picker, switcher" in triage_help
     assert (
         "session_recovery_smoke.py all # all alias -> approval, approval-restart, session-state, "
@@ -553,12 +556,14 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
 
     assert STANDALONE_SMOKE_CLI_SPEC.readme_required_snippets() == (
         "```bash\n.venv/bin/python scripts/standalone_smoke.py\n```",
-        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
-        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)",
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)",
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
+        "`.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end",
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
+        "`.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix JSON artifacts end-to-end with fail-fast contract checks",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview` exports only the currently drifted smoke wrapper README sections",
@@ -589,13 +594,15 @@ def test_smoke_wrapper_cli_specs_render_readme_sections() -> None:
         "```bash\n"
         ".venv/bin/python scripts/standalone_smoke.py\n"
         "```\n\n"
-        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, and `smoke_cli_docs` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.\n\n"
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.\n\n"
         "Operator shortcuts:\n"
-        "- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`)\n"
-        "- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `live`)\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)\n"
         "- `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle\n"
+        "- `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix JSON artifacts end-to-end with fail-fast contract checks\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview` exports only the currently drifted smoke wrapper README sections\n"

@@ -434,11 +434,12 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
 @pytest.mark.parametrize(
     ("argv", "expected_names"),
     [
-        ([], ["summary-utils", "shell-tool", "replay", "docs"]),
-        (["local"], ["summary-utils", "shell-tool", "replay", "docs"]),
-        (["all"], ["summary-utils", "shell-tool", "replay", "docs", "live"]),
+        ([], ["summary-utils", "shell-tool", "replay", "docs", "docs-artifacts"]),
+        (["local"], ["summary-utils", "shell-tool", "replay", "docs", "docs-artifacts"]),
+        (["all"], ["summary-utils", "shell-tool", "replay", "docs", "docs-artifacts", "live"]),
         (["summary-utils"], ["summary-utils"]),
         (["docs"], ["docs"]),
+        (["docs-artifacts"], ["docs-artifacts"]),
         (["live"], ["live"]),
     ],
 )
@@ -547,6 +548,52 @@ def test_standalone_smoke_passes_shared_wrapper_metadata(monkeypatch) -> None:
         "names": ["summary-utils"],
         "wrapper_metadata": STANDALONE_SMOKE_WRAPPER,
     }
+
+
+def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypatch) -> None:
+    smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
+    output = StringIO()
+    real_emit_smoke_results = smoke_cli_docs_artifacts_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        smoke_cli_docs_artifacts_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = smoke_cli_docs_artifacts_smoke.main([])
+
+    assert exit_code == 0
+    lines = output.getvalue().splitlines()
+    _assert_mixed_smoke_result_contract(
+        lines,
+        detail_names=[
+            "render_stdout",
+            "render_manifest_drift_count",
+            "render_manifest_summary",
+            "render_manifest_diff_stats",
+            "fix_check_stdout",
+            "fix_repair_stdout",
+            "fix_post_check_stdout",
+        ],
+        check_names=[
+            "render_exit",
+            "render_manifest_payload",
+            "render_outputs_written",
+            "fix_check_exit",
+            "fix_check_payload",
+            "fix_repair_exit",
+            "fix_repair_payload",
+            "fix_repair_applied",
+            "fix_post_check_exit",
+            "fix_post_check_payload",
+        ],
+    )
+    assert "render_manifest_drift_count: 1" in lines
+    assert "render_manifest_summary: ### Standalone local smoke bundle" in lines
+    assert any(line.startswith("render_manifest_diff_stats: {'added_line_count': ") for line in lines)
+    assert any("smoke README drift detected in 1 section(s)" in line for line in lines if line.startswith("fix_check_stdout: "))
+    assert any(line.startswith("fix_repair_stdout: repaired 1 smoke README section(s) in ") for line in lines)
+    assert any(line.startswith("fix_post_check_stdout: smoke README already up to date: ") for line in lines)
 
 
 @pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
@@ -1509,7 +1556,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
 @pytest.mark.parametrize(
     ("script_name", "invalid_target", "expected_choices"),
     [
-        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,docs,live,local,all}"),
+        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,docs,docs-artifacts,live,local,all}"),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
             "session_recovery_smoke",
