@@ -493,14 +493,15 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("summary-utils", "summary_utils_smoke.py"),
         SmokeScriptTargetTemplate("shell-tool", "shell_tool_smoke.py"),
         SmokeScriptTargetTemplate("replay", "replay_smoke.py"),
+        SmokeScriptTargetTemplate("timeline", "timeline_smoke.py"),
         SmokeScriptTargetTemplate("docs", "smoke_cli_docs_smoke.py"),
         SmokeScriptTargetTemplate("docs-artifacts", "smoke_cli_docs_artifacts_smoke.py"),
         SmokeScriptTargetTemplate("live", "live_smoke.py"),
     ),
     default_target_name="local",
     alias_target_names={
-        "local": ("summary-utils", "shell-tool", "replay", "docs", "docs-artifacts"),
-        "all": ("summary-utils", "shell-tool", "replay", "docs", "docs-artifacts", "live"),
+        "local": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"),
+        "all": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"),
     },
     examples=(
         SmokeCliExample("standalone_smoke.py"),
@@ -509,7 +510,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="local",
             readme_description=(
                 "explicitly re-runs the default `local` alias "
-                "(`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)"
+                "(`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)"
             ),
         ),
         SmokeCliExample(
@@ -517,8 +518,13 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="all",
             readme_description=(
                 "runs the live-inclusive alias "
-                "(`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)"
+                "(`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)"
             ),
+        ),
+        SmokeCliExample(
+            "standalone_smoke.py timeline",
+            target_name="timeline",
+            readme_description="runs just the timeline smoke target",
         ),
         SmokeCliExample(
             "standalone_smoke.py docs",
@@ -540,7 +546,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     readme_section_heading="Standalone local smoke bundle",
     readme_section_intro="To verify the remaining local smoke surfaces with shared fail-fast `= False` handling:",
     readme_intro_paragraphs=(
-        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
     ),
     readme_extra_shortcut_snippets=(
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
@@ -557,7 +563,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
     ),
-    readme_extra_shortcut_insert_at=4,
+    readme_extra_shortcut_insert_at=5,
 )
 
 SESSION_TRIAGE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(

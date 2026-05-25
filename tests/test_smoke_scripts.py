@@ -434,10 +434,11 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
 @pytest.mark.parametrize(
     ("argv", "expected_names"),
     [
-        ([], ["summary-utils", "shell-tool", "replay", "docs", "docs-artifacts"]),
-        (["local"], ["summary-utils", "shell-tool", "replay", "docs", "docs-artifacts"]),
-        (["all"], ["summary-utils", "shell-tool", "replay", "docs", "docs-artifacts", "live"]),
+        ([], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
+        (["local"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
+        (["all"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"]),
         (["summary-utils"], ["summary-utils"]),
+        (["timeline"], ["timeline"]),
         (["docs"], ["docs"]),
         (["docs-artifacts"], ["docs-artifacts"]),
         (["live"], ["live"]),
@@ -1556,7 +1557,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
 @pytest.mark.parametrize(
     ("script_name", "invalid_target", "expected_choices"),
     [
-        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,docs,docs-artifacts,live,local,all}"),
+        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,live,local,all}"),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
             "session_recovery_smoke",

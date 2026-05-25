@@ -503,15 +503,17 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
 def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None:
     assert STANDALONE_SMOKE_CLI_SPEC.readme_reference_command() == ".venv/bin/python scripts/standalone_smoke.py"
     assert STANDALONE_SMOKE_CLI_SPEC.readme_shortcut_snippets() == (
-        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target",
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
         "`.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
     assert STANDALONE_SMOKE_CLI_SPEC.readme_all_shortcut_snippets() == (
-        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target",
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
         "`.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end",
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
@@ -545,7 +547,7 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
     recovery_help = " ".join(recovery_parser.format_help().split())
     matrix_help = " ".join(matrix_parser.format_help().split())
 
-    assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay, docs, docs-artifacts" in standalone_help
+    assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay, timeline, docs, docs-artifacts" in standalone_help
     assert "session_triage_smoke.py both # both alias -> picker, switcher" in triage_help
     assert (
         "session_recovery_smoke.py all # all alias -> approval, approval-restart, session-state, "
@@ -556,9 +558,10 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
 
     assert STANDALONE_SMOKE_CLI_SPEC.readme_required_snippets() == (
         "```bash\n.venv/bin/python scripts/standalone_smoke.py\n```",
-        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
-        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
-        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
+        "`.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)",
+        "`.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)",
+        "`.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target",
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
         "`.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end",
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
@@ -594,10 +597,11 @@ def test_smoke_wrapper_cli_specs_render_readme_sections() -> None:
         "```bash\n"
         ".venv/bin/python scripts/standalone_smoke.py\n"
         "```\n\n"
-        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.\n\n"
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.\n\n"
         "Operator shortcuts:\n"
-        "- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)\n"
-        "- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target\n"
         "- `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target\n"
         "- `.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)\n"

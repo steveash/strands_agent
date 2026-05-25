@@ -405,11 +405,12 @@ To verify the remaining local smoke surfaces with shared fail-fast `= False` han
 .venv/bin/python scripts/standalone_smoke.py
 ```
 
-This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
+This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
 
 Operator shortcuts:
-- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)
-- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)
+- `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)
+- `.venv/bin/python scripts/standalone_smoke.py all` runs the live-inclusive alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`, `live`)
+- `.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target
 - `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
 - `.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)
@@ -433,6 +434,8 @@ To verify the compact runtime-vs-persistence timeline summaries without launchin
 ```bash
 .venv/bin/python scripts/timeline_smoke.py
 ```
+
+This walkthrough now also runs as the public `timeline` target inside `.venv/bin/python scripts/standalone_smoke.py` and therefore inside the default local `.venv/bin/python scripts/smoke_matrix.py` path.
 
 Expected result includes `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, and `timeline_filter_counts= True`, plus rendered timeline snapshots for the runtime and persistence filters.
 
@@ -718,7 +721,7 @@ Future daily iterations should:
 ## Next iteration ideas
 
 - decide whether the event timeline should add collapsible/raw-detail toggles now that compact `summary:` lines exist
-- fold `scripts/timeline_smoke.py` into a public wrapper/bundle so timeline verification is part of the normal smoke matrix instead of a separate manual command
+- extend `scripts/smoke_cli_docs_artifacts_smoke.py` with public target/output options so operators can preserve artifact bundles or audit non-standalone wrapper docs without editing the script
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether the new queue-mix metric lines should also carry oldest-pending age or timestamp cues for approval-heavy edit/test backlogs
