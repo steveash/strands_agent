@@ -182,6 +182,11 @@ def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> N
             target_name="all",
             description="export only the drifted rendered smoke wrapper sections",
         ),
+        SmokeCliExample(
+            "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch",
+            target_name="all",
+            description="persist drift-only review artifacts as rendered sections plus JSON manifest and unified diff files",
+        ),
     )
     assert matches_public_cli_help(
         help_text,
@@ -191,10 +196,13 @@ def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> N
             "smoke_cli_docs_render.py standalone_smoke --body-only # single smoke wrapper body preview",
             "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview # export all rendered smoke wrapper sections",
             "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview # export only the drifted rendered smoke wrapper sections",
+            "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch # persist drift-only review artifacts as rendered sections plus JSON manifest and unified diff files",
             "--body-only",
             "--output-dir OUTPUT_DIR",
             "--readme-path README_PATH",
             "--drift-only",
+            "--manifest-output MANIFEST_OUTPUT",
+            "--diff-output DIFF_OUTPUT",
         ],
     )
 
@@ -220,6 +228,11 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
             description="emit machine-readable JSON drift results for CI without scraping prose",
         ),
         SmokeCliExample(
+            "smoke_cli_docs_fix.py all --check --json-output artifacts/smoke-cli-docs-fix.json",
+            target_name="all",
+            description="persist the same machine-readable drift report to a file alongside the normal console summary",
+        ),
+        SmokeCliExample(
             "smoke_cli_docs_fix.py standalone_smoke",
             target_name="standalone_smoke",
             description="repair a single smoke wrapper README section in place",
@@ -239,12 +252,14 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
             "smoke_cli_docs_fix.py standalone_smoke --diff # preview a single smoke wrapper README section diff without writing it",
             "smoke_cli_docs_fix.py all --check # exit non-zero when any selected smoke wrapper README section drifts",
             "smoke_cli_docs_fix.py all --check --json # emit machine-readable JSON drift results for CI without scraping prose",
+            "smoke_cli_docs_fix.py all --check --json-output artifacts/smoke-cli-docs-fix.json # persist the same machine-readable drift report to a file alongside the normal console summary",
             "smoke_cli_docs_fix.py standalone_smoke # repair a single smoke wrapper README section in place",
             "smoke_cli_docs_fix.py all --stdout # print the fully repaired README to stdout instead of writing it",
             "--readme-path README_PATH",
             "--diff",
             "--check",
             "--json",
+            "--json-output JSON_OUTPUT",
             "--stdout",
         ],
     )

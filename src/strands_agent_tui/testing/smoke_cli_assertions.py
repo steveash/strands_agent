@@ -171,6 +171,11 @@ def build_smoke_cli_doc_render_examples() -> tuple[SmokeCliExample, ...]:
             target_name="all",
             description="export only the drifted rendered smoke wrapper sections",
         ),
+        SmokeCliExample(
+            f"{SMOKE_CLI_DOC_RENDER_SCRIPT_NAME}.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch",
+            target_name="all",
+            description="persist drift-only review artifacts as rendered sections plus JSON manifest and unified diff files",
+        ),
     )
 
 
@@ -194,6 +199,11 @@ def build_smoke_cli_doc_fix_examples() -> tuple[SmokeCliExample, ...]:
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py all --check --json",
             target_name="all",
             description="emit machine-readable JSON drift results for CI without scraping prose",
+        ),
+        SmokeCliExample(
+            f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py all --check --json-output artifacts/smoke-cli-docs-fix.json",
+            target_name="all",
+            description="persist the same machine-readable drift report to a file alongside the normal console summary",
         ),
         SmokeCliExample(
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py standalone_smoke",
@@ -280,6 +290,19 @@ def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Render only the selected smoke-wrapper sections whose README content currently drifts.",
     )
+    parser.add_argument(
+        "--manifest-output",
+        type=Path,
+        help=(
+            "Write a machine-readable JSON manifest for the drift-only review artifact set "
+            "(requires --drift-only)."
+        ),
+    )
+    parser.add_argument(
+        "--diff-output",
+        type=Path,
+        help="Write the drift-only unified diff review artifact to this file path (requires --drift-only).",
+    )
     return parser
 
 
@@ -316,6 +339,14 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Emit a machine-readable JSON drift report (requires --check and/or --diff).",
+    )
+    parser.add_argument(
+        "--json-output",
+        type=Path,
+        help=(
+            "Write the machine-readable drift or repair report to this file path while keeping the normal "
+            "console output."
+        ),
     )
     parser.add_argument(
         "--stdout",

@@ -59,6 +59,33 @@ def _json_drift_report(
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
+def _json_repair_report(
+    *,
+    readme_path: Path,
+    requested_target_name: str | None,
+    selected_script_names: tuple[str, ...],
+    repaired_script_names: tuple[str, ...],
+    stdout: bool,
+) -> str:
+    payload = {
+        "changed": bool(repaired_script_names),
+        "mode": "stdout" if stdout else "repair",
+        "readme_path": str(readme_path),
+        "repaired_count": len(repaired_script_names),
+        "repaired_targets": list(repaired_script_names),
+        "requested_target": requested_target_name,
+        "selected_targets": list(selected_script_names),
+        "up_to_date": not repaired_script_names,
+        "wrote_readme": bool(repaired_script_names) and not stdout,
+    }
+    return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _write_json_report(path: Path, payload: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload + "\n", encoding="utf-8")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -81,17 +108,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             original_markdown,
             requested_target_name=args.target,
         )
-        if args.json:
-            print(
-                _json_drift_report(
-                    readme_path=readme_path,
-                    requested_target_name=args.target,
-                    selected_script_names=selected_script_names,
-                    diff_sections=diff_sections,
-                    include_diff_lines=args.diff,
-                    check=args.check,
-                )
+        json_report = None
+        if args.json or args.json_output is not None:
+            json_report = _json_drift_report(
+                readme_path=readme_path,
+                requested_target_name=args.target,
+                selected_script_names=selected_script_names,
+                diff_sections=diff_sections,
+                include_diff_lines=args.diff,
+                check=args.check,
             )
+            if args.json_output is not None:
+                _write_json_report(args.json_output, json_report)
+        if args.json:
+            assert json_report is not None
+            print(json_report)
             return 1 if args.check and diff_sections else 0
         if args.diff:
             if not diff_sections:
@@ -123,6 +154,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         readme_path,
         requested_target_name=args.target,
     )
+
+    if args.json_output is not None:
+        _write_json_report(
+            args.json_output,
+            _json_repair_report(
+                readme_path=readme_path,
+                requested_target_name=args.target,
+                selected_script_names=selected_script_names,
+                repaired_script_names=repaired_script_names,
+                stdout=args.stdout,
+            ),
+        )
 
     if args.stdout:
         print(repaired_markdown, end="" if repaired_markdown.endswith("\n") else "\n")

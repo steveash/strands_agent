@@ -87,3 +87,32 @@ def test_filter_events_uses_event_categories() -> None:
     assert [event.kind for event in filter_events(events, "failure")] == ["tool_failed"]
     assert [event.kind for event in filter_events(events, "persistence")] == ["artifact_saved"]
     assert [event.kind for event in filter_events(events, "intervention")] == ["steering_confirmation_required"]
+
+
+def test_summarize_event_compacts_runtime_response_metadata() -> None:
+    event = runtime_event(
+        kind="response_completed",
+        title="Fake runtime response ready",
+        detail="Produced a deterministic fake-runtime answer.",
+        data={"provider": "fake-strands", "mode": "fake", "pending_count": 0},
+    )
+
+    assert summarize_event(event) == "response fake-strands/fake | pending 0"
+
+
+def test_summarize_event_compacts_persistence_state() -> None:
+    artifact_event = runtime_event(
+        kind="artifact_saved",
+        title="Session artifact saved",
+        detail="Persisted the turn artifact.",
+        data={"session_id": "session-1", "pending_approval": False},
+    )
+    state_event = runtime_event(
+        kind="session_state_saved",
+        title="Session state saved",
+        detail="Persisted the current event filter and draft prompt.",
+        data={"pending_count": 0, "event_filter": "runtime", "draft_prompt_length": 14},
+    )
+
+    assert summarize_event(artifact_event) == "artifact saved | session session-1 | pending no"
+    assert summarize_event(state_event) == "session state saved | pending 0 | filter runtime | draft 14c"

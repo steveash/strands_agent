@@ -121,32 +121,35 @@ What exists now:
 - attention sorting that now pulls sessions with pending approvals first, recently denied approvals next, then recent tool failures above generic restore/tool activity so blocked or broken work stays easier to spot,
 - tests that cover TUI state, config merging, tool safety, runtime selection, session selection, live-tool event capture, event rendering, and artifact persistence,
 - a local smoke script for validating the real runtime without committing secrets,
-- and a standalone `smoke_cli_docs` smoke target that audits smoke-wrapper `--help` text against the README and emits actionable missing-snippet diagnostics.
+- a standalone `smoke_cli_docs` smoke target that audits smoke-wrapper `--help` text against the README and emits actionable missing-snippet diagnostics,
+- drift-only smoke-doc rendering that can now emit review artifacts (`.md` sections, JSON manifest, unified diff) for multi-wrapper README repairs,
+- repair/check smoke-doc tooling that can now persist machine-readable drift/repair reports to disk for CI or manual review,
+- and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- added `src/strands_agent_tui/timeline.py`, a shared event-timeline renderer/formatter that turns raw runtime/tool/intervention metadata into compact `summary:` lines for the TUI,
-- updated the TUI event pane to surface approval queue/source/resume context plus tool/result previews without losing the raw structured `data:` payloads,
-- expanded `scripts/approval_smoke.py` so the deterministic approval walkthrough now asserts readable intervention summaries in addition to raw schema fields,
-- added `tests/test_timeline.py` and extended app/smoke-script coverage to lock the new timeline rendering contract.
+- repaired the standalone smoke-wrapper README parity drift by extending the shared smoke-doc registry/tests to cover the new render/fix examples already documented in `README.md`,
+- added `--manifest-output` and `--diff-output` to `scripts/smoke_cli_docs_render.py` so drift-only review runs can persist rendered sections plus artifact metadata instead of only printing paths,
+- added `--json-output` to `scripts/smoke_cli_docs_fix.py` so both drift checks and repair runs can write machine-readable reports while keeping the normal console UX,
+- added `scripts/timeline_smoke.py` plus targeted tests to prove the compact runtime/persistence timeline summaries and filter counts stay stable.
 
 Why this matters now:
-- The product goal is to make the Strands loop visible and hackable, and raw event dicts alone are too noisy for rapid understanding.
-- Compact event summaries make approval provenance, queue movement, and post-approval continuation behavior legible at a glance.
-- Using the same formatter in the TUI and smoke checks gives Steve one inspectable event language across fake-runtime learning and real runtime debugging.
+- Steve can now inspect Strands-adjacent smoke-doc drift the same way he inspects agent behavior: as concrete artifacts instead of ephemeral terminal output.
+- The new timeline smoke path turns the event timeline into a first-class learning surface, not just a TUI widget, by proving what runtime and persistence summaries should look like.
+- Shared CLI metadata plus persisted review artifacts make the repo easier to automate without letting README/help text silently drift.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, and event-timeline summary formatting/filtering,
+- unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, event-timeline summary formatting/filtering, and smoke-doc artifact/report generation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
-- app tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates plus compact summary lines, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
-- smoke infrastructure tests verify wrapper help/readme parity, missing-snippet diagnostics, public smoke target selection, and the approval smoke's readable intervention-summary contract,
+- app/session tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates plus compact summary lines, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
+- smoke infrastructure tests verify wrapper help/readme parity, missing-snippet diagnostics, public smoke target selection, drift-only manifest/diff outputs, fix-side JSON outputs, and the dedicated timeline smoke contract,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
 
 Current evidence:
-- automated tests: `322 passed in 37.36s` via `.venv/bin/pytest -q`,
-- focused timeline/app/smoke coverage: `.venv/bin/pytest -q tests/test_timeline.py tests/test_app.py tests/test_smoke_scripts.py` => `103 passed in 34.34s`,
-- approval walkthrough verification: `.venv/bin/python scripts/approval_smoke.py` => `timeline_pending_summary= True`, `timeline_approved_summary= True`, `timeline_denied_summary= True`,
-- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 27.38s`,
-- self-unblock note: local verification succeeded; git commit/tag/push status is updated at the end of each daily report for the current cron run.
+- automated tests: `356 passed in 37.20s` via `.venv/bin/pytest -q`,
+- focused smoke/timeline coverage: `.venv/bin/pytest -q tests/test_timeline.py tests/test_smoke_scripts.py tests/test_smoke_runner.py` => `117 passed in 5.08s`,
+- timeline walkthrough verification: `.venv/bin/python scripts/timeline_smoke.py` => `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, `timeline_filter_counts= True`,
+- runnable matrix verification: `.venv/bin/python scripts/smoke_matrix.py` => `[smoke-matrix] summary: 3/3 bundles passed in 26.66s`,
+- self-unblock note: fixed a failing `standalone_smoke` README/help parity assertion first, then reran the full suite to get the repo back to green before adding the new timeline smoke coverage.
 
 ## First five phases
 
@@ -416,12 +419,24 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix
 - `.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper
 - `.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview` exports only the currently drifted smoke wrapper README sections
+- `.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch` persists drift-only review artifacts as rendered sections plus JSON manifest and unified diff files
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke --diff` previews the standalone wrapper README diff before writing metadata-backed repairs
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all --check` exits non-zero when any public smoke wrapper README section drifts
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all --check --json` emits machine-readable drift results for CI without scraping prose summaries
+- `.venv/bin/python scripts/smoke_cli_docs_fix.py all --check --json-output artifacts/smoke-cli-docs-fix.json` persists the same machine-readable drift report to a file alongside the normal console summary
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
+### Timeline smoke check
+
+To verify the compact runtime-vs-persistence timeline summaries without launching the TUI:
+
+```bash
+.venv/bin/python scripts/timeline_smoke.py
+```
+
+Expected result includes `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, and `timeline_filter_counts= True`, plus rendered timeline snapshots for the runtime and persistence filters.
+
 ### Session triage smoke bundle
 
 To run the picker + switcher smoke surfaces together with shared fail-fast handling:
@@ -704,7 +719,7 @@ Future daily iterations should:
 ## Next iteration ideas
 
 - decide whether the event timeline should add collapsible/raw-detail toggles now that compact `summary:` lines exist
-- add a timeline-focused smoke path for persistence/runtime summaries, not just approval/intervention summaries
+- fold `scripts/timeline_smoke.py` into a public wrapper/bundle so timeline verification is part of the normal smoke matrix instead of a separate manual command
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether the new queue-mix metric lines should also carry oldest-pending age or timestamp cues for approval-heavy edit/test backlogs
