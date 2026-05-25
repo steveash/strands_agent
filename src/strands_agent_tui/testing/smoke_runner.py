@@ -188,6 +188,16 @@ class SmokeTargetSelector:
                     "choice display names reference unknown smoke choices: "
                     + ", ".join(sorted(unknown_choice_names))
                 )
+            mismatched_choice_names = [
+                choice_name
+                for choice_name, display_names in self.choice_display_names.items()
+                if len(display_names) != len(choice_target_names[choice_name])
+            ]
+            if mismatched_choice_names:
+                raise ValueError(
+                    "choice display names must match target counts for: "
+                    + ", ".join(sorted(mismatched_choice_names))
+                )
 
     def _all_choice_target_names(self) -> Mapping[str, tuple[str, ...]]:
         if self.choice_target_names is not None:
@@ -198,11 +208,15 @@ class SmokeTargetSelector:
         }
 
     def _all_choice_display_names(self) -> Mapping[str, tuple[str, ...]]:
-        if self.choice_display_names is not None:
-            return self.choice_display_names
-        return {
+        default_display_names = {
             choice_name: tuple(self.targets[target_name].display_label for target_name in target_names)
             for choice_name, target_names in self._all_choice_target_names().items()
+        }
+        if self.choice_display_names is None:
+            return default_display_names
+        return {
+            **default_display_names,
+            **self.choice_display_names,
         }
 
     @property
@@ -693,10 +707,6 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
         "all": ("standalone-all", "triage", "recovery"),
     },
     choice_display_names={
-        "standalone": ("standalone",),
-        "triage": ("triage",),
-        "recovery": ("recovery",),
-        "local": ("standalone", "triage", "recovery"),
         "all": ("standalone (live-inclusive)", "triage", "recovery"),
     },
     examples=(

@@ -368,7 +368,7 @@ def test_smoke_target_selector_resolves_default_alias_and_single_target(tmp_path
     assert [target.name for target in selector.resolve_targets("all")] == ["first", "second"]
 
 
-def test_smoke_target_selector_supports_public_choices_backed_by_hidden_target_names(tmp_path) -> None:
+def test_smoke_target_selector_supports_partial_public_display_name_overrides_for_hidden_targets(tmp_path) -> None:
     local_script = _write_script(tmp_path, "local.py", "print('local_check= True', flush=True)\n")
     all_script = _write_script(tmp_path, "all.py", "print('all_check= True', flush=True)\n")
     triage_script = _write_script(tmp_path, "triage.py", "print('triage_check= True', flush=True)\n")
@@ -390,9 +390,6 @@ def test_smoke_target_selector_supports_public_choices_backed_by_hidden_target_n
             "all": ("standalone-all", "triage"),
         },
         choice_display_names={
-            "standalone": ("standalone",),
-            "triage": ("triage",),
-            "local": ("standalone", "triage"),
             "all": ("standalone (live-inclusive)", "triage"),
         },
     )
@@ -694,6 +691,14 @@ def test_smoke_wrapper_cli_specs_render_readme_sections() -> None:
             None,
             "choice display names reference unknown smoke choices: missing",
         ),
+        (
+            "all",
+            {"all": ("first",)},
+            None,
+            {"all": ("first", "second")},
+            None,
+            "choice display names must match target counts for: all",
+        ),
         ("first", {}, None, None, "missing", "unknown smoke target 'missing'"),
     ],
 )
@@ -707,11 +712,15 @@ def test_smoke_target_selector_validates_configuration(
     expected_message,
 ) -> None:
     script_path = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
+    targets = {"first": SmokeScriptTarget("first", script_path)}
+    if choice_display_names == {"all": ("first", "second")}:
+        second_script = _write_script(tmp_path, "second.py", "print('second_check= True', flush=True)\n")
+        targets["second"] = SmokeScriptTarget("second", second_script)
 
     if requested_target_name is None:
         with pytest.raises(ValueError, match=expected_message):
             SmokeTargetSelector(
-                targets={"first": SmokeScriptTarget("first", script_path)},
+                targets=targets,
                 default_target_name=default_target_name,
                 alias_target_names=alias_target_names,
                 choice_target_names=choice_target_names,
@@ -720,7 +729,7 @@ def test_smoke_target_selector_validates_configuration(
         return
 
     selector = SmokeTargetSelector(
-        targets={"first": SmokeScriptTarget("first", script_path)},
+        targets=targets,
         default_target_name=default_target_name,
         alias_target_names=alias_target_names,
         choice_target_names=choice_target_names,
