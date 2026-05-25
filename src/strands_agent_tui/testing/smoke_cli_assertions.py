@@ -198,12 +198,12 @@ def build_smoke_cli_doc_fix_examples() -> tuple[SmokeCliExample, ...]:
         SmokeCliExample(
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py all --check --json",
             target_name="all",
-            description="emit machine-readable JSON drift results for CI without scraping prose",
+            description="emit machine-readable JSON drift results with manifest-style summaries/checksums for CI without scraping prose",
         ),
         SmokeCliExample(
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py all --check --json-output artifacts/smoke-cli-docs-fix.json",
             target_name="all",
-            description="persist the same machine-readable drift report to a file alongside the normal console summary",
+            description="persist the same machine-readable drift report with manifest-style summaries/checksums alongside the normal console summary",
         ),
         SmokeCliExample(
             f"{SMOKE_CLI_DOC_FIX_SCRIPT_NAME}.py standalone_smoke",

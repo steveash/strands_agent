@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections.abc import Sequence
 from pathlib import Path
@@ -12,6 +11,13 @@ from strands_agent_tui.testing import (
     render_smoke_cli_readme_section,
     render_smoke_cli_readme_sections,
     resolve_smoke_cli_doc_target_names,
+)
+from strands_agent_tui.testing.smoke_cli_doc_artifacts import (
+    build_smoke_cli_doc_section_payloads,
+    diff_bundle_sha256,
+    format_diff_output,
+    rendered_bundle_sha256,
+    write_text_output,
 )
 
 
@@ -37,17 +43,6 @@ def write_rendered_sections(
     return tuple(written_paths)
 
 
-def _normalize_text_output(payload: str) -> str:
-    if payload and not payload.endswith("\n"):
-        payload += "\n"
-    return payload
-
-
-def _write_text_output(path: Path, payload: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_normalize_text_output(payload), encoding="utf-8")
-
-
 def _write_rendered_sections(
     output_dir: Path,
     rendered_sections: tuple[tuple[str, str], ...],
@@ -59,53 +54,6 @@ def _write_rendered_sections(
         path.write_text(text + "\n", encoding="utf-8")
         written_paths.append(path)
     return tuple(written_paths)
-
-
-def _format_diff_output(diff_sections: tuple[tuple[str, tuple[str, ...]], ...]) -> str:
-    lines: list[str] = []
-    for index, (script_name, diff_lines) in enumerate(diff_sections):
-        if index:
-            lines.append("")
-        lines.append(f"### {script_name}")
-        lines.extend(diff_lines)
-    return "\n".join(lines)
-
-
-def _sha256_text(payload: str) -> str:
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _diff_stats(diff_lines: tuple[str, ...]) -> dict[str, int]:
-    return {
-        "added_line_count": sum(
-            1 for line in diff_lines if line.startswith("+") and not line.startswith("+++")
-        ),
-        "hunk_count": sum(1 for line in diff_lines if line.startswith("@@ ")),
-        "line_count": len(diff_lines),
-        "removed_line_count": sum(
-            1 for line in diff_lines if line.startswith("-") and not line.startswith("---")
-        ),
-    }
-
-
-def _rendered_summary(text: str) -> str:
-    for line in text.splitlines():
-        summary = line.strip()
-        if summary:
-            return summary if len(summary) <= 120 else summary[:119] + "…"
-    return ""
-
-
-def _rendered_bundle_sha256(rendered_sections: tuple[tuple[str, str], ...]) -> str | None:
-    if not rendered_sections:
-        return None
-    return _sha256_text("\n\n".join(f"### {script_name}\n{text}" for script_name, text in rendered_sections))
-
-
-def _diff_bundle_sha256(diff_sections: tuple[tuple[str, tuple[str, ...]], ...]) -> str | None:
-    if not diff_sections:
-        return None
-    return _sha256_text(_normalize_text_output(_format_diff_output(diff_sections)))
 
 
 def _json_manifest(
@@ -121,42 +69,24 @@ def _json_manifest(
     diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
     body_only: bool,
 ) -> str:
-    diff_lines_by_script_name = {
-        script_name: tuple(diff_lines) for script_name, diff_lines in diff_sections
-    }
-    rendered_text_by_script_name = {
-        script_name: text for script_name, text in rendered_sections
-    }
-    written_path_by_script_name = {
-        path.stem: str(path) for path in written_paths
-    }
     payload = {
         "body_only": body_only,
-        "diff_bundle_sha256": _diff_bundle_sha256(diff_sections),
+        "diff_bundle_sha256": diff_bundle_sha256(diff_sections),
         "diff_output_path": str(diff_output) if diff_output is not None else None,
         "drift_count": len(diff_sections),
         "drift_only": True,
         "manifest_path": str(manifest_output),
         "output_dir": str(output_dir) if output_dir is not None else None,
         "readme_path": str(readme_path),
-        "rendered_bundle_sha256": _rendered_bundle_sha256(rendered_sections),
+        "rendered_bundle_sha256": rendered_bundle_sha256(rendered_sections),
         "rendered_count": len(rendered_sections),
         "rendered_targets": [script_name for script_name, _ in rendered_sections],
         "requested_target": requested_target_name,
-        "sections": [
-            {
-                "diff_lines": list(diff_lines_by_script_name[script_name]),
-                "diff_sha256": _sha256_text("\n".join(diff_lines_by_script_name[script_name])),
-                "diff_stats": _diff_stats(diff_lines_by_script_name[script_name]),
-                "output_path": written_path_by_script_name.get(script_name),
-                "rendered_char_count": len(rendered_text_by_script_name[script_name]),
-                "rendered_line_count": len(rendered_text_by_script_name[script_name].splitlines()),
-                "rendered_sha256": _sha256_text(rendered_text_by_script_name[script_name]),
-                "rendered_summary": _rendered_summary(rendered_text_by_script_name[script_name]),
-                "script_name": script_name,
-            }
-            for script_name, _ in rendered_sections
-        ],
+        "sections": build_smoke_cli_doc_section_payloads(
+            rendered_sections=rendered_sections,
+            diff_sections=diff_sections,
+            written_paths=written_paths,
+        ),
         "selected_targets": list(selected_script_names),
         "up_to_date": not diff_sections,
     }
@@ -184,9 +114,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if not diff_sections:
             if args.diff_output is not None:
-                _write_text_output(args.diff_output, "")
+                write_text_output(args.diff_output, "")
             if args.manifest_output is not None:
-                _write_text_output(
+                write_text_output(
                     args.manifest_output,
                     _json_manifest(
                         requested_target_name=args.target,
@@ -224,9 +154,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(rendered_text)
 
     if args.diff_output is not None:
-        _write_text_output(args.diff_output, _format_diff_output(diff_sections))
+        write_text_output(args.diff_output, format_diff_output(diff_sections))
     if args.manifest_output is not None:
-        _write_text_output(
+        write_text_output(
             args.manifest_output,
             _json_manifest(
                 requested_target_name=args.target,
