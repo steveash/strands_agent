@@ -23,6 +23,10 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
     STANDALONE_SMOKE_WRAPPER,
+    build_smoke_cli_doc_drift_report_payload,
+    build_smoke_cli_doc_render_manifest_payload,
+    build_smoke_cli_doc_repair_report_payload,
+    collect_smoke_cli_readme_diffs,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
     matches_public_cli_help,
@@ -51,6 +55,7 @@ from strands_agent_tui.testing import (
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
 README_PATH = Path(__file__).resolve().parent.parent / "README.md"
 README_TEXT = README_PATH.read_text(encoding="utf-8")
+ALL_SMOKE_CLI_DOC_SCRIPT_NAMES = tuple(spec.script_name for spec in SMOKE_CLI_DOC_SPECS)
 
 
 def _load_script_module(name: str):
@@ -78,6 +83,109 @@ def _assert_mixed_smoke_result_contract(
 def _format_script_help(name: str) -> str:
     module = _load_script_module(name)
     return module.build_parser().format_help()
+
+
+
+def _selected_smoke_cli_doc_script_names(requested_target_name: str | None) -> tuple[str, ...]:
+    if requested_target_name in (None, "all"):
+        return ALL_SMOKE_CLI_DOC_SCRIPT_NAMES
+    return (requested_target_name,)
+
+
+
+def _assert_smoke_cli_doc_render_manifest_payload(
+    payload: dict[str, object],
+    *,
+    requested_target_name: str | None,
+    markdown: str,
+    readme_path: Path,
+    output_dir: Path | None,
+    manifest_path: Path,
+    diff_path: Path | None,
+    written_paths: tuple[Path, ...],
+    body_only: bool = False,
+) -> None:
+    diff_sections = collect_smoke_cli_readme_diffs(
+        markdown,
+        requested_target_name=requested_target_name,
+    )
+    rendered_sections = tuple(
+        (script_name, render_smoke_cli_readme_section(script_name, body_only=body_only))
+        for script_name, _diff_lines in diff_sections
+    )
+    assert payload == build_smoke_cli_doc_render_manifest_payload(
+        body_only=body_only,
+        requested_target_name=requested_target_name,
+        selected_script_names=_selected_smoke_cli_doc_script_names(requested_target_name),
+        rendered_sections=rendered_sections,
+        written_paths=written_paths,
+        readme_path=readme_path,
+        output_dir=output_dir,
+        manifest_output=manifest_path,
+        diff_output=diff_path,
+        diff_sections=diff_sections,
+    )
+
+
+
+def _assert_smoke_cli_doc_drift_report_payload(
+    payload: dict[str, object],
+    *,
+    requested_target_name: str | None,
+    markdown: str,
+    readme_path: Path,
+    include_diff_lines: bool,
+    check: bool,
+) -> None:
+    diff_sections = collect_smoke_cli_readme_diffs(
+        markdown,
+        requested_target_name=requested_target_name,
+    )
+    rendered_sections = tuple(
+        (script_name, render_smoke_cli_readme_section(script_name))
+        for script_name, _diff_lines in diff_sections
+    )
+    assert payload == build_smoke_cli_doc_drift_report_payload(
+        readme_path=readme_path,
+        requested_target_name=requested_target_name,
+        selected_script_names=_selected_smoke_cli_doc_script_names(requested_target_name),
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        include_diff_lines=include_diff_lines,
+        check=check,
+    )
+
+
+
+def _assert_smoke_cli_doc_repair_report_payload(
+    payload: dict[str, object],
+    *,
+    requested_target_name: str | None,
+    original_markdown: str,
+    repaired_markdown: str,
+    readme_path: Path,
+    stdout: bool,
+) -> None:
+    diff_sections = collect_smoke_cli_readme_diffs(
+        original_markdown,
+        requested_target_name=requested_target_name,
+    )
+    repaired_script_names = tuple(script_name for script_name, _diff_lines in diff_sections)
+    rendered_sections = tuple(
+        (script_name, render_smoke_cli_readme_section(script_name))
+        for script_name in repaired_script_names
+    )
+    assert payload == build_smoke_cli_doc_repair_report_payload(
+        readme_path=readme_path,
+        requested_target_name=requested_target_name,
+        selected_script_names=_selected_smoke_cli_doc_script_names(requested_target_name),
+        repaired_script_names=repaired_script_names,
+        original_markdown=original_markdown,
+        repaired_markdown=repaired_markdown,
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        stdout=stdout,
+    )
 
 
 def _assert_script_help_contains(script_name: str, required_snippets: list[str] | None = None) -> None:
@@ -739,54 +847,17 @@ def test_smoke_cli_docs_render_drift_only_review_artifacts_write_manifest_and_di
     rendered_text = render_smoke_cli_readme_section("standalone_smoke")
     assert expected_path.read_text(encoding="utf-8") == rendered_text + "\n"
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert manifest_payload["body_only"] is False
-    assert manifest_payload["diff_output_path"] == str(diff_path)
-    assert manifest_payload["diff_bundle_sha256"] == hashlib.sha256(
-        diff_path.read_text(encoding="utf-8").encode("utf-8")
-    ).hexdigest()
-    assert manifest_payload["drift_count"] == 1
-    assert manifest_payload["drift_only"] is True
-    assert manifest_payload["manifest_path"] == str(manifest_path)
-    assert manifest_payload["output_dir"] == str(output_dir)
-    assert manifest_payload["readme_path"] == str(readme_path)
-    assert manifest_payload["rendered_bundle_sha256"] == hashlib.sha256(
-        f"### standalone_smoke\n{rendered_text}".encode("utf-8")
-    ).hexdigest()
-    assert manifest_payload["rendered_count"] == 1
-    assert manifest_payload["rendered_targets"] == ["standalone_smoke"]
-    assert manifest_payload["requested_target"] == "all"
-    assert manifest_payload["selected_targets"] == [
-        "standalone_smoke",
-        "session_triage_smoke",
-        "session_recovery_smoke",
-        "smoke_matrix",
-    ]
-    assert manifest_payload["up_to_date"] is False
-    assert manifest_payload["sections"][0]["script_name"] == "standalone_smoke"
-    assert manifest_payload["sections"][0]["output_path"] == str(expected_path)
-    assert manifest_payload["sections"][0]["rendered_summary"] == "### Standalone local smoke bundle"
-    assert manifest_payload["sections"][0]["rendered_line_count"] == len(rendered_text.splitlines())
-    assert manifest_payload["sections"][0]["rendered_char_count"] == len(rendered_text)
-    assert manifest_payload["sections"][0]["rendered_sha256"] == hashlib.sha256(
-        rendered_text.encode("utf-8")
-    ).hexdigest()
-    assert manifest_payload["sections"][0]["diff_lines"][0] == "--- expected"
-    assert manifest_payload["sections"][0]["diff_lines"][1] == "+++ README"
+    _assert_smoke_cli_doc_render_manifest_payload(
+        manifest_payload,
+        requested_target_name="all",
+        markdown=drifted_markdown,
+        readme_path=readme_path,
+        output_dir=output_dir,
+        manifest_path=manifest_path,
+        diff_path=diff_path,
+        written_paths=(expected_path,),
+    )
     diff_text = diff_path.read_text(encoding="utf-8")
-    assert manifest_payload["sections"][0]["diff_sha256"] == hashlib.sha256(
-        "\n".join(manifest_payload["sections"][0]["diff_lines"]).encode("utf-8")
-    ).hexdigest()
-    section_diff_lines = manifest_payload["sections"][0]["diff_lines"]
-    assert manifest_payload["sections"][0]["diff_stats"] == {
-        "added_line_count": sum(
-            1 for line in section_diff_lines if line.startswith("+") and not line.startswith("+++")
-        ),
-        "hunk_count": sum(1 for line in section_diff_lines if line.startswith("@@ ")),
-        "line_count": len(section_diff_lines),
-        "removed_line_count": sum(
-            1 for line in section_diff_lines if line.startswith("-") and not line.startswith("---")
-        ),
-    }
     assert diff_text.startswith("### standalone_smoke\n--- expected\n+++ README\n@@ ")
     assert diff_text.endswith("\n")
 
@@ -818,28 +889,16 @@ def test_smoke_cli_docs_render_drift_only_review_artifacts_can_report_up_to_date
     assert captured.err == ""
     assert captured.out == f"smoke README already up to date: {readme_path}\n"
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert manifest_payload == {
-        "body_only": False,
-        "diff_bundle_sha256": None,
-        "diff_output_path": str(diff_path),
-        "drift_count": 0,
-        "drift_only": True,
-        "manifest_path": str(manifest_path),
-        "output_dir": None,
-        "readme_path": str(readme_path),
-        "rendered_bundle_sha256": None,
-        "rendered_count": 0,
-        "rendered_targets": [],
-        "requested_target": "all",
-        "sections": [],
-        "selected_targets": [
-            "standalone_smoke",
-            "session_triage_smoke",
-            "session_recovery_smoke",
-            "smoke_matrix",
-        ],
-        "up_to_date": True,
-    }
+    _assert_smoke_cli_doc_render_manifest_payload(
+        manifest_payload,
+        requested_target_name="all",
+        markdown=README_TEXT,
+        readme_path=readme_path,
+        output_dir=None,
+        manifest_path=manifest_path,
+        diff_path=diff_path,
+        written_paths=(),
+    )
     assert diff_path.read_text(encoding="utf-8") == ""
 
 
@@ -1058,34 +1117,14 @@ def test_smoke_cli_docs_fix_check_json_reports_machine_readable_drift_without_wr
     assert captured.err == ""
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
     payload = json.loads(captured.out)
-    rendered_text = render_smoke_cli_readme_section("standalone_smoke")
-    section = payload["sections"][0]
-    assert payload["body_only"] is False
-    assert payload["check"] is True
-    assert payload["diff"] is False
-    assert payload["diff_bundle_sha256"] is not None
-    assert payload["drift_count"] == 1
-    assert payload["drifted_sections"] == [{"script_name": "standalone_smoke"}]
-    assert payload["drifted_targets"] == ["standalone_smoke"]
-    assert payload["readme_path"] == str(readme_path)
-    assert payload["rendered_bundle_sha256"] == hashlib.sha256(
-        f"### standalone_smoke\n{rendered_text}".encode("utf-8")
-    ).hexdigest()
-    assert payload["rendered_count"] == 1
-    assert payload["rendered_targets"] == ["standalone_smoke"]
-    assert payload["requested_target"] == "standalone_smoke"
-    assert payload["selected_targets"] == ["standalone_smoke"]
-    assert payload["up_to_date"] is False
-    assert section["script_name"] == "standalone_smoke"
-    assert section["output_path"] is None
-    assert section["rendered_summary"] == "### Standalone local smoke bundle"
-    assert section["rendered_line_count"] == len(rendered_text.splitlines())
-    assert section["rendered_char_count"] == len(rendered_text)
-    assert section["rendered_sha256"] == hashlib.sha256(rendered_text.encode("utf-8")).hexdigest()
-    assert len(section["diff_sha256"]) == 64
-    assert section["diff_stats"]["hunk_count"] == 1
-    assert section["diff_stats"]["line_count"] > 0
-    assert "diff_lines" not in section
+    _assert_smoke_cli_doc_drift_report_payload(
+        payload,
+        requested_target_name="standalone_smoke",
+        markdown=drifted_markdown,
+        readme_path=readme_path,
+        include_diff_lines=False,
+        check=True,
+    )
 
 
 
@@ -1109,35 +1148,17 @@ def test_smoke_cli_docs_fix_diff_and_check_json_include_machine_readable_diffs(t
     assert captured.err == ""
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
     payload = json.loads(captured.out)
-    rendered_text = render_smoke_cli_readme_section("standalone_smoke")
-    section = payload["sections"][0]
-    assert payload["body_only"] is False
-    assert payload["check"] is True
-    assert payload["diff"] is True
-    assert payload["diff_bundle_sha256"] is not None
-    assert payload["drift_count"] == 1
-    assert payload["drifted_targets"] == ["standalone_smoke"]
-    assert payload["rendered_bundle_sha256"] == hashlib.sha256(
-        f"### standalone_smoke\n{rendered_text}".encode("utf-8")
-    ).hexdigest()
-    assert payload["rendered_count"] == 1
-    assert payload["rendered_targets"] == ["standalone_smoke"]
-    assert payload["selected_targets"] == ["standalone_smoke"]
-    assert payload["up_to_date"] is False
-    assert payload["drifted_sections"][0]["script_name"] == "standalone_smoke"
+    _assert_smoke_cli_doc_drift_report_payload(
+        payload,
+        requested_target_name="standalone_smoke",
+        markdown=drifted_markdown,
+        readme_path=readme_path,
+        include_diff_lines=True,
+        check=True,
+    )
     assert payload["drifted_sections"][0]["diff_lines"][0] == "--- expected"
     assert payload["drifted_sections"][0]["diff_lines"][1] == "+++ README"
     assert any(line.startswith("@@ ") for line in payload["drifted_sections"][0]["diff_lines"])
-    assert section["script_name"] == "standalone_smoke"
-    assert section["output_path"] is None
-    assert section["rendered_summary"] == "### Standalone local smoke bundle"
-    assert section["rendered_line_count"] == len(rendered_text.splitlines())
-    assert section["rendered_char_count"] == len(rendered_text)
-    assert section["rendered_sha256"] == hashlib.sha256(rendered_text.encode("utf-8")).hexdigest()
-    assert section["diff_lines"][0] == "--- expected"
-    assert section["diff_lines"][1] == "+++ README"
-    assert len(section["diff_sha256"]) == 64
-    assert section["diff_stats"]["hunk_count"] == 1
 
 
 
@@ -1175,33 +1196,14 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
     )
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
     payload = json.loads(json_path.read_text(encoding="utf-8"))
-    rendered_text = render_smoke_cli_readme_section("standalone_smoke")
-    section = payload["sections"][0]
-    assert payload["body_only"] is False
-    assert payload["check"] is True
-    assert payload["diff"] is False
-    assert payload["diff_bundle_sha256"] is not None
-    assert payload["drift_count"] == 1
-    assert payload["drifted_sections"] == [{"script_name": "standalone_smoke"}]
-    assert payload["drifted_targets"] == ["standalone_smoke"]
-    assert payload["readme_path"] == str(readme_path)
-    assert payload["rendered_bundle_sha256"] == hashlib.sha256(
-        f"### standalone_smoke\n{rendered_text}".encode("utf-8")
-    ).hexdigest()
-    assert payload["rendered_count"] == 1
-    assert payload["rendered_targets"] == ["standalone_smoke"]
-    assert payload["requested_target"] == "standalone_smoke"
-    assert payload["selected_targets"] == ["standalone_smoke"]
-    assert payload["up_to_date"] is False
-    assert section["script_name"] == "standalone_smoke"
-    assert section["output_path"] is None
-    assert section["rendered_summary"] == "### Standalone local smoke bundle"
-    assert section["rendered_line_count"] == len(rendered_text.splitlines())
-    assert section["rendered_char_count"] == len(rendered_text)
-    assert section["rendered_sha256"] == hashlib.sha256(rendered_text.encode("utf-8")).hexdigest()
-    assert len(section["diff_sha256"]) == 64
-    assert section["diff_stats"]["hunk_count"] == 1
-    assert "diff_lines" not in section
+    _assert_smoke_cli_doc_drift_report_payload(
+        payload,
+        requested_target_name="standalone_smoke",
+        markdown=drifted_markdown,
+        readme_path=readme_path,
+        include_diff_lines=False,
+        check=True,
+    )
 
 
 
@@ -1237,37 +1239,14 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
     repaired_text = readme_path.read_text(encoding="utf-8")
     assert repaired_text != drifted_markdown
     payload = json.loads(json_path.read_text(encoding="utf-8"))
-    rendered_text = render_smoke_cli_readme_section("standalone_smoke")
-    section = payload["sections"][0]
-    assert payload["body_only"] is False
-    assert payload["changed"] is True
-    assert payload["diff_bundle_sha256"] is not None
-    assert payload["drift_count"] == 1
-    assert payload["drifted_targets"] == ["standalone_smoke"]
-    assert payload["mode"] == "repair"
-    assert payload["readme_path"] == str(readme_path)
-    assert payload["readme_sha256_after"] == hashlib.sha256(repaired_text.encode("utf-8")).hexdigest()
-    assert payload["readme_sha256_before"] == hashlib.sha256(drifted_markdown.encode("utf-8")).hexdigest()
-    assert payload["repaired_count"] == 1
-    assert payload["repaired_targets"] == ["standalone_smoke"]
-    assert payload["rendered_bundle_sha256"] == hashlib.sha256(
-        f"### standalone_smoke\n{rendered_text}".encode("utf-8")
-    ).hexdigest()
-    assert payload["rendered_count"] == 1
-    assert payload["rendered_targets"] == ["standalone_smoke"]
-    assert payload["requested_target"] == "standalone_smoke"
-    assert payload["selected_targets"] == ["standalone_smoke"]
-    assert payload["up_to_date"] is False
-    assert payload["wrote_readme"] is True
-    assert section["script_name"] == "standalone_smoke"
-    assert section["output_path"] is None
-    assert section["rendered_summary"] == "### Standalone local smoke bundle"
-    assert section["rendered_line_count"] == len(rendered_text.splitlines())
-    assert section["rendered_char_count"] == len(rendered_text)
-    assert section["rendered_sha256"] == hashlib.sha256(rendered_text.encode("utf-8")).hexdigest()
-    assert len(section["diff_sha256"]) == 64
-    assert section["diff_stats"]["hunk_count"] == 1
-    assert "diff_lines" not in section
+    _assert_smoke_cli_doc_repair_report_payload(
+        payload,
+        requested_target_name="standalone_smoke",
+        original_markdown=drifted_markdown,
+        repaired_markdown=repaired_text,
+        readme_path=readme_path,
+        stdout=False,
+    )
 
 
 
@@ -1302,37 +1281,14 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
     assert captured.out == README_TEXT
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
     payload = json.loads(json_path.read_text(encoding="utf-8"))
-    rendered_text = render_smoke_cli_readme_section("standalone_smoke")
-    section = payload["sections"][0]
-    assert payload["body_only"] is False
-    assert payload["changed"] is True
-    assert payload["diff_bundle_sha256"] is not None
-    assert payload["drift_count"] == 1
-    assert payload["drifted_targets"] == ["standalone_smoke"]
-    assert payload["mode"] == "stdout"
-    assert payload["readme_path"] == str(readme_path)
-    assert payload["readme_sha256_after"] == hashlib.sha256(README_TEXT.encode("utf-8")).hexdigest()
-    assert payload["readme_sha256_before"] == hashlib.sha256(drifted_markdown.encode("utf-8")).hexdigest()
-    assert payload["repaired_count"] == 1
-    assert payload["repaired_targets"] == ["standalone_smoke"]
-    assert payload["rendered_bundle_sha256"] == hashlib.sha256(
-        f"### standalone_smoke\n{rendered_text}".encode("utf-8")
-    ).hexdigest()
-    assert payload["rendered_count"] == 1
-    assert payload["rendered_targets"] == ["standalone_smoke"]
-    assert payload["requested_target"] == "standalone_smoke"
-    assert payload["selected_targets"] == ["standalone_smoke"]
-    assert payload["up_to_date"] is False
-    assert payload["wrote_readme"] is False
-    assert section["script_name"] == "standalone_smoke"
-    assert section["output_path"] is None
-    assert section["rendered_summary"] == "### Standalone local smoke bundle"
-    assert section["rendered_line_count"] == len(rendered_text.splitlines())
-    assert section["rendered_char_count"] == len(rendered_text)
-    assert section["rendered_sha256"] == hashlib.sha256(rendered_text.encode("utf-8")).hexdigest()
-    assert len(section["diff_sha256"]) == 64
-    assert section["diff_stats"]["hunk_count"] == 1
-    assert "diff_lines" not in section
+    _assert_smoke_cli_doc_repair_report_payload(
+        payload,
+        requested_target_name="standalone_smoke",
+        original_markdown=drifted_markdown,
+        repaired_markdown=README_TEXT,
+        readme_path=readme_path,
+        stdout=True,
+    )
 
 
 
@@ -1418,23 +1374,14 @@ def test_smoke_cli_docs_fix_check_json_reports_when_readme_is_already_up_to_date
     assert captured.err == ""
     assert readme_path.read_text(encoding="utf-8") == README_TEXT
     payload = json.loads(captured.out)
-    assert payload == {
-        "body_only": False,
-        "check": True,
-        "diff": False,
-        "diff_bundle_sha256": None,
-        "drift_count": 0,
-        "drifted_sections": [],
-        "drifted_targets": [],
-        "readme_path": str(readme_path),
-        "rendered_bundle_sha256": None,
-        "rendered_count": 0,
-        "rendered_targets": [],
-        "requested_target": "standalone_smoke",
-        "sections": [],
-        "selected_targets": ["standalone_smoke"],
-        "up_to_date": True,
-    }
+    _assert_smoke_cli_doc_drift_report_payload(
+        payload,
+        requested_target_name="standalone_smoke",
+        markdown=README_TEXT,
+        readme_path=readme_path,
+        include_diff_lines=False,
+        check=True,
+    )
 
 
 

@@ -13,10 +13,8 @@ from strands_agent_tui.testing import (
     resolve_smoke_cli_doc_target_names,
 )
 from strands_agent_tui.testing.smoke_cli_doc_artifacts import (
-    build_smoke_cli_doc_section_payloads,
-    diff_bundle_sha256,
+    build_smoke_cli_doc_render_manifest_payload,
     format_diff_output,
-    rendered_bundle_sha256,
     write_text_output,
 )
 
@@ -69,28 +67,22 @@ def _json_manifest(
     diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
     body_only: bool,
 ) -> str:
-    payload = {
-        "body_only": body_only,
-        "diff_bundle_sha256": diff_bundle_sha256(diff_sections),
-        "diff_output_path": str(diff_output) if diff_output is not None else None,
-        "drift_count": len(diff_sections),
-        "drift_only": True,
-        "manifest_path": str(manifest_output),
-        "output_dir": str(output_dir) if output_dir is not None else None,
-        "readme_path": str(readme_path),
-        "rendered_bundle_sha256": rendered_bundle_sha256(rendered_sections),
-        "rendered_count": len(rendered_sections),
-        "rendered_targets": [script_name for script_name, _ in rendered_sections],
-        "requested_target": requested_target_name,
-        "sections": build_smoke_cli_doc_section_payloads(
+    return json.dumps(
+        build_smoke_cli_doc_render_manifest_payload(
+            body_only=body_only,
+            requested_target_name=requested_target_name,
+            selected_script_names=selected_script_names,
             rendered_sections=rendered_sections,
-            diff_sections=diff_sections,
             written_paths=written_paths,
+            readme_path=readme_path,
+            output_dir=output_dir,
+            manifest_output=manifest_output,
+            diff_output=diff_output,
+            diff_sections=diff_sections,
         ),
-        "selected_targets": list(selected_script_names),
-        "up_to_date": not diff_sections,
-    }
-    return json.dumps(payload, indent=2, sort_keys=True)
+        indent=2,
+        sort_keys=True,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

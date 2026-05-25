@@ -92,3 +92,120 @@ def build_smoke_cli_doc_section_payloads(
             section["diff_stats"] = diff_stats(diff_lines)
         section_payloads.append(section)
     return section_payloads
+
+
+
+def build_smoke_cli_doc_render_manifest_payload(
+    *,
+    body_only: bool,
+    requested_target_name: str | None,
+    selected_script_names: tuple[str, ...],
+    rendered_sections: tuple[tuple[str, str], ...],
+    written_paths: tuple[Path, ...],
+    readme_path: Path,
+    output_dir: Path | None,
+    manifest_output: Path,
+    diff_output: Path | None,
+    diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
+) -> dict[str, object]:
+    return {
+        "body_only": body_only,
+        "diff_bundle_sha256": diff_bundle_sha256(diff_sections),
+        "diff_output_path": str(diff_output) if diff_output is not None else None,
+        "drift_count": len(diff_sections),
+        "drift_only": True,
+        "manifest_path": str(manifest_output),
+        "output_dir": str(output_dir) if output_dir is not None else None,
+        "readme_path": str(readme_path),
+        "rendered_bundle_sha256": rendered_bundle_sha256(rendered_sections),
+        "rendered_count": len(rendered_sections),
+        "rendered_targets": [script_name for script_name, _ in rendered_sections],
+        "requested_target": requested_target_name,
+        "sections": build_smoke_cli_doc_section_payloads(
+            rendered_sections=rendered_sections,
+            diff_sections=diff_sections,
+            written_paths=written_paths,
+        ),
+        "selected_targets": list(selected_script_names),
+        "up_to_date": not diff_sections,
+    }
+
+
+
+def build_smoke_cli_doc_drift_report_payload(
+    *,
+    readme_path: Path,
+    requested_target_name: str | None,
+    selected_script_names: tuple[str, ...],
+    rendered_sections: tuple[tuple[str, str], ...],
+    diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
+    include_diff_lines: bool,
+    check: bool,
+) -> dict[str, object]:
+    drifted_sections: list[dict[str, object]] = []
+    for script_name, diff_lines in diff_sections:
+        section: dict[str, object] = {"script_name": script_name}
+        if include_diff_lines:
+            section["diff_lines"] = list(diff_lines)
+        drifted_sections.append(section)
+    return {
+        "body_only": False,
+        "check": check,
+        "diff": include_diff_lines,
+        "diff_bundle_sha256": diff_bundle_sha256(diff_sections),
+        "drift_count": len(diff_sections),
+        "drifted_sections": drifted_sections,
+        "drifted_targets": [script_name for script_name, _ in diff_sections],
+        "readme_path": str(readme_path),
+        "rendered_bundle_sha256": rendered_bundle_sha256(rendered_sections),
+        "rendered_count": len(rendered_sections),
+        "rendered_targets": [script_name for script_name, _ in rendered_sections],
+        "requested_target": requested_target_name,
+        "sections": build_smoke_cli_doc_section_payloads(
+            rendered_sections=rendered_sections,
+            diff_sections=diff_sections,
+            include_diff_lines=include_diff_lines,
+        ),
+        "selected_targets": list(selected_script_names),
+        "up_to_date": not diff_sections,
+    }
+
+
+
+def build_smoke_cli_doc_repair_report_payload(
+    *,
+    readme_path: Path,
+    requested_target_name: str | None,
+    selected_script_names: tuple[str, ...],
+    repaired_script_names: tuple[str, ...],
+    original_markdown: str,
+    repaired_markdown: str,
+    rendered_sections: tuple[tuple[str, str], ...],
+    diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
+    stdout: bool,
+) -> dict[str, object]:
+    return {
+        "body_only": False,
+        "changed": bool(repaired_script_names),
+        "diff_bundle_sha256": diff_bundle_sha256(diff_sections),
+        "drift_count": len(diff_sections),
+        "drifted_targets": [script_name for script_name, _ in diff_sections],
+        "mode": "stdout" if stdout else "repair",
+        "readme_path": str(readme_path),
+        "readme_sha256_after": sha256_text(repaired_markdown),
+        "readme_sha256_before": sha256_text(original_markdown),
+        "repaired_count": len(repaired_script_names),
+        "repaired_targets": list(repaired_script_names),
+        "rendered_bundle_sha256": rendered_bundle_sha256(rendered_sections),
+        "rendered_count": len(rendered_sections),
+        "rendered_targets": [script_name for script_name, _ in rendered_sections],
+        "requested_target": requested_target_name,
+        "sections": build_smoke_cli_doc_section_payloads(
+            rendered_sections=rendered_sections,
+            diff_sections=diff_sections,
+            include_diff_lines=False,
+        ),
+        "selected_targets": list(selected_script_names),
+        "up_to_date": not repaired_script_names,
+        "wrote_readme": bool(repaired_script_names) and not stdout,
+    }
