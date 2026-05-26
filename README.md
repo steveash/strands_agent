@@ -124,29 +124,29 @@ What exists now:
 - a standalone `smoke_cli_docs` smoke target that audits smoke-wrapper `--help` text against the README and emits actionable missing-snippet diagnostics,
 - drift-only smoke-doc rendering that can now emit review artifacts (`.md` sections, JSON manifest summaries/checksums, unified diff) for multi-wrapper README repairs,
 - repair/check smoke-doc tooling that can now persist machine-readable drift/repair reports to disk for CI or manual review,
-- a configurable `scripts/smoke_cli_docs_artifacts_smoke.py` contract runner that can now preserve synthetic drift/review bundles under explicit source/output paths for any public smoke wrapper,
+- a configurable `scripts/smoke_cli_docs_artifacts_smoke.py` contract runner that can now preserve synthetic drift/review bundles under explicit source/output paths for any public smoke wrapper and persist one machine-readable bundle index for CI or later review,
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- extended `scripts/smoke_cli_docs_artifacts_smoke.py` with public `--readme-path`, `--drifted-readme-path`, `--render-output-dir`, and fix/render artifact path overrides so contract runs can target copied README fixtures and persist review bundles under predictable locations,
-- refreshed smoke-script tests and README operator shortcuts so the new artifact-contract controls stay documented and regression-covered.
+- extended `scripts/smoke_cli_docs_artifacts_smoke.py` with `--bundle-index-path` so preserved artifact runs can write one machine-readable JSON bundle index alongside the drifted README, rendered sections, manifest, diff, and fix-side reports,
+- kept the new bundle-index contract documented in the README/operator shortcuts and added regression coverage for both default and explicit bundle-index output paths.
 
 Why this matters now:
-- operators can now exercise the same artifact-contract seam against non-default smoke-wrapper docs without editing the script or losing the generated bundle to a temp directory,
-- review outputs can be routed into stable paths that are easier to inspect, diff, archive, or hand to CI,
+- CI or follow-up tooling can ingest one JSON file instead of scraping console lines or independently discovering every artifact path,
+- preserved review bundles stay easier to archive, diff, and hand off because the index captures both emitted detail lines and pass/fail checks in one place,
 - and the smoke-doc maintenance workflow stays deterministic because the script still synthesizes its own drift before proving render/fix repair behavior end to end.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, event-timeline summary formatting/filtering, and smoke-doc artifact/report generation,
 - tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
 - app/session tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates plus compact summary lines, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
-- smoke infrastructure tests verify wrapper help/readme parity, public smoke target selection, configurable smoke-doc artifact-contract path handling, drift-only manifest/diff outputs, fix-side JSON outputs, and the dedicated timeline smoke contract,
+- smoke infrastructure tests verify wrapper help/readme parity, public smoke target selection, configurable smoke-doc artifact-contract path handling, machine-readable bundle-index output, drift-only manifest/diff outputs, fix-side JSON outputs, and the dedicated timeline smoke contract,
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
 
 Current evidence:
-- automated tests: `.venv/bin/pytest -q` => `367 passed in 49.38s`,
-- focused smoke-doc coverage: `.venv/bin/pytest -q tests/test_smoke_assertions.py tests/test_smoke_scripts.py tests/test_smoke_cli_doc_artifacts.py` => `120 passed in 13.42s`,
-- runnable artifact-contract verification: `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py session_triage_smoke --output-dir artifacts/smoke-cli-docs-artifacts/session-triage --readme-path README.md` produced `render_manifest_summary: ### Session triage smoke bundle` plus persisted drifted/render/fix review artifacts under the requested bundle root,
+- automated tests: `.venv/bin/pytest -q` => `367 passed in 45.75s`,
+- focused smoke-doc coverage: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `118 passed in 13.73s`,
+- runnable artifact-contract verification: `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py all --output-dir /tmp/strands-smoke-cli-docs-artifacts-all --bundle-index-path /tmp/strands-smoke-cli-docs-artifacts-all/index.json` reported `bundle_index_written= True`, `bundle_index_payload= True`, and preserved the all-wrapper drift/render/fix review bundle plus a CI-friendly JSON index,
 - timeline walkthrough verification: `.venv/bin/python scripts/timeline_smoke.py` still reports `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, and `timeline_filter_counts= True`.
 
 ## First five phases
@@ -419,6 +419,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix review artifacts end-to-end with fail-fast contract checks
 - `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py session_triage_smoke --output-dir artifacts/smoke-cli-docs-artifacts/session-triage` preserves a session-triage wrapper artifact bundle for later review
 - `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --readme-path README.md` preserves the all-wrapper contract bundle against a specific README copy while keeping predictable artifact paths
+- `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --bundle-index-path artifacts/smoke-cli-docs-artifacts/index.json` persists one machine-readable bundle index for CI or later review
 - `.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix
 - `.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper
 - `.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview` exports only the currently drifted smoke wrapper README sections
@@ -724,7 +725,7 @@ Future daily iterations should:
 ## Next iteration ideas
 
 - decide whether the event timeline should add collapsible/raw-detail toggles now that compact `summary:` lines exist
-- decide whether `scripts/smoke_cli_docs_artifacts_smoke.py` should also emit a single machine-readable bundle index summarizing every persisted path/result line for CI ingestion
+- decide whether smoke-doc artifact bundles should fold into `scripts/smoke_matrix.py` as an optional review lane
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether the new queue-mix metric lines should also carry oldest-pending age or timestamp cues for approval-heavy edit/test backlogs

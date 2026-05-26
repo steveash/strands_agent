@@ -575,6 +575,10 @@ def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_ou
         "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --readme-path README.md # persist drifted README plus render/fix review artifacts for every public smoke wrapper"
         in help_text
     )
+    assert (
+        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --bundle-index-path artifacts/smoke-cli-docs-artifacts/index.json # persist one machine-readable bundle index for CI or later review"
+        in help_text
+    )
     assert "--output-dir OUTPUT_DIR" in help_text
     assert "--readme-path README_PATH" in help_text
     assert "--drifted-readme-path DRIFTED_README_PATH" in help_text
@@ -584,6 +588,7 @@ def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_ou
     assert "--fix-check-json-path FIX_CHECK_JSON_PATH" in help_text
     assert "--fix-repair-json-path FIX_REPAIR_JSON_PATH" in help_text
     assert "--fix-post-check-json-path FIX_POST_CHECK_JSON_PATH" in help_text
+    assert "--bundle-index-path BUNDLE_INDEX_PATH" in help_text
 
 
 
@@ -615,6 +620,7 @@ def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypa
             "fix_check_json_path",
             "fix_repair_json_path",
             "fix_post_check_json_path",
+            "bundle_index_path",
             "render_stdout",
             "render_manifest_drift_count",
             "render_manifest_summary",
@@ -634,6 +640,8 @@ def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypa
             "fix_repair_applied",
             "fix_post_check_exit",
             "fix_post_check_payload",
+            "bundle_index_written",
+            "bundle_index_payload",
         ],
     )
     assert "requested_target: standalone_smoke" in lines
@@ -647,6 +655,7 @@ def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypa
     assert any(line.startswith("fix_check_json_path: ") for line in lines)
     assert any(line.startswith("fix_repair_json_path: ") for line in lines)
     assert any(line.startswith("fix_post_check_json_path: ") for line in lines)
+    assert any(line.startswith("bundle_index_path: ") for line in lines)
     assert "render_manifest_drift_count: 1" in lines
     assert "render_manifest_summary: ### Standalone local smoke bundle" in lines
     assert any(line.startswith("render_manifest_diff_stats: {'added_line_count': ") for line in lines)
@@ -686,6 +695,14 @@ def test_smoke_cli_docs_artifacts_smoke_supports_nondefault_target_and_persisted
     assert (artifact_root / "fix-check.json").exists()
     assert (artifact_root / "fix-repair.json").exists()
     assert (artifact_root / "fix-post-check.json").exists()
+    bundle_index_path = artifact_root / "bundle-index.json"
+    assert bundle_index_path.exists()
+    bundle_index_payload = json.loads(bundle_index_path.read_text(encoding="utf-8"))
+    assert bundle_index_payload["requested_target_name"] == "smoke_matrix"
+    assert bundle_index_payload["selected_script_names"] == ["smoke_matrix"]
+    assert bundle_index_payload["artifact_paths"]["bundle_index_path"] == str(bundle_index_path)
+    assert bundle_index_payload["checks"]["render_exit"] is True
+    assert bundle_index_payload["details"]["bundle_index_path"] == str(bundle_index_path)
 
 
 def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_artifact_paths(
@@ -713,6 +730,7 @@ def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_arti
     fix_check_json_path = output_root / "review" / "fix-check.json"
     fix_repair_json_path = output_root / "review" / "fix-repair.json"
     fix_post_check_json_path = output_root / "review" / "fix-post-check.json"
+    bundle_index_path = output_root / "review" / "bundle-index.json"
 
     exit_code = smoke_cli_docs_artifacts_smoke.main(
         [
@@ -735,6 +753,8 @@ def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_arti
             str(fix_repair_json_path),
             "--fix-post-check-json-path",
             str(fix_post_check_json_path),
+            "--bundle-index-path",
+            str(bundle_index_path),
         ]
     )
 
@@ -751,6 +771,7 @@ def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_arti
     assert f"fix_check_json_path: {fix_check_json_path}" in lines
     assert f"fix_repair_json_path: {fix_repair_json_path}" in lines
     assert f"fix_post_check_json_path: {fix_post_check_json_path}" in lines
+    assert f"bundle_index_path: {bundle_index_path}" in lines
     assert "render_manifest_summary: ### Session triage smoke bundle" in lines
     assert drifted_readme_path.exists()
     assert (render_output_dir / "session_triage_smoke.md").exists()
@@ -759,6 +780,14 @@ def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_arti
     assert fix_check_json_path.exists()
     assert fix_repair_json_path.exists()
     assert fix_post_check_json_path.exists()
+    assert bundle_index_path.exists()
+    bundle_index_payload = json.loads(bundle_index_path.read_text(encoding="utf-8"))
+    assert bundle_index_payload["requested_target_name"] == "session_triage_smoke"
+    assert bundle_index_payload["selected_script_names"] == ["session_triage_smoke"]
+    assert bundle_index_payload["artifact_paths"]["source_readme_path"] == str(readme_path)
+    assert bundle_index_payload["artifact_paths"]["bundle_index_path"] == str(bundle_index_path)
+    assert bundle_index_payload["checks"]["render_exit"] is True
+    assert bundle_index_payload["details"]["bundle_index_path"] == str(bundle_index_path)
 
 
 

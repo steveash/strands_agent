@@ -60,6 +60,11 @@ ARTIFACT_SCRIPT_EXAMPLES = (
             "persist drifted README plus render/fix review artifacts for every public smoke wrapper"
         ),
     ),
+    SmokeCliExample(
+        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --bundle-index-path artifacts/smoke-cli-docs-artifacts/index.json",
+        target_name="all",
+        description="persist one machine-readable bundle index for CI or later review",
+    ),
 )
 
 
@@ -75,6 +80,7 @@ class ArtifactContractPaths(tuple):
         "fix_check_json_path",
         "fix_repair_json_path",
         "fix_post_check_json_path",
+        "bundle_index_path",
     )
 
     def __new__(
@@ -88,6 +94,7 @@ class ArtifactContractPaths(tuple):
         fix_check_json_path: Path,
         fix_repair_json_path: Path,
         fix_post_check_json_path: Path,
+        bundle_index_path: Path,
     ):
         return super().__new__(
             cls,
@@ -101,6 +108,7 @@ class ArtifactContractPaths(tuple):
                 fix_check_json_path,
                 fix_repair_json_path,
                 fix_post_check_json_path,
+                bundle_index_path,
             ),
         )
 
@@ -179,6 +187,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Path for the post-repair drift-check JSON instead of <artifact-root>/fix-post-check.json.",
     )
+    parser.add_argument(
+        "--bundle-index-path",
+        type=Path,
+        help=(
+            "Path for the machine-readable bundle index instead of <artifact-root>/bundle-index.json."
+        ),
+    )
     return parser
 
 
@@ -226,6 +241,7 @@ def _resolve_artifact_paths(
     fix_check_json_path: Path | None,
     fix_repair_json_path: Path | None,
     fix_post_check_json_path: Path | None,
+    bundle_index_path: Path | None,
 ) -> ArtifactContractPaths:
     explicit_dirs: list[Path] = []
     if drifted_readme_path is not None:
@@ -242,6 +258,8 @@ def _resolve_artifact_paths(
         explicit_dirs.append(fix_repair_json_path.parent)
     if fix_post_check_json_path is not None:
         explicit_dirs.append(fix_post_check_json_path.parent)
+    if bundle_index_path is not None:
+        explicit_dirs.append(bundle_index_path.parent)
 
     artifact_root = output_dir or _artifact_root_from_explicit_paths(explicit_dirs) or source_readme_path.parent
 
@@ -255,7 +273,47 @@ def _resolve_artifact_paths(
         fix_check_json_path=fix_check_json_path or artifact_root / "fix-check.json",
         fix_repair_json_path=fix_repair_json_path or artifact_root / "fix-repair.json",
         fix_post_check_json_path=fix_post_check_json_path or artifact_root / "fix-post-check.json",
+        bundle_index_path=bundle_index_path or artifact_root / "bundle-index.json",
     )
+
+
+def _split_smoke_results(results: Sequence[tuple[str, object]]) -> tuple[dict[str, object], dict[str, bool]]:
+    details: dict[str, object] = {}
+    checks: dict[str, bool] = {}
+    for name, value in results:
+        if isinstance(value, bool):
+            checks[name] = value
+        else:
+            details[name] = value
+    return details, checks
+
+
+def _build_bundle_index_payload(
+    *,
+    requested_target_name: str,
+    selected_script_names: Sequence[str],
+    paths: ArtifactContractPaths,
+    results: Sequence[tuple[str, object]],
+) -> dict[str, object]:
+    details, checks = _split_smoke_results(results)
+    return {
+        "requested_target_name": requested_target_name,
+        "selected_script_names": list(selected_script_names),
+        "artifact_paths": {
+            "artifact_root": str(paths.artifact_root),
+            "source_readme_path": str(paths.source_readme_path),
+            "drifted_readme_path": str(paths.drifted_readme_path),
+            "render_output_dir": str(paths.render_output_dir),
+            "render_manifest_path": str(paths.render_manifest_path),
+            "render_diff_path": str(paths.render_diff_path),
+            "fix_check_json_path": str(paths.fix_check_json_path),
+            "fix_repair_json_path": str(paths.fix_repair_json_path),
+            "fix_post_check_json_path": str(paths.fix_post_check_json_path),
+            "bundle_index_path": str(paths.bundle_index_path),
+        },
+        "details": details,
+        "checks": checks,
+    }
 
 
 def _run_artifact_contract(
@@ -378,7 +436,7 @@ def _run_artifact_contract(
 
     rendered_section_payload = render_manifest["sections"][0] if render_manifest["sections"] else {}
 
-    return [
+    results = [
         ("requested_target", requested_target_name),
         ("selected_targets", ", ".join(selected_script_names)),
         ("artifact_root", str(paths.artifact_root)),
@@ -390,6 +448,7 @@ def _run_artifact_contract(
         ("fix_check_json_path", str(paths.fix_check_json_path)),
         ("fix_repair_json_path", str(paths.fix_repair_json_path)),
         ("fix_post_check_json_path", str(paths.fix_post_check_json_path)),
+        ("bundle_index_path", str(paths.bundle_index_path)),
         ("render_stdout", " | ".join(render_result.stdout.strip().splitlines())),
         ("render_manifest_drift_count", render_manifest.get("drift_count")),
         ("render_manifest_summary", rendered_section_payload.get("rendered_summary")),
@@ -418,6 +477,25 @@ def _run_artifact_contract(
         ("fix_post_check_exit", fix_post_check_result.returncode == 0),
         ("fix_post_check_payload", fix_post_check_payload == expected_fix_post_check_payload),
     ]
+    bundle_index_payload = _build_bundle_index_payload(
+        requested_target_name=requested_target_name,
+        selected_script_names=selected_script_names,
+        paths=paths,
+        results=results,
+    )
+    paths.bundle_index_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.bundle_index_path.write_text(
+        json.dumps(bundle_index_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    written_bundle_index_payload = json.loads(paths.bundle_index_path.read_text(encoding="utf-8"))
+    results.extend(
+        [
+            ("bundle_index_written", paths.bundle_index_path.exists()),
+            ("bundle_index_payload", written_bundle_index_payload == bundle_index_payload),
+        ]
+    )
+    return results
 
 
 def run_smoke_cli_docs_artifacts_smoke(
@@ -432,6 +510,7 @@ def run_smoke_cli_docs_artifacts_smoke(
     fix_check_json_path: Path | None = None,
     fix_repair_json_path: Path | None = None,
     fix_post_check_json_path: Path | None = None,
+    bundle_index_path: Path | None = None,
 ) -> list[tuple[str, object]]:
     explicit_output_paths = (
         drifted_readme_path,
@@ -441,6 +520,7 @@ def run_smoke_cli_docs_artifacts_smoke(
         fix_check_json_path,
         fix_repair_json_path,
         fix_post_check_json_path,
+        bundle_index_path,
     )
     if output_dir is None and not any(path is not None for path in explicit_output_paths):
         with tempfile.TemporaryDirectory(prefix="smoke-cli-docs-artifacts-") as tmp_dir_name:
@@ -454,6 +534,7 @@ def run_smoke_cli_docs_artifacts_smoke(
                 fix_check_json_path=fix_check_json_path,
                 fix_repair_json_path=fix_repair_json_path,
                 fix_post_check_json_path=fix_post_check_json_path,
+                bundle_index_path=bundle_index_path,
             )
             return _run_artifact_contract(
                 requested_target_name=requested_target_name,
@@ -469,6 +550,7 @@ def run_smoke_cli_docs_artifacts_smoke(
         fix_check_json_path=fix_check_json_path,
         fix_repair_json_path=fix_repair_json_path,
         fix_post_check_json_path=fix_post_check_json_path,
+        bundle_index_path=bundle_index_path,
     )
     return _run_artifact_contract(requested_target_name=requested_target_name, paths=paths)
 
@@ -488,6 +570,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             fix_check_json_path=args.fix_check_json_path,
             fix_repair_json_path=args.fix_repair_json_path,
             fix_post_check_json_path=args.fix_post_check_json_path,
+            bundle_index_path=args.bundle_index_path,
         )
     )
 
