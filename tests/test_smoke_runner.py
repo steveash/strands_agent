@@ -320,6 +320,54 @@ def test_run_smoke_targets_emits_failure_summary_footer(tmp_path, monkeypatch) -
     ]
 
 
+def test_run_smoke_targets_emits_failure_hint_before_summary_footer(tmp_path, monkeypatch) -> None:
+    first_script = _write_script(
+        tmp_path,
+        "first.py",
+        """
+        print("first_check= True", flush=True)
+        """,
+    )
+    second_script = _write_script(
+        tmp_path,
+        "second.py",
+        """
+        print("detail: export live env", flush=True)
+        print("second_check= False", flush=True)
+        """,
+    )
+
+    perf_values = iter([0.0, 2.5])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    bundle_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
+    stdout = StringIO()
+    stderr = StringIO()
+    exit_code = run_smoke_targets(
+        [
+            SmokeScriptTarget("first", first_script),
+            SmokeScriptTarget("second", second_script),
+        ],
+        stdout=stdout,
+        stderr=stderr,
+        python_executable=sys.executable,
+        wrapper_metadata=bundle_metadata,
+        failure_hint_builder=lambda target, observed_lines: (
+            "hint: export STRANDS_AGENT_RUNTIME=live"
+            if target.name == "second" and "detail: export live env\n" in observed_lines
+            else None
+        ),
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue() == "first_check= True\ndetail: export live env\nsecond_check= False\n"
+    assert stderr.getvalue().splitlines() == [
+        "second smoke failed fast: second_check= False",
+        "[bundle-smoke] hint: export STRANDS_AGENT_RUNTIME=live",
+        bundle_metadata.failure_summary_line(passed_count=1, total_count=2, elapsed_seconds=2.5),
+    ]
+
+
 def test_smoke_wrapper_metadata_formats_shared_summary_and_progress_lines() -> None:
     wrapper_metadata = SmokeWrapperMetadata(summary_label="bundle-smoke")
     bundle_metadata = SMOKE_MATRIX_WRAPPER

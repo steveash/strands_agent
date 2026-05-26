@@ -551,6 +551,88 @@ def test_standalone_smoke_passes_shared_wrapper_metadata(monkeypatch) -> None:
     }
 
 
+def test_standalone_smoke_all_failure_emits_live_runtime_export_hint(monkeypatch) -> None:
+    standalone_smoke = _load_script_module("standalone_smoke")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stderr = kwargs["stderr"]
+        if target.name == "live":
+            observer("provider=fake-strands mode=fake\n")
+            observer("live_runtime_requested= False\n")
+            print("live smoke failed fast: live_runtime_requested= False", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 2.4])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    real_run_smoke_targets = standalone_smoke.run_smoke_targets
+    monkeypatch.setattr(
+        standalone_smoke,
+        "run_smoke_targets",
+        lambda targets, **kwargs: real_run_smoke_targets(targets, stdout=stdout, stderr=stderr, **kwargs),
+    )
+
+    exit_code = standalone_smoke.main(["all"])
+
+    assert exit_code == 1
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue().splitlines() == [
+        "live smoke failed fast: live_runtime_requested= False",
+        (
+            "[standalone-smoke] hint: `standalone_smoke.py all` includes the live smoke target; "
+            "export `STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
+            "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning."
+        ),
+        STANDALONE_SMOKE_WRAPPER.failure_summary_line(passed_count=6, total_count=7, elapsed_seconds=2.4),
+    ]
+
+
+
+def test_standalone_smoke_live_failure_emits_missing_api_key_hint(monkeypatch) -> None:
+    standalone_smoke = _load_script_module("standalone_smoke")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stderr = kwargs["stderr"]
+        if target.name == "live":
+            observer("RuntimeError: OPENAI_API_KEY is required for live runtime mode\n")
+            print("live smoke exited with status 1", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.5])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    real_run_smoke_targets = standalone_smoke.run_smoke_targets
+    monkeypatch.setattr(
+        standalone_smoke,
+        "run_smoke_targets",
+        lambda targets, **kwargs: real_run_smoke_targets(targets, stdout=stdout, stderr=stderr, **kwargs),
+    )
+
+    exit_code = standalone_smoke.main(["live"])
+
+    assert exit_code == 1
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue().splitlines() == [
+        "live smoke exited with status 1",
+        (
+            "[standalone-smoke] hint: `standalone_smoke.py live` reached the live runtime, but "
+            "`OPENAI_API_KEY` was missing; export `OPENAI_API_KEY` "
+            "(and optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning."
+        ),
+        STANDALONE_SMOKE_WRAPPER.failure_summary_line(passed_count=0, total_count=1, elapsed_seconds=1.5),
+    ]
+
+
 def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_output_dir() -> None:
     smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
 

@@ -244,6 +244,7 @@ class SmokeTargetSelector:
 SmokeFailurePredicate = Callable[[str], bool]
 SmokeOutputLineFilter = Callable[[str], bool]
 SmokeOutputLineObserver = Callable[[str], None]
+SmokeFailureHintBuilder = Callable[[SmokeScriptTarget, Sequence[str]], str | None]
 
 
 def _describe_cli_example(
@@ -870,6 +871,7 @@ def run_smoke_targets(
     failure_predicate: SmokeFailurePredicate = is_failed_smoke_check_line,
     wrapper_metadata: SmokeWrapperMetadata | None = None,
     summary_label: str | None = None,
+    failure_hint_builder: SmokeFailureHintBuilder | None = None,
 ) -> int:
     summary_metadata = _resolve_wrapper_metadata(wrapper_metadata=wrapper_metadata, summary_label=summary_label)
     started_at = perf_counter()
@@ -877,14 +879,25 @@ def run_smoke_targets(
     total_count = len(targets)
 
     for target in targets:
+        observed_lines: list[str] | None = [] if failure_hint_builder is not None else None
         exit_code = run_smoke_target(
             target,
             stdout=stdout,
             stderr=stderr,
             python_executable=python_executable,
             failure_predicate=failure_predicate,
+            output_line_observer=observed_lines.append if observed_lines is not None else None,
         )
         if exit_code != 0:
+            hint = None
+            if failure_hint_builder is not None:
+                hint = failure_hint_builder(target, () if observed_lines is None else tuple(observed_lines))
+            if hint is not None:
+                if summary_metadata is not None:
+                    _emit_wrapper_line(summary_metadata, hint, stream=stderr)
+                else:
+                    print(hint, file=stderr)
+                    stderr.flush()
             if summary_metadata is not None:
                 elapsed = perf_counter() - started_at
                 _emit_wrapper_line(
