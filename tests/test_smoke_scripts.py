@@ -568,10 +568,22 @@ def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_ou
         in help_text
     )
     assert (
-        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts # persist drifted README plus render/fix JSON review artifacts for every public smoke wrapper"
+        "smoke_cli_docs_artifacts_smoke.py session_triage_smoke --output-dir artifacts/smoke-cli-docs-artifacts/session-triage # persist a session-triage wrapper artifact bundle for later review"
+        in help_text
+    )
+    assert (
+        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --readme-path README.md # persist drifted README plus render/fix review artifacts for every public smoke wrapper"
         in help_text
     )
     assert "--output-dir OUTPUT_DIR" in help_text
+    assert "--readme-path README_PATH" in help_text
+    assert "--drifted-readme-path DRIFTED_README_PATH" in help_text
+    assert "--render-output-dir RENDER_OUTPUT_DIR" in help_text
+    assert "--render-manifest-path RENDER_MANIFEST_PATH" in help_text
+    assert "--render-diff-path RENDER_DIFF_PATH" in help_text
+    assert "--fix-check-json-path FIX_CHECK_JSON_PATH" in help_text
+    assert "--fix-repair-json-path FIX_REPAIR_JSON_PATH" in help_text
+    assert "--fix-post-check-json-path FIX_POST_CHECK_JSON_PATH" in help_text
 
 
 
@@ -595,6 +607,14 @@ def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypa
             "requested_target",
             "selected_targets",
             "artifact_root",
+            "source_readme_path",
+            "drifted_readme_path",
+            "render_output_dir",
+            "render_manifest_path",
+            "render_diff_path",
+            "fix_check_json_path",
+            "fix_repair_json_path",
+            "fix_post_check_json_path",
             "render_stdout",
             "render_manifest_drift_count",
             "render_manifest_summary",
@@ -619,6 +639,14 @@ def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypa
     assert "requested_target: standalone_smoke" in lines
     assert "selected_targets: standalone_smoke" in lines
     assert any(line.startswith("artifact_root: ") for line in lines)
+    assert any(line.startswith("source_readme_path: ") for line in lines)
+    assert any(line.startswith("drifted_readme_path: ") for line in lines)
+    assert any(line.startswith("render_output_dir: ") for line in lines)
+    assert any(line.startswith("render_manifest_path: ") for line in lines)
+    assert any(line.startswith("render_diff_path: ") for line in lines)
+    assert any(line.startswith("fix_check_json_path: ") for line in lines)
+    assert any(line.startswith("fix_repair_json_path: ") for line in lines)
+    assert any(line.startswith("fix_post_check_json_path: ") for line in lines)
     assert "render_manifest_drift_count: 1" in lines
     assert "render_manifest_summary: ### Standalone local smoke bundle" in lines
     assert any(line.startswith("render_manifest_diff_stats: {'added_line_count': ") for line in lines)
@@ -658,6 +686,79 @@ def test_smoke_cli_docs_artifacts_smoke_supports_nondefault_target_and_persisted
     assert (artifact_root / "fix-check.json").exists()
     assert (artifact_root / "fix-repair.json").exists()
     assert (artifact_root / "fix-post-check.json").exists()
+
+
+def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_artifact_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
+    output = StringIO()
+    real_emit_smoke_results = smoke_cli_docs_artifacts_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        smoke_cli_docs_artifacts_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    readme_path = tmp_path / "custom" / "README-copy.md"
+    readme_path.parent.mkdir(parents=True, exist_ok=True)
+    readme_path.write_text(README_TEXT, encoding="utf-8")
+
+    output_root = tmp_path / "bundle"
+    drifted_readme_path = output_root / "fixtures" / "README-contract.md"
+    render_output_dir = output_root / "rendered-sections"
+    render_manifest_path = output_root / "review" / "manifest.json"
+    render_diff_path = output_root / "review" / "diff.patch"
+    fix_check_json_path = output_root / "review" / "fix-check.json"
+    fix_repair_json_path = output_root / "review" / "fix-repair.json"
+    fix_post_check_json_path = output_root / "review" / "fix-post-check.json"
+
+    exit_code = smoke_cli_docs_artifacts_smoke.main(
+        [
+            "session_triage_smoke",
+            "--readme-path",
+            str(readme_path),
+            "--output-dir",
+            str(output_root),
+            "--drifted-readme-path",
+            str(drifted_readme_path),
+            "--render-output-dir",
+            str(render_output_dir),
+            "--render-manifest-path",
+            str(render_manifest_path),
+            "--render-diff-path",
+            str(render_diff_path),
+            "--fix-check-json-path",
+            str(fix_check_json_path),
+            "--fix-repair-json-path",
+            str(fix_repair_json_path),
+            "--fix-post-check-json-path",
+            str(fix_post_check_json_path),
+        ]
+    )
+
+    assert exit_code == 0
+    lines = output.getvalue().splitlines()
+    assert "requested_target: session_triage_smoke" in lines
+    assert "selected_targets: session_triage_smoke" in lines
+    assert f"artifact_root: {output_root}" in lines
+    assert f"source_readme_path: {readme_path}" in lines
+    assert f"drifted_readme_path: {drifted_readme_path}" in lines
+    assert f"render_output_dir: {render_output_dir}" in lines
+    assert f"render_manifest_path: {render_manifest_path}" in lines
+    assert f"render_diff_path: {render_diff_path}" in lines
+    assert f"fix_check_json_path: {fix_check_json_path}" in lines
+    assert f"fix_repair_json_path: {fix_repair_json_path}" in lines
+    assert f"fix_post_check_json_path: {fix_post_check_json_path}" in lines
+    assert "render_manifest_summary: ### Session triage smoke bundle" in lines
+    assert drifted_readme_path.exists()
+    assert (render_output_dir / "session_triage_smoke.md").exists()
+    assert render_manifest_path.exists()
+    assert render_diff_path.exists()
+    assert fix_check_json_path.exists()
+    assert fix_repair_json_path.exists()
+    assert fix_post_check_json_path.exists()
 
 
 

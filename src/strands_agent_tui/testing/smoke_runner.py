@@ -565,7 +565,9 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     readme_extra_shortcut_snippets=(
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle",
-        "`.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix JSON artifacts end-to-end with fail-fast contract checks",
+        "`.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix review artifacts end-to-end with fail-fast contract checks",
+        "`.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py session_triage_smoke --output-dir artifacts/smoke-cli-docs-artifacts/session-triage` preserves a session-triage wrapper artifact bundle for later review",
+        "`.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --readme-path README.md` preserves the all-wrapper contract bundle against a specific README copy while keeping predictable artifact paths",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py standalone_smoke --body-only` previews just the rendered standalone wrapper README body before a manual docs fix",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview` exports rendered README sections for every public smoke wrapper",
         "`.venv/bin/python scripts/smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview` exports only the currently drifted smoke wrapper README sections",
