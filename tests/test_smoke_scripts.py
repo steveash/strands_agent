@@ -551,6 +551,30 @@ def test_standalone_smoke_passes_shared_wrapper_metadata(monkeypatch) -> None:
     }
 
 
+def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_output_dir() -> None:
+    smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
+
+    help_text = " ".join(smoke_cli_docs_artifacts_smoke.build_parser().format_help().split())
+
+    assert (
+        "Which public smoke-wrapper docs artifact contract to exercise. Aliases: all -> standalone_smoke, "
+        "session_triage_smoke, session_recovery_smoke, smoke_matrix."
+    ) in help_text
+    assert (
+        "smoke_cli_docs_artifacts_smoke.py # default target -> standalone_smoke" in help_text
+    )
+    assert (
+        "smoke_cli_docs_artifacts_smoke.py smoke_matrix # single smoke wrapper artifact contract"
+        in help_text
+    )
+    assert (
+        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts # persist drifted README plus render/fix JSON review artifacts for every public smoke wrapper"
+        in help_text
+    )
+    assert "--output-dir OUTPUT_DIR" in help_text
+
+
+
 def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypatch) -> None:
     smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
     output = StringIO()
@@ -568,6 +592,9 @@ def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypa
     _assert_mixed_smoke_result_contract(
         lines,
         detail_names=[
+            "requested_target",
+            "selected_targets",
+            "artifact_root",
             "render_stdout",
             "render_manifest_drift_count",
             "render_manifest_summary",
@@ -589,12 +616,65 @@ def test_smoke_cli_docs_artifacts_smoke_reports_expected_contract_lines(monkeypa
             "fix_post_check_payload",
         ],
     )
+    assert "requested_target: standalone_smoke" in lines
+    assert "selected_targets: standalone_smoke" in lines
+    assert any(line.startswith("artifact_root: ") for line in lines)
     assert "render_manifest_drift_count: 1" in lines
     assert "render_manifest_summary: ### Standalone local smoke bundle" in lines
     assert any(line.startswith("render_manifest_diff_stats: {'added_line_count': ") for line in lines)
     assert any("smoke README drift detected in 1 section(s)" in line for line in lines if line.startswith("fix_check_stdout: "))
     assert any(line.startswith("fix_repair_stdout: repaired 1 smoke README section(s) in ") for line in lines)
     assert any(line.startswith("fix_post_check_stdout: smoke README already up to date: ") for line in lines)
+
+
+
+def test_smoke_cli_docs_artifacts_smoke_supports_nondefault_target_and_persisted_output_dir(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
+    output = StringIO()
+    real_emit_smoke_results = smoke_cli_docs_artifacts_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        smoke_cli_docs_artifacts_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    artifact_root = tmp_path / "artifacts"
+    exit_code = smoke_cli_docs_artifacts_smoke.main(["smoke_matrix", "--output-dir", str(artifact_root)])
+
+    assert exit_code == 0
+    lines = output.getvalue().splitlines()
+    assert "requested_target: smoke_matrix" in lines
+    assert "selected_targets: smoke_matrix" in lines
+    assert f"artifact_root: {artifact_root}" in lines
+    assert "render_manifest_drift_count: 1" in lines
+    assert "render_manifest_summary: ### Full local smoke matrix" in lines
+    assert (artifact_root / "README-drifted.md").exists()
+    assert (artifact_root / "rendered" / "smoke_matrix.md").exists()
+    assert (artifact_root / "render-manifest.json").exists()
+    assert (artifact_root / "render-review.patch").exists()
+    assert (artifact_root / "fix-check.json").exists()
+    assert (artifact_root / "fix-repair.json").exists()
+    assert (artifact_root / "fix-post-check.json").exists()
+
+
+
+def test_smoke_cli_docs_artifacts_smoke_invalid_choice_errors_show_public_cli_choices(capsys) -> None:
+    smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
+
+    with pytest.raises(SystemExit) as exc_info:
+        smoke_cli_docs_artifacts_smoke.main(["docs"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert matches_public_cli_invalid_choice(
+        captured.err,
+        invalid_target="docs",
+        expected_choices="{standalone_smoke,session_triage_smoke,session_recovery_smoke,smoke_matrix,all}",
+    )
 
 
 @pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
