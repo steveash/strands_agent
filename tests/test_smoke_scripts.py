@@ -2041,6 +2041,79 @@ def test_smoke_matrix_preserves_public_bundle_labels_in_fail_fast_stderr(monkeyp
     ]
 
 
+def test_smoke_matrix_all_failure_emits_live_runtime_export_hint(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stderr = kwargs["stderr"]
+        if target.name == "standalone-all":
+            observer("provider=fake-strands mode=fake\n")
+            observer("live_runtime_requested= False\n")
+            print("standalone smoke failed fast: live_runtime_requested= False", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.0, 1.6, 2.4])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main(["all"])
+
+    assert exit_code == 1
+    summary_metadata = SMOKE_MATRIX_WRAPPER
+    assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
+    assert stderr.getvalue().splitlines() == [
+        "standalone smoke failed fast: live_runtime_requested= False",
+        summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.6),
+        (
+            "[smoke-matrix] hint: `smoke_matrix.py all` swaps in `standalone_smoke.py all`; "
+            "export `STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
+            "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning the live-inclusive matrix."
+        ),
+        summary_metadata.failure_summary_line(passed_count=0, total_count=3, elapsed_seconds=2.4),
+    ]
+
+
+def test_smoke_matrix_all_failure_emits_missing_api_key_hint(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stderr = kwargs["stderr"]
+        if target.name == "standalone-all":
+            observer("RuntimeError: OPENAI_API_KEY is required for live runtime mode\n")
+            print("standalone smoke exited with status 1", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.0, 1.5, 2.1])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main(["all"])
+
+    assert exit_code == 1
+    summary_metadata = SMOKE_MATRIX_WRAPPER
+    assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
+    assert stderr.getvalue().splitlines() == [
+        "standalone smoke exited with status 1",
+        summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.5),
+        (
+            "[smoke-matrix] hint: `smoke_matrix.py all` reached the live runtime, but `OPENAI_API_KEY` "
+            "was missing; export `OPENAI_API_KEY` (and optionally `STRANDS_AGENT_OPENAI_MODEL`) "
+            "before rerunning."
+        ),
+        summary_metadata.failure_summary_line(passed_count=0, total_count=3, elapsed_seconds=2.1),
+    ]
+
+
 def _render_picker_attention_workspace_shell_outputs(tmp_path: Path) -> dict[str, str]:
     seed_plain_session(tmp_path)
     seed_pending_approval_session(tmp_path)

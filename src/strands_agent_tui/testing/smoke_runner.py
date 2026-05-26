@@ -243,6 +243,7 @@ class SmokeTargetSelector:
 
 SmokeFailurePredicate = Callable[[str], bool]
 SmokeOutputLineFilter = Callable[[str], bool]
+SmokeOutputLineObserver = Callable[[str], None]
 
 
 def _describe_cli_example(
@@ -810,6 +811,7 @@ def run_smoke_target(
     python_executable: str = sys.executable,
     failure_predicate: SmokeFailurePredicate = is_failed_smoke_check_line,
     output_line_filter: SmokeOutputLineFilter | None = None,
+    output_line_observer: SmokeOutputLineObserver | None = None,
 ) -> int:
     process = subprocess.Popen(
         [python_executable, str(target.script_path), *target.args],
@@ -822,6 +824,8 @@ def run_smoke_target(
     failed_line: str | None = None
     assert process.stdout is not None
     for line in process.stdout:
+        if output_line_observer is not None:
+            output_line_observer(line)
         if output_line_filter is None or output_line_filter(line):
             print(line, end="", file=stdout)
             stdout.flush()
