@@ -474,22 +474,22 @@ Operator shortcuts:
 - `.venv/bin/python scripts/session_recovery_smoke.py approval` runs only the approval smoke target
 
 ### Full local smoke matrix
-
 To run the current local smoke bundles together with fail-fast handling:
 
 ```bash
 .venv/bin/python scripts/smoke_matrix.py
 ```
 
-This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle.
+This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, or `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`.
 
 Operator shortcuts:
 - `.venv/bin/python scripts/smoke_matrix.py local` explicitly re-runs the default local matrix (`standalone`, `triage`, `recovery`)
 - `.venv/bin/python scripts/smoke_matrix.py all` swaps in the live-inclusive standalone bundle (`standalone (live-inclusive)`, `triage`, `recovery`)
+- `.venv/bin/python scripts/smoke_matrix.py review` adds the optional smoke-doc artifact review lane (`standalone`, `triage`, `recovery`, `docs-review`)
 - `.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle
 - `.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle
 - `.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle
-
+- `.venv/bin/python scripts/smoke_matrix.py docs-review` runs only the smoke-doc artifact review lane with persisted artifacts under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`
 ### Live approval-restore smoke check
 
 To verify the live runtime's restored approval metadata flow without launching the TUI:

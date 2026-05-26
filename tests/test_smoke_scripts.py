@@ -231,6 +231,40 @@ def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
     ]
 
 
+def test_live_smoke_main_emits_clean_runtime_error_summary_without_traceback(monkeypatch) -> None:
+    live_smoke = _load_script_module("live_smoke")
+
+    class _Runtime:
+        def run(self, prompt: str):
+            assert prompt == "Reply with exactly: live runtime ok"
+            raise RuntimeError("OPENAI_API_KEY is required for live runtime mode")
+
+    monkeypatch.setattr(
+        live_smoke,
+        "load_config",
+        lambda: SimpleNamespace(runtime_mode="live", openai_model="stub-model"),
+    )
+    monkeypatch.setattr(live_smoke, "build_runtime", lambda **_: _Runtime())
+
+    output = StringIO()
+    real_emit_smoke_results = live_smoke.emit_smoke_results
+    monkeypatch.setattr(
+        live_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    with redirect_stdout(output):
+        exit_code = live_smoke.main()
+
+    assert exit_code == 1
+    assert "Traceback" not in output.getvalue()
+    assert output.getvalue().splitlines() == [
+        "live_runtime_error: RuntimeError: OPENAI_API_KEY is required for live runtime mode",
+        "live_runtime_requested= True",
+    ]
+
+
 def test_approval_smoke_emits_timeline_summary_checks(monkeypatch) -> None:
     approval_smoke = _load_script_module("approval_smoke")
     output = StringIO()
@@ -598,9 +632,16 @@ def test_standalone_smoke_live_failure_emits_missing_api_key_hint(monkeypatch) -
 
     def _run_smoke_target(target, **kwargs):
         observer = kwargs["output_line_observer"]
+        stdout = kwargs["stdout"]
         stderr = kwargs["stderr"]
         if target.name == "live":
-            observer("RuntimeError: OPENAI_API_KEY is required for live runtime mode\n")
+            for line in (
+                "live_runtime_error: RuntimeError: OPENAI_API_KEY is required for live runtime mode\n",
+                "live_runtime_requested= True\n",
+            ):
+                observer(line)
+                print(line, end="", file=stdout)
+            stdout.flush()
             print("live smoke exited with status 1", file=stderr)
             return 1
         return 0
@@ -621,7 +662,10 @@ def test_standalone_smoke_live_failure_emits_missing_api_key_hint(monkeypatch) -
     exit_code = standalone_smoke.main(["live"])
 
     assert exit_code == 1
-    assert stdout.getvalue() == ""
+    assert stdout.getvalue().splitlines() == [
+        "live_runtime_error: RuntimeError: OPENAI_API_KEY is required for live runtime mode",
+        "live_runtime_requested= True",
+    ]
     assert stderr.getvalue().splitlines() == [
         "live smoke exited with status 1",
         (
@@ -1818,7 +1862,7 @@ def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> No
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target="standalone-all",
-        expected_choices="{standalone,triage,recovery,local,all}",
+        expected_choices="{standalone,triage,recovery,docs-review,local,all,review}",
     )
 
 
@@ -1934,12 +1978,57 @@ def test_smoke_matrix_all_uses_live_inclusive_standalone_bundle(monkeypatch) -> 
     }
 
 
+def test_smoke_matrix_review_adds_docs_review_lane(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    seen = {}
+
+    def _run_smoke_target(target, **_kwargs):
+        seen.setdefault("names", []).append(target.name)
+        seen.setdefault("args", []).append(target.args)
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+
+    exit_code = smoke_matrix.main(["review"])
+
+    assert exit_code == 0
+    assert seen == {
+        "names": ["standalone-local", "triage", "recovery", "docs-review"],
+        "args": [
+            (),
+            (),
+            (),
+            (
+                "all",
+                "--output-dir",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+                "--bundle-index-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
+            ),
+        ],
+    }
+
+
 @pytest.mark.parametrize(
     ("argv", "expected_names", "expected_args"),
     [
         (["standalone"], ["standalone-local"], [()]),
         (["triage"], ["triage"], [()]),
         (["recovery"], ["recovery"], [()]),
+        (
+            ["docs-review"],
+            ["docs-review"],
+            [
+                (
+                    "all",
+                    "--output-dir",
+                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+                    "--bundle-index-path",
+                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
+                )
+            ],
+        ),
     ],
 )
 def test_smoke_matrix_single_bundle_target_selection(monkeypatch, argv, expected_names, expected_args) -> None:

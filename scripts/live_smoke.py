@@ -2,13 +2,23 @@ from __future__ import annotations
 
 from strands_agent_tui.config import load_config
 from strands_agent_tui.runtime import build_runtime
-from strands_agent_tui.testing import emit_smoke_checks
+from strands_agent_tui.testing import emit_smoke_checks, emit_smoke_results
 
 
 def main() -> int:
     config = load_config()
-    runtime = build_runtime(mode=config.runtime_mode, openai_model=config.openai_model)
-    result = runtime.run("Reply with exactly: live runtime ok")
+    try:
+        runtime = build_runtime(mode=config.runtime_mode, openai_model=config.openai_model)
+        result = runtime.run("Reply with exactly: live runtime ok")
+    except Exception as exc:
+        emit_smoke_results(
+            [
+                ("live_runtime_error", f"{type(exc).__name__}: {exc}"),
+                ("live_runtime_requested", config.runtime_mode == "live"),
+            ]
+        )
+        return 1
+
     print(result.text)
     print(f"provider={result.provider} mode={result.mode}")
 
