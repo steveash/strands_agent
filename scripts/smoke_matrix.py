@@ -28,6 +28,9 @@ DOCS_REVIEW_BUNDLE_INDEX_FLAG = "--bundle-index-path"
 DOCS_REVIEW_DRIFTED_README_FLAG = "--drifted-readme-path"
 DOCS_REVIEW_RENDER_MANIFEST_FLAG = "--render-manifest-path"
 DOCS_REVIEW_RENDER_DIFF_FLAG = "--render-diff-path"
+DOCS_REVIEW_FIX_CHECK_JSON_FLAG = "--fix-check-json-path"
+DOCS_REVIEW_FIX_REPAIR_JSON_FLAG = "--fix-repair-json-path"
+DOCS_REVIEW_FIX_POST_CHECK_JSON_FLAG = "--fix-post-check-json-path"
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
 
@@ -65,11 +68,17 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
     drifted_readme_path = _extract_target_arg_path(target, DOCS_REVIEW_DRIFTED_README_FLAG)
     render_manifest_path = _extract_target_arg_path(target, DOCS_REVIEW_RENDER_MANIFEST_FLAG)
     render_diff_path = _extract_target_arg_path(target, DOCS_REVIEW_RENDER_DIFF_FLAG)
+    fix_check_json_path = _extract_target_arg_path(target, DOCS_REVIEW_FIX_CHECK_JSON_FLAG)
+    fix_repair_json_path = _extract_target_arg_path(target, DOCS_REVIEW_FIX_REPAIR_JSON_FLAG)
+    fix_post_check_json_path = _extract_target_arg_path(target, DOCS_REVIEW_FIX_POST_CHECK_JSON_FLAG)
 
     if artifact_root is not None:
         drifted_readme_path = drifted_readme_path or str(artifact_root / "README-drifted.md")
         render_manifest_path = render_manifest_path or str(artifact_root / "render-manifest.json")
         render_diff_path = render_diff_path or str(artifact_root / "render-review.patch")
+        fix_check_json_path = fix_check_json_path or str(artifact_root / "fix-check.json")
+        fix_repair_json_path = fix_repair_json_path or str(artifact_root / "fix-repair.json")
+        fix_post_check_json_path = fix_post_check_json_path or str(artifact_root / "fix-post-check.json")
 
     messages: list[str] = []
     if output_dir and bundle_index_path:
@@ -85,6 +94,12 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
         messages.append(f"review render manifest: {render_manifest_path}")
     if render_diff_path:
         messages.append(f"review render diff: {render_diff_path}")
+    if fix_check_json_path:
+        messages.append(f"review fix-check JSON: {fix_check_json_path}")
+    if fix_repair_json_path:
+        messages.append(f"review fix-repair JSON: {fix_repair_json_path}")
+    if fix_post_check_json_path:
+        messages.append(f"review fix-post-check JSON: {fix_post_check_json_path}")
     return tuple(messages)
 
 

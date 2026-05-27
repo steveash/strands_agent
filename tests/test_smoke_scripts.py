@@ -2062,6 +2062,18 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
             "[smoke-matrix] review render diff: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch"
         ),
+        (
+            "[smoke-matrix] review fix-check JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json"
+        ),
+        (
+            "[smoke-matrix] review fix-repair JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json"
+        ),
+        (
+            "[smoke-matrix] review fix-post-check JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json"
+        ),
         summary_metadata.success_summary_line(passed_count=4, total_count=4, elapsed_seconds=4.0),
     ]
 
@@ -2125,6 +2137,12 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
             "artifacts/custom/render.json",
             "--render-diff-path",
             "artifacts/custom/review.patch",
+            "--fix-check-json-path",
+            "artifacts/custom/fix-check.json",
+            "--fix-repair-json-path",
+            "artifacts/custom/fix-repair.json",
+            "--fix-post-check-json-path",
+            "artifacts/custom/fix-post-check.json",
         ),
         display_name="docs-review",
     )
@@ -2134,6 +2152,9 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
         "review drifted README: artifacts/custom/README-review.md",
         "review render manifest: artifacts/custom/render.json",
         "review render diff: artifacts/custom/review.patch",
+        "review fix-check JSON: artifacts/custom/fix-check.json",
+        "review fix-repair JSON: artifacts/custom/fix-repair.json",
+        "review fix-post-check JSON: artifacts/custom/fix-post-check.json",
     )
 
 
@@ -2301,6 +2322,18 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
         (
             "[smoke-matrix] review render diff: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch"
+        ),
+        (
+            "[smoke-matrix] review fix-check JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json"
+        ),
+        (
+            "[smoke-matrix] review fix-repair JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json"
+        ),
+        (
+            "[smoke-matrix] review fix-post-check JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json"
         ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=1, elapsed_seconds=2.5),
     ]
