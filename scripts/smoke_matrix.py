@@ -22,6 +22,9 @@ LOCAL_BUNDLE_NAMES = list(CLI_SPEC.default_target_names())
 ALL_BUNDLE_NAMES = list(CLI_SPEC.resolve_target_names("all"))
 SUPPRESSED_NESTED_SUMMARY_PREFIXES = NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES
 LIVE_INCLUSIVE_STANDALONE_TARGET_NAME = "standalone-all"
+DOCS_REVIEW_TARGET_NAME = "docs-review"
+DOCS_REVIEW_OUTPUT_DIR_FLAG = "--output-dir"
+DOCS_REVIEW_BUNDLE_INDEX_FLAG = "--bundle-index-path"
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
 
@@ -34,6 +37,28 @@ def _emit_matrix_line(message: str, *, stream) -> None:
 def _should_emit_bundle_output_line(line: str) -> bool:
     normalized_line = line.rstrip("\n")
     return not any(normalized_line.startswith(prefix) for prefix in SUPPRESSED_NESTED_SUMMARY_PREFIXES)
+
+
+def _extract_target_arg_path(target: SmokeScriptTarget, flag_name: str) -> str | None:
+    args = target.args
+    for index, arg in enumerate(args[:-1]):
+        if arg == flag_name:
+            return args[index + 1]
+    return None
+
+
+def _docs_review_artifact_location_message(target: SmokeScriptTarget) -> str | None:
+    if target.name != DOCS_REVIEW_TARGET_NAME:
+        return None
+    output_dir = _extract_target_arg_path(target, DOCS_REVIEW_OUTPUT_DIR_FLAG)
+    bundle_index_path = _extract_target_arg_path(target, DOCS_REVIEW_BUNDLE_INDEX_FLAG)
+    if output_dir and bundle_index_path:
+        return f"review artifacts: {output_dir} (index: {bundle_index_path})"
+    if bundle_index_path:
+        return f"review artifact index: {bundle_index_path}"
+    if output_dir:
+        return f"review artifacts: {output_dir}"
+    return None
 
 
 def _live_inclusive_failure_hint(target: SmokeScriptTarget, observed_lines: Sequence[str]) -> str | None:
@@ -83,6 +108,9 @@ def run_smoke_matrix(
                 SMOKE_MATRIX_WRAPPER.failed_message(item_name=target.display_label, elapsed_seconds=elapsed),
                 stream=stderr,
             )
+            artifact_location_message = _docs_review_artifact_location_message(target)
+            if artifact_location_message is not None:
+                _emit_matrix_line(artifact_location_message, stream=stderr)
             hint = _live_inclusive_failure_hint(target, observed_lines)
             if hint is not None:
                 _emit_matrix_line(hint, stream=stderr)
@@ -101,6 +129,9 @@ def run_smoke_matrix(
             SMOKE_MATRIX_WRAPPER.passed_message(item_name=target.display_label, elapsed_seconds=elapsed),
             stream=stdout,
         )
+        artifact_location_message = _docs_review_artifact_location_message(target)
+        if artifact_location_message is not None:
+            _emit_matrix_line(artifact_location_message, stream=stdout)
 
     total_elapsed = perf_counter() - total_started_at
     _emit_matrix_line(

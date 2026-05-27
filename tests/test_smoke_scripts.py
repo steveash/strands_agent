@@ -2010,6 +2010,37 @@ def test_smoke_matrix_review_adds_docs_review_lane(monkeypatch) -> None:
     }
 
 
+def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
+    perf_values = iter([0.0, 1.0, 1.2, 1.4, 1.8, 2.0, 2.5, 2.6, 3.4, 4.0])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    with redirect_stdout(stdout):
+        exit_code = smoke_matrix.main(["review"])
+
+    assert exit_code == 0
+    assert stdout.getvalue().splitlines() == [
+        summary_metadata.running_line(item_name="standalone"),
+        summary_metadata.passed_line(item_name="standalone", elapsed_seconds=0.2),
+        summary_metadata.running_line(item_name="triage"),
+        summary_metadata.passed_line(item_name="triage", elapsed_seconds=0.4),
+        summary_metadata.running_line(item_name="recovery"),
+        summary_metadata.passed_line(item_name="recovery", elapsed_seconds=0.5),
+        summary_metadata.running_line(item_name="docs-review"),
+        summary_metadata.passed_line(item_name="docs-review", elapsed_seconds=0.8),
+        (
+            "[smoke-matrix] review artifacts: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
+            "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json)"
+        ),
+        summary_metadata.success_summary_line(passed_count=4, total_count=4, elapsed_seconds=4.0),
+    ]
+
+
 @pytest.mark.parametrize(
     ("argv", "expected_names", "expected_args"),
     [
@@ -2179,6 +2210,32 @@ def test_smoke_matrix_emits_failed_bundle_summary_and_stops(monkeypatch) -> None
     assert stderr.getvalue().splitlines() == [
         summary_metadata.failed_line(item_name="triage", elapsed_seconds=0.5),
         summary_metadata.failure_summary_line(passed_count=1, total_count=3, elapsed_seconds=2.5),
+    ]
+
+
+def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 1)
+    perf_values = iter([0.0, 1.0, 1.6, 2.5])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main(["docs-review"])
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="docs-review")]
+    assert stderr.getvalue().splitlines() == [
+        summary_metadata.failed_line(item_name="docs-review", elapsed_seconds=0.6),
+        (
+            "[smoke-matrix] review artifacts: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
+            "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json)"
+        ),
+        summary_metadata.failure_summary_line(passed_count=0, total_count=1, elapsed_seconds=2.5),
     ]
 
 
