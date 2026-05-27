@@ -676,6 +676,29 @@ SESSION_RECOVERY_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     ),
 )
 
+SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review"
+SMOKE_MATRIX_REVIEW_BUNDLE_INDEX_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/index.json"
+SMOKE_MATRIX_REVIEW_DRIFTED_README_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/README-drifted.md"
+SMOKE_MATRIX_REVIEW_RENDER_MANIFEST_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/render-manifest.json"
+SMOKE_MATRIX_REVIEW_RENDER_DIFF_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/render-review.patch"
+SMOKE_MATRIX_REVIEW_FIX_CHECK_JSON_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/fix-check.json"
+SMOKE_MATRIX_REVIEW_FIX_REPAIR_JSON_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/fix-repair.json"
+SMOKE_MATRIX_REVIEW_FIX_POST_CHECK_JSON_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/fix-post-check.json"
+SMOKE_MATRIX_DOCS_REVIEW_ARGS = (
+    "all",
+    "--output-dir",
+    SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT,
+    "--bundle-index-path",
+    SMOKE_MATRIX_REVIEW_BUNDLE_INDEX_PATH,
+    "--fix-check-json-path",
+    SMOKE_MATRIX_REVIEW_FIX_CHECK_JSON_PATH,
+    "--fix-repair-json-path",
+    SMOKE_MATRIX_REVIEW_FIX_REPAIR_JSON_PATH,
+    "--fix-post-check-json-path",
+    SMOKE_MATRIX_REVIEW_FIX_POST_CHECK_JSON_PATH,
+)
+
+
 SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
     script_name="smoke_matrix",
     description=(
@@ -702,13 +725,7 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate(
             "docs-review",
             "smoke_cli_docs_artifacts_smoke.py",
-            args=(
-                "all",
-                "--output-dir",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
-                "--bundle-index-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
-            ),
+            args=SMOKE_MATRIX_DOCS_REVIEW_ARGS,
             display_name="docs-review",
         ),
     ),

@@ -129,14 +129,14 @@ What exists now:
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- added `Ctrl+T` and `Ctrl+R` timeline controls so the event pane can hide verbose detail lines and raw event payloads when Steve wants a compact summary-first view,
-- persisted those timeline display preferences in `session_state.json` so compact-vs-expanded inspection context restores cleanly after a restart or session reopen,
-- extended timeline/session-state smoke coverage plus TUI/unit tests to prove both the toggle behavior and restart-safe restoration path.
+- taught the shared `docs-review` smoke-matrix target contract to pass explicit `--fix-check-json-path`, `--fix-repair-json-path`, and `--fix-post-check-json-path` arguments instead of relying only on `--output-dir`-derived defaults,
+- centralized the default `smoke-matrix-review` artifact paths in the shared smoke-runner metadata so the review lane's persisted CLI contract and emitted artifact hints stay aligned,
+- and extended smoke-runner/smoke-matrix regression coverage so both review alias selection and single-target docs-review dispatch assert the explicit fix-side JSON paths.
 
 Why this matters now:
-- Strands learning gets easier when Steve can flip between a terse operator view and a fully expanded event/debug view without leaving the same session,
-- restart-safe observability preferences make session replay feel more like a workstation and less like a stateless demo,
-- and the fake/runtime smoke paths now exercise one more concrete seam where Strands events, local TUI state, and persistence have to line up cleanly.
+- the review lane now preserves its fix-side JSON artifact contract directly in the launched child command, not just in the post-run hint lines,
+- future README/CI review automation can inspect the docs-review target args and know exactly where each fix/check payload will land,
+- and the smoke-matrix wrapper now locks down one more cross-script seam where shared metadata, emitted hints, and persisted artifact paths need to agree.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, event-timeline summary formatting/filtering, and smoke-doc artifact/report generation,
@@ -146,10 +146,9 @@ How we know the prototype is working right now:
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
 
 Current evidence:
-- automated tests: `.venv/bin/pytest -q` => `381 passed in 49.91s`,
-- focused timeline/app/smoke regression: `.venv/bin/pytest -q tests/test_timeline.py tests/test_app.py::test_timeline_toggle_shortcuts_hide_detail_and_raw_data_and_persist_state tests/test_app.py::test_app_restores_timeline_detail_and_raw_view_from_session_state tests/test_smoke_scripts.py::test_timeline_smoke_emits_runtime_and_persistence_summary_checks tests/test_smoke_scripts.py::test_session_state_smoke_emits_mixed_detail_and_boolean_lines` => `12 passed in 4.76s`,
-- timeline walkthrough verification: `.venv/bin/python scripts/timeline_smoke.py` reports `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, `timeline_filter_counts= True`, and `timeline_compact_toggle= True`,
-- restart-safe timeline-view verification: `.venv/bin/python scripts/session_state_smoke.py` reports `session_state_restored_event_filter= True`, `session_state_restored_view= True`, `session_state_restored_draft= True`, `session_state_restored_timeline_view= True`, and `session_state_latest_visible_event= True`.
+- targeted smoke-runner/smoke-matrix regression: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `130 passed in 16.41s`,
+- review-lane runnable verification: `.venv/bin/python scripts/smoke_matrix.py review` => emitted direct bundle-root/index plus `README-drifted.md`, `render-manifest.json`, `render-review.patch`, `fix-check.json`, `fix-repair.json`, and `fix-post-check.json` artifact lines before `[smoke-matrix] summary: 4/4 bundles passed in 36.62s`,
+- full automated tests: `.venv/bin/pytest -q` => `382 passed in 50.06s`.
 
 ## First five phases
 

@@ -574,6 +574,21 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
     assert [target.name for target in spec.resolve_targets(script_dir=tmp_path, requested_target_name="standalone")] == [
         "standalone-local"
     ]
+    docs_review_targets = spec.resolve_targets(script_dir=tmp_path, requested_target_name="docs-review")
+    assert [target.name for target in docs_review_targets] == ["docs-review"]
+    assert docs_review_targets[0].args == (
+        "all",
+        "--output-dir",
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+        "--bundle-index-path",
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
+        "--fix-check-json-path",
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json",
+        "--fix-repair-json-path",
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json",
+        "--fix-post-check-json-path",
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json",
+    )
 
     with pytest.raises(ValueError, match="unknown smoke wrapper cli spec 'missing_smoke'"):
         smoke_wrapper_cli_spec("missing_smoke")
