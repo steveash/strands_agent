@@ -25,6 +25,9 @@ LIVE_INCLUSIVE_STANDALONE_TARGET_NAME = "standalone-all"
 DOCS_REVIEW_TARGET_NAME = "docs-review"
 DOCS_REVIEW_OUTPUT_DIR_FLAG = "--output-dir"
 DOCS_REVIEW_BUNDLE_INDEX_FLAG = "--bundle-index-path"
+DOCS_REVIEW_DRIFTED_README_FLAG = "--drifted-readme-path"
+DOCS_REVIEW_RENDER_MANIFEST_FLAG = "--render-manifest-path"
+DOCS_REVIEW_RENDER_DIFF_FLAG = "--render-diff-path"
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
 
@@ -47,18 +50,42 @@ def _extract_target_arg_path(target: SmokeScriptTarget, flag_name: str) -> str |
     return None
 
 
-def _docs_review_artifact_location_message(target: SmokeScriptTarget) -> str | None:
+def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[str, ...]:
     if target.name != DOCS_REVIEW_TARGET_NAME:
-        return None
+        return ()
     output_dir = _extract_target_arg_path(target, DOCS_REVIEW_OUTPUT_DIR_FLAG)
     bundle_index_path = _extract_target_arg_path(target, DOCS_REVIEW_BUNDLE_INDEX_FLAG)
-    if output_dir and bundle_index_path:
-        return f"review artifacts: {output_dir} (index: {bundle_index_path})"
-    if bundle_index_path:
-        return f"review artifact index: {bundle_index_path}"
+
+    artifact_root: Path | None = None
     if output_dir:
-        return f"review artifacts: {output_dir}"
-    return None
+        artifact_root = Path(output_dir)
+    elif bundle_index_path:
+        artifact_root = Path(bundle_index_path).parent
+
+    drifted_readme_path = _extract_target_arg_path(target, DOCS_REVIEW_DRIFTED_README_FLAG)
+    render_manifest_path = _extract_target_arg_path(target, DOCS_REVIEW_RENDER_MANIFEST_FLAG)
+    render_diff_path = _extract_target_arg_path(target, DOCS_REVIEW_RENDER_DIFF_FLAG)
+
+    if artifact_root is not None:
+        drifted_readme_path = drifted_readme_path or str(artifact_root / "README-drifted.md")
+        render_manifest_path = render_manifest_path or str(artifact_root / "render-manifest.json")
+        render_diff_path = render_diff_path or str(artifact_root / "render-review.patch")
+
+    messages: list[str] = []
+    if output_dir and bundle_index_path:
+        messages.append(f"review artifacts: {output_dir} (index: {bundle_index_path})")
+    elif bundle_index_path:
+        messages.append(f"review artifact index: {bundle_index_path}")
+    elif output_dir:
+        messages.append(f"review artifacts: {output_dir}")
+
+    if drifted_readme_path:
+        messages.append(f"review drifted README: {drifted_readme_path}")
+    if render_manifest_path:
+        messages.append(f"review render manifest: {render_manifest_path}")
+    if render_diff_path:
+        messages.append(f"review render diff: {render_diff_path}")
+    return tuple(messages)
 
 
 def _live_inclusive_failure_hint(target: SmokeScriptTarget, observed_lines: Sequence[str]) -> str | None:
@@ -108,8 +135,7 @@ def run_smoke_matrix(
                 SMOKE_MATRIX_WRAPPER.failed_message(item_name=target.display_label, elapsed_seconds=elapsed),
                 stream=stderr,
             )
-            artifact_location_message = _docs_review_artifact_location_message(target)
-            if artifact_location_message is not None:
+            for artifact_location_message in _docs_review_artifact_location_messages(target):
                 _emit_matrix_line(artifact_location_message, stream=stderr)
             hint = _live_inclusive_failure_hint(target, observed_lines)
             if hint is not None:
@@ -129,8 +155,7 @@ def run_smoke_matrix(
             SMOKE_MATRIX_WRAPPER.passed_message(item_name=target.display_label, elapsed_seconds=elapsed),
             stream=stdout,
         )
-        artifact_location_message = _docs_review_artifact_location_message(target)
-        if artifact_location_message is not None:
+        for artifact_location_message in _docs_review_artifact_location_messages(target):
             _emit_matrix_line(artifact_location_message, stream=stdout)
 
     total_elapsed = perf_counter() - total_started_at

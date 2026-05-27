@@ -2050,6 +2050,18 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
             "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json)"
         ),
+        (
+            "[smoke-matrix] review drifted README: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
+        ),
+        (
+            "[smoke-matrix] review render manifest: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json"
+        ),
+        (
+            "[smoke-matrix] review render diff: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch"
+        ),
         summary_metadata.success_summary_line(passed_count=4, total_count=4, elapsed_seconds=4.0),
     ]
 
@@ -2094,6 +2106,36 @@ def test_smoke_matrix_single_bundle_target_selection(monkeypatch, argv, expected
         "names": expected_names,
         "args": expected_args,
     }
+
+
+def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_paths() -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    target = smoke_matrix.SmokeScriptTarget(
+        name="docs-review",
+        script_path=SCRIPT_DIR / "smoke_cli_docs_artifacts_smoke.py",
+        args=(
+            "all",
+            "--output-dir",
+            "artifacts/review",
+            "--bundle-index-path",
+            "artifacts/review/index.json",
+            "--drifted-readme-path",
+            "artifacts/custom/README-review.md",
+            "--render-manifest-path",
+            "artifacts/custom/render.json",
+            "--render-diff-path",
+            "artifacts/custom/review.patch",
+        ),
+        display_name="docs-review",
+    )
+
+    assert smoke_matrix._docs_review_artifact_location_messages(target) == (
+        "review artifacts: artifacts/review (index: artifacts/review/index.json)",
+        "review drifted README: artifacts/custom/README-review.md",
+        "review render manifest: artifacts/custom/render.json",
+        "review render diff: artifacts/custom/review.patch",
+    )
+
 
 
 def test_smoke_matrix_emits_bundle_timing_summary(monkeypatch) -> None:
@@ -2247,6 +2289,18 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
             "[smoke-matrix] review artifacts: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
             "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json)"
+        ),
+        (
+            "[smoke-matrix] review drifted README: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
+        ),
+        (
+            "[smoke-matrix] review render manifest: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json"
+        ),
+        (
+            "[smoke-matrix] review render diff: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch"
         ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=1, elapsed_seconds=2.5),
     ]
