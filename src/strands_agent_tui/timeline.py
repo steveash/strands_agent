@@ -5,7 +5,10 @@ from collections.abc import Sequence
 from strands_agent_tui.runtime import RuntimeEvent
 
 EVENT_FILTER_MODES = frozenset({"all", "runtime", "tool", "failure", "persistence", "intervention"})
-TIMELINE_KEYS_LINE = "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence, F12 intervention"
+TIMELINE_KEYS_LINE = (
+    "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence, F12 intervention, "
+    "Ctrl+T detail, Ctrl+R raw"
+)
 
 
 def filter_events(events: Sequence[RuntimeEvent], event_filter: str) -> list[RuntimeEvent]:
@@ -19,6 +22,8 @@ def render_event_timeline(
     *,
     event_filter: str = "all",
     max_events: int = 12,
+    show_details: bool = True,
+    show_data: bool = True,
 ) -> str:
     if not events:
         return (
@@ -31,6 +36,7 @@ def render_event_timeline(
     lines = [
         "Event Timeline",
         f"Filter: {event_filter} ({len(filtered)}/{len(events)} events)",
+        f"View: detail {'on' if show_details else 'off'} | raw {'on' if show_data else 'off'}",
         TIMELINE_KEYS_LINE,
         "",
     ]
@@ -42,8 +48,9 @@ def render_event_timeline(
         summary = summarize_event(event)
         if summary:
             lines.append(f"   summary: {summary}")
-        lines.append(f"   {event.detail}")
-        if event.data:
+        if show_details:
+            lines.append(f"   {event.detail}")
+        if show_data and event.data:
             compact_data = ", ".join(f"{key}={value!r}" for key, value in sorted(event.data.items()))
             lines.append(f"   data: {compact_data}")
     return "\n".join(lines)
@@ -179,6 +186,9 @@ def _summarize_persistence_event(event: RuntimeEvent) -> str:
         event_filter = _text(data.get("event_filter"))
         if event_filter and event_filter != "all":
             parts.append(f"filter {event_filter}")
+        detail_state = _timeline_state_label(data)
+        if detail_state != "detail on | raw on":
+            parts.append(detail_state)
         draft_length = _int_value(data.get("draft_prompt_length"))
         if draft_length:
             parts.append(f"draft {draft_length}c")
@@ -199,6 +209,9 @@ def _summarize_persistence_event(event: RuntimeEvent) -> str:
         event_filter = _text(data.get("event_filter"))
         if event_filter:
             parts.append(f"filter {event_filter}")
+        detail_state = _timeline_state_label(data)
+        if detail_state != "detail on | raw on":
+            parts.append(detail_state)
         view = _text(data.get("view"))
         if view:
             parts.append(view)
@@ -257,6 +270,12 @@ def _detail_preview(detail: str, limit: int = 80) -> str:
 def _text(value: object) -> str:
     text = str(value).strip() if value is not None else ""
     return text
+
+
+def _timeline_state_label(data: dict[str, object]) -> str:
+    detail_on = bool(data.get("show_event_details", True))
+    raw_on = bool(data.get("show_event_data", True))
+    return f"detail {'on' if detail_on else 'off'} | raw {'on' if raw_on else 'off'}"
 
 
 def _int_value(value: object) -> int | None:

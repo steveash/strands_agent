@@ -334,20 +334,24 @@ def test_timeline_smoke_emits_runtime_and_persistence_summary_checks(monkeypatch
     assert exit_code == 0
     _assert_mixed_smoke_result_contract(
         lines,
-        detail_names=["runtime_timeline_view", "persistence_timeline_view"],
+        detail_names=["runtime_timeline_view", "persistence_timeline_view", "compact_timeline_view"],
         check_names=[
             "timeline_runtime_summary",
             "timeline_persistence_summary",
             "timeline_filter_counts",
+            "timeline_compact_toggle",
         ],
     )
     assert "timeline_runtime_summary= True" in lines
     assert "timeline_persistence_summary= True" in lines
     assert "timeline_filter_counts= True" in lines
+    assert "timeline_compact_toggle= True" in lines
     assert "runtime_timeline_view: Event Timeline" in text
     assert "summary: response fake-strands/fake | pending 0" in text
     assert "persistence_timeline_view: Event Timeline" in text
     assert "summary: session state saved | pending 0 | filter runtime | draft 14c" in text
+    assert "compact_timeline_view: Event Timeline" in text
+    assert "View: detail off | raw off" in text
 
 
 def test_approval_restart_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:
@@ -391,14 +395,23 @@ def test_session_state_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -
     assert exit_code == 0
     _assert_mixed_smoke_result_contract(
         lines,
-        detail_names=["restored_event_filter", "restored_view", "restored_draft", "latest_visible_event"],
+        detail_names=[
+            "restored_event_filter",
+            "restored_view",
+            "restored_draft",
+            "restored_timeline_view",
+            "latest_visible_event",
+        ],
         check_names=[
             "session_state_restored_event_filter",
             "session_state_restored_view",
             "session_state_restored_draft",
+            "session_state_restored_timeline_view",
             "session_state_latest_visible_event",
         ],
     )
+    assert "restored_timeline_view: detail off / raw off" in lines
+    assert "session_state_restored_timeline_view= True" in lines
 
 
 def test_live_restore_smoke_wrapper_preserves_detail_lines_and_success_exit(monkeypatch) -> None:

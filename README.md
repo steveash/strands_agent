@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views, explicit stale-cutoff hints in picker/switcher legends and prompts, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, and compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views, explicit stale-cutoff hints in picker/switcher legends and prompts, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts, and operator-controlled timeline detail/raw toggles whose compact-vs-expanded state now survives a TUI restart.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -97,13 +97,14 @@ What exists now:
 - approval lifecycle events that now carry shared `steering_stage`, `approval_tool_family`, and synthetic continuation metadata so fake/live approval recovery can be inspected with the same mental model,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, compact human-readable summary lines, and raw structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence/intervention views,
+- keyboard-driven `Ctrl+T` detail and `Ctrl+R` raw-data toggles so the event pane can switch between compact summary-only and fully expanded observability views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
 - structured event payloads with timestamps and metadata for both fake and live runtime paths,
 - explicit `artifact_saved` persistence events emitted by the app after each turn is written,
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
-- restart-safe restoration of event-filter, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
+- restart-safe restoration of event-filter, timeline detail/raw view, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
 - launch-time CLI picker triage controls for all/pending/denied/restore/restored-approval/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting, including `--pick-filter` / `--pick-sort` defaults and interactive `A` / `P` / `D` / `R` / `V` / `O` / `Q` / `X` / `U` / `T` / `W` / `E` / `G` / `H` / `I` / `Y` / `S` toggles,
 - an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline,
@@ -128,13 +129,14 @@ What exists now:
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- extended `scripts/smoke_cli_docs_artifacts_smoke.py` with `--bundle-index-path` so preserved artifact runs can write one machine-readable JSON bundle index alongside the drifted README, rendered sections, manifest, diff, and fix-side reports,
-- kept the new bundle-index contract documented in the README/operator shortcuts and added regression coverage for both default and explicit bundle-index output paths.
+- added `Ctrl+T` and `Ctrl+R` timeline controls so the event pane can hide verbose detail lines and raw event payloads when Steve wants a compact summary-first view,
+- persisted those timeline display preferences in `session_state.json` so compact-vs-expanded inspection context restores cleanly after a restart or session reopen,
+- extended timeline/session-state smoke coverage plus TUI/unit tests to prove both the toggle behavior and restart-safe restoration path.
 
 Why this matters now:
-- CI or follow-up tooling can ingest one JSON file instead of scraping console lines or independently discovering every artifact path,
-- preserved review bundles stay easier to archive, diff, and hand off because the index captures both emitted detail lines and pass/fail checks in one place,
-- and the smoke-doc maintenance workflow stays deterministic because the script still synthesizes its own drift before proving render/fix repair behavior end to end.
+- Strands learning gets easier when Steve can flip between a terse operator view and a fully expanded event/debug view without leaving the same session,
+- restart-safe observability preferences make session replay feel more like a workstation and less like a stateless demo,
+- and the fake/runtime smoke paths now exercise one more concrete seam where Strands events, local TUI state, and persistence have to line up cleanly.
 
 How we know the prototype is working right now:
 - unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, event-timeline summary formatting/filtering, and smoke-doc artifact/report generation,
@@ -144,10 +146,10 @@ How we know the prototype is working right now:
 - runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
 
 Current evidence:
-- automated tests: `.venv/bin/pytest -q` => `367 passed in 45.75s`,
-- focused smoke-doc coverage: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `118 passed in 13.73s`,
-- runnable artifact-contract verification: `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py all --output-dir /tmp/strands-smoke-cli-docs-artifacts-all --bundle-index-path /tmp/strands-smoke-cli-docs-artifacts-all/index.json` reported `bundle_index_written= True`, `bundle_index_payload= True`, and preserved the all-wrapper drift/render/fix review bundle plus a CI-friendly JSON index,
-- timeline walkthrough verification: `.venv/bin/python scripts/timeline_smoke.py` still reports `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, and `timeline_filter_counts= True`.
+- automated tests: `.venv/bin/pytest -q` => `381 passed in 49.91s`,
+- focused timeline/app/smoke regression: `.venv/bin/pytest -q tests/test_timeline.py tests/test_app.py::test_timeline_toggle_shortcuts_hide_detail_and_raw_data_and_persist_state tests/test_app.py::test_app_restores_timeline_detail_and_raw_view_from_session_state tests/test_smoke_scripts.py::test_timeline_smoke_emits_runtime_and_persistence_summary_checks tests/test_smoke_scripts.py::test_session_state_smoke_emits_mixed_detail_and_boolean_lines` => `12 passed in 4.76s`,
+- timeline walkthrough verification: `.venv/bin/python scripts/timeline_smoke.py` reports `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, `timeline_filter_counts= True`, and `timeline_compact_toggle= True`,
+- restart-safe timeline-view verification: `.venv/bin/python scripts/session_state_smoke.py` reports `session_state_restored_event_filter= True`, `session_state_restored_view= True`, `session_state_restored_draft= True`, `session_state_restored_timeline_view= True`, and `session_state_latest_visible_event= True`.
 
 ## First five phases
 
@@ -585,8 +587,12 @@ Inside the TUI, use these shortcuts to focus the event pane:
 - `F4` failure events
 - `F5` persistence events
 - `F12` intervention / approval events
+- `Ctrl+T` toggle event detail lines on/off
+- `Ctrl+R` toggle raw structured event data on/off
 
 Each event row now also includes a compact `summary:` line when the formatter can derive something higher-signal than the raw detail string, for example approval queue position/source, resumed-after-approval state, shell command previews, or artifact/session-state save context.
+
+The current detail/raw toggle state is shown at the top of the pane and is also persisted in `session_state.json`, so a restart can reopen the same compact or expanded timeline view.
 
 This is intentionally simple, but it already makes it much easier to inspect Strands loop behavior without losing the complete turn transcript.
 
@@ -724,7 +730,7 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- decide whether the event timeline should add collapsible/raw-detail toggles now that compact `summary:` lines exist
+- decide whether the compact timeline view should eventually support per-event expansion instead of only global detail/raw toggles
 - decide whether smoke-doc artifact bundles should fold into `scripts/smoke_matrix.py` as an optional review lane
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists

@@ -62,6 +62,8 @@ class TurnArtifact:
 class SessionState:
     pending_approvals: list[ApprovalRequest] = field(default_factory=list)
     event_filter: str = "all"
+    show_event_details: bool = True
+    show_event_data: bool = True
     history_focus_index: int | None = None
     draft_prompt: str = ""
     session_switcher_active: bool = False
@@ -70,7 +72,7 @@ class SessionState:
     session_switcher_sort_mode: str = "recent"
     session_switcher_page_index: int = 0
     updated_at: str | None = None
-    schema_version: str = "strands-agent/session-state-v5"
+    schema_version: str = "strands-agent/session-state-v6"
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -78,6 +80,8 @@ class SessionState:
             "updated_at": self.updated_at or datetime.now(UTC).isoformat(),
             "pending_approvals": [approval.as_dict() for approval in self.pending_approvals],
             "event_filter": self.event_filter,
+            "show_event_details": self.show_event_details,
+            "show_event_data": self.show_event_data,
             "history_focus_index": self.history_focus_index,
             "draft_prompt": self.draft_prompt,
             "session_switcher_active": self.session_switcher_active,
@@ -101,6 +105,8 @@ class SessionState:
                 ApprovalRequest.from_dict(item) for item in pending_payload if isinstance(item, dict)
             ],
             event_filter=str(payload.get("event_filter", "all") or "all"),
+            show_event_details=bool(payload.get("show_event_details", True)),
+            show_event_data=bool(payload.get("show_event_data", True)),
             history_focus_index=history_focus_index,
             draft_prompt=str(payload.get("draft_prompt", "") or ""),
             session_switcher_active=bool(payload.get("session_switcher_active", False)),
@@ -109,13 +115,15 @@ class SessionState:
             session_switcher_sort_mode=str(payload.get("session_switcher_sort_mode", "recent") or "recent"),
             session_switcher_page_index=page_index,
             updated_at=str(payload.get("updated_at")) if payload.get("updated_at") else None,
-            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v5")),
+            schema_version=str(payload.get("schema_version", "strands-agent/session-state-v6")),
         )
 
     def is_default(self) -> bool:
         return (
             not self.pending_approvals
             and self.event_filter == "all"
+            and self.show_event_details is True
+            and self.show_event_data is True
             and self.history_focus_index is None
             and not self.draft_prompt
             and not self.session_switcher_active

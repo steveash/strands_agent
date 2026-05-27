@@ -436,6 +436,40 @@ async def test_event_filter_shortcuts_limit_visible_categories(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
+async def test_timeline_toggle_shortcuts_hide_detail_and_raw_data_and_persist_state(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="timeline-toggle-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("l", "i", "s", "t", " ", "f", "i", "l", "e", "s", "enter")
+        await pilot.pause()
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+
+        events = str(app.query_one("#events").render())
+        stored_state = SessionArtifactStore(tmp_path, session_id="timeline-toggle-session").load_session_state()
+
+        assert "View: detail off | raw off" in events
+        assert "summary: tool list_files -> .: README.md" in events
+        assert "\n   Deterministic fake tool event for workspace inspection." not in events
+        assert "data: result_preview='.: README.md'" not in events
+        assert stored_state is not None
+        assert stored_state.show_event_details is False
+        assert stored_state.show_event_data is False
+
+
+@pytest.mark.asyncio
 async def test_app_renders_pending_approval_banner_for_risky_mutation(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="confirm-session")
     app = StrandsAgentApp(
@@ -868,6 +902,71 @@ async def test_app_restores_event_filter_and_replay_focus_from_session_state(tmp
         assert "View: replay 3/4" in status
         assert "Filter: tool (4/5 events)" in events
         assert any(event.kind == "session_view_restored" for event in second_app.events)
+
+
+@pytest.mark.asyncio
+async def test_app_restores_timeline_detail_and_raw_view_from_session_state(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="timeline-restore-session")
+    for index in range(1, 3):
+        artifact_store.append_turn(
+            TurnArtifact(
+                prompt=f"prompt {index}",
+                response=f"response {index}",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "tool_finished",
+                        "list_files",
+                        f"listed files {index}",
+                        data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+    first_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="timeline-restore-session",
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with first_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+
+    second_app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="timeline-restore-session",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="timeline-restore-session"),
+    )
+
+    async with second_app.run_test() as pilot:
+        await pilot.pause()
+
+        events = str(second_app.query_one("#events").render())
+
+        assert second_app.show_event_details is False
+        assert second_app.show_event_data is False
+        assert "View: detail off | raw off" in events
+        assert "summary: session view restored | filter all | detail off | raw off" in events
+        assert "data: tool_name='list_files'" not in events
 
 
 @pytest.mark.asyncio

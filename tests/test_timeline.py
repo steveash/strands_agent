@@ -58,6 +58,22 @@ def test_summarize_event_marks_approved_shell_tool_resumes() -> None:
     assert summarize_event(event) == "shell test pytest -q -> 2 passed | approved | resumed"
 
 
+def test_render_event_timeline_hides_detail_and_raw_sections_when_toggled_off() -> None:
+    event = runtime_event(
+        kind="tool_finished",
+        title="list_files",
+        detail="Returned a simulated workspace listing without touching disk.",
+        data={"tool_name": "list_files", "result_preview": ".: README.md", "source": "fake_runtime"},
+    )
+
+    rendered = render_event_timeline([event], show_details=False, show_data=False)
+
+    assert "View: detail off | raw off" in rendered
+    assert "summary: tool list_files -> .: README.md" in rendered
+    assert "\n   Returned a simulated workspace listing without touching disk." not in rendered
+    assert "data: result_preview='.: README.md'" not in rendered
+
+
 def test_render_event_timeline_preserves_empty_state() -> None:
     rendered = render_event_timeline([], event_filter="intervention")
 
@@ -113,6 +129,13 @@ def test_summarize_event_compacts_persistence_state() -> None:
         detail="Persisted the current event filter and draft prompt.",
         data={"pending_count": 0, "event_filter": "runtime", "draft_prompt_length": 14},
     )
+    toggled_state_event = runtime_event(
+        kind="session_view_restored",
+        title="Session view restored",
+        detail="Restored the saved timeline state.",
+        data={"event_filter": "tool", "show_event_details": False, "show_event_data": False, "view": "replay 3/4"},
+    )
 
     assert summarize_event(artifact_event) == "artifact saved | session session-1 | pending no"
     assert summarize_event(state_event) == "session state saved | pending 0 | filter runtime | draft 14c"
+    assert summarize_event(toggled_state_event) == "session view restored | filter tool | detail off | raw off | replay 3/4"

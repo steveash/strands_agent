@@ -39,6 +39,7 @@ def main() -> int:
     full_timeline = render_event_timeline(events, event_filter="all")
     runtime_timeline = render_event_timeline(events, event_filter="runtime")
     persistence_timeline = render_event_timeline(events, event_filter="persistence")
+    compact_timeline = render_event_timeline(events, event_filter="all", show_details=False, show_data=False)
 
     print("FULL TIMELINE")
     print(full_timeline)
@@ -46,6 +47,8 @@ def main() -> int:
     print(runtime_timeline)
     print("\nPERSISTENCE FILTER")
     print(persistence_timeline)
+    print("\nCOMPACT VIEW")
+    print(compact_timeline)
 
     return emit_smoke_results(
         [
@@ -64,8 +67,16 @@ def main() -> int:
                 "Filter: runtime (2/4 events)" in runtime_timeline
                 and "Filter: persistence (2/4 events)" in persistence_timeline,
             ),
+            (
+                "timeline_compact_toggle",
+                "View: detail off | raw off" in compact_timeline
+                and "summary: response fake-strands/fake | pending 0" in compact_timeline
+                and "Produced a deterministic fake-runtime answer" not in compact_timeline
+                and "data:" not in compact_timeline,
+            ),
             ("runtime_timeline_view", runtime_timeline),
             ("persistence_timeline_view", persistence_timeline),
+            ("compact_timeline_view", compact_timeline),
         ]
     )
 

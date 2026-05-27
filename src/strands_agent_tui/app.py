@@ -63,6 +63,8 @@ class StrandsAgentApp(App):
         Binding("f9", "approve_pending", "Approve pending"),
         Binding("f10", "deny_pending", "Deny pending"),
         Binding("f11", "toggle_session_switcher", "Switch session"),
+        Binding("ctrl+t", "toggle_event_details", "Toggle event details"),
+        Binding("ctrl+r", "toggle_event_data", "Toggle raw event data"),
     ]
 
     CSS = """
@@ -130,6 +132,8 @@ class StrandsAgentApp(App):
         self.history: list[tuple[str, str]] = []
         self.events: list[RuntimeEvent] = []
         self.event_filter = "all"
+        self.show_event_details = True
+        self.show_event_data = True
         self.history_focus_index: int | None = None
         self.draft_prompt = ""
         self.session_switcher_active = False
@@ -351,6 +355,8 @@ class StrandsAgentApp(App):
         self.config.session_id = artifact_store.session_id
         self.history = []
         self.events = []
+        self.show_event_details = True
+        self.show_event_data = True
         self.history_focus_index = None
         self.draft_prompt = ""
         self.pending_approval = None
@@ -373,6 +379,8 @@ class StrandsAgentApp(App):
 
         session_state = self.artifact_store.load_session_state() or SessionState()
         self.event_filter = self._sanitize_event_filter(session_state.event_filter)
+        self.show_event_details = session_state.show_event_details
+        self.show_event_data = session_state.show_event_data
         self.history_focus_index = self._normalize_history_focus_index(session_state.history_focus_index)
         self.draft_prompt = session_state.draft_prompt
 
@@ -395,12 +403,17 @@ class StrandsAgentApp(App):
             )
         if (
             session_state.event_filter != "all"
+            or session_state.show_event_details is not True
+            or session_state.show_event_data is not True
             or session_state.history_focus_index is not None
             or session_state.draft_prompt
         ):
             restored_view = self.history_view_label()
             restored_bits = [
-                f"Restored event filter `{self.event_filter}` and view `{restored_view}` from session state."
+                (
+                    f"Restored event filter `{self.event_filter}`, timeline detail/raw `"
+                    f"{self.timeline_view_label()}`, and view `{restored_view}` from session state."
+                )
             ]
             if session_state.draft_prompt:
                 restored_bits.append(f"Draft prompt restored ({len(session_state.draft_prompt)} chars).")
@@ -414,6 +427,8 @@ class StrandsAgentApp(App):
                         "event_filter": self.event_filter,
                         "history_focus_index": self.history_focus_index,
                         "view": restored_view,
+                        "show_event_details": self.show_event_details,
+                        "show_event_data": self.show_event_data,
                         "draft_prompt_length": len(session_state.draft_prompt),
                     },
                 )
@@ -617,13 +632,28 @@ class StrandsAgentApp(App):
         return "\n".join(lines)
 
     def render_events(self) -> str:
-        return render_event_timeline(self.events, event_filter=self.event_filter)
+        return render_event_timeline(
+            self.events,
+            event_filter=self.event_filter,
+            show_details=self.show_event_details,
+            show_data=self.show_event_data,
+        )
 
     def filtered_events(self) -> list[RuntimeEvent]:
         return filter_events(self.events, self.event_filter)
 
     def action_set_event_filter(self, value: str) -> None:
         self.event_filter = self._sanitize_event_filter(value)
+        self._persist_session_view_state()
+        self.query_one("#events", Static).update(self.render_events())
+
+    def action_toggle_event_details(self) -> None:
+        self.show_event_details = not self.show_event_details
+        self._persist_session_view_state()
+        self.query_one("#events", Static).update(self.render_events())
+
+    def action_toggle_event_data(self) -> None:
+        self.show_event_data = not self.show_event_data
         self._persist_session_view_state()
         self.query_one("#events", Static).update(self.render_events())
 
@@ -1038,6 +1068,8 @@ class StrandsAgentApp(App):
         state = SessionState(
             pending_approvals=pending_approvals,
             event_filter=self.event_filter,
+            show_event_details=self.show_event_details,
+            show_event_data=self.show_event_data,
             history_focus_index=self.history_focus_index,
             draft_prompt=self.draft_prompt,
             session_switcher_active=self.session_switcher_active,
@@ -1076,6 +1108,8 @@ class StrandsAgentApp(App):
                         "approval_id": pending_approvals[0].request_id,
                         "tool_name": pending_approvals[0].tool_name,
                         "event_filter": self.event_filter,
+                        "show_event_details": self.show_event_details,
+                        "show_event_data": self.show_event_data,
                         "history_focus_index": self.history_focus_index,
                         "draft_prompt_length": len(self.draft_prompt),
                         "session_switcher_page_index": self.session_switcher_page_index,
@@ -1086,6 +1120,9 @@ class StrandsAgentApp(App):
 
     def _persist_session_view_state(self) -> None:
         self._sync_session_state(emit_pending_events=False)
+
+    def timeline_view_label(self) -> str:
+        return f"detail {'on' if self.show_event_details else 'off'} / raw {'on' if self.show_event_data else 'off'}"
 
     def _sanitize_event_filter(self, value: str) -> str:
         return value if value in EVENT_FILTER_MODES else "all"

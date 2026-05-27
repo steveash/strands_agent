@@ -43,6 +43,10 @@ async def run_smoke() -> int:
             await pilot.pause()
             await pilot.press("f6")
             await pilot.pause()
+            await pilot.press("ctrl+t")
+            await pilot.pause()
+            await pilot.press("ctrl+r")
+            await pilot.pause()
             await pilot.press("d", "r", "a", "f", "t", " ", "n", "e", "x", "t", " ", "s", "t", "e", "p")
             await pilot.pause()
 
@@ -63,16 +67,19 @@ async def run_smoke() -> int:
             restored_event_filter = second_app.event_filter
             restored_view = second_app.history_view_label()
             restored_draft = second_app.query_one("#prompt").value
+            restored_timeline_view = second_app.timeline_view_label()
             latest_visible_event = second_app.filtered_events()[-1].kind if second_app.filtered_events() else None
             return emit_smoke_results(
                 [
                     ("restored_event_filter", restored_event_filter),
                     ("restored_view", restored_view),
                     ("restored_draft", restored_draft),
+                    ("restored_timeline_view", restored_timeline_view),
                     ("latest_visible_event", latest_visible_event),
                     ("session_state_restored_event_filter", restored_event_filter == "tool"),
                     ("session_state_restored_view", restored_view == "replay 3/4"),
                     ("session_state_restored_draft", restored_draft == "draft next step"),
+                    ("session_state_restored_timeline_view", restored_timeline_view == "detail off / raw off"),
                     ("session_state_latest_visible_event", latest_visible_event == "tool_finished"),
                 ]
             )
