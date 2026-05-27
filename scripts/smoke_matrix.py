@@ -26,6 +26,7 @@ DOCS_REVIEW_TARGET_NAME = "docs-review"
 DOCS_REVIEW_OUTPUT_DIR_FLAG = "--output-dir"
 DOCS_REVIEW_BUNDLE_INDEX_FLAG = "--bundle-index-path"
 DOCS_REVIEW_DRIFTED_README_FLAG = "--drifted-readme-path"
+DOCS_REVIEW_RENDER_OUTPUT_DIR_FLAG = "--render-output-dir"
 DOCS_REVIEW_RENDER_MANIFEST_FLAG = "--render-manifest-path"
 DOCS_REVIEW_RENDER_DIFF_FLAG = "--render-diff-path"
 DOCS_REVIEW_FIX_CHECK_JSON_FLAG = "--fix-check-json-path"
@@ -66,6 +67,7 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
         artifact_root = Path(bundle_index_path).parent
 
     drifted_readme_path = _extract_target_arg_path(target, DOCS_REVIEW_DRIFTED_README_FLAG)
+    render_output_dir = _extract_target_arg_path(target, DOCS_REVIEW_RENDER_OUTPUT_DIR_FLAG)
     render_manifest_path = _extract_target_arg_path(target, DOCS_REVIEW_RENDER_MANIFEST_FLAG)
     render_diff_path = _extract_target_arg_path(target, DOCS_REVIEW_RENDER_DIFF_FLAG)
     fix_check_json_path = _extract_target_arg_path(target, DOCS_REVIEW_FIX_CHECK_JSON_FLAG)
@@ -74,6 +76,7 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
 
     if artifact_root is not None:
         drifted_readme_path = drifted_readme_path or str(artifact_root / "README-drifted.md")
+        render_output_dir = render_output_dir or str(artifact_root / "rendered")
         render_manifest_path = render_manifest_path or str(artifact_root / "render-manifest.json")
         render_diff_path = render_diff_path or str(artifact_root / "render-review.patch")
         fix_check_json_path = fix_check_json_path or str(artifact_root / "fix-check.json")
@@ -90,6 +93,8 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
 
     if drifted_readme_path:
         messages.append(f"review drifted README: {drifted_readme_path}")
+    if render_output_dir:
+        messages.append(f"review rendered sections: {render_output_dir}")
     if render_manifest_path:
         messages.append(f"review render manifest: {render_manifest_path}")
     if render_diff_path:

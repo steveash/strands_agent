@@ -584,6 +584,8 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
         "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
         "--drifted-readme-path",
         "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md",
+        "--render-output-dir",
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered",
         "--render-manifest-path",
         "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json",
         "--render-diff-path",

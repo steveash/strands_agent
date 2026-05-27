@@ -2020,6 +2020,8 @@ def test_smoke_matrix_review_adds_docs_review_lane(monkeypatch) -> None:
                 "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
                 "--drifted-readme-path",
                 "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md",
+                "--render-output-dir",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered",
                 "--render-manifest-path",
                 "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json",
                 "--render-diff-path",
@@ -2067,6 +2069,10 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
         ),
         (
+            "[smoke-matrix] review rendered sections: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered"
+        ),
+        (
             "[smoke-matrix] review render manifest: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json"
         ),
@@ -2108,6 +2114,8 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
                     "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
                     "--drifted-readme-path",
                     "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md",
+                    "--render-output-dir",
+                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered",
                     "--render-manifest-path",
                     "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json",
                     "--render-diff-path",
@@ -2157,6 +2165,8 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
             "artifacts/review/index.json",
             "--drifted-readme-path",
             "artifacts/custom/README-review.md",
+            "--render-output-dir",
+            "artifacts/custom/rendered-sections",
             "--render-manifest-path",
             "artifacts/custom/render.json",
             "--render-diff-path",
@@ -2174,6 +2184,7 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
     assert smoke_matrix._docs_review_artifact_location_messages(target) == (
         "review artifacts: artifacts/review (index: artifacts/review/index.json)",
         "review drifted README: artifacts/custom/README-review.md",
+        "review rendered sections: artifacts/custom/rendered-sections",
         "review render manifest: artifacts/custom/render.json",
         "review render diff: artifacts/custom/review.patch",
         "review fix-check JSON: artifacts/custom/fix-check.json",
@@ -2338,6 +2349,10 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
         (
             "[smoke-matrix] review drifted README: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
+        ),
+        (
+            "[smoke-matrix] review rendered sections: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered"
         ),
         (
             "[smoke-matrix] review render manifest: "
