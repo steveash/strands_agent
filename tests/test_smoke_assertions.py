@@ -260,6 +260,7 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
             "--check",
             "--json",
             "--json-output JSON_OUTPUT",
+            "--render-output-dir RENDER_OUTPUT_DIR",
             "--stdout",
         ],
     )

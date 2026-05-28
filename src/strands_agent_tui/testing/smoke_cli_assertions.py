@@ -349,6 +349,14 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--render-output-dir",
+        type=Path,
+        help=(
+            "Record the rendered-section review directory in machine-readable JSON output so downstream "
+            "tooling can locate exported README sections without scraping console hints."
+        ),
+    )
+    parser.add_argument(
         "--stdout",
         action="store_true",
         help="Print the fully repaired README to stdout instead of writing the README path.",

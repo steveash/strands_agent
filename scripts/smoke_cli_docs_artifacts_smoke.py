@@ -376,6 +376,8 @@ def _run_artifact_contract(
         "--check",
         "--json-output",
         str(paths.fix_check_json_path),
+        "--render-output-dir",
+        str(paths.render_output_dir),
     )
     fix_check_payload = json.loads(paths.fix_check_json_path.read_text(encoding="utf-8"))
     expected_fix_check_payload = build_smoke_cli_doc_drift_report_payload(
@@ -386,6 +388,7 @@ def _run_artifact_contract(
         diff_sections=render_diff_sections,
         include_diff_lines=False,
         check=True,
+        render_output_dir=paths.render_output_dir,
     )
 
     fix_repair_result = _run_script(
@@ -395,6 +398,8 @@ def _run_artifact_contract(
         str(paths.drifted_readme_path),
         "--json-output",
         str(paths.fix_repair_json_path),
+        "--render-output-dir",
+        str(paths.render_output_dir),
     )
     repaired_markdown = paths.drifted_readme_path.read_text(encoding="utf-8")
     repaired_diff_sections = collect_smoke_cli_readme_diffs(
@@ -412,6 +417,7 @@ def _run_artifact_contract(
         rendered_sections=render_sections,
         diff_sections=render_diff_sections,
         stdout=False,
+        render_output_dir=paths.render_output_dir,
     )
 
     fix_post_check_result = _run_script(
@@ -422,6 +428,8 @@ def _run_artifact_contract(
         "--check",
         "--json-output",
         str(paths.fix_post_check_json_path),
+        "--render-output-dir",
+        str(paths.render_output_dir),
     )
     fix_post_check_payload = json.loads(paths.fix_post_check_json_path.read_text(encoding="utf-8"))
     expected_fix_post_check_payload = build_smoke_cli_doc_drift_report_payload(
@@ -432,6 +440,7 @@ def _run_artifact_contract(
         diff_sections=(),
         include_diff_lines=False,
         check=True,
+        render_output_dir=paths.render_output_dir,
     )
 
     rendered_section_payload = render_manifest["sections"][0] if render_manifest["sections"] else {}

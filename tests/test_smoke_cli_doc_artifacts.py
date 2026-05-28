@@ -75,6 +75,7 @@ def test_build_smoke_cli_doc_render_manifest_payload_tracks_review_artifacts(tmp
 
 def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> None:
     drifted_markdown, diff_sections, rendered_sections = _drift_fixture()
+    render_output_dir = Path("artifacts/rendered")
 
     payload = build_smoke_cli_doc_drift_report_payload(
         readme_path=Path("README.md"),
@@ -84,6 +85,7 @@ def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> N
         diff_sections=diff_sections,
         include_diff_lines=False,
         check=True,
+        render_output_dir=render_output_dir,
     )
 
     section = payload["sections"][0]
@@ -92,6 +94,7 @@ def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> N
     assert payload["drifted_sections"] == [{"script_name": "standalone_smoke"}]
     assert payload["drifted_targets"] == ["standalone_smoke"]
     assert payload["readme_path"] == "README.md"
+    assert payload["render_output_dir"] == str(render_output_dir)
     assert section["script_name"] == "standalone_smoke"
     assert section["rendered_summary"] == "### Standalone local smoke bundle"
     assert section["diff_stats"]["line_count"] == len(diff_sections[0][1])
@@ -101,6 +104,7 @@ def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> N
 
 def test_build_smoke_cli_doc_repair_report_payload_tracks_stdout_vs_write_mode() -> None:
     drifted_markdown, diff_sections, rendered_sections = _drift_fixture()
+    render_output_dir = Path("artifacts/rendered")
 
     payload = build_smoke_cli_doc_repair_report_payload(
         readme_path=Path("README.md"),
@@ -112,6 +116,7 @@ def test_build_smoke_cli_doc_repair_report_payload_tracks_stdout_vs_write_mode()
         rendered_sections=rendered_sections,
         diff_sections=diff_sections,
         stdout=True,
+        render_output_dir=render_output_dir,
     )
 
     section = payload["sections"][0]
@@ -119,6 +124,7 @@ def test_build_smoke_cli_doc_repair_report_payload_tracks_stdout_vs_write_mode()
     assert payload["mode"] == "stdout"
     assert payload["repaired_count"] == 1
     assert payload["repaired_targets"] == ["standalone_smoke"]
+    assert payload["render_output_dir"] == str(render_output_dir)
     assert payload["wrote_readme"] is False
     assert payload["readme_sha256_before"] == hashlib.sha256(drifted_markdown.encode("utf-8")).hexdigest()
     assert payload["readme_sha256_after"] == hashlib.sha256(README_TEXT.encode("utf-8")).hexdigest()
