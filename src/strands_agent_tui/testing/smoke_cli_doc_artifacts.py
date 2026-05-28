@@ -142,6 +142,8 @@ def build_smoke_cli_doc_drift_report_payload(
     include_diff_lines: bool,
     check: bool,
     render_output_dir: Path | None = None,
+    render_manifest_path: Path | None = None,
+    render_diff_path: Path | None = None,
 ) -> dict[str, object]:
     drifted_sections: list[dict[str, object]] = []
     for script_name, diff_lines in diff_sections:
@@ -158,6 +160,8 @@ def build_smoke_cli_doc_drift_report_payload(
         "drifted_sections": drifted_sections,
         "drifted_targets": [script_name for script_name, _ in diff_sections],
         "readme_path": str(readme_path),
+        "render_diff_path": str(render_diff_path) if render_diff_path is not None else None,
+        "render_manifest_path": str(render_manifest_path) if render_manifest_path is not None else None,
         "render_output_dir": str(render_output_dir) if render_output_dir is not None else None,
         "rendered_bundle_sha256": rendered_bundle_sha256(rendered_sections),
         "rendered_count": len(rendered_sections),
@@ -186,6 +190,8 @@ def build_smoke_cli_doc_repair_report_payload(
     diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
     stdout: bool,
     render_output_dir: Path | None = None,
+    render_manifest_path: Path | None = None,
+    render_diff_path: Path | None = None,
 ) -> dict[str, object]:
     return {
         "body_only": False,
@@ -196,6 +202,8 @@ def build_smoke_cli_doc_repair_report_payload(
         "mode": "stdout" if stdout else "repair",
         "readme_path": str(readme_path),
         "readme_sha256_after": sha256_text(repaired_markdown),
+        "render_diff_path": str(render_diff_path) if render_diff_path is not None else None,
+        "render_manifest_path": str(render_manifest_path) if render_manifest_path is not None else None,
         "render_output_dir": str(render_output_dir) if render_output_dir is not None else None,
         "readme_sha256_before": sha256_text(original_markdown),
         "repaired_count": len(repaired_script_names),

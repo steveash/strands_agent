@@ -357,6 +357,22 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--render-manifest-path",
+        type=Path,
+        help=(
+            "Record the render-manifest artifact path in machine-readable JSON output so downstream "
+            "tooling can chain directly into the drift-review manifest."
+        ),
+    )
+    parser.add_argument(
+        "--render-diff-path",
+        type=Path,
+        help=(
+            "Record the render-diff artifact path in machine-readable JSON output so downstream tooling "
+            "can chain directly into the unified review patch."
+        ),
+    )
+    parser.add_argument(
         "--stdout",
         action="store_true",
         help="Print the fully repaired README to stdout instead of writing the README path.",

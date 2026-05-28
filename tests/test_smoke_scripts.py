@@ -137,6 +137,8 @@ def _assert_smoke_cli_doc_drift_report_payload(
     include_diff_lines: bool,
     check: bool,
     render_output_dir: Path | None = None,
+    render_manifest_path: Path | None = None,
+    render_diff_path: Path | None = None,
 ) -> None:
     diff_sections = collect_smoke_cli_readme_diffs(
         markdown,
@@ -155,6 +157,8 @@ def _assert_smoke_cli_doc_drift_report_payload(
         include_diff_lines=include_diff_lines,
         check=check,
         render_output_dir=render_output_dir,
+        render_manifest_path=render_manifest_path,
+        render_diff_path=render_diff_path,
     )
 
 
@@ -168,6 +172,8 @@ def _assert_smoke_cli_doc_repair_report_payload(
     readme_path: Path,
     stdout: bool,
     render_output_dir: Path | None = None,
+    render_manifest_path: Path | None = None,
+    render_diff_path: Path | None = None,
 ) -> None:
     diff_sections = collect_smoke_cli_readme_diffs(
         original_markdown,
@@ -189,6 +195,8 @@ def _assert_smoke_cli_doc_repair_report_payload(
         diff_sections=diff_sections,
         stdout=stdout,
         render_output_dir=render_output_dir,
+        render_manifest_path=render_manifest_path,
+        render_diff_path=render_diff_path,
     )
 
 
@@ -846,15 +854,13 @@ def test_smoke_cli_docs_artifacts_smoke_supports_nondefault_target_and_persisted
     assert bundle_index_payload["artifact_paths"]["bundle_index_path"] == str(bundle_index_path)
     assert bundle_index_payload["checks"]["render_exit"] is True
     assert bundle_index_payload["details"]["bundle_index_path"] == str(bundle_index_path)
-    assert json.loads((artifact_root / "fix-check.json").read_text(encoding="utf-8"))["render_output_dir"] == str(
-        artifact_root / "rendered"
-    )
-    assert json.loads((artifact_root / "fix-repair.json").read_text(encoding="utf-8"))["render_output_dir"] == str(
-        artifact_root / "rendered"
-    )
-    assert json.loads((artifact_root / "fix-post-check.json").read_text(encoding="utf-8"))["render_output_dir"] == str(
-        artifact_root / "rendered"
-    )
+    fix_check_payload = json.loads((artifact_root / "fix-check.json").read_text(encoding="utf-8"))
+    fix_repair_payload = json.loads((artifact_root / "fix-repair.json").read_text(encoding="utf-8"))
+    fix_post_check_payload = json.loads((artifact_root / "fix-post-check.json").read_text(encoding="utf-8"))
+    for payload in (fix_check_payload, fix_repair_payload, fix_post_check_payload):
+        assert payload["render_output_dir"] == str(artifact_root / "rendered")
+        assert payload["render_manifest_path"] == str(artifact_root / "render-manifest.json")
+        assert payload["render_diff_path"] == str(artifact_root / "render-review.patch")
 
 
 def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_artifact_paths(
@@ -940,9 +946,13 @@ def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_arti
     assert bundle_index_payload["artifact_paths"]["bundle_index_path"] == str(bundle_index_path)
     assert bundle_index_payload["checks"]["render_exit"] is True
     assert bundle_index_payload["details"]["bundle_index_path"] == str(bundle_index_path)
-    assert json.loads(fix_check_json_path.read_text(encoding="utf-8"))["render_output_dir"] == str(render_output_dir)
-    assert json.loads(fix_repair_json_path.read_text(encoding="utf-8"))["render_output_dir"] == str(render_output_dir)
-    assert json.loads(fix_post_check_json_path.read_text(encoding="utf-8"))["render_output_dir"] == str(render_output_dir)
+    fix_check_payload = json.loads(fix_check_json_path.read_text(encoding="utf-8"))
+    fix_repair_payload = json.loads(fix_repair_json_path.read_text(encoding="utf-8"))
+    fix_post_check_payload = json.loads(fix_post_check_json_path.read_text(encoding="utf-8"))
+    for payload in (fix_check_payload, fix_repair_payload, fix_post_check_payload):
+        assert payload["render_output_dir"] == str(render_output_dir)
+        assert payload["render_manifest_path"] == str(render_manifest_path)
+        assert payload["render_diff_path"] == str(render_diff_path)
 
 
 
@@ -1414,6 +1424,8 @@ def test_smoke_cli_docs_fix_build_parser_lists_public_targets_examples_and_flags
     assert "--json" in help_text
     assert "--json-output JSON_OUTPUT" in help_text
     assert "--render-output-dir RENDER_OUTPUT_DIR" in help_text
+    assert "--render-manifest-path RENDER_MANIFEST_PATH" in help_text
+    assert "--render-diff-path RENDER_DIFF_PATH" in help_text
     assert "--stdout" in help_text
 
 
@@ -1584,6 +1596,8 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
     readme_path = tmp_path / "README.md"
     json_path = tmp_path / "artifacts" / "smoke-cli-docs-fix.json"
     render_output_dir = tmp_path / "artifacts" / "rendered"
+    render_manifest_path = tmp_path / "artifacts" / "render-manifest.json"
+    render_diff_path = tmp_path / "artifacts" / "render-review.patch"
     drifted_markdown = replace_markdown_section(
         README_TEXT,
         heading=standalone_spec.readme_section_heading,
@@ -1601,6 +1615,10 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
             str(json_path),
             "--render-output-dir",
             str(render_output_dir),
+            "--render-manifest-path",
+            str(render_manifest_path),
+            "--render-diff-path",
+            str(render_diff_path),
         ]
     )
     captured = capsys.readouterr()
@@ -1621,6 +1639,8 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
         include_diff_lines=False,
         check=True,
         render_output_dir=render_output_dir,
+        render_manifest_path=render_manifest_path,
+        render_diff_path=render_diff_path,
     )
 
 
@@ -1631,6 +1651,8 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
     readme_path = tmp_path / "README.md"
     json_path = tmp_path / "artifacts" / "smoke-cli-docs-fix.json"
     render_output_dir = tmp_path / "artifacts" / "rendered"
+    render_manifest_path = tmp_path / "artifacts" / "render-manifest.json"
+    render_diff_path = tmp_path / "artifacts" / "render-review.patch"
     drifted_markdown = replace_markdown_section(
         README_TEXT,
         heading=standalone_spec.readme_section_heading,
@@ -1647,6 +1669,10 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
             str(json_path),
             "--render-output-dir",
             str(render_output_dir),
+            "--render-manifest-path",
+            str(render_manifest_path),
+            "--render-diff-path",
+            str(render_diff_path),
         ]
     )
     captured = capsys.readouterr()
@@ -1668,6 +1694,8 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
         readme_path=readme_path,
         stdout=False,
         render_output_dir=render_output_dir,
+        render_manifest_path=render_manifest_path,
+        render_diff_path=render_diff_path,
     )
 
 
@@ -1680,6 +1708,8 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
     readme_path = tmp_path / "README.md"
     json_path = tmp_path / "artifacts" / "smoke-cli-docs-fix.json"
     render_output_dir = tmp_path / "artifacts" / "rendered"
+    render_manifest_path = tmp_path / "artifacts" / "render-manifest.json"
+    render_diff_path = tmp_path / "artifacts" / "render-review.patch"
     drifted_markdown = replace_markdown_section(
         README_TEXT,
         heading=standalone_spec.readme_section_heading,
@@ -1697,6 +1727,10 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
             str(json_path),
             "--render-output-dir",
             str(render_output_dir),
+            "--render-manifest-path",
+            str(render_manifest_path),
+            "--render-diff-path",
+            str(render_diff_path),
         ]
     )
     captured = capsys.readouterr()
@@ -1714,6 +1748,8 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
         readme_path=readme_path,
         stdout=True,
         render_output_dir=render_output_dir,
+        render_manifest_path=render_manifest_path,
+        render_diff_path=render_diff_path,
     )
 
 

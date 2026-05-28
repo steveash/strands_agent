@@ -261,6 +261,8 @@ def test_smoke_cli_doc_fix_parser_and_examples_follow_wrapper_registry() -> None
             "--json",
             "--json-output JSON_OUTPUT",
             "--render-output-dir RENDER_OUTPUT_DIR",
+            "--render-manifest-path RENDER_MANIFEST_PATH",
+            "--render-diff-path RENDER_DIFF_PATH",
             "--stdout",
         ],
     )

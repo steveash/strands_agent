@@ -378,6 +378,10 @@ def _run_artifact_contract(
         str(paths.fix_check_json_path),
         "--render-output-dir",
         str(paths.render_output_dir),
+        "--render-manifest-path",
+        str(paths.render_manifest_path),
+        "--render-diff-path",
+        str(paths.render_diff_path),
     )
     fix_check_payload = json.loads(paths.fix_check_json_path.read_text(encoding="utf-8"))
     expected_fix_check_payload = build_smoke_cli_doc_drift_report_payload(
@@ -389,6 +393,8 @@ def _run_artifact_contract(
         include_diff_lines=False,
         check=True,
         render_output_dir=paths.render_output_dir,
+        render_manifest_path=paths.render_manifest_path,
+        render_diff_path=paths.render_diff_path,
     )
 
     fix_repair_result = _run_script(
@@ -400,6 +406,10 @@ def _run_artifact_contract(
         str(paths.fix_repair_json_path),
         "--render-output-dir",
         str(paths.render_output_dir),
+        "--render-manifest-path",
+        str(paths.render_manifest_path),
+        "--render-diff-path",
+        str(paths.render_diff_path),
     )
     repaired_markdown = paths.drifted_readme_path.read_text(encoding="utf-8")
     repaired_diff_sections = collect_smoke_cli_readme_diffs(
@@ -418,6 +428,8 @@ def _run_artifact_contract(
         diff_sections=render_diff_sections,
         stdout=False,
         render_output_dir=paths.render_output_dir,
+        render_manifest_path=paths.render_manifest_path,
+        render_diff_path=paths.render_diff_path,
     )
 
     fix_post_check_result = _run_script(
@@ -430,6 +442,10 @@ def _run_artifact_contract(
         str(paths.fix_post_check_json_path),
         "--render-output-dir",
         str(paths.render_output_dir),
+        "--render-manifest-path",
+        str(paths.render_manifest_path),
+        "--render-diff-path",
+        str(paths.render_diff_path),
     )
     fix_post_check_payload = json.loads(paths.fix_post_check_json_path.read_text(encoding="utf-8"))
     expected_fix_post_check_payload = build_smoke_cli_doc_drift_report_payload(
@@ -441,6 +457,8 @@ def _run_artifact_contract(
         include_diff_lines=False,
         check=True,
         render_output_dir=paths.render_output_dir,
+        render_manifest_path=paths.render_manifest_path,
+        render_diff_path=paths.render_diff_path,
     )
 
     rendered_section_payload = render_manifest["sections"][0] if render_manifest["sections"] else {}
