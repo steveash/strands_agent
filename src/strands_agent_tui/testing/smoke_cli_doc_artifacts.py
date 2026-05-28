@@ -141,9 +141,11 @@ def build_smoke_cli_doc_drift_report_payload(
     diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
     include_diff_lines: bool,
     check: bool,
+    drifted_readme_path: Path | None = None,
     render_output_dir: Path | None = None,
     render_manifest_path: Path | None = None,
     render_diff_path: Path | None = None,
+    bundle_index_path: Path | None = None,
 ) -> dict[str, object]:
     drifted_sections: list[dict[str, object]] = []
     for script_name, diff_lines in diff_sections:
@@ -157,8 +159,10 @@ def build_smoke_cli_doc_drift_report_payload(
         "diff": include_diff_lines,
         "diff_bundle_sha256": diff_bundle_sha256(diff_sections),
         "drift_count": len(diff_sections),
+        "drifted_readme_path": str(drifted_readme_path) if drifted_readme_path is not None else None,
         "drifted_sections": drifted_sections,
         "drifted_targets": [script_name for script_name, _ in diff_sections],
+        "bundle_index_path": str(bundle_index_path) if bundle_index_path is not None else None,
         "readme_path": str(readme_path),
         "render_diff_path": str(render_diff_path) if render_diff_path is not None else None,
         "render_manifest_path": str(render_manifest_path) if render_manifest_path is not None else None,
@@ -189,16 +193,20 @@ def build_smoke_cli_doc_repair_report_payload(
     rendered_sections: tuple[tuple[str, str], ...],
     diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
     stdout: bool,
+    drifted_readme_path: Path | None = None,
     render_output_dir: Path | None = None,
     render_manifest_path: Path | None = None,
     render_diff_path: Path | None = None,
+    bundle_index_path: Path | None = None,
 ) -> dict[str, object]:
     return {
         "body_only": False,
         "changed": bool(repaired_script_names),
         "diff_bundle_sha256": diff_bundle_sha256(diff_sections),
         "drift_count": len(diff_sections),
+        "drifted_readme_path": str(drifted_readme_path) if drifted_readme_path is not None else None,
         "drifted_targets": [script_name for script_name, _ in diff_sections],
+        "bundle_index_path": str(bundle_index_path) if bundle_index_path is not None else None,
         "mode": "stdout" if stdout else "repair",
         "readme_path": str(readme_path),
         "readme_sha256_after": sha256_text(repaired_markdown),

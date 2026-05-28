@@ -136,9 +136,11 @@ def _assert_smoke_cli_doc_drift_report_payload(
     readme_path: Path,
     include_diff_lines: bool,
     check: bool,
+    drifted_readme_path: Path | None = None,
     render_output_dir: Path | None = None,
     render_manifest_path: Path | None = None,
     render_diff_path: Path | None = None,
+    bundle_index_path: Path | None = None,
 ) -> None:
     diff_sections = collect_smoke_cli_readme_diffs(
         markdown,
@@ -156,9 +158,11 @@ def _assert_smoke_cli_doc_drift_report_payload(
         diff_sections=diff_sections,
         include_diff_lines=include_diff_lines,
         check=check,
+        drifted_readme_path=drifted_readme_path,
         render_output_dir=render_output_dir,
         render_manifest_path=render_manifest_path,
         render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
     )
 
 
@@ -171,9 +175,11 @@ def _assert_smoke_cli_doc_repair_report_payload(
     repaired_markdown: str,
     readme_path: Path,
     stdout: bool,
+    drifted_readme_path: Path | None = None,
     render_output_dir: Path | None = None,
     render_manifest_path: Path | None = None,
     render_diff_path: Path | None = None,
+    bundle_index_path: Path | None = None,
 ) -> None:
     diff_sections = collect_smoke_cli_readme_diffs(
         original_markdown,
@@ -194,9 +200,11 @@ def _assert_smoke_cli_doc_repair_report_payload(
         rendered_sections=rendered_sections,
         diff_sections=diff_sections,
         stdout=stdout,
+        drifted_readme_path=drifted_readme_path,
         render_output_dir=render_output_dir,
         render_manifest_path=render_manifest_path,
         render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
     )
 
 
@@ -950,6 +958,8 @@ def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_arti
     fix_repair_payload = json.loads(fix_repair_json_path.read_text(encoding="utf-8"))
     fix_post_check_payload = json.loads(fix_post_check_json_path.read_text(encoding="utf-8"))
     for payload in (fix_check_payload, fix_repair_payload, fix_post_check_payload):
+        assert payload["drifted_readme_path"] == str(drifted_readme_path)
+        assert payload["bundle_index_path"] == str(bundle_index_path)
         assert payload["render_output_dir"] == str(render_output_dir)
         assert payload["render_manifest_path"] == str(render_manifest_path)
         assert payload["render_diff_path"] == str(render_diff_path)
@@ -1423,6 +1433,8 @@ def test_smoke_cli_docs_fix_build_parser_lists_public_targets_examples_and_flags
     assert "--check" in help_text
     assert "--json" in help_text
     assert "--json-output JSON_OUTPUT" in help_text
+    assert "--drifted-readme-path DRIFTED_README_PATH" in help_text
+    assert "--bundle-index-path BUNDLE_INDEX_PATH" in help_text
     assert "--render-output-dir RENDER_OUTPUT_DIR" in help_text
     assert "--render-manifest-path RENDER_MANIFEST_PATH" in help_text
     assert "--render-diff-path RENDER_DIFF_PATH" in help_text
@@ -1595,6 +1607,8 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
     readme_path = tmp_path / "README.md"
     json_path = tmp_path / "artifacts" / "smoke-cli-docs-fix.json"
+    drifted_readme_path = tmp_path / "artifacts" / "README-drifted.md"
+    bundle_index_path = tmp_path / "artifacts" / "bundle-index.json"
     render_output_dir = tmp_path / "artifacts" / "rendered"
     render_manifest_path = tmp_path / "artifacts" / "render-manifest.json"
     render_diff_path = tmp_path / "artifacts" / "render-review.patch"
@@ -1613,6 +1627,10 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
             "--check",
             "--json-output",
             str(json_path),
+            "--drifted-readme-path",
+            str(drifted_readme_path),
+            "--bundle-index-path",
+            str(bundle_index_path),
             "--render-output-dir",
             str(render_output_dir),
             "--render-manifest-path",
@@ -1638,9 +1656,11 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
         readme_path=readme_path,
         include_diff_lines=False,
         check=True,
+        drifted_readme_path=drifted_readme_path,
         render_output_dir=render_output_dir,
         render_manifest_path=render_manifest_path,
         render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
     )
 
 
@@ -1650,6 +1670,8 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
     readme_path = tmp_path / "README.md"
     json_path = tmp_path / "artifacts" / "smoke-cli-docs-fix.json"
+    drifted_readme_path = tmp_path / "artifacts" / "README-drifted.md"
+    bundle_index_path = tmp_path / "artifacts" / "bundle-index.json"
     render_output_dir = tmp_path / "artifacts" / "rendered"
     render_manifest_path = tmp_path / "artifacts" / "render-manifest.json"
     render_diff_path = tmp_path / "artifacts" / "render-review.patch"
@@ -1667,6 +1689,10 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
             str(readme_path),
             "--json-output",
             str(json_path),
+            "--drifted-readme-path",
+            str(drifted_readme_path),
+            "--bundle-index-path",
+            str(bundle_index_path),
             "--render-output-dir",
             str(render_output_dir),
             "--render-manifest-path",
@@ -1693,9 +1719,11 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
         repaired_markdown=repaired_text,
         readme_path=readme_path,
         stdout=False,
+        drifted_readme_path=drifted_readme_path,
         render_output_dir=render_output_dir,
         render_manifest_path=render_manifest_path,
         render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
     )
 
 
@@ -1707,6 +1735,8 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
     readme_path = tmp_path / "README.md"
     json_path = tmp_path / "artifacts" / "smoke-cli-docs-fix.json"
+    drifted_readme_path = tmp_path / "artifacts" / "README-drifted.md"
+    bundle_index_path = tmp_path / "artifacts" / "bundle-index.json"
     render_output_dir = tmp_path / "artifacts" / "rendered"
     render_manifest_path = tmp_path / "artifacts" / "render-manifest.json"
     render_diff_path = tmp_path / "artifacts" / "render-review.patch"
@@ -1725,6 +1755,10 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
             "--stdout",
             "--json-output",
             str(json_path),
+            "--drifted-readme-path",
+            str(drifted_readme_path),
+            "--bundle-index-path",
+            str(bundle_index_path),
             "--render-output-dir",
             str(render_output_dir),
             "--render-manifest-path",
@@ -1747,9 +1781,11 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
         repaired_markdown=README_TEXT,
         readme_path=readme_path,
         stdout=True,
+        drifted_readme_path=drifted_readme_path,
         render_output_dir=render_output_dir,
         render_manifest_path=render_manifest_path,
         render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
     )
 
 
@@ -1940,7 +1976,7 @@ def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> No
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target="standalone-all",
-        expected_choices="{standalone,triage,recovery,docs-review,local,all,review}",
+        expected_choices="{standalone,triage,recovery,docs-review,local,all,review,all-review}",
     )
 
 
@@ -2102,6 +2138,52 @@ def test_smoke_matrix_review_adds_docs_review_lane(monkeypatch) -> None:
     }
 
 
+def test_smoke_matrix_all_review_combines_live_inclusive_and_docs_review(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    seen = {}
+
+    def _run_smoke_target(target, **_kwargs):
+        seen.setdefault("names", []).append(target.name)
+        seen.setdefault("args", []).append(target.args)
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+
+    exit_code = smoke_matrix.main(["all-review"])
+
+    assert exit_code == 0
+    assert seen == {
+        "names": ["standalone-all", "triage", "recovery", "docs-review"],
+        "args": [
+            ("all",),
+            (),
+            (),
+            (
+                "all",
+                "--output-dir",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+                "--bundle-index-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
+                "--drifted-readme-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md",
+                "--render-output-dir",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered",
+                "--render-manifest-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json",
+                "--render-diff-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch",
+                "--fix-check-json-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json",
+                "--fix-repair-json-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json",
+                "--fix-post-check-json-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json",
+            ),
+        ],
+    }
+
+
 def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(monkeypatch) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
     summary_metadata = SMOKE_MATRIX_WRAPPER
@@ -2167,6 +2249,32 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
         (["standalone"], ["standalone-local"], [()]),
         (["triage"], ["triage"], [()]),
         (["recovery"], ["recovery"], [()]),
+        (["all-review"], ["standalone-all", "triage", "recovery", "docs-review"], [
+            ("all",),
+            (),
+            (),
+            (
+                "all",
+                "--output-dir",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+                "--bundle-index-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
+                "--drifted-readme-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md",
+                "--render-output-dir",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered",
+                "--render-manifest-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json",
+                "--render-diff-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch",
+                "--fix-check-json-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json",
+                "--fix-repair-json-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json",
+                "--fix-post-check-json-path",
+                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json",
+            ),
+        ]),
         (
             ["docs-review"],
             ["docs-review"],
@@ -2502,7 +2610,7 @@ def test_smoke_matrix_all_failure_emits_live_runtime_export_hint(monkeypatch) ->
         "standalone smoke failed fast: live_runtime_requested= False",
         summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.6),
         (
-            "[smoke-matrix] hint: `smoke_matrix.py all` swaps in `standalone_smoke.py all`; "
+            "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`; "
             "export `STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
             "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning the live-inclusive matrix."
         ),
@@ -2538,11 +2646,47 @@ def test_smoke_matrix_all_failure_emits_missing_api_key_hint(monkeypatch) -> Non
         "standalone smoke exited with status 1",
         summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.5),
         (
-            "[smoke-matrix] hint: `smoke_matrix.py all` reached the live runtime, but `OPENAI_API_KEY` "
+            "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` "
             "was missing; export `OPENAI_API_KEY` (and optionally `STRANDS_AGENT_OPENAI_MODEL`) "
             "before rerunning."
         ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=3, elapsed_seconds=2.1),
+    ]
+
+
+def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stderr = kwargs["stderr"]
+        if target.name == "standalone-all":
+            observer("live_runtime_requested= False\n")
+            print("standalone smoke failed fast: live_runtime_requested= False", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.0, 1.3, 2.0])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main(["all-review"])
+
+    assert exit_code == 1
+    summary_metadata = SMOKE_MATRIX_WRAPPER
+    assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
+    assert stderr.getvalue().splitlines() == [
+        "standalone smoke failed fast: live_runtime_requested= False",
+        summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.3),
+        (
+            "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`; "
+            "export `STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
+            "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning the live-inclusive matrix."
+        ),
+        summary_metadata.failure_summary_line(passed_count=0, total_count=4, elapsed_seconds=2.0),
     ]
 
 

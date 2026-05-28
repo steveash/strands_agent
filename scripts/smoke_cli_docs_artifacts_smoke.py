@@ -376,6 +376,10 @@ def _run_artifact_contract(
         "--check",
         "--json-output",
         str(paths.fix_check_json_path),
+        "--drifted-readme-path",
+        str(paths.drifted_readme_path),
+        "--bundle-index-path",
+        str(paths.bundle_index_path),
         "--render-output-dir",
         str(paths.render_output_dir),
         "--render-manifest-path",
@@ -392,9 +396,11 @@ def _run_artifact_contract(
         diff_sections=render_diff_sections,
         include_diff_lines=False,
         check=True,
+        drifted_readme_path=paths.drifted_readme_path,
         render_output_dir=paths.render_output_dir,
         render_manifest_path=paths.render_manifest_path,
         render_diff_path=paths.render_diff_path,
+        bundle_index_path=paths.bundle_index_path,
     )
 
     fix_repair_result = _run_script(
@@ -404,6 +410,10 @@ def _run_artifact_contract(
         str(paths.drifted_readme_path),
         "--json-output",
         str(paths.fix_repair_json_path),
+        "--drifted-readme-path",
+        str(paths.drifted_readme_path),
+        "--bundle-index-path",
+        str(paths.bundle_index_path),
         "--render-output-dir",
         str(paths.render_output_dir),
         "--render-manifest-path",
@@ -427,9 +437,11 @@ def _run_artifact_contract(
         rendered_sections=render_sections,
         diff_sections=render_diff_sections,
         stdout=False,
+        drifted_readme_path=paths.drifted_readme_path,
         render_output_dir=paths.render_output_dir,
         render_manifest_path=paths.render_manifest_path,
         render_diff_path=paths.render_diff_path,
+        bundle_index_path=paths.bundle_index_path,
     )
 
     fix_post_check_result = _run_script(
@@ -440,6 +452,10 @@ def _run_artifact_contract(
         "--check",
         "--json-output",
         str(paths.fix_post_check_json_path),
+        "--drifted-readme-path",
+        str(paths.drifted_readme_path),
+        "--bundle-index-path",
+        str(paths.bundle_index_path),
         "--render-output-dir",
         str(paths.render_output_dir),
         "--render-manifest-path",
@@ -456,9 +472,11 @@ def _run_artifact_contract(
         diff_sections=(),
         include_diff_lines=False,
         check=True,
+        drifted_readme_path=paths.drifted_readme_path,
         render_output_dir=paths.render_output_dir,
         render_manifest_path=paths.render_manifest_path,
         render_diff_path=paths.render_diff_path,
+        bundle_index_path=paths.bundle_index_path,
     )
 
     rendered_section_payload = render_manifest["sections"][0] if render_manifest["sections"] else {}

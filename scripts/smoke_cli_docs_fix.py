@@ -48,9 +48,11 @@ def _json_drift_report(
     diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
     include_diff_lines: bool,
     check: bool,
+    drifted_readme_path: Path | None,
     render_output_dir: Path | None,
     render_manifest_path: Path | None,
     render_diff_path: Path | None,
+    bundle_index_path: Path | None,
 ) -> str:
     rendered_sections = _rendered_sections_for_script_names(
         tuple(script_name for script_name, _diff_lines in diff_sections)
@@ -64,9 +66,11 @@ def _json_drift_report(
             diff_sections=diff_sections,
             include_diff_lines=include_diff_lines,
             check=check,
+            drifted_readme_path=drifted_readme_path,
             render_output_dir=render_output_dir,
             render_manifest_path=render_manifest_path,
             render_diff_path=render_diff_path,
+            bundle_index_path=bundle_index_path,
         ),
         indent=2,
         sort_keys=True,
@@ -83,9 +87,11 @@ def _json_repair_report(
     repaired_markdown: str,
     diff_sections: tuple[tuple[str, tuple[str, ...]], ...],
     stdout: bool,
+    drifted_readme_path: Path | None,
     render_output_dir: Path | None,
     render_manifest_path: Path | None,
     render_diff_path: Path | None,
+    bundle_index_path: Path | None,
 ) -> str:
     rendered_sections = _rendered_sections_for_script_names(repaired_script_names)
     return json.dumps(
@@ -99,9 +105,11 @@ def _json_repair_report(
             rendered_sections=rendered_sections,
             diff_sections=diff_sections,
             stdout=stdout,
+            drifted_readme_path=drifted_readme_path,
             render_output_dir=render_output_dir,
             render_manifest_path=render_manifest_path,
             render_diff_path=render_diff_path,
+            bundle_index_path=bundle_index_path,
         ),
         indent=2,
         sort_keys=True,
@@ -139,9 +147,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 diff_sections=diff_sections,
                 include_diff_lines=args.diff,
                 check=args.check,
+                drifted_readme_path=args.drifted_readme_path,
                 render_output_dir=args.render_output_dir,
                 render_manifest_path=args.render_manifest_path,
                 render_diff_path=args.render_diff_path,
+                bundle_index_path=args.bundle_index_path,
             )
             if args.json_output is not None:
                 write_text_output(args.json_output, json_report)
@@ -195,9 +205,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     requested_target_name=args.target,
                 ),
                 stdout=args.stdout,
+                drifted_readme_path=args.drifted_readme_path,
                 render_output_dir=args.render_output_dir,
                 render_manifest_path=args.render_manifest_path,
                 render_diff_path=args.render_diff_path,
+                bundle_index_path=args.bundle_index_path,
             ),
         )
 

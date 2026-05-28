@@ -566,6 +566,13 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
     assert spec.resolve_target_names("all") == ("standalone-all", "triage", "recovery")
     assert spec.resolve_display_names("all") == ("standalone (live-inclusive)", "triage", "recovery")
     assert spec.resolve_target_names("review") == ("standalone-local", "triage", "recovery", "docs-review")
+    assert spec.resolve_target_names("all-review") == ("standalone-all", "triage", "recovery", "docs-review")
+    assert spec.resolve_display_names("all-review") == (
+        "standalone (live-inclusive)",
+        "triage",
+        "recovery",
+        "docs-review",
+    )
     assert [target.name for target in spec.default_targets(script_dir=tmp_path)] == [
         "standalone-local",
         "triage",
@@ -661,6 +668,10 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
     assert "smoke_matrix.py local # local alias -> standalone, triage, recovery" in matrix_help
     assert "smoke_matrix.py all # all alias -> standalone (live-inclusive), triage, recovery" in matrix_help
     assert "smoke_matrix.py review # review alias -> standalone, triage, recovery, docs-review" in matrix_help
+    assert (
+        "smoke_matrix.py all-review # all-review alias -> standalone (live-inclusive), triage, recovery, docs-review"
+        in matrix_help
+    )
 
     assert STANDALONE_SMOKE_CLI_SPEC.readme_required_snippets() == (
         "```bash\n.venv/bin/python scripts/standalone_smoke.py\n```",
@@ -690,10 +701,11 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
     )
     assert SMOKE_MATRIX_CLI_SPEC.readme_required_snippets() == (
         "```bash\n.venv/bin/python scripts/smoke_matrix.py\n```",
-        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, or `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`.",
+        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`, or `.venv/bin/python scripts/smoke_matrix.py all-review` to combine both in one rerun.",
         "`.venv/bin/python scripts/smoke_matrix.py local` explicitly re-runs the default local matrix (`standalone`, `triage`, `recovery`)",
         "`.venv/bin/python scripts/smoke_matrix.py all` swaps in the live-inclusive standalone bundle (`standalone (live-inclusive)`, `triage`, `recovery`)",
         "`.venv/bin/python scripts/smoke_matrix.py review` adds the optional smoke-doc artifact review lane (`standalone`, `triage`, `recovery`, `docs-review`)",
+        "`.venv/bin/python scripts/smoke_matrix.py all-review` combines the live-inclusive standalone bundle with the smoke-doc artifact review lane (`standalone (live-inclusive)`, `triage`, `recovery`, `docs-review`)",
         "`.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle",
         "`.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle",
         "`.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle",
@@ -763,11 +775,12 @@ def test_smoke_wrapper_cli_specs_render_readme_sections() -> None:
         "```bash\n"
         ".venv/bin/python scripts/smoke_matrix.py\n"
         "```\n\n"
-        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, or `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`.\n\n"
+        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`, or `.venv/bin/python scripts/smoke_matrix.py all-review` to combine both in one rerun.\n\n"
         "Operator shortcuts:\n"
         "- `.venv/bin/python scripts/smoke_matrix.py local` explicitly re-runs the default local matrix (`standalone`, `triage`, `recovery`)\n"
         "- `.venv/bin/python scripts/smoke_matrix.py all` swaps in the live-inclusive standalone bundle (`standalone (live-inclusive)`, `triage`, `recovery`)\n"
         "- `.venv/bin/python scripts/smoke_matrix.py review` adds the optional smoke-doc artifact review lane (`standalone`, `triage`, `recovery`, `docs-review`)\n"
+        "- `.venv/bin/python scripts/smoke_matrix.py all-review` combines the live-inclusive standalone bundle with the smoke-doc artifact review lane (`standalone (live-inclusive)`, `triage`, `recovery`, `docs-review`)\n"
         "- `.venv/bin/python scripts/smoke_matrix.py triage` runs only the session-triage bundle\n"
         "- `.venv/bin/python scripts/smoke_matrix.py standalone` runs only the standalone local bundle\n"
         "- `.venv/bin/python scripts/smoke_matrix.py recovery` runs only the recovery bundle\n"

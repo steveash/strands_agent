@@ -114,13 +114,13 @@ def _live_inclusive_failure_hint(target: SmokeScriptTarget, observed_lines: Sequ
     normalized_lines = [line.rstrip("\n") for line in observed_lines]
     if any(LIVE_RUNTIME_REQUESTED_FALSE_LINE in line for line in normalized_lines):
         return (
-            "hint: `smoke_matrix.py all` swaps in `standalone_smoke.py all`; export "
+            "hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`; export "
             "`STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
             "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning the live-inclusive matrix."
         )
     if any(LIVE_RUNTIME_API_KEY_ERROR in line for line in normalized_lines):
         return (
-            "hint: `smoke_matrix.py all` reached the live runtime, but `OPENAI_API_KEY` was missing; "
+            "hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` was missing; "
             "export `OPENAI_API_KEY` (and optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning."
         )
     return None

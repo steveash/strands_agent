@@ -349,6 +349,22 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--drifted-readme-path",
+        type=Path,
+        help=(
+            "Record the drifted README artifact path in machine-readable JSON output so downstream tooling "
+            "can chain directly into the review copy that was checked or repaired."
+        ),
+    )
+    parser.add_argument(
+        "--bundle-index-path",
+        type=Path,
+        help=(
+            "Record the docs-review bundle-index artifact path in machine-readable JSON output so downstream "
+            "tooling can chain into the broader review bundle contract."
+        ),
+    )
+    parser.add_argument(
         "--render-output-dir",
         type=Path,
         help=(

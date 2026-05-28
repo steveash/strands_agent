@@ -713,8 +713,8 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
     description=(
         "Run standalone, session-triage, recovery, and optional docs-review smoke bundles together "
         "with fail-fast handling. The default 'local' matrix excludes the opt-in live runtime smoke "
-        "target, the 'all' alias swaps in the live-inclusive standalone bundle, and the 'review' alias "
-        "adds a smoke-doc artifact review lane."
+        "target, the 'all' alias swaps in the live-inclusive standalone bundle, the 'review' alias "
+        "adds a smoke-doc artifact review lane, and the 'all-review' alias combines both."
     ),
     item_help="Which smoke bundle or bundle matrix to run.",
     target_templates=(
@@ -743,6 +743,7 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
         "local": ("standalone-local", "triage", "recovery"),
         "all": ("standalone-all", "triage", "recovery"),
         "review": ("standalone-local", "triage", "recovery", "docs-review"),
+        "all-review": ("standalone-all", "triage", "recovery", "docs-review"),
     },
     choice_target_names={
         "standalone": ("standalone-local",),
@@ -752,9 +753,11 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
         "local": ("standalone-local", "triage", "recovery"),
         "all": ("standalone-all", "triage", "recovery"),
         "review": ("standalone-local", "triage", "recovery", "docs-review"),
+        "all-review": ("standalone-all", "triage", "recovery", "docs-review"),
     },
     choice_display_names={
         "all": ("standalone (live-inclusive)", "triage", "recovery"),
+        "all-review": ("standalone (live-inclusive)", "triage", "recovery", "docs-review"),
     },
     examples=(
         SmokeCliExample("smoke_matrix.py"),
@@ -780,6 +783,14 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
             readme_description=(
                 "adds the optional smoke-doc artifact review lane "
                 "(`standalone`, `triage`, `recovery`, `docs-review`)"
+            ),
+        ),
+        SmokeCliExample(
+            "smoke_matrix.py all-review",
+            target_name="all-review",
+            readme_description=(
+                "combines the live-inclusive standalone bundle with the smoke-doc artifact review lane "
+                "(`standalone (live-inclusive)`, `triage`, `recovery`, `docs-review`)"
             ),
         ),
         SmokeCliExample(
@@ -814,10 +825,10 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
     readme_section_heading="Full local smoke matrix",
     readme_section_intro="To run the current local smoke bundles together with fail-fast handling:",
     help_required_snippets_extra=(
-        "The default 'local' matrix excludes the opt-in live runtime smoke target, the 'all' alias swaps in the live-inclusive standalone bundle, and the 'review' alias adds a smoke-doc artifact review lane.",
+        "The default 'local' matrix excludes the opt-in live runtime smoke target, the 'all' alias swaps in the live-inclusive standalone bundle, the 'review' alias adds a smoke-doc artifact review lane, and the 'all-review' alias combines both.",
     ),
     readme_intro_paragraphs=(
-        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, or `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`.",
+        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`, or `.venv/bin/python scripts/smoke_matrix.py all-review` to combine both in one rerun.",
     ),
     alias_heading="Bundle aliases",
     single_choice_description="single bundle",

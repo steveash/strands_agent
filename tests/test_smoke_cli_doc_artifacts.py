@@ -75,9 +75,11 @@ def test_build_smoke_cli_doc_render_manifest_payload_tracks_review_artifacts(tmp
 
 def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> None:
     drifted_markdown, diff_sections, rendered_sections = _drift_fixture()
+    drifted_readme_path = Path("artifacts/README-drifted.md")
     render_output_dir = Path("artifacts/rendered")
     render_manifest_path = Path("artifacts/render-manifest.json")
     render_diff_path = Path("artifacts/render-review.patch")
+    bundle_index_path = Path("artifacts/bundle-index.json")
 
     payload = build_smoke_cli_doc_drift_report_payload(
         readme_path=Path("README.md"),
@@ -87,16 +89,20 @@ def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> N
         diff_sections=diff_sections,
         include_diff_lines=False,
         check=True,
+        drifted_readme_path=drifted_readme_path,
         render_output_dir=render_output_dir,
         render_manifest_path=render_manifest_path,
         render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
     )
 
     section = payload["sections"][0]
     assert payload["check"] is True
     assert payload["diff"] is False
+    assert payload["drifted_readme_path"] == str(drifted_readme_path)
     assert payload["drifted_sections"] == [{"script_name": "standalone_smoke"}]
     assert payload["drifted_targets"] == ["standalone_smoke"]
+    assert payload["bundle_index_path"] == str(bundle_index_path)
     assert payload["readme_path"] == "README.md"
     assert payload["render_output_dir"] == str(render_output_dir)
     assert payload["render_manifest_path"] == str(render_manifest_path)
@@ -110,9 +116,11 @@ def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> N
 
 def test_build_smoke_cli_doc_repair_report_payload_tracks_stdout_vs_write_mode() -> None:
     drifted_markdown, diff_sections, rendered_sections = _drift_fixture()
+    drifted_readme_path = Path("artifacts/README-drifted.md")
     render_output_dir = Path("artifacts/rendered")
     render_manifest_path = Path("artifacts/render-manifest.json")
     render_diff_path = Path("artifacts/render-review.patch")
+    bundle_index_path = Path("artifacts/bundle-index.json")
 
     payload = build_smoke_cli_doc_repair_report_payload(
         readme_path=Path("README.md"),
@@ -124,9 +132,11 @@ def test_build_smoke_cli_doc_repair_report_payload_tracks_stdout_vs_write_mode()
         rendered_sections=rendered_sections,
         diff_sections=diff_sections,
         stdout=True,
+        drifted_readme_path=drifted_readme_path,
         render_output_dir=render_output_dir,
         render_manifest_path=render_manifest_path,
         render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
     )
 
     section = payload["sections"][0]
@@ -134,6 +144,8 @@ def test_build_smoke_cli_doc_repair_report_payload_tracks_stdout_vs_write_mode()
     assert payload["mode"] == "stdout"
     assert payload["repaired_count"] == 1
     assert payload["repaired_targets"] == ["standalone_smoke"]
+    assert payload["drifted_readme_path"] == str(drifted_readme_path)
+    assert payload["bundle_index_path"] == str(bundle_index_path)
     assert payload["render_output_dir"] == str(render_output_dir)
     assert payload["render_manifest_path"] == str(render_manifest_path)
     assert payload["render_diff_path"] == str(render_diff_path)
