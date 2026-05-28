@@ -677,35 +677,35 @@ SESSION_RECOVERY_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
 )
 
 SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review"
-SMOKE_MATRIX_REVIEW_BUNDLE_INDEX_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/index.json"
-SMOKE_MATRIX_REVIEW_DRIFTED_README_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/README-drifted.md"
-SMOKE_MATRIX_REVIEW_RENDER_OUTPUT_DIR = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/rendered"
-SMOKE_MATRIX_REVIEW_RENDER_MANIFEST_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/render-manifest.json"
-SMOKE_MATRIX_REVIEW_RENDER_DIFF_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/render-review.patch"
-SMOKE_MATRIX_REVIEW_FIX_CHECK_JSON_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/fix-check.json"
-SMOKE_MATRIX_REVIEW_FIX_REPAIR_JSON_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/fix-repair.json"
-SMOKE_MATRIX_REVIEW_FIX_POST_CHECK_JSON_PATH = f"{SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT}/fix-post-check.json"
-SMOKE_MATRIX_DOCS_REVIEW_ARGS = (
-    "all",
-    "--output-dir",
-    SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT,
-    "--bundle-index-path",
-    SMOKE_MATRIX_REVIEW_BUNDLE_INDEX_PATH,
-    "--drifted-readme-path",
-    SMOKE_MATRIX_REVIEW_DRIFTED_README_PATH,
-    "--render-output-dir",
-    SMOKE_MATRIX_REVIEW_RENDER_OUTPUT_DIR,
-    "--render-manifest-path",
-    SMOKE_MATRIX_REVIEW_RENDER_MANIFEST_PATH,
-    "--render-diff-path",
-    SMOKE_MATRIX_REVIEW_RENDER_DIFF_PATH,
-    "--fix-check-json-path",
-    SMOKE_MATRIX_REVIEW_FIX_CHECK_JSON_PATH,
-    "--fix-repair-json-path",
-    SMOKE_MATRIX_REVIEW_FIX_REPAIR_JSON_PATH,
-    "--fix-post-check-json-path",
-    SMOKE_MATRIX_REVIEW_FIX_POST_CHECK_JSON_PATH,
-)
+SMOKE_MATRIX_ALL_REVIEW_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
+
+
+def smoke_matrix_docs_review_args(artifact_root: str) -> tuple[str, ...]:
+    return (
+        "all",
+        "--output-dir",
+        artifact_root,
+        "--bundle-index-path",
+        f"{artifact_root}/index.json",
+        "--drifted-readme-path",
+        f"{artifact_root}/README-drifted.md",
+        "--render-output-dir",
+        f"{artifact_root}/rendered",
+        "--render-manifest-path",
+        f"{artifact_root}/render-manifest.json",
+        "--render-diff-path",
+        f"{artifact_root}/render-review.patch",
+        "--fix-check-json-path",
+        f"{artifact_root}/fix-check.json",
+        "--fix-repair-json-path",
+        f"{artifact_root}/fix-repair.json",
+        "--fix-post-check-json-path",
+        f"{artifact_root}/fix-post-check.json",
+    )
+
+
+SMOKE_MATRIX_DOCS_REVIEW_ARGS = smoke_matrix_docs_review_args(SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT)
+SMOKE_MATRIX_ALL_REVIEW_DOCS_REVIEW_ARGS = smoke_matrix_docs_review_args(SMOKE_MATRIX_ALL_REVIEW_ARTIFACT_ROOT)
 
 
 SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
@@ -737,13 +737,19 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
             args=SMOKE_MATRIX_DOCS_REVIEW_ARGS,
             display_name="docs-review",
         ),
+        SmokeScriptTargetTemplate(
+            "docs-review-all",
+            "smoke_cli_docs_artifacts_smoke.py",
+            args=SMOKE_MATRIX_ALL_REVIEW_DOCS_REVIEW_ARGS,
+            display_name="docs-review",
+        ),
     ),
     default_target_name="local",
     alias_target_names={
         "local": ("standalone-local", "triage", "recovery"),
         "all": ("standalone-all", "triage", "recovery"),
         "review": ("standalone-local", "triage", "recovery", "docs-review"),
-        "all-review": ("standalone-all", "triage", "recovery", "docs-review"),
+        "all-review": ("standalone-all", "triage", "recovery", "docs-review-all"),
     },
     choice_target_names={
         "standalone": ("standalone-local",),
@@ -753,7 +759,7 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
         "local": ("standalone-local", "triage", "recovery"),
         "all": ("standalone-all", "triage", "recovery"),
         "review": ("standalone-local", "triage", "recovery", "docs-review"),
-        "all-review": ("standalone-all", "triage", "recovery", "docs-review"),
+        "all-review": ("standalone-all", "triage", "recovery", "docs-review-all"),
     },
     choice_display_names={
         "all": ("standalone (live-inclusive)", "triage", "recovery"),
@@ -790,6 +796,8 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="all-review",
             readme_description=(
                 "combines the live-inclusive standalone bundle with the smoke-doc artifact review lane "
+                "while persisting docs-review artifacts under "
+                "`artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review` "
                 "(`standalone (live-inclusive)`, `triage`, `recovery`, `docs-review`)"
             ),
         ),
@@ -828,7 +836,7 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
         "The default 'local' matrix excludes the opt-in live runtime smoke target, the 'all' alias swaps in the live-inclusive standalone bundle, the 'review' alias adds a smoke-doc artifact review lane, and the 'all-review' alias combines both.",
     ),
     readme_intro_paragraphs=(
-        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`, or `.venv/bin/python scripts/smoke_matrix.py all-review` to combine both in one rerun.",
+        "This default `local` matrix runs the standalone local bundle plus the session-triage and recovery bundles together, suppresses the nested wrapper summary footers so the combined output stays focused on per-check lines, prints bundle-level `running ...`, `... passed in ...s`, or `... failed in ...s` summaries, and finishes with an overall matrix summary line. Use `.venv/bin/python scripts/smoke_matrix.py all` after exporting live-runtime env vars if you want the `all` alias to swap in the live-inclusive standalone bundle, `.venv/bin/python scripts/smoke_matrix.py review` to append a smoke-doc artifact review lane that persists its bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-review`, or `.venv/bin/python scripts/smoke_matrix.py all-review` to combine both in one rerun while persisting the docs-review bundle under `artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review`.",
     ),
     alias_heading="Bundle aliases",
     single_choice_description="single bundle",

@@ -23,6 +23,7 @@ ALL_BUNDLE_NAMES = list(CLI_SPEC.resolve_target_names("all"))
 SUPPRESSED_NESTED_SUMMARY_PREFIXES = NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES
 LIVE_INCLUSIVE_STANDALONE_TARGET_NAME = "standalone-all"
 DOCS_REVIEW_TARGET_NAME = "docs-review"
+DOCS_REVIEW_ALL_TARGET_NAME = "docs-review-all"
 DOCS_REVIEW_OUTPUT_DIR_FLAG = "--output-dir"
 DOCS_REVIEW_BUNDLE_INDEX_FLAG = "--bundle-index-path"
 DOCS_REVIEW_DRIFTED_README_FLAG = "--drifted-readme-path"
@@ -55,7 +56,7 @@ def _extract_target_arg_path(target: SmokeScriptTarget, flag_name: str) -> str |
 
 
 def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[str, ...]:
-    if target.name != DOCS_REVIEW_TARGET_NAME:
+    if target.name not in {DOCS_REVIEW_TARGET_NAME, DOCS_REVIEW_ALL_TARGET_NAME}:
         return ()
     output_dir = _extract_target_arg_path(target, DOCS_REVIEW_OUTPUT_DIR_FLAG)
     bundle_index_path = _extract_target_arg_path(target, DOCS_REVIEW_BUNDLE_INDEX_FLAG)
