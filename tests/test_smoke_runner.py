@@ -604,6 +604,17 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
         "--fix-post-check-json-path",
         "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json",
     )
+    assert docs_review_targets[0].metadata == {
+        "artifact_root": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+        "bundle_index_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
+        "drifted_readme_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md",
+        "render_output_dir": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered",
+        "render_manifest_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json",
+        "render_diff_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch",
+        "fix_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json",
+        "fix_repair_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json",
+        "fix_post_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json",
+    }
     all_review_targets = spec.resolve_targets(script_dir=tmp_path, requested_target_name="all-review")
     assert [target.name for target in all_review_targets] == ["standalone-all", "triage", "recovery", "docs-review-all"]
     assert all_review_targets[-1].args == (
@@ -627,6 +638,17 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
         "--fix-post-check-json-path",
         "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json",
     )
+    assert all_review_targets[-1].metadata == {
+        "artifact_root": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+        "bundle_index_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json",
+        "drifted_readme_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/README-drifted.md",
+        "render_output_dir": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/rendered",
+        "render_manifest_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-manifest.json",
+        "render_diff_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-review.patch",
+        "fix_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-check.json",
+        "fix_repair_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-repair.json",
+        "fix_post_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json",
+    }
 
     with pytest.raises(ValueError, match="unknown smoke wrapper cli spec 'missing_smoke'"):
         smoke_wrapper_cli_spec("missing_smoke")

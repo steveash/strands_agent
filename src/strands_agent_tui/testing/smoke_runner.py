@@ -18,6 +18,7 @@ class SmokeScriptTarget:
     script_path: Path
     args: tuple[str, ...] = ()
     display_name: str | None = None
+    metadata: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def display_label(self) -> str:
@@ -43,6 +44,7 @@ class SmokeScriptTargetTemplate:
     script_filename: str
     args: tuple[str, ...] = ()
     display_name: str | None = None
+    metadata: Mapping[str, str] = field(default_factory=dict)
 
     def build_target(self, *, script_dir: Path) -> SmokeScriptTarget:
         return SmokeScriptTarget(
@@ -50,6 +52,7 @@ class SmokeScriptTargetTemplate:
             script_dir / self.script_filename,
             args=self.args,
             display_name=self.display_name,
+            metadata=dict(self.metadata),
         )
 
     def build_doc_target(self) -> SmokeScriptTarget:
@@ -58,6 +61,7 @@ class SmokeScriptTargetTemplate:
             Path(self.script_filename),
             args=self.args,
             display_name=self.display_name,
+            metadata=dict(self.metadata),
         )
 
 
@@ -680,30 +684,49 @@ SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-ma
 SMOKE_MATRIX_ALL_REVIEW_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
 
 
+def smoke_matrix_docs_review_metadata(artifact_root: str) -> dict[str, str]:
+    return {
+        "artifact_root": artifact_root,
+        "bundle_index_path": f"{artifact_root}/index.json",
+        "drifted_readme_path": f"{artifact_root}/README-drifted.md",
+        "render_output_dir": f"{artifact_root}/rendered",
+        "render_manifest_path": f"{artifact_root}/render-manifest.json",
+        "render_diff_path": f"{artifact_root}/render-review.patch",
+        "fix_check_json_path": f"{artifact_root}/fix-check.json",
+        "fix_repair_json_path": f"{artifact_root}/fix-repair.json",
+        "fix_post_check_json_path": f"{artifact_root}/fix-post-check.json",
+    }
+
+
 def smoke_matrix_docs_review_args(artifact_root: str) -> tuple[str, ...]:
+    metadata = smoke_matrix_docs_review_metadata(artifact_root)
     return (
         "all",
         "--output-dir",
-        artifact_root,
+        metadata["artifact_root"],
         "--bundle-index-path",
-        f"{artifact_root}/index.json",
+        metadata["bundle_index_path"],
         "--drifted-readme-path",
-        f"{artifact_root}/README-drifted.md",
+        metadata["drifted_readme_path"],
         "--render-output-dir",
-        f"{artifact_root}/rendered",
+        metadata["render_output_dir"],
         "--render-manifest-path",
-        f"{artifact_root}/render-manifest.json",
+        metadata["render_manifest_path"],
         "--render-diff-path",
-        f"{artifact_root}/render-review.patch",
+        metadata["render_diff_path"],
         "--fix-check-json-path",
-        f"{artifact_root}/fix-check.json",
+        metadata["fix_check_json_path"],
         "--fix-repair-json-path",
-        f"{artifact_root}/fix-repair.json",
+        metadata["fix_repair_json_path"],
         "--fix-post-check-json-path",
-        f"{artifact_root}/fix-post-check.json",
+        metadata["fix_post_check_json_path"],
     )
 
 
+SMOKE_MATRIX_DOCS_REVIEW_METADATA = smoke_matrix_docs_review_metadata(SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT)
+SMOKE_MATRIX_ALL_REVIEW_DOCS_REVIEW_METADATA = smoke_matrix_docs_review_metadata(
+    SMOKE_MATRIX_ALL_REVIEW_ARTIFACT_ROOT
+)
 SMOKE_MATRIX_DOCS_REVIEW_ARGS = smoke_matrix_docs_review_args(SMOKE_MATRIX_REVIEW_ARTIFACT_ROOT)
 SMOKE_MATRIX_ALL_REVIEW_DOCS_REVIEW_ARGS = smoke_matrix_docs_review_args(SMOKE_MATRIX_ALL_REVIEW_ARTIFACT_ROOT)
 
@@ -736,12 +759,14 @@ SMOKE_MATRIX_CLI_SPEC = SmokeWrapperCliSpec(
             "smoke_cli_docs_artifacts_smoke.py",
             args=SMOKE_MATRIX_DOCS_REVIEW_ARGS,
             display_name="docs-review",
+            metadata=SMOKE_MATRIX_DOCS_REVIEW_METADATA,
         ),
         SmokeScriptTargetTemplate(
             "docs-review-all",
             "smoke_cli_docs_artifacts_smoke.py",
             args=SMOKE_MATRIX_ALL_REVIEW_DOCS_REVIEW_ARGS,
             display_name="docs-review",
+            metadata=SMOKE_MATRIX_ALL_REVIEW_DOCS_REVIEW_METADATA,
         ),
     ),
     default_target_name="local",

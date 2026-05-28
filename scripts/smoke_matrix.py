@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -35,6 +36,17 @@ DOCS_REVIEW_FIX_REPAIR_JSON_FLAG = "--fix-repair-json-path"
 DOCS_REVIEW_FIX_POST_CHECK_JSON_FLAG = "--fix-post-check-json-path"
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
+DOCS_REVIEW_ARTIFACT_METADATA_KEYS = (
+    "artifact_root",
+    "bundle_index_path",
+    "drifted_readme_path",
+    "render_output_dir",
+    "render_manifest_path",
+    "render_diff_path",
+    "fix_check_json_path",
+    "fix_repair_json_path",
+    "fix_post_check_json_path",
+)
 
 
 def _emit_matrix_line(message: str, *, stream) -> None:
@@ -55,9 +67,18 @@ def _extract_target_arg_path(target: SmokeScriptTarget, flag_name: str) -> str |
     return None
 
 
-def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[str, ...]:
+def _docs_review_artifact_paths(target: SmokeScriptTarget) -> dict[str, str]:
     if target.name not in {DOCS_REVIEW_TARGET_NAME, DOCS_REVIEW_ALL_TARGET_NAME}:
-        return ()
+        return {}
+
+    metadata_paths = {
+        key: value
+        for key in DOCS_REVIEW_ARTIFACT_METADATA_KEYS
+        if (value := target.metadata.get(key))
+    }
+    if metadata_paths:
+        return metadata_paths
+
     output_dir = _extract_target_arg_path(target, DOCS_REVIEW_OUTPUT_DIR_FLAG)
     bundle_index_path = _extract_target_arg_path(target, DOCS_REVIEW_BUNDLE_INDEX_FLAG)
 
@@ -83,6 +104,63 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
         fix_check_json_path = fix_check_json_path or str(artifact_root / "fix-check.json")
         fix_repair_json_path = fix_repair_json_path or str(artifact_root / "fix-repair.json")
         fix_post_check_json_path = fix_post_check_json_path or str(artifact_root / "fix-post-check.json")
+
+    paths: dict[str, str] = {}
+    if output_dir:
+        paths["artifact_root"] = output_dir
+    elif artifact_root is not None:
+        paths["artifact_root"] = str(artifact_root)
+    if bundle_index_path:
+        paths["bundle_index_path"] = bundle_index_path
+    if drifted_readme_path:
+        paths["drifted_readme_path"] = drifted_readme_path
+    if render_output_dir:
+        paths["render_output_dir"] = render_output_dir
+    if render_manifest_path:
+        paths["render_manifest_path"] = render_manifest_path
+    if render_diff_path:
+        paths["render_diff_path"] = render_diff_path
+    if fix_check_json_path:
+        paths["fix_check_json_path"] = fix_check_json_path
+    if fix_repair_json_path:
+        paths["fix_repair_json_path"] = fix_repair_json_path
+    if fix_post_check_json_path:
+        paths["fix_post_check_json_path"] = fix_post_check_json_path
+    return paths
+
+
+def _docs_review_artifact_metadata(target: SmokeScriptTarget) -> dict[str, str] | None:
+    paths = _docs_review_artifact_paths(target)
+    if not paths:
+        return None
+    return {
+        "display_name": target.display_label,
+        "target_name": target.name,
+        **paths,
+    }
+
+
+def _docs_review_artifact_metadata_message(target: SmokeScriptTarget) -> str | None:
+    metadata = _docs_review_artifact_metadata(target)
+    if metadata is None:
+        return None
+    return f"review metadata: {json.dumps(metadata, sort_keys=True)}"
+
+
+def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[str, ...]:
+    paths = _docs_review_artifact_paths(target)
+    if not paths:
+        return ()
+
+    output_dir = paths.get("artifact_root")
+    bundle_index_path = paths.get("bundle_index_path")
+    drifted_readme_path = paths.get("drifted_readme_path")
+    render_output_dir = paths.get("render_output_dir")
+    render_manifest_path = paths.get("render_manifest_path")
+    render_diff_path = paths.get("render_diff_path")
+    fix_check_json_path = paths.get("fix_check_json_path")
+    fix_repair_json_path = paths.get("fix_repair_json_path")
+    fix_post_check_json_path = paths.get("fix_post_check_json_path")
 
     messages: list[str] = []
     if output_dir and bundle_index_path:
@@ -156,6 +234,9 @@ def run_smoke_matrix(
                 SMOKE_MATRIX_WRAPPER.failed_message(item_name=target.display_label, elapsed_seconds=elapsed),
                 stream=stderr,
             )
+            artifact_metadata_message = _docs_review_artifact_metadata_message(target)
+            if artifact_metadata_message is not None:
+                _emit_matrix_line(artifact_metadata_message, stream=stderr)
             for artifact_location_message in _docs_review_artifact_location_messages(target):
                 _emit_matrix_line(artifact_location_message, stream=stderr)
             hint = _live_inclusive_failure_hint(target, observed_lines)
@@ -176,6 +257,9 @@ def run_smoke_matrix(
             SMOKE_MATRIX_WRAPPER.passed_message(item_name=target.display_label, elapsed_seconds=elapsed),
             stream=stdout,
         )
+        artifact_metadata_message = _docs_review_artifact_metadata_message(target)
+        if artifact_metadata_message is not None:
+            _emit_matrix_line(artifact_metadata_message, stream=stdout)
         for artifact_location_message in _docs_review_artifact_location_messages(target):
             _emit_matrix_line(artifact_location_message, stream=stdout)
 

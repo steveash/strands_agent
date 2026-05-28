@@ -1958,6 +1958,23 @@ def test_smoke_cli_doc_specs_follow_shared_wrapper_registry_order() -> None:
 
 
 
+def _expected_smoke_matrix_review_metadata_line(*, artifact_root: str, target_name: str) -> str:
+    payload = {
+        "artifact_root": artifact_root,
+        "bundle_index_path": f"{artifact_root}/index.json",
+        "display_name": "docs-review",
+        "drifted_readme_path": f"{artifact_root}/README-drifted.md",
+        "fix_check_json_path": f"{artifact_root}/fix-check.json",
+        "fix_post_check_json_path": f"{artifact_root}/fix-post-check.json",
+        "fix_repair_json_path": f"{artifact_root}/fix-repair.json",
+        "render_diff_path": f"{artifact_root}/render-review.patch",
+        "render_manifest_path": f"{artifact_root}/render-manifest.json",
+        "render_output_dir": f"{artifact_root}/rendered",
+        "target_name": target_name,
+    }
+    return "[smoke-matrix] review metadata: " + json.dumps(payload, sort_keys=True)
+
+
 def test_smoke_matrix_uses_shared_wrapper_summary_prefixes() -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
 
@@ -2206,6 +2223,10 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
         summary_metadata.passed_line(item_name="recovery", elapsed_seconds=0.5),
         summary_metadata.running_line(item_name="docs-review"),
         summary_metadata.passed_line(item_name="docs-review", elapsed_seconds=0.8),
+        _expected_smoke_matrix_review_metadata_line(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+            target_name="docs-review",
+        ),
         (
             "[smoke-matrix] review artifacts: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
@@ -2265,6 +2286,10 @@ def test_smoke_matrix_all_review_emits_distinct_artifact_location_after_docs_rev
         summary_metadata.passed_line(item_name="recovery", elapsed_seconds=0.5),
         summary_metadata.running_line(item_name="docs-review"),
         summary_metadata.passed_line(item_name="docs-review", elapsed_seconds=0.8),
+        _expected_smoke_matrix_review_metadata_line(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+            target_name="docs-review-all",
+        ),
         (
             "[smoke-matrix] review artifacts: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review "
@@ -2413,6 +2438,19 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
         display_name="docs-review",
     )
 
+    assert smoke_matrix._docs_review_artifact_metadata(target) == {
+        "artifact_root": "artifacts/review",
+        "bundle_index_path": "artifacts/review/index.json",
+        "display_name": "docs-review",
+        "drifted_readme_path": "artifacts/custom/README-review.md",
+        "fix_check_json_path": "artifacts/custom/fix-check.json",
+        "fix_post_check_json_path": "artifacts/custom/fix-post-check.json",
+        "fix_repair_json_path": "artifacts/custom/fix-repair.json",
+        "render_diff_path": "artifacts/custom/review.patch",
+        "render_manifest_path": "artifacts/custom/render.json",
+        "render_output_dir": "artifacts/custom/rendered-sections",
+        "target_name": "docs-review",
+    }
     assert smoke_matrix._docs_review_artifact_location_messages(target) == (
         "review artifacts: artifacts/review (index: artifacts/review/index.json)",
         "review drifted README: artifacts/custom/README-review.md",
@@ -2573,6 +2611,10 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
     assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="docs-review")]
     assert stderr.getvalue().splitlines() == [
         summary_metadata.failed_line(item_name="docs-review", elapsed_seconds=0.6),
+        _expected_smoke_matrix_review_metadata_line(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
+            target_name="docs-review",
+        ),
         (
             "[smoke-matrix] review artifacts: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
