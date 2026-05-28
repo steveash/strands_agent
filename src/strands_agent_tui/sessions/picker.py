@@ -172,6 +172,10 @@ class SessionSummary:
     has_workspace_edit_activity: bool = False
     has_pending_workspace_edit_approval: bool = False
     has_restored_pending_workspace_edit_approval: bool = False
+    pending_workspace_edit_age_sort_key: int = 0
+    pending_workspace_edit_oldest_at: str = ""
+    restored_pending_workspace_edit_age_sort_key: int = 0
+    restored_pending_workspace_edit_oldest_at: str = ""
     last_workspace_preview: str = ""
     recent_workspace_previews: list[str] = field(default_factory=list)
     last_workspace_inspect_preview: str = ""
@@ -186,6 +190,10 @@ class SessionSummary:
     has_shell_test_activity: bool = False
     has_pending_shell_test_approval: bool = False
     has_restored_pending_shell_test_approval: bool = False
+    pending_shell_test_age_sort_key: int = 0
+    pending_shell_test_oldest_at: str = ""
+    restored_pending_shell_test_age_sort_key: int = 0
+    restored_pending_shell_test_oldest_at: str = ""
     last_shell_preview: str = ""
     recent_shell_previews: list[str] = field(default_factory=list)
     last_shell_inspect_preview: str = ""
@@ -264,6 +272,23 @@ class SessionSummary:
         if filter_mode == "shell-test":
             return self.has_restored_pending_shell_test_approval
         return False
+
+    def pending_only_lane_oldest_age_and_timestamp(self, filter_mode: str) -> tuple[int, str]:
+        if filter_mode == "workspace-edit":
+            return self.pending_workspace_edit_age_sort_key, self.pending_workspace_edit_oldest_at
+        if filter_mode == "shell-test":
+            return self.pending_shell_test_age_sort_key, self.pending_shell_test_oldest_at
+        return 0, ""
+
+    def restored_pending_only_lane_oldest_age_and_timestamp(self, filter_mode: str) -> tuple[int, str]:
+        if filter_mode == "workspace-edit":
+            return (
+                self.restored_pending_workspace_edit_age_sort_key,
+                self.restored_pending_workspace_edit_oldest_at,
+            )
+        if filter_mode == "shell-test":
+            return self.restored_pending_shell_test_age_sort_key, self.restored_pending_shell_test_oldest_at
+        return 0, ""
 
     def render_line(
         self,
@@ -582,6 +607,10 @@ class ToolFilterMetrics:
 class PendingOnlyLaneMetrics:
     pending_only_sessions: int
     restored_pending_only_sessions: int
+    oldest_age_seconds: int
+    oldest_at: str = ""
+    restored_oldest_age_seconds: int = 0
+    restored_oldest_at: str = ""
 
 
 @dataclass(slots=True)
@@ -730,6 +759,18 @@ def _ordered_recent_sessions(
         )
         has_shell_inspect_activity, has_shell_test_activity = _shell_activity_presence(turns, pending_approvals)
         intervention_activity = _summarize_intervention_activity(turns, pending_approvals)
+        pending_workspace_edit_approvals = _pending_approvals_for_filter_mode(pending_approvals, "workspace-edit")
+        restored_pending_workspace_edit_approvals = _pending_approvals_for_filter_mode(
+            pending_approvals,
+            "workspace-edit",
+            restored_only=True,
+        )
+        pending_shell_test_approvals = _pending_approvals_for_filter_mode(pending_approvals, "shell-test")
+        restored_pending_shell_test_approvals = _pending_approvals_for_filter_mode(
+            pending_approvals,
+            "shell-test",
+            restored_only=True,
+        )
 
         summary = SessionSummary(
             session_id=store.session_id,
@@ -790,14 +831,15 @@ def _ordered_recent_sessions(
             ),
             has_workspace_inspect_activity=has_workspace_inspect_activity,
             has_workspace_edit_activity=has_workspace_edit_activity,
-            has_pending_workspace_edit_approval=any(
-                str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES
-                for approval in pending_approvals
+            has_pending_workspace_edit_approval=bool(pending_workspace_edit_approvals),
+            has_restored_pending_workspace_edit_approval=bool(restored_pending_workspace_edit_approvals),
+            pending_workspace_edit_age_sort_key=_pending_approval_age_seconds(pending_workspace_edit_approvals) or 0,
+            pending_workspace_edit_oldest_at=_oldest_approval_timestamp_display(pending_workspace_edit_approvals),
+            restored_pending_workspace_edit_age_sort_key=(
+                _pending_approval_age_seconds(restored_pending_workspace_edit_approvals) or 0
             ),
-            has_restored_pending_workspace_edit_approval=any(
-                str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES
-                and approval.restored_from_session
-                for approval in pending_approvals
+            restored_pending_workspace_edit_oldest_at=_oldest_approval_timestamp_display(
+                restored_pending_workspace_edit_approvals
             ),
             last_workspace_preview=_latest_workspace_preview(turns),
             recent_workspace_previews=_recent_workspace_previews(turns),
@@ -811,24 +853,15 @@ def _ordered_recent_sessions(
             shell_lane_badges=_shell_lane_badges(has_shell_inspect_activity, has_shell_test_activity),
             has_shell_inspect_activity=has_shell_inspect_activity,
             has_shell_test_activity=has_shell_test_activity,
-            has_pending_shell_test_approval=any(
-                str(approval.tool_name or "").strip() == "run_shell_command"
-                and _is_test_shell_command_data(
-                    shell_policy="",
-                    shell_command_family="",
-                    command=_approval_command_from_args(approval.args),
-                )
-                for approval in pending_approvals
+            has_pending_shell_test_approval=bool(pending_shell_test_approvals),
+            has_restored_pending_shell_test_approval=bool(restored_pending_shell_test_approvals),
+            pending_shell_test_age_sort_key=_pending_approval_age_seconds(pending_shell_test_approvals) or 0,
+            pending_shell_test_oldest_at=_oldest_approval_timestamp_display(pending_shell_test_approvals),
+            restored_pending_shell_test_age_sort_key=(
+                _pending_approval_age_seconds(restored_pending_shell_test_approvals) or 0
             ),
-            has_restored_pending_shell_test_approval=any(
-                str(approval.tool_name or "").strip() == "run_shell_command"
-                and approval.restored_from_session
-                and _is_test_shell_command_data(
-                    shell_policy="",
-                    shell_command_family="",
-                    command=_approval_command_from_args(approval.args),
-                )
-                for approval in pending_approvals
+            restored_pending_shell_test_oldest_at=_oldest_approval_timestamp_display(
+                restored_pending_shell_test_approvals
             ),
             last_shell_preview=_latest_shell_preview(turns),
             recent_shell_previews=_recent_shell_previews(turns),
@@ -2417,6 +2450,33 @@ def _approval_tool_family_for_values(*, tool_name: str, command: str, shell_comm
     return "tool"
 
 
+def _pending_approvals_for_filter_mode(
+    pending_approvals: Sequence[ApprovalRequest],
+    filter_mode: str,
+    *,
+    restored_only: bool | None = None,
+) -> list[ApprovalRequest]:
+    approvals = [
+        approval
+        for approval in pending_approvals
+        if restored_only is None or approval.restored_from_session is restored_only
+    ]
+    if filter_mode == "workspace-edit":
+        return [approval for approval in approvals if str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES]
+    if filter_mode == "shell-test":
+        return [
+            approval
+            for approval in approvals
+            if str(approval.tool_name or "").strip() == "run_shell_command"
+            and _is_test_shell_command_data(
+                shell_policy="",
+                shell_command_family="",
+                command=_approval_command_from_args(approval.args),
+            )
+        ]
+    return []
+
+
 def _render_approval_focus_badges(record: dict[str, object] | None) -> list[str]:
     if record is None:
         return []
@@ -2913,6 +2973,15 @@ def _format_oldest_age_clause(age_seconds: int, timestamp: str = "") -> str:
     return f" ({clause})"
 
 
+def _render_age_timestamp_metric(label: str, age_seconds: int, timestamp: str = "") -> str:
+    if age_seconds <= 0:
+        return ""
+    metric = f"{label}: {_format_age_compact(age_seconds)}"
+    if timestamp:
+        metric += f" @ {timestamp}"
+    return metric
+
+
 def _intervention_restored_age_and_timestamp(summary: SessionSummary) -> tuple[int, str]:
     candidates = [
         (summary.restored_pending_approval_age_sort_key, summary.restored_pending_approval_oldest_at),
@@ -3167,17 +3236,41 @@ def _summarize_pending_only_lane_metrics(
 ) -> PendingOnlyLaneMetrics:
     pending_only_sessions = 0
     restored_pending_only_sessions = 0
+    oldest_age_seconds = 0
+    oldest_at = ""
+    restored_oldest_age_seconds = 0
+    restored_oldest_at = ""
 
     for summary in summaries:
         if not summary.has_pending_only_lane_match(filter_mode):
             continue
         pending_only_sessions += 1
+        lane_age_seconds, lane_timestamp = summary.pending_only_lane_oldest_age_and_timestamp(filter_mode)
+        oldest_age_seconds, oldest_at = _update_oldest_age_and_timestamp(
+            oldest_age_seconds,
+            oldest_at,
+            lane_age_seconds,
+            lane_timestamp,
+        )
         if summary.has_restored_pending_only_lane_match(filter_mode):
             restored_pending_only_sessions += 1
+            restored_age_seconds, restored_timestamp = summary.restored_pending_only_lane_oldest_age_and_timestamp(
+                filter_mode
+            )
+            restored_oldest_age_seconds, restored_oldest_at = _update_oldest_age_and_timestamp(
+                restored_oldest_age_seconds,
+                restored_oldest_at,
+                restored_age_seconds,
+                restored_timestamp,
+            )
 
     return PendingOnlyLaneMetrics(
         pending_only_sessions=pending_only_sessions,
         restored_pending_only_sessions=restored_pending_only_sessions,
+        oldest_age_seconds=oldest_age_seconds,
+        oldest_at=oldest_at,
+        restored_oldest_age_seconds=restored_oldest_age_seconds,
+        restored_oldest_at=restored_oldest_at,
     )
 
 
@@ -3197,6 +3290,12 @@ def _format_pending_only_lane_metrics(metrics: PendingOnlyLaneMetrics) -> list[s
     return [
         _render_session_count_metric("pending-only", metrics.pending_only_sessions),
         _render_session_count_metric("restored pending-only", metrics.restored_pending_only_sessions),
+        _render_age_timestamp_metric("oldest pending-only", metrics.oldest_age_seconds, metrics.oldest_at),
+        _render_age_timestamp_metric(
+            "oldest restored pending-only",
+            metrics.restored_oldest_age_seconds,
+            metrics.restored_oldest_at,
+        ),
     ]
 
 

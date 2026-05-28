@@ -298,7 +298,11 @@ def test_render_session_picker_surfaces_workspace_rollups_and_overlap(tmp_path: 
         in edit_rendered
     )
     assert "Workspace focus: edit" in edit_rendered
-    assert "Workspace edit queue mix: pending-only: 2 sessions" in edit_rendered
+    assert (
+        "Workspace edit queue mix: pending-only: 2 sessions "
+        f"| oldest pending-only: 5d @ {_format_test_timestamp(edit_at)}"
+        in edit_rendered
+    )
 
 
 
@@ -342,7 +346,11 @@ def test_render_session_picker_surfaces_shell_rollups_and_overlap(tmp_path: Path
         in test_rendered
     )
     assert "Shell focus: test" in test_rendered
-    assert "Shell test queue mix: pending-only: 2 sessions" in test_rendered
+    assert (
+        "Shell test queue mix: pending-only: 2 sessions "
+        f"| oldest pending-only: 5d @ {_format_test_timestamp(test_at)}"
+        in test_rendered
+    )
 
 
 def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_lane(tmp_path: Path) -> None:
@@ -426,6 +434,52 @@ def test_render_session_picker_marks_pending_only_workspace_and_shell_lane_match
     assert "shell focus: pending only" in shell_test_rendered
     assert "- shell focus: pending only until a test executes" in shell_test_rendered
     assert "Shell test queue mix: pending-only: 1 session" in shell_test_rendered
+
+
+def test_render_session_picker_surfaces_restored_pending_only_queue_age_cues(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    fresh_edit_at = now - timedelta(days=2)
+    restored_edit_at = now - timedelta(days=6)
+    fresh_test_at = now - timedelta(days=3)
+    restored_test_at = now - timedelta(days=7)
+
+    workspace_root = tmp_path / "workspace-restored"
+    seed_workspace_edit_session(
+        workspace_root,
+        session_id="session-workspace-edit-fresh",
+        created_at=fresh_edit_at.isoformat(),
+    )
+    seed_workspace_edit_session(
+        workspace_root,
+        session_id="session-workspace-edit-restored",
+        restored_from_session=True,
+        created_at=restored_edit_at.isoformat(),
+    )
+
+    shell_root = tmp_path / "shell-restored"
+    seed_shell_test_session(
+        shell_root,
+        session_id="session-shell-test-fresh",
+        created_at=fresh_test_at.isoformat(),
+    )
+    seed_shell_test_session(
+        shell_root,
+        session_id="session-shell-test-restored",
+        restored_from_session=True,
+        created_at=restored_test_at.isoformat(),
+    )
+
+    workspace_edit_rendered = render_session_picker(workspace_root, filter_mode="workspace-edit")
+    shell_test_rendered = render_session_picker(shell_root, filter_mode="shell-test")
+
+    assert (
+        f"oldest restored pending-only: 6d @ {_format_test_timestamp(restored_edit_at)}"
+        in workspace_edit_rendered
+    )
+    assert (
+        f"oldest restored pending-only: 7d @ {_format_test_timestamp(restored_test_at)}"
+        in shell_test_rendered
+    )
 
 
 def test_render_session_picker_surfaces_tool_rollup_timestamps(tmp_path: Path) -> None:
