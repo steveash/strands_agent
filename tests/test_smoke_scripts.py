@@ -2749,7 +2749,92 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
             "[smoke-matrix] review fix-post-check JSON: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json"
         ),
+        (
+            "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
+            "`standalone_smoke.py docs-focused`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
+            "docs-review artifacts without the rest of the matrix."
+        ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=1, elapsed_seconds=2.5),
+    ]
+
+
+def test_smoke_matrix_all_review_docs_review_failure_emits_docs_focused_hint(monkeypatch) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    summary_metadata = SMOKE_MATRIX_WRAPPER
+
+    def _run_smoke_target(target, **_kwargs):
+        return 1 if target.name == "docs-review-all" else 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.0, 1.3, 2.0, 2.4, 3.0, 3.5, 4.2, 5.0, 5.8])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main(["all-review"])
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == [
+        summary_metadata.running_line(item_name="standalone"),
+        summary_metadata.passed_line(item_name="standalone", elapsed_seconds=0.3),
+        summary_metadata.running_line(item_name="triage"),
+        summary_metadata.passed_line(item_name="triage", elapsed_seconds=0.4),
+        summary_metadata.running_line(item_name="recovery"),
+        summary_metadata.passed_line(item_name="recovery", elapsed_seconds=0.5),
+        summary_metadata.running_line(item_name="docs-review"),
+    ]
+    assert stderr.getvalue().splitlines() == [
+        summary_metadata.failed_line(item_name="docs-review", elapsed_seconds=0.8),
+        _expected_smoke_matrix_review_metadata_line(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+            target_name="docs-review-all",
+        ),
+        (
+            "[smoke-matrix] review artifacts: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review "
+            "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json)"
+        ),
+        (
+            "[smoke-matrix] review matrix summary: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
+        ),
+        (
+            "[smoke-matrix] review drifted README: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/README-drifted.md"
+        ),
+        (
+            "[smoke-matrix] review rendered sections: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/rendered"
+        ),
+        (
+            "[smoke-matrix] review render manifest: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-manifest.json"
+        ),
+        (
+            "[smoke-matrix] review render diff: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-review.patch"
+        ),
+        (
+            "[smoke-matrix] review fix-check JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-check.json"
+        ),
+        (
+            "[smoke-matrix] review fix-repair JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-repair.json"
+        ),
+        (
+            "[smoke-matrix] review fix-post-check JSON: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json"
+        ),
+        (
+            "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
+            "`standalone_smoke.py docs-focused`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
+            "docs-review artifacts without the rest of the matrix."
+        ),
+        summary_metadata.failure_summary_line(passed_count=3, total_count=4, elapsed_seconds=5.8),
     ]
 
 

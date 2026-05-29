@@ -35,6 +35,11 @@ DOCS_REVIEW_FIX_CHECK_JSON_FLAG = "--fix-check-json-path"
 DOCS_REVIEW_FIX_REPAIR_JSON_FLAG = "--fix-repair-json-path"
 DOCS_REVIEW_FIX_POST_CHECK_JSON_FLAG = "--fix-post-check-json-path"
 DOCS_REVIEW_MATRIX_SUMMARY_FILENAME = "matrix-summary.json"
+DOCS_FOCUSED_RERUN_HINT = (
+    "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-focused`; rerun "
+    "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + docs-review "
+    "artifacts without the rest of the matrix."
+)
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
 DOCS_REVIEW_ARTIFACT_METADATA_KEYS = (
@@ -222,6 +227,12 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
     return tuple(messages)
 
 
+def _docs_review_rerun_hint(target: SmokeScriptTarget) -> str | None:
+    if target.name not in {DOCS_REVIEW_TARGET_NAME, DOCS_REVIEW_ALL_TARGET_NAME}:
+        return None
+    return DOCS_FOCUSED_RERUN_HINT
+
+
 def _live_inclusive_failure_hint(target: SmokeScriptTarget, observed_lines: Sequence[str]) -> str | None:
     if target.name != LIVE_INCLUSIVE_STANDALONE_TARGET_NAME:
         return None
@@ -283,6 +294,9 @@ def run_smoke_matrix(
             if target == docs_review_target:
                 for artifact_location_message in _docs_review_artifact_location_messages(target):
                     _emit_matrix_line(artifact_location_message, stream=stderr)
+                docs_review_hint = _docs_review_rerun_hint(target)
+                if docs_review_hint is not None:
+                    _emit_matrix_line(docs_review_hint, stream=stderr)
             hint = _live_inclusive_failure_hint(target, observed_lines)
             if hint is not None:
                 _emit_matrix_line(hint, stream=stderr)
