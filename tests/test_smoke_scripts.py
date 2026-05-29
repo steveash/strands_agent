@@ -509,6 +509,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         (["docs"], ["docs"]),
         (["docs-artifacts"], ["docs-artifacts"]),
         (["matrix-artifact-roots"], ["matrix-artifact-roots"]),
+        (["matrix-all-review-order"], ["matrix-all-review-order"]),
         (["live"], ["live"]),
     ],
 )
@@ -2029,7 +2030,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
         (
             "standalone_smoke",
             "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,live,local,all}",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,live,local,all}",
         ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
@@ -2881,6 +2882,10 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
     assert stderr.getvalue().splitlines() == [
         "standalone smoke failed fast: live_runtime_requested= False",
         summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.3),
+        _expected_smoke_matrix_review_metadata_line(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+            target_name="docs-review-all",
+        ),
         (
             "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`; "
             "export `STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
@@ -2888,6 +2893,46 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
         ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=4, elapsed_seconds=2.0),
     ]
+
+
+def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_before_hint(capsys) -> None:
+    smoke_script = _load_script_module("smoke_matrix_all_review_order_smoke")
+
+    exit_code = smoke_script.main([])
+
+    assert exit_code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert any(line.startswith("checkout_root: ") for line in lines)
+    assert "stderr_failed_line: standalone smoke failed fast: live_runtime_requested=False" in lines
+    assert any(
+        line.startswith(
+            "stderr_metadata_line: [smoke-matrix] review metadata: {\"artifact_root\": "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_hint_line: [smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith("stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ")
+        for line in lines
+    )
+    for check_name in (
+        "exit_code_non_zero",
+        "failed_line_present",
+        "metadata_line_present",
+        "hint_line_present",
+        "summary_line_present",
+        "metadata_targets_docs_review_all",
+        "metadata_artifact_root_matches_all_review",
+        "metadata_matrix_summary_matches_all_review",
+        "metadata_before_hint",
+        "metadata_before_failure_summary",
+    ):
+        assert f"{check_name}= True" in lines
 
 
 def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review_runs_afterward(capsys) -> None:

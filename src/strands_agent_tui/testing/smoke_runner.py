@@ -517,6 +517,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("docs", "smoke_cli_docs_smoke.py"),
         SmokeScriptTargetTemplate("docs-artifacts", "smoke_cli_docs_artifacts_smoke.py"),
         SmokeScriptTargetTemplate("matrix-artifact-roots", "smoke_matrix_artifact_roots_smoke.py"),
+        SmokeScriptTargetTemplate("matrix-all-review-order", "smoke_matrix_all_review_order_smoke.py"),
         SmokeScriptTargetTemplate("live", "live_smoke.py"),
     ),
     default_target_name="local",
@@ -563,6 +564,14 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             readme_description=(
                 "runs the fake-live smoke-matrix artifact-root regression that proves `review` and "
                 "`all-review` keep distinct docs-review bundles"
+            ),
+        ),
+        SmokeCliExample(
+            "standalone_smoke.py matrix-all-review-order",
+            target_name="matrix-all-review-order",
+            readme_description=(
+                "runs the real `all-review` smoke-matrix regression that proves pending docs-review "
+                "metadata appears before the live-runtime hint and fail-fast summary"
             ),
         ),
         SmokeCliExample(

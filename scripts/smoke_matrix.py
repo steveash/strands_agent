@@ -164,6 +164,21 @@ def _docs_review_artifact_metadata_message(metadata: dict[str, str] | None) -> s
     return f"review metadata: {json.dumps(metadata, sort_keys=True)}"
 
 
+def _docs_review_target_for_failure(
+    targets: Sequence[SmokeScriptTarget],
+    *,
+    current_index: int,
+) -> SmokeScriptTarget | None:
+    target_names = {DOCS_REVIEW_TARGET_NAME, DOCS_REVIEW_ALL_TARGET_NAME}
+    current_target = targets[current_index]
+    if current_target.name in target_names:
+        return current_target
+    for pending_target in targets[current_index + 1 :]:
+        if pending_target.name in target_names:
+            return pending_target
+    return None
+
+
 def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[str, ...]:
     paths = _docs_review_artifact_paths(target)
     if not paths:
@@ -237,7 +252,7 @@ def run_smoke_matrix(
     passed_count = 0
     total_count = len(targets)
 
-    for target in targets:
+    for index, target in enumerate(targets):
         _emit_matrix_line(SMOKE_MATRIX_WRAPPER.running_message(item_name=target.display_label), stream=stdout)
         started_at = perf_counter()
         observed_lines: list[str] = []
@@ -249,9 +264,14 @@ def run_smoke_matrix(
             output_line_observer=observed_lines.append,
         )
         elapsed = perf_counter() - started_at
-        artifact_metadata = _persist_docs_review_artifact_metadata_summary(
-            _docs_review_artifact_metadata(target)
-        )
+        docs_review_target = _docs_review_target_for_failure(targets, current_index=index)
+        artifact_metadata = None
+        if target == docs_review_target:
+            artifact_metadata = _persist_docs_review_artifact_metadata_summary(
+                _docs_review_artifact_metadata(target)
+            )
+        elif exit_code != 0 and docs_review_target is not None:
+            artifact_metadata = _docs_review_artifact_metadata(docs_review_target)
         if exit_code != 0:
             _emit_matrix_line(
                 SMOKE_MATRIX_WRAPPER.failed_message(item_name=target.display_label, elapsed_seconds=elapsed),
@@ -260,8 +280,9 @@ def run_smoke_matrix(
             artifact_metadata_message = _docs_review_artifact_metadata_message(artifact_metadata)
             if artifact_metadata_message is not None:
                 _emit_matrix_line(artifact_metadata_message, stream=stderr)
-            for artifact_location_message in _docs_review_artifact_location_messages(target):
-                _emit_matrix_line(artifact_location_message, stream=stderr)
+            if target == docs_review_target:
+                for artifact_location_message in _docs_review_artifact_location_messages(target):
+                    _emit_matrix_line(artifact_location_message, stream=stderr)
             hint = _live_inclusive_failure_hint(target, observed_lines)
             if hint is not None:
                 _emit_matrix_line(hint, stream=stderr)

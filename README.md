@@ -432,6 +432,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place
 - `.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles
+- `.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review metadata appears before the live-runtime hint and fail-fast summary
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
 ### Timeline smoke check
 

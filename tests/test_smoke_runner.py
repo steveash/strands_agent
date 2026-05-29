@@ -665,6 +665,7 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
         "`.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target",
         "`.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end",
         "`.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles",
+        "`.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review metadata appears before the live-runtime hint and fail-fast summary",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
     assert STANDALONE_SMOKE_CLI_SPEC.readme_all_shortcut_snippets() == (
@@ -690,6 +691,7 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
         "`.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles",
+        "`.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review metadata appears before the live-runtime hint and fail-fast summary",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
     assert STANDALONE_SMOKE_CLI_SPEC.readme_operator_shortcut_lines() == tuple(
@@ -710,6 +712,7 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
 
     assert "standalone_smoke.py local # local alias -> summary-utils, shell-tool, replay, timeline, docs, docs-artifacts" in standalone_help
     assert "standalone_smoke.py matrix-artifact-roots # single target" in standalone_help
+    assert "standalone_smoke.py matrix-all-review-order # single target" in standalone_help
     assert "session_triage_smoke.py both # both alias -> picker, switcher" in triage_help
     assert (
         "session_recovery_smoke.py all # all alias -> approval, approval-restart, session-state, "
@@ -748,6 +751,7 @@ def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> N
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
         "`.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles",
+        "`.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review metadata appears before the live-runtime hint and fail-fast summary",
         "`.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target",
     )
     assert SMOKE_MATRIX_CLI_SPEC.readme_required_snippets() == (
@@ -795,6 +799,7 @@ def test_smoke_wrapper_cli_specs_render_readme_sections() -> None:
         "- `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata\n"
         "- `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place\n"
         "- `.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles\n"
+        "- `.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review metadata appears before the live-runtime hint and fail-fast summary\n"
         "- `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target"
     )
     assert SESSION_TRIAGE_SMOKE_CLI_SPEC.render_readme_section() == (
