@@ -2885,6 +2885,44 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
     ]
 
 
+def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review_runs_afterward(capsys) -> None:
+    smoke_script = _load_script_module("smoke_matrix_artifact_roots_smoke")
+
+    exit_code = smoke_script.main([])
+
+    assert exit_code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert any(line.startswith("checkout_root: ") for line in lines)
+    assert any(line.startswith("review_artifact_root: ") for line in lines)
+    assert any(line.startswith("all_review_artifact_root: ") for line in lines)
+    assert any(
+        line.startswith("review_summary_line: [smoke-matrix] summary: 4/4 bundles passed in ")
+        for line in lines
+    )
+    assert any(
+        line.startswith("all_review_summary_line: [smoke-matrix] summary: 4/4 bundles passed in ")
+        for line in lines
+    )
+    for check_name in (
+        "review_exit_code_zero",
+        "all_review_exit_code_zero",
+        "review_stderr_empty",
+        "all_review_stderr_empty",
+        "artifact_roots_distinct",
+        "review_artifacts_exist",
+        "all_review_artifacts_exist",
+        "review_summary_targets_docs_review",
+        "all_review_summary_targets_docs_review_all",
+        "review_summary_path_keeps_review_root",
+        "all_review_summary_path_keeps_all_review_root",
+        "review_index_preserved_after_all_review",
+        "review_summary_preserved_after_all_review",
+        "review_summary_line_present",
+        "all_review_summary_line_present",
+    ):
+        assert f"{check_name}= True" in lines
+
+
 def _render_picker_attention_workspace_shell_outputs(tmp_path: Path) -> dict[str, str]:
     seed_plain_session(tmp_path)
     seed_pending_approval_session(tmp_path)
