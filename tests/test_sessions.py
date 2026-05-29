@@ -482,6 +482,147 @@ def test_render_session_picker_surfaces_restored_pending_only_queue_age_cues(tmp
     )
 
 
+def test_render_session_picker_falls_back_to_session_activity_for_missing_pending_only_timestamps(
+    tmp_path: Path,
+) -> None:
+    now = datetime.now(UTC)
+    fresh_edit_at = now - timedelta(days=4)
+    restored_edit_at = now - timedelta(days=6)
+    fresh_test_at = now - timedelta(days=3)
+    restored_test_at = now - timedelta(days=5)
+
+    workspace_root = tmp_path / "workspace-fallback"
+    fresh_edit_store = SessionArtifactStore(workspace_root, session_id="session-workspace-edit-fallback-fresh")
+    fresh_edit_store.append_turn(
+        TurnArtifact(
+            prompt="queue edit",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=fresh_edit_at.isoformat(),
+        )
+    )
+    fresh_edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-workspace-edit-fallback-fresh",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit",
+            )
+        ]
+    )
+    _set_session_artifact_mtime(fresh_edit_store, fresh_edit_at)
+
+    restored_edit_store = SessionArtifactStore(
+        workspace_root,
+        session_id="session-workspace-edit-fallback-restored",
+    )
+    restored_edit_store.append_turn(
+        TurnArtifact(
+            prompt="restore queued edit",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=restored_edit_at.isoformat(),
+        )
+    )
+    restored_edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-workspace-edit-fallback-restored",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "old_text": "old", "new_text": "new"},
+                source="fake_runtime",
+                prompt="restore queued edit",
+                restored_from_session=True,
+            )
+        ]
+    )
+    _set_session_artifact_mtime(restored_edit_store, restored_edit_at)
+
+    shell_root = tmp_path / "shell-fallback"
+    fresh_test_store = SessionArtifactStore(shell_root, session_id="session-shell-test-fallback-fresh")
+    fresh_test_store.append_turn(
+        TurnArtifact(
+            prompt="queue tests",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=fresh_test_at.isoformat(),
+        )
+    )
+    fresh_test_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-shell-test-fallback-fresh",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="queue tests",
+            )
+        ]
+    )
+    _set_session_artifact_mtime(fresh_test_store, fresh_test_at)
+
+    restored_test_store = SessionArtifactStore(shell_root, session_id="session-shell-test-fallback-restored")
+    restored_test_store.append_turn(
+        TurnArtifact(
+            prompt="restore queued tests",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=restored_test_at.isoformat(),
+        )
+    )
+    restored_test_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-shell-test-fallback-restored",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "python -m pytest -q"},
+                source="fake_runtime",
+                prompt="restore queued tests",
+                restored_from_session=True,
+            )
+        ]
+    )
+    _set_session_artifact_mtime(restored_test_store, restored_test_at)
+
+    workspace_edit_rendered = render_session_picker(workspace_root, filter_mode="workspace-edit")
+    shell_test_rendered = render_session_picker(shell_root, filter_mode="shell-test")
+
+    assert (
+        f"oldest pending-only: 6d @ {_format_test_timestamp(restored_edit_at)}"
+        in workspace_edit_rendered
+    )
+    assert (
+        f"oldest restored pending-only: 6d @ {_format_test_timestamp(restored_edit_at)}"
+        in workspace_edit_rendered
+    )
+    assert (
+        f"oldest pending-only: 5d @ {_format_test_timestamp(restored_test_at)}"
+        in shell_test_rendered
+    )
+    assert (
+        f"oldest restored pending-only: 5d @ {_format_test_timestamp(restored_test_at)}"
+        in shell_test_rendered
+    )
+
+
 def test_render_session_picker_surfaces_tool_rollup_timestamps(tmp_path: Path) -> None:
     now = datetime.now(UTC)
     workspace_at = now - timedelta(days=3)

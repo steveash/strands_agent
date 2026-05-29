@@ -210,6 +210,7 @@ class SessionSummary:
     stale_session_badges: list[str] = field(default_factory=list)
     stale_session_summary: str = ""
     pending_approval_age_sort_key: int = 0
+    session_activity_age_sort_key: int = 0
     stale_session_sort_key: int = 0
     restore_badges: list[str] = field(default_factory=list)
     draft_prompt_preview: str = ""
@@ -273,21 +274,47 @@ class SessionSummary:
             return self.has_restored_pending_shell_test_approval
         return False
 
+    def _pending_only_lane_age_and_timestamp_with_activity_fallback(
+        self,
+        age_seconds: int,
+        timestamp: str,
+        *,
+        has_pending_match: bool,
+    ) -> tuple[int, str]:
+        if age_seconds > 0 or timestamp:
+            return age_seconds, timestamp
+        if not has_pending_match or self.session_activity_age_sort_key <= 0:
+            return 0, ""
+        return self.session_activity_age_sort_key, self.updated_at
+
     def pending_only_lane_oldest_age_and_timestamp(self, filter_mode: str) -> tuple[int, str]:
         if filter_mode == "workspace-edit":
-            return self.pending_workspace_edit_age_sort_key, self.pending_workspace_edit_oldest_at
+            return self._pending_only_lane_age_and_timestamp_with_activity_fallback(
+                self.pending_workspace_edit_age_sort_key,
+                self.pending_workspace_edit_oldest_at,
+                has_pending_match=self.has_pending_workspace_edit_approval,
+            )
         if filter_mode == "shell-test":
-            return self.pending_shell_test_age_sort_key, self.pending_shell_test_oldest_at
+            return self._pending_only_lane_age_and_timestamp_with_activity_fallback(
+                self.pending_shell_test_age_sort_key,
+                self.pending_shell_test_oldest_at,
+                has_pending_match=self.has_pending_shell_test_approval,
+            )
         return 0, ""
 
     def restored_pending_only_lane_oldest_age_and_timestamp(self, filter_mode: str) -> tuple[int, str]:
         if filter_mode == "workspace-edit":
-            return (
+            return self._pending_only_lane_age_and_timestamp_with_activity_fallback(
                 self.restored_pending_workspace_edit_age_sort_key,
                 self.restored_pending_workspace_edit_oldest_at,
+                has_pending_match=self.has_restored_pending_workspace_edit_approval,
             )
         if filter_mode == "shell-test":
-            return self.restored_pending_shell_test_age_sort_key, self.restored_pending_shell_test_oldest_at
+            return self._pending_only_lane_age_and_timestamp_with_activity_fallback(
+                self.restored_pending_shell_test_age_sort_key,
+                self.restored_pending_shell_test_oldest_at,
+                has_pending_match=self.has_restored_pending_shell_test_approval,
+            )
         return 0, ""
 
     def render_line(
@@ -882,6 +909,7 @@ def _ordered_recent_sessions(
             stale_session_badges=stale_session_badges,
             stale_session_summary=stale_session_summary,
             pending_approval_age_sort_key=int(pending_approval_age_seconds or 0),
+            session_activity_age_sort_key=max(int(datetime.now(UTC).timestamp() - activity_timestamp), 0),
             stale_session_sort_key=int(stale_session_sort_key),
             restore_badges=_restore_badges(session_state, len(turns)),
             draft_prompt_preview=draft_prompt_preview,
