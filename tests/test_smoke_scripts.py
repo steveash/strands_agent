@@ -504,6 +504,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         ([], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
         (["local"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
         (["all"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"]),
+        (["docs-focused"], ["docs", "docs-artifacts", "matrix-artifact-roots", "matrix-all-review-order"]),
         (["summary-utils"], ["summary-utils"]),
         (["timeline"], ["timeline"]),
         (["docs"], ["docs"]),
@@ -2030,7 +2031,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
         (
             "standalone_smoke",
             "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,live,local,all}",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,live,local,docs-focused,all}",
         ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (

@@ -523,6 +523,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     default_target_name="local",
     alias_target_names={
         "local": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"),
+        "docs-focused": ("docs", "docs-artifacts", "matrix-artifact-roots", "matrix-all-review-order"),
         "all": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"),
     },
     examples=(
@@ -559,6 +560,14 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             readme_description="runs the smoke CLI render/fix artifact contract smoke end-to-end",
         ),
         SmokeCliExample(
+            "standalone_smoke.py docs-focused",
+            target_name="docs-focused",
+            readme_description=(
+                "re-runs the docs parity + docs-review lane alias "
+                "(`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`)"
+            ),
+        ),
+        SmokeCliExample(
             "standalone_smoke.py matrix-artifact-roots",
             target_name="matrix-artifact-roots",
             readme_description=(
@@ -584,7 +593,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     readme_section_heading="Standalone local smoke bundle",
     readme_section_intro="To verify the remaining local smoke surfaces with shared fail-fast `= False` handling:",
     readme_intro_paragraphs=(
-        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py docs-focused` to rerun just the docs parity + docs-review lane, or `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
     ),
     readme_extra_shortcut_snippets=(
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
@@ -604,7 +613,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata",
         "`.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place",
     ),
-    readme_extra_shortcut_insert_at=5,
+    readme_extra_shortcut_insert_at=6,
 )
 
 SESSION_TRIAGE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(

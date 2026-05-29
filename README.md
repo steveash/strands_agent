@@ -407,7 +407,7 @@ To verify the remaining local smoke surfaces with shared fail-fast `= False` han
 .venv/bin/python scripts/standalone_smoke.py
 ```
 
-This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
+This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py docs-focused` to rerun just the docs parity + docs-review lane, or `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
 
 Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)
@@ -415,6 +415,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target
 - `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
 - `.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end
+- `.venv/bin/python scripts/standalone_smoke.py docs-focused` re-runs the docs parity + docs-review lane alias (`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle
 - `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix review artifacts end-to-end with fail-fast contract checks
