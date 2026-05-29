@@ -695,6 +695,7 @@ def smoke_matrix_docs_review_metadata(artifact_root: str) -> dict[str, str]:
         "fix_check_json_path": f"{artifact_root}/fix-check.json",
         "fix_repair_json_path": f"{artifact_root}/fix-repair.json",
         "fix_post_check_json_path": f"{artifact_root}/fix-post-check.json",
+        "matrix_summary_path": f"{artifact_root}/matrix-summary.json",
     }
 
 

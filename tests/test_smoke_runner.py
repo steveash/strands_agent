@@ -614,6 +614,7 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
         "fix_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json",
         "fix_repair_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json",
         "fix_post_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json",
+        "matrix_summary_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json",
     }
     all_review_targets = spec.resolve_targets(script_dir=tmp_path, requested_target_name="all-review")
     assert [target.name for target in all_review_targets] == ["standalone-all", "triage", "recovery", "docs-review-all"]
@@ -648,6 +649,7 @@ def test_smoke_wrapper_cli_spec_registry_helper_resolves_defaults_and_unknown_na
         "fix_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-check.json",
         "fix_repair_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-repair.json",
         "fix_post_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json",
+        "matrix_summary_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json",
     }
 
     with pytest.raises(ValueError, match="unknown smoke wrapper cli spec 'missing_smoke'"):

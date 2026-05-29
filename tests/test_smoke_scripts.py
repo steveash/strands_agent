@@ -1967,6 +1967,7 @@ def _expected_smoke_matrix_review_metadata_line(*, artifact_root: str, target_na
         "fix_check_json_path": f"{artifact_root}/fix-check.json",
         "fix_post_check_json_path": f"{artifact_root}/fix-post-check.json",
         "fix_repair_json_path": f"{artifact_root}/fix-repair.json",
+        "matrix_summary_path": f"{artifact_root}/matrix-summary.json",
         "render_diff_path": f"{artifact_root}/render-review.patch",
         "render_manifest_path": f"{artifact_root}/render-manifest.json",
         "render_output_dir": f"{artifact_root}/rendered",
@@ -2233,6 +2234,10 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
             "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json)"
         ),
         (
+            "[smoke-matrix] review matrix summary: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
+        ),
+        (
             "[smoke-matrix] review drifted README: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
         ),
@@ -2294,6 +2299,10 @@ def test_smoke_matrix_all_review_emits_distinct_artifact_location_after_docs_rev
             "[smoke-matrix] review artifacts: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review "
             "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json)"
+        ),
+        (
+            "[smoke-matrix] review matrix summary: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
         ),
         (
             "[smoke-matrix] review drifted README: "
@@ -2446,6 +2455,7 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
         "fix_check_json_path": "artifacts/custom/fix-check.json",
         "fix_post_check_json_path": "artifacts/custom/fix-post-check.json",
         "fix_repair_json_path": "artifacts/custom/fix-repair.json",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
         "render_diff_path": "artifacts/custom/review.patch",
         "render_manifest_path": "artifacts/custom/render.json",
         "render_output_dir": "artifacts/custom/rendered-sections",
@@ -2453,6 +2463,7 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
     }
     assert smoke_matrix._docs_review_artifact_location_messages(target) == (
         "review artifacts: artifacts/review (index: artifacts/review/index.json)",
+        "review matrix summary: artifacts/review/matrix-summary.json",
         "review drifted README: artifacts/custom/README-review.md",
         "review rendered sections: artifacts/custom/rendered-sections",
         "review render manifest: artifacts/custom/render.json",
@@ -2461,6 +2472,85 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
         "review fix-repair JSON: artifacts/custom/fix-repair.json",
         "review fix-post-check JSON: artifacts/custom/fix-post-check.json",
     )
+
+
+
+def test_smoke_matrix_writes_review_metadata_summary_artifact_on_success(monkeypatch, tmp_path: Path) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    artifact_root = tmp_path / "review"
+    target = smoke_matrix.SmokeScriptTarget(
+        name="docs-review",
+        script_path=SCRIPT_DIR / "smoke_cli_docs_artifacts_smoke.py",
+        display_name="docs-review",
+        metadata={
+            "artifact_root": str(artifact_root),
+            "bundle_index_path": str(artifact_root / "index.json"),
+            "drifted_readme_path": str(artifact_root / "README-drifted.md"),
+            "render_output_dir": str(artifact_root / "rendered"),
+            "render_manifest_path": str(artifact_root / "render-manifest.json"),
+            "render_diff_path": str(artifact_root / "render-review.patch"),
+            "fix_check_json_path": str(artifact_root / "fix-check.json"),
+            "fix_repair_json_path": str(artifact_root / "fix-repair.json"),
+            "fix_post_check_json_path": str(artifact_root / "fix-post-check.json"),
+            "matrix_summary_path": str(artifact_root / "matrix-summary.json"),
+        },
+    )
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 0)
+
+    stdout = StringIO()
+    exit_code = smoke_matrix.run_smoke_matrix([target], stdout=stdout, stderr=StringIO())
+
+    assert exit_code == 0
+    summary_path = artifact_root / "matrix-summary.json"
+    assert summary_path.exists()
+    assert json.loads(summary_path.read_text(encoding="utf-8")) == {
+        "artifact_root": str(artifact_root),
+        "bundle_index_path": str(artifact_root / "index.json"),
+        "display_name": "docs-review",
+        "drifted_readme_path": str(artifact_root / "README-drifted.md"),
+        "fix_check_json_path": str(artifact_root / "fix-check.json"),
+        "fix_post_check_json_path": str(artifact_root / "fix-post-check.json"),
+        "fix_repair_json_path": str(artifact_root / "fix-repair.json"),
+        "matrix_summary_path": str(summary_path),
+        "render_diff_path": str(artifact_root / "render-review.patch"),
+        "render_manifest_path": str(artifact_root / "render-manifest.json"),
+        "render_output_dir": str(artifact_root / "rendered"),
+        "target_name": "docs-review",
+    }
+    assert f"[smoke-matrix] review matrix summary: {summary_path}" in stdout.getvalue().splitlines()
+
+
+
+def test_smoke_matrix_writes_review_metadata_summary_artifact_on_failure(monkeypatch, tmp_path: Path) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    artifact_root = tmp_path / "review-failure"
+    target = smoke_matrix.SmokeScriptTarget(
+        name="docs-review",
+        script_path=SCRIPT_DIR / "smoke_cli_docs_artifacts_smoke.py",
+        display_name="docs-review",
+        metadata={
+            "artifact_root": str(artifact_root),
+            "bundle_index_path": str(artifact_root / "index.json"),
+            "drifted_readme_path": str(artifact_root / "README-drifted.md"),
+            "render_output_dir": str(artifact_root / "rendered"),
+            "render_manifest_path": str(artifact_root / "render-manifest.json"),
+            "render_diff_path": str(artifact_root / "render-review.patch"),
+            "fix_check_json_path": str(artifact_root / "fix-check.json"),
+            "fix_repair_json_path": str(artifact_root / "fix-repair.json"),
+            "fix_post_check_json_path": str(artifact_root / "fix-post-check.json"),
+            "matrix_summary_path": str(artifact_root / "matrix-summary.json"),
+        },
+    )
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", lambda target, **_kwargs: 1)
+
+    stderr = StringIO()
+    exit_code = smoke_matrix.run_smoke_matrix([target], stdout=StringIO(), stderr=stderr)
+
+    assert exit_code == 1
+    summary_path = artifact_root / "matrix-summary.json"
+    assert summary_path.exists()
+    assert json.loads(summary_path.read_text(encoding="utf-8"))["target_name"] == "docs-review"
+    assert f"[smoke-matrix] review matrix summary: {summary_path}" in stderr.getvalue().splitlines()
 
 
 
@@ -2619,6 +2709,10 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
             "[smoke-matrix] review artifacts: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
             "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json)"
+        ),
+        (
+            "[smoke-matrix] review matrix summary: "
+            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
         ),
         (
             "[smoke-matrix] review drifted README: "
