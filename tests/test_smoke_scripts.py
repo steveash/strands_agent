@@ -508,6 +508,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         (["timeline"], ["timeline"]),
         (["docs"], ["docs"]),
         (["docs-artifacts"], ["docs-artifacts"]),
+        (["matrix-artifact-roots"], ["matrix-artifact-roots"]),
         (["live"], ["live"]),
     ],
 )
@@ -2025,7 +2026,11 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
 @pytest.mark.parametrize(
     ("script_name", "invalid_target", "expected_choices"),
     [
-        ("standalone_smoke", "standalone-local", "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,live,local,all}"),
+        (
+            "standalone_smoke",
+            "standalone-local",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,live,local,all}",
+        ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
             "session_recovery_smoke",

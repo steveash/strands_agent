@@ -516,6 +516,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("timeline", "timeline_smoke.py"),
         SmokeScriptTargetTemplate("docs", "smoke_cli_docs_smoke.py"),
         SmokeScriptTargetTemplate("docs-artifacts", "smoke_cli_docs_artifacts_smoke.py"),
+        SmokeScriptTargetTemplate("matrix-artifact-roots", "smoke_matrix_artifact_roots_smoke.py"),
         SmokeScriptTargetTemplate("live", "live_smoke.py"),
     ),
     default_target_name="local",
@@ -555,6 +556,14 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             "standalone_smoke.py docs-artifacts",
             target_name="docs-artifacts",
             readme_description="runs the smoke CLI render/fix artifact contract smoke end-to-end",
+        ),
+        SmokeCliExample(
+            "standalone_smoke.py matrix-artifact-roots",
+            target_name="matrix-artifact-roots",
+            readme_description=(
+                "runs the fake-live smoke-matrix artifact-root regression that proves `review` and "
+                "`all-review` keep distinct docs-review bundles"
+            ),
         ),
         SmokeCliExample(
             "standalone_smoke.py replay",
