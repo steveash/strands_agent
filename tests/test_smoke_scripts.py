@@ -3093,6 +3093,7 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "matrix_summary_targets_docs_review_all",
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_metadata",
+        "matrix_summary_line_matches_metadata_path",
         "metadata_before_hint",
         "artifacts_before_hint",
         "matrix_summary_before_hint",

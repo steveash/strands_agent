@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+
+REVIEW_ARTIFACT_METADATA_SKIP_KEYS = frozenset({"display_name", "target_name"})
 
 
 def normalize_text_output(payload: str) -> str:
@@ -60,6 +64,49 @@ def diff_bundle_sha256(diff_sections: tuple[tuple[str, tuple[str, ...]], ...]) -
     if not diff_sections:
         return None
     return sha256_text(normalize_text_output(format_diff_output(diff_sections)))
+
+
+def resolve_checkout_path(path_text: str, *, checkout_root: Path) -> Path:
+    path = Path(path_text)
+    if path.is_absolute():
+        return path
+    return checkout_root / path
+
+
+def output_path_from_prefixed_lines(
+    output_lines: str | Sequence[str],
+    *,
+    prefix: str,
+    checkout_root: Path,
+) -> Path | None:
+    lines = output_lines.splitlines() if isinstance(output_lines, str) else output_lines
+    for line in lines:
+        if line.startswith(prefix):
+            return resolve_checkout_path(line.removeprefix(prefix), checkout_root=checkout_root)
+    return None
+
+
+def resolve_review_artifact_paths(
+    payload: Mapping[str, object],
+    *,
+    checkout_root: Path,
+) -> dict[str, Path]:
+    return {
+        key: resolve_checkout_path(value, checkout_root=checkout_root)
+        for key, value in payload.items()
+        if key not in REVIEW_ARTIFACT_METADATA_SKIP_KEYS and isinstance(value, str)
+    }
+
+
+def load_review_matrix_summary(
+    summary_path: Path | None,
+    *,
+    checkout_root: Path,
+) -> tuple[dict[str, object], dict[str, Path]]:
+    if summary_path is None or not summary_path.exists():
+        return {}, {}
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    return payload, resolve_review_artifact_paths(payload, checkout_root=checkout_root)
 
 
 def build_smoke_cli_doc_section_payloads(

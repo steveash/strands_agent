@@ -129,26 +129,26 @@ What exists now:
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- taught `scripts/smoke_matrix.py all-review` to emit the pending docs-review artifact bundle lines immediately after the persisted `review metadata` payload even when the live-inclusive standalone bundle fails before the docs-review lane starts,
-- extended `scripts/smoke_matrix_all_review_order_smoke.py` so the real subprocess regression now asserts both `review artifacts:` and `review matrix summary:` appear before the live-runtime hint and fail-fast summary,
-- and added regression coverage that locks in the early-failure stderr ordering plus the still-persisted `matrix-summary.json` artifact contract.
+- factored the shared docs-review `matrix-summary.json` path resolution/loading into `src/strands_agent_tui/testing/smoke_cli_doc_artifacts.py`,
+- rewired both `scripts/smoke_matrix_artifact_roots_smoke.py` and `scripts/smoke_matrix_all_review_order_smoke.py` to consume the shared helper path instead of carrying local copies,
+- and extended the real `all-review` order smoke so it also proves the emitted `review matrix summary:` line resolves to the same checkout-local file path recorded in the pending metadata payload.
 
 Why this matters now:
-- operators no longer have to parse the JSON metadata line by hand to find the pending docs-review bundle root or `matrix-summary.json` path after an `all-review` early failure,
-- the fail-fast path now exposes the same artifact breadcrumbs as the normal docs-review lane, which makes the follow-up `docs-focused` rerun workflow faster and less error-prone,
-- and the runnable order smoke keeps this observability contract honest through a real subprocess execution instead of only via mocked stderr expectations.
+- the two docs-review matrix smokes now resolve emitted artifact breadcrumbs through one code path instead of risking subtle drift in duplicated line-parsing logic,
+- the real subprocess `all-review` failure smoke now checks the exact line-to-artifact path contract instead of only comparing JSON payload fields,
+- and future docs-review consumers can reuse the helper without re-implementing relative-path-to-checkout resolution again.
 
 How we know the prototype is working right now:
-- targeted smoke-script regressions verify the pending-review metadata artifact persists, the early-failure stderr includes the live-runtime hint, and the runnable order smoke proves metadata plus artifact-location lines arrive before the hint/summary,
-- smoke runner/script tests verify the shared matrix target metadata, emitted artifact-path lines, and wrapper contracts stay aligned,
-- the docs-focused standalone smoke bundle reruns the docs parity + docs-review artifact checks together in one fail-fast path,
-- and the full pytest suite still passes after the matrix failure-path change.
+- direct helper tests verify prefixed output-line parsing plus relative `matrix-summary.json` artifact resolution against a checkout root,
+- the targeted smoke-script regressions still pass and now prove the real `all-review` stderr line resolves to the same persisted matrix-summary file path carried in the metadata payload,
+- the docs-focused standalone smoke bundle still reruns the docs parity + docs-review artifact checks together in one fail-fast path,
+- and the full pytest suite still passes after the helper extraction.
 
 Current evidence:
-- targeted early-failure regressions: `.venv/bin/pytest -q tests/test_smoke_scripts.py -k 'all_review_failure_persists_pending_review_metadata_artifact or all_review_order_smoke_emits_pending_review_metadata_before_hint or all_review_failure_emits_live_runtime_hint'` => `3 passed, 112 deselected in 12.43s`,
-- smoke runner/script slice: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `143 passed in 27.84s`,
-- docs-focused smoke bundle: `.venv/bin/python scripts/standalone_smoke.py docs-focused` => `[standalone-smoke] summary: 4/4 targets passed in 18.62s`,
-- full automated tests: `.venv/bin/pytest -q` => `398 passed in 65.76s (0:01:05)`.
+- targeted helper + matrix regressions: `.venv/bin/pytest -q tests/test_smoke_cli_doc_artifacts.py tests/test_smoke_scripts.py -k 'review_matrix_summary or matrix_all_review_order or matrix_artifact_roots'` => `4 passed, 116 deselected in 12.59s`,
+- smoke runner/script/helper slice: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py tests/test_smoke_cli_doc_artifacts.py` => `148 passed in 23.69s`,
+- docs-focused smoke bundle: `.venv/bin/python scripts/standalone_smoke.py docs-focused` => `[standalone-smoke] summary: 4/4 targets passed in 15.79s`,
+- full automated tests: `.venv/bin/pytest -q` => `400 passed in 60.86s (0:01:00)`.
 
 ## First five phases
 

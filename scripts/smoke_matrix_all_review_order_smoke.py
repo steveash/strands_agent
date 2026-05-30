@@ -11,7 +11,12 @@ from io import StringIO
 from pathlib import Path
 from typing import Iterator
 
-from strands_agent_tui.testing import emit_smoke_results
+from strands_agent_tui.testing import (
+    emit_smoke_results,
+    load_review_matrix_summary,
+    output_path_from_prefixed_lines,
+    resolve_checkout_path,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
@@ -64,13 +69,6 @@ def _line_index(lines: list[str], prefix: str) -> int | None:
     return None
 
 
-def _resolve_checkout_path(path_text: str, *, checkout_root: Path) -> Path:
-    path = Path(path_text)
-    if path.is_absolute():
-        return path
-    return checkout_root / path
-
-
 def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
     smoke_matrix_module = _load_smoke_matrix_module()
     with tempfile.TemporaryDirectory(prefix="smoke-matrix-all-review-order-") as temp_dir:
@@ -101,15 +99,19 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             json.loads(metadata_line.removeprefix(REVIEW_METADATA_PREFIX)) if metadata_line else {}
         )
         matrix_summary_path_text = metadata_payload.get("matrix_summary_path", "")
-        matrix_summary_path = (
-            _resolve_checkout_path(matrix_summary_path_text, checkout_root=checkout_root)
+        metadata_matrix_summary_path = (
+            resolve_checkout_path(matrix_summary_path_text, checkout_root=checkout_root)
             if matrix_summary_path_text
             else None
         )
-        matrix_summary_payload = (
-            json.loads(matrix_summary_path.read_text(encoding="utf-8"))
-            if matrix_summary_path is not None and matrix_summary_path.exists()
-            else {}
+        line_matrix_summary_path = output_path_from_prefixed_lines(
+            stderr_lines,
+            prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+            checkout_root=checkout_root,
+        )
+        matrix_summary_payload, _matrix_summary_paths = load_review_matrix_summary(
+            line_matrix_summary_path,
+            checkout_root=checkout_root,
         )
 
         return [
@@ -142,7 +144,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             ),
             (
                 "matrix_summary_artifact_exists",
-                matrix_summary_path is not None and matrix_summary_path.exists(),
+                line_matrix_summary_path is not None and line_matrix_summary_path.exists(),
             ),
             (
                 "matrix_summary_targets_docs_review_all",
@@ -155,6 +157,10 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             (
                 "matrix_summary_path_matches_metadata",
                 matrix_summary_payload.get("matrix_summary_path") == metadata_payload.get("matrix_summary_path"),
+            ),
+            (
+                "matrix_summary_line_matches_metadata_path",
+                line_matrix_summary_path == metadata_matrix_summary_path,
             ),
             (
                 "metadata_before_hint",

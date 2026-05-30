@@ -11,7 +11,13 @@ from io import StringIO
 from pathlib import Path
 from typing import Iterator
 
-from strands_agent_tui.testing import emit_smoke_results
+from strands_agent_tui.testing import (
+    emit_smoke_results,
+    load_review_matrix_summary,
+    output_path_from_prefixed_lines,
+    resolve_checkout_path,
+    resolve_review_artifact_paths,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
@@ -47,7 +53,7 @@ def _patched_run_smoke_target(smoke_matrix_module, checkout_root: Path) -> Itera
         for key, value in metadata.items():
             if key in {"display_name", "target_name"}:
                 continue
-            resolved_path = _resolve_checkout_path(value, checkout_root=checkout_root)
+            resolved_path = resolve_checkout_path(value, checkout_root=checkout_root)
             if key in {"artifact_root", "render_output_dir"}:
                 resolved_path.mkdir(parents=True, exist_ok=True)
                 continue
@@ -111,45 +117,11 @@ def _load_smoke_matrix_module():
     return module
 
 
-def _resolve_checkout_path(path_text: str, *, checkout_root: Path) -> Path:
-    path = Path(path_text)
-    if path.is_absolute():
-        return path
-    return checkout_root / path
-
-
 def _capture_success_summary_line(stdout_text: str) -> str:
     for line in stdout_text.splitlines():
         if line.startswith(SUCCESS_SUMMARY_PREFIX):
             return line
     return ""
-
-
-def _capture_review_matrix_summary_path(stdout_text: str, *, checkout_root: Path) -> Path | None:
-    for line in stdout_text.splitlines():
-        if line.startswith(REVIEW_MATRIX_SUMMARY_PREFIX):
-            return _resolve_checkout_path(
-                line.removeprefix(REVIEW_MATRIX_SUMMARY_PREFIX),
-                checkout_root=checkout_root,
-            )
-    return None
-
-
-def _load_review_paths_from_matrix_summary(
-    summary_path: Path | None,
-    *,
-    checkout_root: Path,
-) -> tuple[dict[str, object], dict[str, Path]]:
-    if summary_path is None or not summary_path.exists():
-        return {}, {}
-
-    payload = json.loads(summary_path.read_text(encoding="utf-8"))
-    paths = {
-        key: _resolve_checkout_path(value, checkout_root=checkout_root)
-        for key, value in payload.items()
-        if key not in {"display_name", "target_name"} and isinstance(value, str)
-    }
-    return payload, paths
 
 
 def _run_matrix_alias(smoke_matrix_module, alias: str, *, checkout_root: Path) -> tuple[int, str, str]:
@@ -167,7 +139,7 @@ def _resolved_docs_review_paths(smoke_matrix_module, requested_target_name: str,
     )[-1]
     metadata = smoke_matrix_module._docs_review_artifact_metadata(target)
     assert metadata is not None
-    return {key: _resolve_checkout_path(value, checkout_root=checkout_root) for key, value in metadata.items() if key not in {"display_name", "target_name"}}
+    return resolve_review_artifact_paths(metadata, checkout_root=checkout_root)
 
 
 def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
@@ -191,11 +163,12 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 "review",
                 checkout_root=checkout_root,
             )
-            review_summary_path_from_line = _capture_review_matrix_summary_path(
+            review_summary_path_from_line = output_path_from_prefixed_lines(
                 review_stdout,
+                prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
                 checkout_root=checkout_root,
             )
-            review_summary_payload, review_paths = _load_review_paths_from_matrix_summary(
+            review_summary_payload, review_paths = load_review_matrix_summary(
                 review_summary_path_from_line,
                 checkout_root=checkout_root,
             )
@@ -216,11 +189,12 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 "all-review",
                 checkout_root=checkout_root,
             )
-            all_review_summary_path_from_line = _capture_review_matrix_summary_path(
+            all_review_summary_path_from_line = output_path_from_prefixed_lines(
                 all_review_stdout,
+                prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
                 checkout_root=checkout_root,
             )
-            all_review_summary_payload, all_review_paths = _load_review_paths_from_matrix_summary(
+            all_review_summary_payload, all_review_paths = load_review_matrix_summary(
                 all_review_summary_path_from_line,
                 checkout_root=checkout_root,
             )
@@ -278,14 +252,14 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             ),
             (
                 "review_summary_path_keeps_review_root",
-                _resolve_checkout_path(review_summary_payload.get("artifact_root", ""), checkout_root=checkout_root)
+                resolve_review_artifact_paths(review_summary_payload, checkout_root=checkout_root).get("artifact_root")
                 == review_root
                 if review_root is not None
                 else False,
             ),
             (
                 "all_review_summary_path_keeps_all_review_root",
-                _resolve_checkout_path(all_review_summary_payload.get("artifact_root", ""), checkout_root=checkout_root)
+                resolve_review_artifact_paths(all_review_summary_payload, checkout_root=checkout_root).get("artifact_root")
                 == all_review_root
                 if all_review_root is not None
                 else False,

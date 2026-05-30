@@ -8,8 +8,12 @@ from strands_agent_tui.testing import (
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
     collect_smoke_cli_readme_diffs,
+    load_review_matrix_summary,
+    output_path_from_prefixed_lines,
     render_smoke_cli_readme_section,
     replace_markdown_section,
+    resolve_checkout_path,
+    resolve_review_artifact_paths,
     smoke_cli_doc_spec,
 )
 
@@ -112,6 +116,51 @@ def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> N
     assert section["diff_stats"]["line_count"] == len(diff_sections[0][1])
     assert "diff_lines" not in section
     assert drifted_markdown != README_TEXT
+
+
+def test_output_path_from_prefixed_lines_resolves_relative_review_matrix_summary_path(tmp_path) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+
+    resolved = output_path_from_prefixed_lines(
+        [f"[smoke-matrix] review matrix summary: {summary_path.relative_to(checkout_root)}"],
+        prefix="[smoke-matrix] review matrix summary: ",
+        checkout_root=checkout_root,
+    )
+
+    assert resolved == summary_path
+
+
+def test_load_review_matrix_summary_resolves_relative_artifact_paths(tmp_path) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        """
+{
+  "display_name": "docs-review",
+  "target_name": "docs-review",
+  "artifact_root": "artifacts/review",
+  "bundle_index_path": "artifacts/review/index.json",
+  "matrix_summary_path": "artifacts/review/matrix-summary.json"
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    payload, paths = load_review_matrix_summary(summary_path, checkout_root=checkout_root)
+
+    assert payload["artifact_root"] == "artifacts/review"
+    assert paths == {
+        "artifact_root": checkout_root / "artifacts" / "review",
+        "bundle_index_path": checkout_root / "artifacts" / "review" / "index.json",
+        "matrix_summary_path": summary_path,
+    }
+    assert resolve_review_artifact_paths(payload, checkout_root=checkout_root)["artifact_root"] == resolve_checkout_path(
+        "artifacts/review",
+        checkout_root=checkout_root,
+    )
 
 
 def test_build_smoke_cli_doc_repair_report_payload_tracks_stdout_vs_write_mode() -> None:
