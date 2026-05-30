@@ -518,12 +518,19 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("docs-artifacts", "smoke_cli_docs_artifacts_smoke.py"),
         SmokeScriptTargetTemplate("matrix-artifact-roots", "smoke_matrix_artifact_roots_smoke.py"),
         SmokeScriptTargetTemplate("matrix-all-review-order", "smoke_matrix_all_review_order_smoke.py"),
+        SmokeScriptTargetTemplate("matrix-docs-review-hint", "smoke_matrix_docs_review_hint_smoke.py"),
         SmokeScriptTargetTemplate("live", "live_smoke.py"),
     ),
     default_target_name="local",
     alias_target_names={
         "local": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"),
-        "docs-focused": ("docs", "docs-artifacts", "matrix-artifact-roots", "matrix-all-review-order"),
+        "docs-focused": (
+            "docs",
+            "docs-artifacts",
+            "matrix-artifact-roots",
+            "matrix-all-review-order",
+            "matrix-docs-review-hint",
+        ),
         "all": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"),
     },
     examples=(
@@ -564,7 +571,8 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="docs-focused",
             readme_description=(
                 "re-runs the docs parity + docs-review lane alias "
-                "(`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`)"
+                "(`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, "
+                "`matrix-docs-review-hint`)"
             ),
         ),
         SmokeCliExample(
@@ -581,6 +589,14 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             readme_description=(
                 "runs the real `all-review` smoke-matrix regression that proves pending docs-review "
                 "metadata appears before the live-runtime hint and fail-fast summary"
+            ),
+        ),
+        SmokeCliExample(
+            "standalone_smoke.py matrix-docs-review-hint",
+            target_name="matrix-docs-review-hint",
+            readme_description=(
+                "runs the real subprocess docs-review failure regression that proves the docs-focused "
+                "rerun hint lands after the persisted review matrix-summary path"
             ),
         ),
         SmokeCliExample(

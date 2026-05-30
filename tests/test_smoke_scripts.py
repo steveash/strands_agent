@@ -504,7 +504,16 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         ([], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
         (["local"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
         (["all"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"]),
-        (["docs-focused"], ["docs", "docs-artifacts", "matrix-artifact-roots", "matrix-all-review-order"]),
+        (
+            ["docs-focused"],
+            [
+                "docs",
+                "docs-artifacts",
+                "matrix-artifact-roots",
+                "matrix-all-review-order",
+                "matrix-docs-review-hint",
+            ],
+        ),
         (["summary-utils"], ["summary-utils"]),
         (["timeline"], ["timeline"]),
         (["docs"], ["docs"]),
@@ -2048,7 +2057,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
         (
             "standalone_smoke",
             "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,live,local,docs-focused,all}",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,matrix-docs-review-hint,live,local,docs-focused,all}",
         ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
@@ -3144,6 +3153,54 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "review_summary_preserved_after_all_review",
         "review_summary_line_present",
         "all_review_summary_line_present",
+    ):
+        assert f"{check_name}= True" in lines
+
+
+def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering(capsys) -> None:
+    smoke_script = _load_script_module("smoke_matrix_docs_review_hint_smoke")
+
+    exit_code = smoke_script.main([])
+
+    assert exit_code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert any(line.startswith("checkout_root: ") for line in lines)
+    assert any(line.startswith("stdout_last_line: [smoke-matrix] running docs-review") for line in lines)
+    assert any(
+        line.startswith(
+            "stderr_failed_line: docs-review smoke failed fast: render_manifest_payload=False"
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith("stderr_summary_line: [smoke-matrix] summary: 3/4 bundles passed before failure in ")
+        for line in lines
+    )
+    for check_name in (
+        "exit_code_non_zero",
+        "failed_line_present",
+        "matrix_summary_line_present",
+        "hint_line_present",
+        "summary_line_present",
+        "matrix_summary_artifact_exists",
+        "matrix_summary_targets_docs_review_all",
+        "matrix_summary_artifact_root_matches_all_review",
+        "matrix_summary_path_matches_all_review",
+        "hint_after_matrix_summary",
+        "hint_before_failure_summary",
+        "stdout_docs_review_started",
     ):
         assert f"{check_name}= True" in lines
 

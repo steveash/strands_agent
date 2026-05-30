@@ -134,21 +134,21 @@ What changed this run:
 - and extended the real `all-review` order smoke so it also proves the emitted `review matrix summary:` line resolves to the same checkout-local file path recorded in the pending metadata payload.
 
 Why this matters now:
-- the two docs-review matrix smokes now resolve emitted artifact breadcrumbs through one code path instead of risking subtle drift in duplicated line-parsing logic,
-- the real subprocess `all-review` failure smoke now checks the exact line-to-artifact path contract instead of only comparing JSON payload fields,
-- and future docs-review consumers can reuse the helper without re-implementing relative-path-to-checkout resolution again.
+- the docs-review matrix smokes still resolve emitted artifact breadcrumbs through one shared code path instead of risking subtle drift in duplicated line-parsing logic,
+- the `docs-focused` rerun hint now has a real subprocess docs-review failure smoke instead of living only behind mocked unit coverage,
+- and operators can still rerun the full docs parity + docs-review lane through one fail-fast `standalone_smoke.py docs-focused` entrypoint.
 
 How we know the prototype is working right now:
-- direct helper tests verify prefixed output-line parsing plus relative `matrix-summary.json` artifact resolution against a checkout root,
-- the targeted smoke-script regressions still pass and now prove the real `all-review` stderr line resolves to the same persisted matrix-summary file path carried in the metadata payload,
-- the docs-focused standalone smoke bundle still reruns the docs parity + docs-review artifact checks together in one fail-fast path,
-- and the full pytest suite still passes after the helper extraction.
+- direct helper tests still verify prefixed output-line parsing plus relative `matrix-summary.json` artifact resolution against a checkout root,
+- the targeted smoke-script regressions now prove both the real `all-review` stderr line-to-artifact contract and the real docs-review failure hint ordering,
+- the docs-focused standalone smoke bundle reruns docs parity + docs-review artifact checks together in one fail-fast path that now includes the subprocess hint smoke,
+- and the full pytest suite still passes after the new smoke target landed.
 
 Current evidence:
-- targeted helper + matrix regressions: `.venv/bin/pytest -q tests/test_smoke_cli_doc_artifacts.py tests/test_smoke_scripts.py -k 'review_matrix_summary or matrix_all_review_order or matrix_artifact_roots'` => `4 passed, 116 deselected in 12.59s`,
-- smoke runner/script/helper slice: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py tests/test_smoke_cli_doc_artifacts.py` => `148 passed in 23.69s`,
-- docs-focused smoke bundle: `.venv/bin/python scripts/standalone_smoke.py docs-focused` => `[standalone-smoke] summary: 4/4 targets passed in 15.79s`,
-- full automated tests: `.venv/bin/pytest -q` => `400 passed in 60.86s (0:01:00)`.
+- targeted helper + matrix regressions: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py tests/test_smoke_cli_doc_artifacts.py -k 'matrix_docs_review_hint or matrix_all_review_order or matrix_artifact_roots or standalone_smoke_selects_expected_targets or smoke_wrapper_cli_spec or invalid_choice'` => `26 passed, 123 deselected in 10.96s`,
+- smoke runner/script/helper slice: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py tests/test_smoke_cli_doc_artifacts.py` => `149 passed in 27.50s`,
+- docs-focused smoke bundle: `.venv/bin/python scripts/standalone_smoke.py docs-focused` => `[standalone-smoke] summary: 5/5 targets passed in 17.66s`,
+- full automated tests: `.venv/bin/pytest -q` => `401 passed in 60.55s (0:01:00)`.
 
 ## First five phases
 
@@ -415,7 +415,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target
 - `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
 - `.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end
-- `.venv/bin/python scripts/standalone_smoke.py docs-focused` re-runs the docs parity + docs-review lane alias (`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`)
+- `.venv/bin/python scripts/standalone_smoke.py docs-focused` re-runs the docs parity + docs-review lane alias (`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, `matrix-docs-review-hint`)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle
 - `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix review artifacts end-to-end with fail-fast contract checks
@@ -434,6 +434,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place
 - `.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles
 - `.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review metadata appears before the live-runtime hint and fail-fast summary
+- `.venv/bin/python scripts/standalone_smoke.py matrix-docs-review-hint` runs the real subprocess docs-review failure regression that proves the docs-focused rerun hint lands after the persisted review matrix-summary path
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
 ### Timeline smoke check
 
