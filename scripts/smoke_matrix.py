@@ -282,7 +282,9 @@ def run_smoke_matrix(
                 _docs_review_artifact_metadata(target)
             )
         elif exit_code != 0 and docs_review_target is not None:
-            artifact_metadata = _docs_review_artifact_metadata(docs_review_target)
+            artifact_metadata = _persist_docs_review_artifact_metadata_summary(
+                _docs_review_artifact_metadata(docs_review_target)
+            )
         if exit_code != 0:
             _emit_matrix_line(
                 SMOKE_MATRIX_WRAPPER.failed_message(item_name=target.display_label, elapsed_seconds=elapsed),

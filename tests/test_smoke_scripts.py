@@ -2981,6 +2981,46 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
     ]
 
 
+def test_smoke_matrix_all_review_failure_persists_pending_review_metadata_artifact(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stderr = kwargs["stderr"]
+        if target.name == "standalone-all":
+            observer("live_runtime_requested= False\n")
+            print("standalone smoke failed fast: live_runtime_requested= False", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: 0.0)
+
+    exit_code = smoke_matrix.main(["all-review"])
+
+    assert exit_code == 1
+    summary_path = tmp_path / "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
+    assert summary_path.exists()
+    assert json.loads(summary_path.read_text(encoding="utf-8")) == {
+        "artifact_root": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+        "bundle_index_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json",
+        "display_name": "docs-review",
+        "drifted_readme_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/README-drifted.md",
+        "fix_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-check.json",
+        "fix_post_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json",
+        "fix_repair_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-repair.json",
+        "matrix_summary_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json",
+        "render_diff_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-review.patch",
+        "render_manifest_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-manifest.json",
+        "render_output_dir": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/rendered",
+        "target_name": "docs-review-all",
+    }
+
+
 def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_before_hint(capsys) -> None:
     smoke_script = _load_script_module("smoke_matrix_all_review_order_smoke")
 
@@ -3015,6 +3055,10 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "metadata_targets_docs_review_all",
         "metadata_artifact_root_matches_all_review",
         "metadata_matrix_summary_matches_all_review",
+        "matrix_summary_artifact_exists",
+        "matrix_summary_targets_docs_review_all",
+        "matrix_summary_artifact_root_matches_all_review",
+        "matrix_summary_path_matches_metadata",
         "metadata_before_hint",
         "metadata_before_failure_summary",
     ):

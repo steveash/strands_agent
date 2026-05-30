@@ -62,6 +62,13 @@ def _line_index(lines: list[str], prefix: str) -> int | None:
     return None
 
 
+def _resolve_checkout_path(path_text: str, *, checkout_root: Path) -> Path:
+    path = Path(path_text)
+    if path.is_absolute():
+        return path
+    return checkout_root / path
+
+
 def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
     smoke_matrix_module = _load_smoke_matrix_module()
     with tempfile.TemporaryDirectory(prefix="smoke-matrix-all-review-order-") as temp_dir:
@@ -87,6 +94,17 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
         metadata_payload = (
             json.loads(metadata_line.removeprefix(REVIEW_METADATA_PREFIX)) if metadata_line else {}
         )
+        matrix_summary_path_text = metadata_payload.get("matrix_summary_path", "")
+        matrix_summary_path = (
+            _resolve_checkout_path(matrix_summary_path_text, checkout_root=checkout_root)
+            if matrix_summary_path_text
+            else None
+        )
+        matrix_summary_payload = (
+            json.loads(matrix_summary_path.read_text(encoding="utf-8"))
+            if matrix_summary_path is not None and matrix_summary_path.exists()
+            else {}
+        )
 
         return [
             ("checkout_root", str(checkout_root)),
@@ -111,6 +129,22 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             (
                 "metadata_matrix_summary_matches_all_review",
                 metadata_payload.get("matrix_summary_path") == EXPECTED_MATRIX_SUMMARY_PATH,
+            ),
+            (
+                "matrix_summary_artifact_exists",
+                matrix_summary_path is not None and matrix_summary_path.exists(),
+            ),
+            (
+                "matrix_summary_targets_docs_review_all",
+                matrix_summary_payload.get("target_name") == smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME,
+            ),
+            (
+                "matrix_summary_artifact_root_matches_all_review",
+                matrix_summary_payload.get("artifact_root") == EXPECTED_ARTIFACT_ROOT,
+            ),
+            (
+                "matrix_summary_path_matches_metadata",
+                matrix_summary_payload.get("matrix_summary_path") == metadata_payload.get("matrix_summary_path"),
             ),
             (
                 "metadata_before_hint",
