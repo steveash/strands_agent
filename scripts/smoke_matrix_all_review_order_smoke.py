@@ -16,6 +16,8 @@ from strands_agent_tui.testing import emit_smoke_results
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
 REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
+REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
+REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
 LIVE_HINT_PREFIX = "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
 EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
@@ -81,6 +83,8 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
 
         stderr_lines = stderr.getvalue().splitlines()
         metadata_index = _line_index(stderr_lines, REVIEW_METADATA_PREFIX)
+        artifacts_index = _line_index(stderr_lines, REVIEW_ARTIFACTS_PREFIX)
+        matrix_summary_index = _line_index(stderr_lines, REVIEW_MATRIX_SUMMARY_PREFIX)
         hint_index = _line_index(stderr_lines, LIVE_HINT_PREFIX)
         summary_index = _line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = next(
@@ -89,6 +93,8 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
         )
         display_failed_line = failed_line.replace("= False", "=False")
         metadata_line = stderr_lines[metadata_index] if metadata_index is not None else ""
+        artifacts_line = stderr_lines[artifacts_index] if artifacts_index is not None else ""
+        matrix_summary_line = stderr_lines[matrix_summary_index] if matrix_summary_index is not None else ""
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""
         summary_line = stderr_lines[summary_index] if summary_index is not None else ""
         metadata_payload = (
@@ -110,12 +116,16 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             ("checkout_root", str(checkout_root)),
             ("stderr_failed_line", display_failed_line),
             ("stderr_metadata_line", metadata_line),
+            ("stderr_artifacts_line", artifacts_line),
+            ("stderr_matrix_summary_line", matrix_summary_line),
             ("stderr_hint_line", hint_line),
             ("stderr_summary_line", summary_line),
             ("exit_code", exit_code),
             ("exit_code_non_zero", exit_code != 0),
             ("failed_line_present", bool(failed_line)),
             ("metadata_line_present", bool(metadata_line)),
+            ("artifacts_line_present", bool(artifacts_line)),
+            ("matrix_summary_line_present", bool(matrix_summary_line)),
             ("hint_line_present", bool(hint_line)),
             ("summary_line_present", bool(summary_line)),
             (
@@ -151,8 +161,26 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
                 metadata_index is not None and hint_index is not None and metadata_index < hint_index,
             ),
             (
+                "artifacts_before_hint",
+                artifacts_index is not None and hint_index is not None and artifacts_index < hint_index,
+            ),
+            (
+                "matrix_summary_before_hint",
+                matrix_summary_index is not None and hint_index is not None and matrix_summary_index < hint_index,
+            ),
+            (
                 "metadata_before_failure_summary",
                 metadata_index is not None and summary_index is not None and metadata_index < summary_index,
+            ),
+            (
+                "artifacts_before_failure_summary",
+                artifacts_index is not None and summary_index is not None and artifacts_index < summary_index,
+            ),
+            (
+                "matrix_summary_before_failure_summary",
+                matrix_summary_index is not None
+                and summary_index is not None
+                and matrix_summary_index < summary_index,
             ),
         ]
 

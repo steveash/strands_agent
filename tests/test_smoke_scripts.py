@@ -1979,6 +1979,23 @@ def _expected_smoke_matrix_review_metadata_line(*, artifact_root: str, target_na
     return "[smoke-matrix] review metadata: " + json.dumps(payload, sort_keys=True)
 
 
+def _expected_smoke_matrix_review_artifact_location_lines(*, artifact_root: str) -> list[str]:
+    return [
+        (
+            "[smoke-matrix] review artifacts: "
+            f"{artifact_root} (index: {artifact_root}/index.json)"
+        ),
+        f"[smoke-matrix] review matrix summary: {artifact_root}/matrix-summary.json",
+        f"[smoke-matrix] review drifted README: {artifact_root}/README-drifted.md",
+        f"[smoke-matrix] review rendered sections: {artifact_root}/rendered",
+        f"[smoke-matrix] review render manifest: {artifact_root}/render-manifest.json",
+        f"[smoke-matrix] review render diff: {artifact_root}/render-review.patch",
+        f"[smoke-matrix] review fix-check JSON: {artifact_root}/fix-check.json",
+        f"[smoke-matrix] review fix-repair JSON: {artifact_root}/fix-repair.json",
+        f"[smoke-matrix] review fix-post-check JSON: {artifact_root}/fix-post-check.json",
+    ]
+
+
 def test_smoke_matrix_uses_shared_wrapper_summary_prefixes() -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
 
@@ -2972,6 +2989,9 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
             artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
             target_name="docs-review-all",
         ),
+        *_expected_smoke_matrix_review_artifact_location_lines(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
+        ),
         (
             "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`; "
             "export `STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
@@ -3038,6 +3058,18 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
     )
     assert any(
         line.startswith(
+            "stderr_artifacts_line: [smoke-matrix] review artifacts: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
             "stderr_hint_line: [smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
         )
         for line in lines
@@ -3050,6 +3082,8 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "exit_code_non_zero",
         "failed_line_present",
         "metadata_line_present",
+        "artifacts_line_present",
+        "matrix_summary_line_present",
         "hint_line_present",
         "summary_line_present",
         "metadata_targets_docs_review_all",
@@ -3060,7 +3094,11 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_metadata",
         "metadata_before_hint",
+        "artifacts_before_hint",
+        "matrix_summary_before_hint",
         "metadata_before_failure_summary",
+        "artifacts_before_failure_summary",
+        "matrix_summary_before_failure_summary",
     ):
         assert f"{check_name}= True" in lines
 

@@ -129,26 +129,26 @@ What exists now:
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- taught focused `workspace-edit` and `shell-test` queue-mix summaries to explicitly label `activity fallback` whenever their oldest pending-only age/timestamp cue came from session activity instead of approval `created_at`,
-- kept the fresh-vs-restored pending-only split intact while propagating that provenance marker through both the launch-time picker and in-app `F11` switcher surfaces,
-- and added regression coverage for both the pure session-summary renderer and the live TUI switcher flow.
+- taught `scripts/smoke_matrix.py all-review` to emit the pending docs-review artifact bundle lines immediately after the persisted `review metadata` payload even when the live-inclusive standalone bundle fails before the docs-review lane starts,
+- extended `scripts/smoke_matrix_all_review_order_smoke.py` so the real subprocess regression now asserts both `review artifacts:` and `review matrix summary:` appear before the live-runtime hint and fail-fast summary,
+- and added regression coverage that locks in the early-failure stderr ordering plus the still-persisted `matrix-summary.json` artifact contract.
 
 Why this matters now:
-- older or migrated sessions that lack approval timestamps still surface useful oldest-pending queue cues instead of dropping back to count-only summaries,
-- operators can now tell at a glance whether a queue-age claim came from true approval metadata or a restart-safe session-activity fallback,
-- and this deepens the Strands learning loop by showing how resumable Strands tooling can stay observable even when some pause-state metadata is incomplete.
+- operators no longer have to parse the JSON metadata line by hand to find the pending docs-review bundle root or `matrix-summary.json` path after an `all-review` early failure,
+- the fail-fast path now exposes the same artifact breadcrumbs as the normal docs-review lane, which makes the follow-up `docs-focused` rerun workflow faster and less error-prone,
+- and the runnable order smoke keeps this observability contract honest through a real subprocess execution instead of only via mocked stderr expectations.
 
 How we know the prototype is working right now:
-- unit tests verify runtime behavior, config merging, deterministic fake-event emission, approval queue behavior, live tool registration, live tool-event capture, structured event payloads, default artifact-root derivation, event-timeline summary formatting/filtering, and smoke-doc artifact/report generation,
-- tool tests verify bounded reads, bounded search, guarded writes, exact-match replacement rules, workspace confinement, and event-sink instrumentation,
-- app/session tests verify prompt submission, status rendering, workspace banner rendering, approval banner rendering, event timeline updates plus compact summary lines, approval blocking/approval resume behavior, restart-safe draft-prompt recovery, restore-state badges plus selected-session previews in the session switcher, pending/denied backlog rollup rendering inside the switcher, restart-safe session-switcher recovery, and on-disk artifact persistence for both success and failure cases,
-- smoke infrastructure tests verify wrapper help/readme parity, public smoke target selection, configurable smoke-doc artifact-contract path handling, machine-readable bundle-index output, drift-only manifest/diff outputs, fix-side JSON outputs, and the dedicated timeline smoke contract,
-- runtime errors are surfaced visibly in both the transcript and event pane, and are also written to session artifacts with structured metadata.
+- targeted smoke-script regressions verify the pending-review metadata artifact persists, the early-failure stderr includes the live-runtime hint, and the runnable order smoke proves metadata plus artifact-location lines arrive before the hint/summary,
+- smoke runner/script tests verify the shared matrix target metadata, emitted artifact-path lines, and wrapper contracts stay aligned,
+- the docs-focused standalone smoke bundle reruns the docs parity + docs-review artifact checks together in one fail-fast path,
+- and the full pytest suite still passes after the matrix failure-path change.
 
 Current evidence:
-- focused picker/switcher regressions: `.venv/bin/pytest -q tests/test_sessions.py tests/test_app.py` => `110 passed in 39.14s`,
-- triage smoke walkthrough: `.venv/bin/python scripts/session_triage_smoke.py both` => `[session-triage-smoke] summary: 2/2 targets passed in 18.67s`,
-- full automated tests: `.venv/bin/pytest -q` => `398 passed in 74.16s (0:01:14)`.
+- targeted early-failure regressions: `.venv/bin/pytest -q tests/test_smoke_scripts.py -k 'all_review_failure_persists_pending_review_metadata_artifact or all_review_order_smoke_emits_pending_review_metadata_before_hint or all_review_failure_emits_live_runtime_hint'` => `3 passed, 112 deselected in 12.43s`,
+- smoke runner/script slice: `.venv/bin/pytest -q tests/test_smoke_runner.py tests/test_smoke_scripts.py` => `143 passed in 27.84s`,
+- docs-focused smoke bundle: `.venv/bin/python scripts/standalone_smoke.py docs-focused` => `[standalone-smoke] summary: 4/4 targets passed in 18.62s`,
+- full automated tests: `.venv/bin/pytest -q` => `398 passed in 65.76s (0:01:05)`.
 
 ## First five phases
 

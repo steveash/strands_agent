@@ -293,9 +293,10 @@ def run_smoke_matrix(
             artifact_metadata_message = _docs_review_artifact_metadata_message(artifact_metadata)
             if artifact_metadata_message is not None:
                 _emit_matrix_line(artifact_metadata_message, stream=stderr)
+            artifact_location_target = docs_review_target if docs_review_target is not None else target
+            for artifact_location_message in _docs_review_artifact_location_messages(artifact_location_target):
+                _emit_matrix_line(artifact_location_message, stream=stderr)
             if target == docs_review_target:
-                for artifact_location_message in _docs_review_artifact_location_messages(target):
-                    _emit_matrix_line(artifact_location_message, stream=stderr)
                 docs_review_hint = _docs_review_rerun_hint(target)
                 if docs_review_hint is not None:
                     _emit_matrix_line(docs_review_hint, stream=stderr)
