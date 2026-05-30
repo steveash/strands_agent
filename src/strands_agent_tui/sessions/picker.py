@@ -280,14 +280,20 @@ class SessionSummary:
         timestamp: str,
         *,
         has_pending_match: bool,
-    ) -> tuple[int, str]:
+    ) -> tuple[int, str, bool]:
         if age_seconds > 0 or timestamp:
-            return age_seconds, timestamp
+            return age_seconds, timestamp, False
         if not has_pending_match or self.session_activity_age_sort_key <= 0:
-            return 0, ""
-        return self.session_activity_age_sort_key, self.updated_at
+            return 0, "", False
+        return self.session_activity_age_sort_key, self.updated_at, True
 
     def pending_only_lane_oldest_age_and_timestamp(self, filter_mode: str) -> tuple[int, str]:
+        age_seconds, timestamp, _used_activity_fallback = self.pending_only_lane_oldest_age_and_timestamp_source(
+            filter_mode
+        )
+        return age_seconds, timestamp
+
+    def pending_only_lane_oldest_age_and_timestamp_source(self, filter_mode: str) -> tuple[int, str, bool]:
         if filter_mode == "workspace-edit":
             return self._pending_only_lane_age_and_timestamp_with_activity_fallback(
                 self.pending_workspace_edit_age_sort_key,
@@ -300,9 +306,15 @@ class SessionSummary:
                 self.pending_shell_test_oldest_at,
                 has_pending_match=self.has_pending_shell_test_approval,
             )
-        return 0, ""
+        return 0, "", False
 
     def restored_pending_only_lane_oldest_age_and_timestamp(self, filter_mode: str) -> tuple[int, str]:
+        age_seconds, timestamp, _used_activity_fallback = self.restored_pending_only_lane_oldest_age_and_timestamp_source(
+            filter_mode
+        )
+        return age_seconds, timestamp
+
+    def restored_pending_only_lane_oldest_age_and_timestamp_source(self, filter_mode: str) -> tuple[int, str, bool]:
         if filter_mode == "workspace-edit":
             return self._pending_only_lane_age_and_timestamp_with_activity_fallback(
                 self.restored_pending_workspace_edit_age_sort_key,
@@ -315,7 +327,7 @@ class SessionSummary:
                 self.restored_pending_shell_test_oldest_at,
                 has_pending_match=self.has_restored_pending_shell_test_approval,
             )
-        return 0, ""
+        return 0, "", False
 
     def render_line(
         self,
@@ -636,8 +648,10 @@ class PendingOnlyLaneMetrics:
     restored_pending_only_sessions: int
     oldest_age_seconds: int
     oldest_at: str = ""
+    oldest_uses_activity_fallback: bool = False
     restored_oldest_age_seconds: int = 0
     restored_oldest_at: str = ""
+    restored_oldest_uses_activity_fallback: bool = False
 
 
 @dataclass(slots=True)
@@ -3001,12 +3015,20 @@ def _format_oldest_age_clause(age_seconds: int, timestamp: str = "") -> str:
     return f" ({clause})"
 
 
-def _render_age_timestamp_metric(label: str, age_seconds: int, timestamp: str = "") -> str:
+def _render_age_timestamp_metric(
+    label: str,
+    age_seconds: int,
+    timestamp: str = "",
+    *,
+    activity_fallback: bool = False,
+) -> str:
     if age_seconds <= 0:
         return ""
     metric = f"{label}: {_format_age_compact(age_seconds)}"
     if timestamp:
         metric += f" @ {timestamp}"
+    if activity_fallback:
+        metric += " (activity fallback)"
     return metric
 
 
@@ -3266,39 +3288,56 @@ def _summarize_pending_only_lane_metrics(
     restored_pending_only_sessions = 0
     oldest_age_seconds = 0
     oldest_at = ""
+    oldest_uses_activity_fallback = False
     restored_oldest_age_seconds = 0
     restored_oldest_at = ""
+    restored_oldest_uses_activity_fallback = False
 
     for summary in summaries:
         if not summary.has_pending_only_lane_match(filter_mode):
             continue
         pending_only_sessions += 1
-        lane_age_seconds, lane_timestamp = summary.pending_only_lane_oldest_age_and_timestamp(filter_mode)
+        lane_age_seconds, lane_timestamp, lane_used_activity_fallback = (
+            summary.pending_only_lane_oldest_age_and_timestamp_source(filter_mode)
+        )
+        previous_oldest_age = oldest_age_seconds
+        previous_oldest_timestamp = oldest_at
         oldest_age_seconds, oldest_at = _update_oldest_age_and_timestamp(
             oldest_age_seconds,
             oldest_at,
             lane_age_seconds,
             lane_timestamp,
         )
+        if (oldest_age_seconds, oldest_at) != (previous_oldest_age, previous_oldest_timestamp):
+            oldest_uses_activity_fallback = lane_used_activity_fallback
         if summary.has_restored_pending_only_lane_match(filter_mode):
             restored_pending_only_sessions += 1
-            restored_age_seconds, restored_timestamp = summary.restored_pending_only_lane_oldest_age_and_timestamp(
-                filter_mode
+            restored_age_seconds, restored_timestamp, restored_used_activity_fallback = (
+                summary.restored_pending_only_lane_oldest_age_and_timestamp_source(filter_mode)
             )
+            previous_restored_age = restored_oldest_age_seconds
+            previous_restored_timestamp = restored_oldest_at
             restored_oldest_age_seconds, restored_oldest_at = _update_oldest_age_and_timestamp(
                 restored_oldest_age_seconds,
                 restored_oldest_at,
                 restored_age_seconds,
                 restored_timestamp,
             )
+            if (restored_oldest_age_seconds, restored_oldest_at) != (
+                previous_restored_age,
+                previous_restored_timestamp,
+            ):
+                restored_oldest_uses_activity_fallback = restored_used_activity_fallback
 
     return PendingOnlyLaneMetrics(
         pending_only_sessions=pending_only_sessions,
         restored_pending_only_sessions=restored_pending_only_sessions,
         oldest_age_seconds=oldest_age_seconds,
         oldest_at=oldest_at,
+        oldest_uses_activity_fallback=oldest_uses_activity_fallback,
         restored_oldest_age_seconds=restored_oldest_age_seconds,
         restored_oldest_at=restored_oldest_at,
+        restored_oldest_uses_activity_fallback=restored_oldest_uses_activity_fallback,
     )
 
 
@@ -3318,11 +3357,17 @@ def _format_pending_only_lane_metrics(metrics: PendingOnlyLaneMetrics) -> list[s
     return [
         _render_session_count_metric("pending-only", metrics.pending_only_sessions),
         _render_session_count_metric("restored pending-only", metrics.restored_pending_only_sessions),
-        _render_age_timestamp_metric("oldest pending-only", metrics.oldest_age_seconds, metrics.oldest_at),
+        _render_age_timestamp_metric(
+            "oldest pending-only",
+            metrics.oldest_age_seconds,
+            metrics.oldest_at,
+            activity_fallback=metrics.oldest_uses_activity_fallback,
+        ),
         _render_age_timestamp_metric(
             "oldest restored pending-only",
             metrics.restored_oldest_age_seconds,
             metrics.restored_oldest_at,
+            activity_fallback=metrics.restored_oldest_uses_activity_fallback,
         ),
     ]
 

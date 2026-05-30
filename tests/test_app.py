@@ -1719,6 +1719,107 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_marks_pending_only_age_fallback_sources(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    now = datetime.now(UTC)
+    fallback_edit_at = now - timedelta(days=6)
+    fallback_test_at = now - timedelta(days=5)
+
+    edit_store = SessionArtifactStore(tmp_path, session_id="session-edit-fallback")
+    edit_store.append_turn(
+        TurnArtifact(
+            prompt="queue edit",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=fallback_edit_at.isoformat(),
+        )
+    )
+    edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-edit-fallback",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit",
+            )
+        ]
+    )
+    set_session_artifact_mtime(edit_store, fallback_edit_at)
+
+    test_store = SessionArtifactStore(tmp_path, session_id="session-test-fallback")
+    test_store.append_turn(
+        TurnArtifact(
+            prompt="queue tests",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=fallback_test_at.isoformat(),
+        )
+    )
+    test_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-test-fallback",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="queue tests",
+            )
+        ]
+    )
+    set_session_artifact_mtime(test_store, fallback_test_at)
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        workspace_edit_output = str(app.query_one("#output").render())
+        assert "Workspace edit queue mix:" in workspace_edit_output
+        assert "oldest pending-only:" in workspace_edit_output
+        assert "(activity fallback)" in workspace_edit_output
+
+        await pilot.press("y")
+        await pilot.pause()
+        shell_test_output = str(app.query_one("#output").render())
+        assert "Shell test queue mix:" in shell_test_output
+        assert "oldest pending-only:" in shell_test_output
+        assert "(activity fallback)" in shell_test_output
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_supports_stale_pending_denied_and_restored_subfilters(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(

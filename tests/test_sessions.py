@@ -303,6 +303,7 @@ def test_render_session_picker_surfaces_workspace_rollups_and_overlap(tmp_path: 
         f"| oldest pending-only: 5d @ {_format_test_timestamp(edit_at)}"
         in edit_rendered
     )
+    assert "activity fallback" not in edit_rendered
 
 
 
@@ -351,6 +352,7 @@ def test_render_session_picker_surfaces_shell_rollups_and_overlap(tmp_path: Path
         f"| oldest pending-only: 5d @ {_format_test_timestamp(test_at)}"
         in test_rendered
     )
+    assert "activity fallback" not in test_rendered
 
 
 def test_render_session_picker_collapses_workspace_and_shell_previews_to_active_lane(tmp_path: Path) -> None:
@@ -606,19 +608,19 @@ def test_render_session_picker_falls_back_to_session_activity_for_missing_pendin
     shell_test_rendered = render_session_picker(shell_root, filter_mode="shell-test")
 
     assert (
-        f"oldest pending-only: 6d @ {_format_test_timestamp(restored_edit_at)}"
+        f"oldest pending-only: 6d @ {_format_test_timestamp(restored_edit_at)} (activity fallback)"
         in workspace_edit_rendered
     )
     assert (
-        f"oldest restored pending-only: 6d @ {_format_test_timestamp(restored_edit_at)}"
+        f"oldest restored pending-only: 6d @ {_format_test_timestamp(restored_edit_at)} (activity fallback)"
         in workspace_edit_rendered
     )
     assert (
-        f"oldest pending-only: 5d @ {_format_test_timestamp(restored_test_at)}"
+        f"oldest pending-only: 5d @ {_format_test_timestamp(restored_test_at)} (activity fallback)"
         in shell_test_rendered
     )
     assert (
-        f"oldest restored pending-only: 5d @ {_format_test_timestamp(restored_test_at)}"
+        f"oldest restored pending-only: 5d @ {_format_test_timestamp(restored_test_at)} (activity fallback)"
         in shell_test_rendered
     )
 
