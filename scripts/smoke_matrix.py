@@ -233,6 +233,21 @@ def _docs_review_rerun_hint(target: SmokeScriptTarget) -> str | None:
     return DOCS_FOCUSED_RERUN_HINT
 
 
+def _pending_docs_review_rerun_hint(
+    current_target: SmokeScriptTarget,
+    docs_review_target: SmokeScriptTarget | None,
+    *,
+    live_failure_hint: str | None,
+) -> str | None:
+    if live_failure_hint is None:
+        return None
+    if current_target.name != LIVE_INCLUSIVE_STANDALONE_TARGET_NAME:
+        return None
+    if docs_review_target is None or docs_review_target.name != DOCS_REVIEW_ALL_TARGET_NAME:
+        return None
+    return _docs_review_rerun_hint(docs_review_target)
+
+
 def _live_inclusive_failure_hint(target: SmokeScriptTarget, observed_lines: Sequence[str]) -> str | None:
     if target.name != LIVE_INCLUSIVE_STANDALONE_TARGET_NAME:
         return None
@@ -300,9 +315,16 @@ def run_smoke_matrix(
                 docs_review_hint = _docs_review_rerun_hint(target)
                 if docs_review_hint is not None:
                     _emit_matrix_line(docs_review_hint, stream=stderr)
-            hint = _live_inclusive_failure_hint(target, observed_lines)
-            if hint is not None:
-                _emit_matrix_line(hint, stream=stderr)
+            live_failure_hint = _live_inclusive_failure_hint(target, observed_lines)
+            if live_failure_hint is not None:
+                _emit_matrix_line(live_failure_hint, stream=stderr)
+            pending_docs_review_hint = _pending_docs_review_rerun_hint(
+                target,
+                docs_review_target,
+                live_failure_hint=live_failure_hint,
+            )
+            if pending_docs_review_hint is not None:
+                _emit_matrix_line(pending_docs_review_hint, stream=stderr)
             total_elapsed = perf_counter() - total_started_at
             _emit_matrix_line(
                 SMOKE_MATRIX_WRAPPER.failure_summary_message(

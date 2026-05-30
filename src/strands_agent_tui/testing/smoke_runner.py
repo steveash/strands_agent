@@ -588,7 +588,8 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="matrix-all-review-order",
             readme_description=(
                 "runs the real `all-review` smoke-matrix regression that proves pending docs-review "
-                "metadata appears before the live-runtime hint and fail-fast summary"
+                "breadcrumbs appear before the live-runtime hint and the docs-focused rerun hint lands "
+                "before the fail-fast summary"
             ),
         ),
         SmokeCliExample(

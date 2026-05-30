@@ -24,6 +24,10 @@ REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
 REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
 REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
 LIVE_HINT_PREFIX = "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
+DOCS_FOCUSED_HINT_PREFIX = (
+    "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
+    "`standalone_smoke.py docs-focused`;"
+)
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
 EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
 EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
@@ -84,6 +88,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
         artifacts_index = _line_index(stderr_lines, REVIEW_ARTIFACTS_PREFIX)
         matrix_summary_index = _line_index(stderr_lines, REVIEW_MATRIX_SUMMARY_PREFIX)
         hint_index = _line_index(stderr_lines, LIVE_HINT_PREFIX)
+        docs_hint_index = _line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
         summary_index = _line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = next(
             (line for line in stderr_lines if line == "standalone smoke failed fast: live_runtime_requested= False"),
@@ -94,6 +99,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
         artifacts_line = stderr_lines[artifacts_index] if artifacts_index is not None else ""
         matrix_summary_line = stderr_lines[matrix_summary_index] if matrix_summary_index is not None else ""
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""
+        docs_hint_line = stderr_lines[docs_hint_index] if docs_hint_index is not None else ""
         summary_line = stderr_lines[summary_index] if summary_index is not None else ""
         metadata_payload = (
             json.loads(metadata_line.removeprefix(REVIEW_METADATA_PREFIX)) if metadata_line else {}
@@ -121,6 +127,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             ("stderr_artifacts_line", artifacts_line),
             ("stderr_matrix_summary_line", matrix_summary_line),
             ("stderr_hint_line", hint_line),
+            ("stderr_docs_hint_line", docs_hint_line),
             ("stderr_summary_line", summary_line),
             ("exit_code", exit_code),
             ("exit_code_non_zero", exit_code != 0),
@@ -129,6 +136,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             ("artifacts_line_present", bool(artifacts_line)),
             ("matrix_summary_line_present", bool(matrix_summary_line)),
             ("hint_line_present", bool(hint_line)),
+            ("docs_hint_line_present", bool(docs_hint_line)),
             ("summary_line_present", bool(summary_line)),
             (
                 "metadata_targets_docs_review_all",
@@ -173,6 +181,14 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             (
                 "matrix_summary_before_hint",
                 matrix_summary_index is not None and hint_index is not None and matrix_summary_index < hint_index,
+            ),
+            (
+                "live_hint_before_docs_hint",
+                hint_index is not None and docs_hint_index is not None and hint_index < docs_hint_index,
+            ),
+            (
+                "docs_hint_before_failure_summary",
+                docs_hint_index is not None and summary_index is not None and docs_hint_index < summary_index,
             ),
             (
                 "metadata_before_failure_summary",

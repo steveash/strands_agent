@@ -3006,7 +3006,64 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
             "export `STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
             "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning the live-inclusive matrix."
         ),
+        (
+            "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
+            "`standalone_smoke.py docs-focused`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
+            "docs-review artifacts without the rest of the matrix."
+        ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=4, elapsed_seconds=2.0),
+    ]
+
+
+def test_smoke_matrix_all_review_failure_emits_missing_api_key_hint_and_docs_focused_rerun(
+    monkeypatch,
+) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stderr = kwargs["stderr"]
+        if target.name == "standalone-all":
+            observer("RuntimeError: OPENAI_API_KEY is required for live runtime mode\n")
+            print("standalone smoke exited with status 1", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, 1.0, 1.4, 2.2])
+    monkeypatch.setattr(smoke_matrix, "perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = smoke_matrix.main(["all-review"])
+
+    assert exit_code == 1
+    summary_metadata = SMOKE_MATRIX_WRAPPER
+    assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
+    assert stderr.getvalue().splitlines() == [
+        "standalone smoke exited with status 1",
+        summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.4),
+        _expected_smoke_matrix_review_metadata_line(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+            target_name="docs-review-all",
+        ),
+        *_expected_smoke_matrix_review_artifact_location_lines(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
+        ),
+        (
+            "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` "
+            "was missing; export `OPENAI_API_KEY` (and optionally `STRANDS_AGENT_OPENAI_MODEL`) "
+            "before rerunning."
+        ),
+        (
+            "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
+            "`standalone_smoke.py docs-focused`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
+            "docs-review artifacts without the rest of the matrix."
+        ),
+        summary_metadata.failure_summary_line(passed_count=0, total_count=4, elapsed_seconds=2.2),
     ]
 
 
@@ -3084,6 +3141,13 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         for line in lines
     )
     assert any(
+        line.startswith(
+            "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
+            "`standalone_smoke.py docs-focused`;"
+        )
+        for line in lines
+    )
+    assert any(
         line.startswith("stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ")
         for line in lines
     )
@@ -3094,6 +3158,7 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "artifacts_line_present",
         "matrix_summary_line_present",
         "hint_line_present",
+        "docs_hint_line_present",
         "summary_line_present",
         "metadata_targets_docs_review_all",
         "metadata_artifact_root_matches_all_review",
@@ -3106,6 +3171,8 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "metadata_before_hint",
         "artifacts_before_hint",
         "matrix_summary_before_hint",
+        "live_hint_before_docs_hint",
+        "docs_hint_before_failure_summary",
         "metadata_before_failure_summary",
         "artifacts_before_failure_summary",
         "matrix_summary_before_failure_summary",
