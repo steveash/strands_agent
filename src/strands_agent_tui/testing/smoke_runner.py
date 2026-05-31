@@ -518,6 +518,10 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("docs-artifacts", "smoke_cli_docs_artifacts_smoke.py"),
         SmokeScriptTargetTemplate("matrix-artifact-roots", "smoke_matrix_artifact_roots_smoke.py"),
         SmokeScriptTargetTemplate("matrix-all-review-order", "smoke_matrix_all_review_order_smoke.py"),
+        SmokeScriptTargetTemplate(
+            "matrix-all-review-missing-api-key",
+            "smoke_matrix_all_review_missing_api_key_smoke.py",
+        ),
         SmokeScriptTargetTemplate("matrix-docs-review-hint", "smoke_matrix_docs_review_hint_smoke.py"),
         SmokeScriptTargetTemplate("live", "live_smoke.py"),
     ),
@@ -529,6 +533,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             "docs-artifacts",
             "matrix-artifact-roots",
             "matrix-all-review-order",
+            "matrix-all-review-missing-api-key",
             "matrix-docs-review-hint",
         ),
         "all": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"),
@@ -572,6 +577,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             readme_description=(
                 "re-runs the docs parity + docs-review lane alias "
                 "(`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, "
+                "`matrix-all-review-missing-api-key`, "
                 "`matrix-docs-review-hint`)"
             ),
         ),
@@ -590,6 +596,15 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
                 "runs the real `all-review` smoke-matrix regression that proves pending docs-review "
                 "breadcrumbs appear before the live-runtime hint and the docs-focused rerun hint lands "
                 "before the fail-fast summary"
+            ),
+        ),
+        SmokeCliExample(
+            "standalone_smoke.py matrix-all-review-missing-api-key",
+            target_name="matrix-all-review-missing-api-key",
+            readme_description=(
+                "runs the real subprocess `all-review` live-runtime failure regression that proves the "
+                "missing-API-key hint lands after the persisted docs-review breadcrumbs and before the "
+                "docs-focused rerun hint"
             ),
         ),
         SmokeCliExample(

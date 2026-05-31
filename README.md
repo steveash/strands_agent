@@ -415,7 +415,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target
 - `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
 - `.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end
-- `.venv/bin/python scripts/standalone_smoke.py docs-focused` re-runs the docs parity + docs-review lane alias (`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, `matrix-docs-review-hint`)
+- `.venv/bin/python scripts/standalone_smoke.py docs-focused` re-runs the docs parity + docs-review lane alias (`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, `matrix-all-review-missing-api-key`, `matrix-docs-review-hint`)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle
 - `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix review artifacts end-to-end with fail-fast contract checks
@@ -434,6 +434,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place
 - `.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles
 - `.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review breadcrumbs appear before the live-runtime hint and the docs-focused rerun hint lands before the fail-fast summary
+- `.venv/bin/python scripts/standalone_smoke.py matrix-all-review-missing-api-key` runs the real subprocess `all-review` live-runtime failure regression that proves the missing-API-key hint lands after the persisted docs-review breadcrumbs and before the docs-focused rerun hint
 - `.venv/bin/python scripts/standalone_smoke.py matrix-docs-review-hint` runs the real subprocess docs-review failure regression that proves the docs-focused rerun hint lands after the persisted review matrix-summary path
 - `.venv/bin/python scripts/standalone_smoke.py replay` runs just the replay smoke target
 ### Timeline smoke check

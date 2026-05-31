@@ -511,6 +511,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
                 "docs-artifacts",
                 "matrix-artifact-roots",
                 "matrix-all-review-order",
+                "matrix-all-review-missing-api-key",
                 "matrix-docs-review-hint",
             ],
         ),
@@ -520,6 +521,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         (["docs-artifacts"], ["docs-artifacts"]),
         (["matrix-artifact-roots"], ["matrix-artifact-roots"]),
         (["matrix-all-review-order"], ["matrix-all-review-order"]),
+        (["matrix-all-review-missing-api-key"], ["matrix-all-review-missing-api-key"]),
         (["live"], ["live"]),
     ],
 )
@@ -2057,7 +2059,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
         (
             "standalone_smoke",
             "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,matrix-docs-review-hint,live,local,docs-focused,all}",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,docs-focused,all}",
         ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
@@ -3172,6 +3174,81 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "artifacts_before_hint",
         "matrix_summary_before_hint",
         "live_hint_before_docs_hint",
+        "docs_hint_before_failure_summary",
+        "metadata_before_failure_summary",
+        "artifacts_before_failure_summary",
+        "matrix_summary_before_failure_summary",
+    ):
+        assert f"{check_name}= True" in lines
+
+
+def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_metadata_before_hints(
+    capsys,
+) -> None:
+    smoke_script = _load_script_module("smoke_matrix_all_review_missing_api_key_smoke")
+
+    exit_code = smoke_script.main([])
+
+    assert exit_code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert any(line.startswith("checkout_root: ") for line in lines)
+    assert "stderr_failed_line: standalone smoke exited with status 1" in lines
+    assert any(
+        line.startswith(
+            "stderr_metadata_line: [smoke-matrix] review metadata: {\"artifact_root\": "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_artifacts_line: [smoke-matrix] review artifacts: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_missing_api_key_hint_line: [smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` was missing;"
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
+            "`standalone_smoke.py docs-focused`;"
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith("stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ")
+        for line in lines
+    )
+    for check_name in (
+        "exit_code_non_zero",
+        "failed_line_present",
+        "metadata_line_present",
+        "artifacts_line_present",
+        "matrix_summary_line_present",
+        "missing_api_key_hint_line_present",
+        "docs_hint_line_present",
+        "summary_line_present",
+        "metadata_targets_docs_review_all",
+        "metadata_artifact_root_matches_all_review",
+        "metadata_matrix_summary_matches_all_review",
+        "matrix_summary_artifact_exists",
+        "matrix_summary_targets_docs_review_all",
+        "matrix_summary_artifact_root_matches_all_review",
+        "matrix_summary_path_matches_metadata",
+        "matrix_summary_line_matches_metadata_path",
+        "metadata_before_missing_api_key_hint",
+        "artifacts_before_missing_api_key_hint",
+        "matrix_summary_before_missing_api_key_hint",
+        "missing_api_key_hint_before_docs_hint",
         "docs_hint_before_failure_summary",
         "metadata_before_failure_summary",
         "artifacts_before_failure_summary",
