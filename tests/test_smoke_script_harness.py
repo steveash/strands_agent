@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
 from strands_agent_tui.testing import (
     build_script_driver_source,
+    collect_review_artifact_output,
     detail_safe_text,
     find_prefixed_line_index,
-    run_python_driver_in_temp_checkout,
-    run_loaded_script_module_main,
     load_script_module,
+    run_loaded_script_module_main,
+    run_python_driver_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
 )
 
@@ -24,6 +26,97 @@ def test_find_prefixed_line_index_and_detail_safe_text() -> None:
     assert find_prefixed_line_index(lines, "beta:") == 1
     assert find_prefixed_line_index(lines, "gamma:") is None
     assert detail_safe_text("render_manifest_payload= False") == "render_manifest_payload=False"
+
+
+def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_path: Path) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_payload = {
+        "display_name": "docs-review",
+        "target_name": "docs-review",
+        "artifact_root": "artifacts/review",
+        "bundle_index_path": "artifacts/review/index.json",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+    }
+    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
+    metadata_payload = {
+        "display_name": "docs-review",
+        "target_name": "docs-review",
+        "artifact_root": "artifacts/review",
+        "bundle_index_path": "artifacts/review/index.json",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+    }
+
+    observed = collect_review_artifact_output(
+        [
+            f"[smoke-matrix] review metadata: {json.dumps(metadata_payload, sort_keys=True)}",
+            "[smoke-matrix] review artifacts: artifacts/review",
+            "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
+        ],
+        checkout_root=checkout_root,
+        metadata_prefix="[smoke-matrix] review metadata: ",
+        artifacts_prefix="[smoke-matrix] review artifacts: ",
+        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
+    )
+
+    assert observed.metadata_index == 0
+    assert observed.artifacts_index == 1
+    assert observed.matrix_summary_index == 2
+    assert observed.metadata_line_present is True
+    assert observed.artifacts_line_present is True
+    assert observed.matrix_summary_line_present is True
+    assert observed.metadata_targets("docs-review") is True
+    assert observed.metadata_artifact_root_matches("artifacts/review") is True
+    assert observed.metadata_matrix_summary_matches("artifacts/review/matrix-summary.json") is True
+    assert observed.matrix_summary_artifact_exists is True
+    assert observed.matrix_summary_targets("docs-review") is True
+    assert observed.matrix_summary_artifact_root_matches("artifacts/review") is True
+    assert observed.matrix_summary_path_matches("artifacts/review/matrix-summary.json") is True
+    assert observed.matrix_summary_path_matches_metadata() is True
+    assert observed.matrix_summary_line_matches_metadata_path() is True
+    assert observed.metadata_paths == {
+        "artifact_root": checkout_root / "artifacts" / "review",
+        "bundle_index_path": checkout_root / "artifacts" / "review" / "index.json",
+        "matrix_summary_path": summary_path,
+    }
+    assert observed.matrix_summary_paths == observed.metadata_paths
+
+
+def test_collect_review_artifact_output_supports_matrix_summary_without_metadata(tmp_path: Path) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        json.dumps(
+            {
+                "display_name": "docs-review-all",
+                "target_name": "docs-review-all",
+                "artifact_root": "artifacts/review",
+                "matrix_summary_path": "artifacts/review/matrix-summary.json",
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    observed = collect_review_artifact_output(
+        ["[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json"],
+        checkout_root=checkout_root,
+        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
+    )
+
+    assert observed.metadata_index is None
+    assert observed.artifacts_index is None
+    assert observed.metadata_line == ""
+    assert observed.artifacts_line == ""
+    assert observed.matrix_summary_index == 0
+    assert observed.matrix_summary_line_present is True
+    assert observed.matrix_summary_artifact_exists is True
+    assert observed.matrix_summary_targets("docs-review-all") is True
+    assert observed.matrix_summary_artifact_root_matches("artifacts/review") is True
+    assert observed.matrix_summary_path_matches("artifacts/review/matrix-summary.json") is True
 
 
 def test_run_script_module_main_in_temp_checkout_changes_cwd_and_unsets_env(tmp_path: Path, monkeypatch) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -13,6 +14,12 @@ from pathlib import Path
 from shutil import rmtree
 from textwrap import dedent
 from typing import Any, Callable, Iterator
+
+from .smoke_cli_doc_artifacts import (
+    load_review_matrix_summary,
+    output_path_from_prefixed_lines,
+    resolve_review_artifact_paths,
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +42,65 @@ class SmokeScriptRunResult:
         self.cleanup_callback()
 
 
+@dataclass(frozen=True)
+class ReviewArtifactOutputObservation:
+    checkout_root: Path
+    metadata_index: int | None
+    artifacts_index: int | None
+    matrix_summary_index: int | None
+    metadata_line: str
+    artifacts_line: str
+    matrix_summary_line: str
+    metadata_payload: dict[str, object]
+    metadata_paths: dict[str, Path]
+    metadata_matrix_summary_path: Path | None
+    matrix_summary_path: Path | None
+    matrix_summary_payload: dict[str, object]
+    matrix_summary_paths: dict[str, Path]
+
+    @property
+    def metadata_line_present(self) -> bool:
+        return bool(self.metadata_line)
+
+    @property
+    def artifacts_line_present(self) -> bool:
+        return bool(self.artifacts_line)
+
+    @property
+    def matrix_summary_line_present(self) -> bool:
+        return bool(self.matrix_summary_line)
+
+    @property
+    def matrix_summary_artifact_exists(self) -> bool:
+        return self.matrix_summary_path is not None and self.matrix_summary_path.exists()
+
+    def metadata_targets(self, target_name: str) -> bool:
+        return self.metadata_payload.get("target_name") == target_name
+
+    def metadata_artifact_root_matches(self, artifact_root: str) -> bool:
+        return self.metadata_payload.get("artifact_root") == artifact_root
+
+    def metadata_matrix_summary_matches(self, matrix_summary_path: str) -> bool:
+        return self.metadata_payload.get("matrix_summary_path") == matrix_summary_path
+
+    def matrix_summary_targets(self, target_name: str) -> bool:
+        return self.matrix_summary_payload.get("target_name") == target_name
+
+    def matrix_summary_artifact_root_matches(self, artifact_root: str) -> bool:
+        return self.matrix_summary_payload.get("artifact_root") == artifact_root
+
+    def matrix_summary_path_matches(self, matrix_summary_path: str) -> bool:
+        return self.matrix_summary_payload.get("matrix_summary_path") == matrix_summary_path
+
+    def matrix_summary_path_matches_metadata(self) -> bool:
+        return self.matrix_summary_payload.get("matrix_summary_path") == self.metadata_payload.get(
+            "matrix_summary_path"
+        )
+
+    def matrix_summary_line_matches_metadata_path(self) -> bool:
+        return self.matrix_summary_path == self.metadata_matrix_summary_path
+
+
 def find_prefixed_line_index(lines: Sequence[str], prefix: str) -> int | None:
     for index, line in enumerate(lines):
         if line.startswith(prefix):
@@ -44,6 +110,60 @@ def find_prefixed_line_index(lines: Sequence[str], prefix: str) -> int | None:
 
 def detail_safe_text(text: str) -> str:
     return text.replace("= False", "=False")
+
+
+def collect_review_artifact_output(
+    output_lines: str | Sequence[str],
+    *,
+    checkout_root: Path,
+    matrix_summary_prefix: str,
+    metadata_prefix: str | None = None,
+    artifacts_prefix: str | None = None,
+) -> ReviewArtifactOutputObservation:
+    lines = output_lines.splitlines() if isinstance(output_lines, str) else list(output_lines)
+    metadata_index = find_prefixed_line_index(lines, metadata_prefix) if metadata_prefix is not None else None
+    artifacts_index = find_prefixed_line_index(lines, artifacts_prefix) if artifacts_prefix is not None else None
+    matrix_summary_index = find_prefixed_line_index(lines, matrix_summary_prefix)
+
+    metadata_line = lines[metadata_index] if metadata_index is not None else ""
+    artifacts_line = lines[artifacts_index] if artifacts_index is not None else ""
+    matrix_summary_line = lines[matrix_summary_index] if matrix_summary_index is not None else ""
+
+    metadata_payload: dict[str, object] = {}
+    if metadata_line and metadata_prefix is not None:
+        loaded_metadata = json.loads(metadata_line.removeprefix(metadata_prefix))
+        if isinstance(loaded_metadata, dict):
+            metadata_payload = loaded_metadata
+    metadata_paths = (
+        resolve_review_artifact_paths(metadata_payload, checkout_root=checkout_root) if metadata_payload else {}
+    )
+    metadata_matrix_summary_path = metadata_paths.get("matrix_summary_path")
+
+    matrix_summary_path = output_path_from_prefixed_lines(
+        lines,
+        prefix=matrix_summary_prefix,
+        checkout_root=checkout_root,
+    )
+    matrix_summary_payload, matrix_summary_paths = load_review_matrix_summary(
+        matrix_summary_path,
+        checkout_root=checkout_root,
+    )
+
+    return ReviewArtifactOutputObservation(
+        checkout_root=checkout_root,
+        metadata_index=metadata_index,
+        artifacts_index=artifacts_index,
+        matrix_summary_index=matrix_summary_index,
+        metadata_line=metadata_line,
+        artifacts_line=artifacts_line,
+        matrix_summary_line=matrix_summary_line,
+        metadata_payload=metadata_payload,
+        metadata_paths=metadata_paths,
+        metadata_matrix_summary_path=metadata_matrix_summary_path,
+        matrix_summary_path=matrix_summary_path,
+        matrix_summary_payload=matrix_summary_payload,
+        matrix_summary_paths=matrix_summary_paths,
+    )
 
 
 def load_script_module(script_path: Path, module_name: str) -> Any:

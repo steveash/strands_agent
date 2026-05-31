@@ -132,8 +132,10 @@ from .smoke_cli_doc_artifacts import (
     write_text_output,
 )
 from .smoke_script_harness import (
+    ReviewArtifactOutputObservation,
     SmokeScriptRunResult,
     build_script_driver_source,
+    collect_review_artifact_output,
     detail_safe_text,
     find_prefixed_line_index,
     load_script_module,
@@ -295,8 +297,10 @@ __all__ = [
     "resolve_review_artifact_paths",
     "sha256_text",
     "write_text_output",
+    "ReviewArtifactOutputObservation",
     "SmokeScriptRunResult",
     "build_script_driver_source",
+    "collect_review_artifact_output",
     "detail_safe_text",
     "find_prefixed_line_index",
     "load_script_module",

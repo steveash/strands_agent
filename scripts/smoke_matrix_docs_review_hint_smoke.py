@@ -6,11 +6,10 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     build_script_driver_source,
+    collect_review_artifact_output,
     detail_safe_text,
     emit_smoke_results,
     find_prefixed_line_index,
-    load_review_matrix_summary,
-    output_path_from_prefixed_lines,
     run_python_driver_in_temp_checkout,
 )
 
@@ -56,60 +55,55 @@ def run_smoke_matrix_docs_review_hint_smoke() -> list[tuple[str, object]]:
         driver_filename="run_smoke_matrix_docs_review_hint.py",
     )
     try:
-        checkout_root = smoke_run.checkout_root
         stdout_lines = smoke_run.stdout_lines
         stderr_lines = smoke_run.stderr_lines
+        review_output = collect_review_artifact_output(
+            stderr_lines,
+            checkout_root=smoke_run.checkout_root,
+            matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+        )
         stdout_last_line = stdout_lines[-1] if stdout_lines else ""
         failed_index = find_prefixed_line_index(stderr_lines, FAILED_LINE_PREFIX)
-        matrix_summary_index = find_prefixed_line_index(stderr_lines, REVIEW_MATRIX_SUMMARY_PREFIX)
         hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = stderr_lines[failed_index] if failed_index is not None else ""
-        matrix_summary_line = stderr_lines[matrix_summary_index] if matrix_summary_index is not None else ""
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""
         summary_line = stderr_lines[summary_index] if summary_index is not None else ""
-        matrix_summary_path = output_path_from_prefixed_lines(
-            stderr_lines,
-            prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-            checkout_root=checkout_root,
-        )
-        matrix_summary_payload, _matrix_summary_paths = load_review_matrix_summary(
-            matrix_summary_path,
-            checkout_root=checkout_root,
-        )
 
         return [
-            ("checkout_root", str(checkout_root)),
+            ("checkout_root", str(smoke_run.checkout_root)),
             ("stdout_last_line", stdout_last_line),
             ("stderr_failed_line", detail_safe_text(failed_line)),
-            ("stderr_matrix_summary_line", matrix_summary_line),
+            ("stderr_matrix_summary_line", review_output.matrix_summary_line),
             ("stderr_hint_line", hint_line),
             ("stderr_summary_line", summary_line),
             ("exit_code", smoke_run.exit_code),
             ("exit_code_non_zero", smoke_run.exit_code != 0),
             ("failed_line_present", bool(failed_line)),
-            ("matrix_summary_line_present", bool(matrix_summary_line)),
+            ("matrix_summary_line_present", review_output.matrix_summary_line_present),
             ("hint_line_present", bool(hint_line)),
             ("summary_line_present", bool(summary_line)),
             (
                 "matrix_summary_artifact_exists",
-                matrix_summary_path is not None and matrix_summary_path.exists(),
+                review_output.matrix_summary_artifact_exists,
             ),
             (
                 "matrix_summary_targets_docs_review_all",
-                matrix_summary_payload.get("target_name") == "docs-review-all",
+                review_output.matrix_summary_targets("docs-review-all"),
             ),
             (
                 "matrix_summary_artifact_root_matches_all_review",
-                matrix_summary_payload.get("artifact_root") == EXPECTED_ARTIFACT_ROOT,
+                review_output.matrix_summary_artifact_root_matches(EXPECTED_ARTIFACT_ROOT),
             ),
             (
                 "matrix_summary_path_matches_all_review",
-                matrix_summary_payload.get("matrix_summary_path") == EXPECTED_MATRIX_SUMMARY_PATH,
+                review_output.matrix_summary_path_matches(EXPECTED_MATRIX_SUMMARY_PATH),
             ),
             (
                 "hint_after_matrix_summary",
-                matrix_summary_index is not None and hint_index is not None and matrix_summary_index < hint_index,
+                review_output.matrix_summary_index is not None
+                and hint_index is not None
+                and review_output.matrix_summary_index < hint_index,
             ),
             (
                 "hint_before_failure_summary",
