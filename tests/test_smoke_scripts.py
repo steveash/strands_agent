@@ -3267,6 +3267,22 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
     assert any(line.startswith("checkout_root: ") for line in lines)
     assert any(line.startswith("review_artifact_root: ") for line in lines)
     assert any(line.startswith("all_review_artifact_root: ") for line in lines)
+    assert any(line.startswith("review_metadata_line: [smoke-matrix] review metadata: ") for line in lines)
+    assert any(line.startswith("review_artifacts_line: [smoke-matrix] review artifacts: ") for line in lines)
+    assert any(
+        line.startswith("review_matrix_summary_line: [smoke-matrix] review matrix summary: ")
+        for line in lines
+    )
+    assert any(
+        line.startswith("all_review_metadata_line: [smoke-matrix] review metadata: ") for line in lines
+    )
+    assert any(
+        line.startswith("all_review_artifacts_line: [smoke-matrix] review artifacts: ") for line in lines
+    )
+    assert any(
+        line.startswith("all_review_matrix_summary_line: [smoke-matrix] review matrix summary: ")
+        for line in lines
+    )
     assert any(
         line.startswith("review_summary_line: [smoke-matrix] summary: 4/4 bundles passed in ")
         for line in lines
@@ -3280,6 +3296,18 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "all_review_exit_code_zero",
         "review_stderr_empty",
         "all_review_stderr_empty",
+        "review_metadata_line_present",
+        "review_artifacts_line_present",
+        "review_matrix_summary_line_present",
+        "all_review_metadata_line_present",
+        "all_review_artifacts_line_present",
+        "all_review_matrix_summary_line_present",
+        "review_metadata_targets_docs_review",
+        "all_review_metadata_targets_docs_review_all",
+        "review_metadata_artifact_root_matches_review",
+        "all_review_metadata_artifact_root_matches_all_review",
+        "review_metadata_matrix_summary_matches_expected_path",
+        "all_review_metadata_matrix_summary_matches_expected_path",
         "review_matrix_summary_line_matches_expected_path",
         "all_review_matrix_summary_line_matches_expected_path",
         "review_paths_loaded_from_matrix_summary",
@@ -3291,6 +3319,10 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "all_review_summary_targets_docs_review_all",
         "review_summary_path_keeps_review_root",
         "all_review_summary_path_keeps_all_review_root",
+        "review_matrix_summary_path_matches_metadata",
+        "all_review_matrix_summary_path_matches_metadata",
+        "review_matrix_summary_line_matches_metadata_path",
+        "all_review_matrix_summary_line_matches_metadata_path",
         "review_loaded_summary_path_matches_line",
         "all_review_loaded_summary_path_matches_line",
         "review_index_preserved_after_all_review",

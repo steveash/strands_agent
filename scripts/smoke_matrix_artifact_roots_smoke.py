@@ -9,10 +9,9 @@ from pathlib import Path
 from typing import Iterator
 
 from strands_agent_tui.testing import (
+    collect_review_artifact_output,
     emit_smoke_results,
     load_script_module,
-    load_review_matrix_summary,
-    output_path_from_prefixed_lines,
     resolve_checkout_path,
     resolve_review_artifact_paths,
     run_loaded_script_module_main,
@@ -21,6 +20,8 @@ from strands_agent_tui.testing import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
 SUCCESS_SUMMARY_PREFIX = "[smoke-matrix] summary: 4/4 bundles passed in "
+REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
+REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
 REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
 
 
@@ -117,33 +118,62 @@ def _run_matrix_alias(smoke_matrix_module, alias: str, *, checkout_root: Path):
     )
 
 
-def _resolved_docs_review_paths(smoke_matrix_module, requested_target_name: str, *, checkout_root: Path) -> dict[str, Path]:
+def _observe_matrix_alias(smoke_matrix_module, alias: str, *, checkout_root: Path):
+    smoke_run = _run_matrix_alias(
+        smoke_matrix_module,
+        alias,
+        checkout_root=checkout_root,
+    )
+    review_output = collect_review_artifact_output(
+        smoke_run.stdout,
+        checkout_root=checkout_root,
+        metadata_prefix=REVIEW_METADATA_PREFIX,
+        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
+        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+    )
+    return smoke_run, review_output
+
+
+def _expected_docs_review_metadata(smoke_matrix_module, requested_target_name: str) -> dict[str, str]:
     target = smoke_matrix_module.CLI_SPEC.resolve_targets(
         script_dir=smoke_matrix_module.SCRIPT_DIR,
         requested_target_name=requested_target_name,
     )[-1]
     metadata = smoke_matrix_module._docs_review_artifact_metadata(target)
     assert metadata is not None
-    return resolve_review_artifact_paths(metadata, checkout_root=checkout_root)
+    return metadata
+
+
+def _resolved_docs_review_paths(smoke_matrix_module, requested_target_name: str, *, checkout_root: Path) -> dict[str, Path]:
+    return resolve_review_artifact_paths(
+        _expected_docs_review_metadata(smoke_matrix_module, requested_target_name),
+        checkout_root=checkout_root,
+    )
 
 
 def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
     smoke_matrix_module = _load_smoke_matrix_module()
     with tempfile.TemporaryDirectory(prefix="smoke-matrix-artifact-roots-") as temp_dir:
         checkout_root = Path(temp_dir)
-        expected_review_paths = _resolved_docs_review_paths(
+        expected_review_metadata = _expected_docs_review_metadata(
             smoke_matrix_module,
             "docs-review",
-            checkout_root=checkout_root,
         )
-        expected_all_review_paths = _resolved_docs_review_paths(
+        expected_all_review_metadata = _expected_docs_review_metadata(
             smoke_matrix_module,
             "all-review",
+        )
+        expected_review_paths = resolve_review_artifact_paths(
+            expected_review_metadata,
+            checkout_root=checkout_root,
+        )
+        expected_all_review_paths = resolve_review_artifact_paths(
+            expected_all_review_metadata,
             checkout_root=checkout_root,
         )
 
         with _patched_run_smoke_target(smoke_matrix_module, checkout_root):
-            review_run = _run_matrix_alias(
+            review_run, review_output = _observe_matrix_alias(
                 smoke_matrix_module,
                 "review",
                 checkout_root=checkout_root,
@@ -151,17 +181,10 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             review_exit_code = review_run.exit_code
             review_stdout = review_run.stdout
             review_stderr = review_run.stderr
-            review_summary_path_from_line = output_path_from_prefixed_lines(
-                review_stdout,
-                prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-                checkout_root=checkout_root,
-            )
-            review_summary_payload, review_paths = load_review_matrix_summary(
-                review_summary_path_from_line,
-                checkout_root=checkout_root,
-            )
+            review_summary_payload = review_output.matrix_summary_payload
+            review_paths = review_output.matrix_summary_paths
             review_index_path = review_paths.get("bundle_index_path")
-            review_summary_artifact_path = review_paths.get("matrix_summary_path")
+            review_summary_artifact_path = review_output.matrix_summary_path
             review_index_before = (
                 review_index_path.read_text(encoding="utf-8")
                 if review_index_path is not None and review_index_path.exists()
@@ -172,7 +195,7 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 if review_summary_artifact_path is not None and review_summary_artifact_path.exists()
                 else None
             )
-            all_review_run = _run_matrix_alias(
+            all_review_run, all_review_output = _observe_matrix_alias(
                 smoke_matrix_module,
                 "all-review",
                 checkout_root=checkout_root,
@@ -180,16 +203,11 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             all_review_exit_code = all_review_run.exit_code
             all_review_stdout = all_review_run.stdout
             all_review_stderr = all_review_run.stderr
-            all_review_summary_path_from_line = output_path_from_prefixed_lines(
-                all_review_stdout,
-                prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-                checkout_root=checkout_root,
-            )
-            all_review_summary_payload, all_review_paths = load_review_matrix_summary(
-                all_review_summary_path_from_line,
-                checkout_root=checkout_root,
-            )
+            all_review_summary_payload = all_review_output.matrix_summary_payload
+            all_review_paths = all_review_output.matrix_summary_paths
 
+        review_summary_path_from_line = review_output.matrix_summary_path
+        all_review_summary_path_from_line = all_review_output.matrix_summary_path
         review_index_preserved = (
             review_index_before is not None
             and review_index_path is not None
@@ -214,12 +232,48 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             ("checkout_root", str(checkout_root)),
             ("review_artifact_root", str(review_root) if review_root is not None else ""),
             ("all_review_artifact_root", str(all_review_root) if all_review_root is not None else ""),
+            ("review_metadata_line", review_output.metadata_line),
+            ("review_artifacts_line", review_output.artifacts_line),
+            ("review_matrix_summary_line", review_output.matrix_summary_line),
+            ("all_review_metadata_line", all_review_output.metadata_line),
+            ("all_review_artifacts_line", all_review_output.artifacts_line),
+            ("all_review_matrix_summary_line", all_review_output.matrix_summary_line),
             ("review_summary_line", review_summary_line),
             ("all_review_summary_line", all_review_summary_line),
             ("review_exit_code_zero", review_exit_code == 0),
             ("all_review_exit_code_zero", all_review_exit_code == 0),
             ("review_stderr_empty", review_stderr == ""),
             ("all_review_stderr_empty", all_review_stderr == ""),
+            ("review_metadata_line_present", review_output.metadata_line_present),
+            ("review_artifacts_line_present", review_output.artifacts_line_present),
+            ("review_matrix_summary_line_present", review_output.matrix_summary_line_present),
+            ("all_review_metadata_line_present", all_review_output.metadata_line_present),
+            ("all_review_artifacts_line_present", all_review_output.artifacts_line_present),
+            ("all_review_matrix_summary_line_present", all_review_output.matrix_summary_line_present),
+            (
+                "review_metadata_targets_docs_review",
+                review_output.metadata_targets(smoke_matrix_module.DOCS_REVIEW_TARGET_NAME),
+            ),
+            (
+                "all_review_metadata_targets_docs_review_all",
+                all_review_output.metadata_targets(smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME),
+            ),
+            (
+                "review_metadata_artifact_root_matches_review",
+                review_output.metadata_artifact_root_matches(expected_review_metadata["artifact_root"]),
+            ),
+            (
+                "all_review_metadata_artifact_root_matches_all_review",
+                all_review_output.metadata_artifact_root_matches(expected_all_review_metadata["artifact_root"]),
+            ),
+            (
+                "review_metadata_matrix_summary_matches_expected_path",
+                review_output.metadata_matrix_summary_matches(expected_review_metadata["matrix_summary_path"]),
+            ),
+            (
+                "all_review_metadata_matrix_summary_matches_expected_path",
+                all_review_output.metadata_matrix_summary_matches(expected_all_review_metadata["matrix_summary_path"]),
+            ),
             (
                 "review_matrix_summary_line_matches_expected_path",
                 review_summary_path_from_line == expected_review_paths["matrix_summary_path"],
@@ -254,6 +308,22 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 == all_review_root
                 if all_review_root is not None
                 else False,
+            ),
+            (
+                "review_matrix_summary_path_matches_metadata",
+                review_output.matrix_summary_path_matches_metadata(),
+            ),
+            (
+                "all_review_matrix_summary_path_matches_metadata",
+                all_review_output.matrix_summary_path_matches_metadata(),
+            ),
+            (
+                "review_matrix_summary_line_matches_metadata_path",
+                review_output.matrix_summary_line_matches_metadata_path(),
+            ),
+            (
+                "all_review_matrix_summary_line_matches_metadata_path",
+                all_review_output.matrix_summary_line_matches_metadata_path(),
             ),
             (
                 "review_loaded_summary_path_matches_line",
