@@ -131,6 +131,15 @@ from .smoke_cli_doc_artifacts import (
     sha256_text,
     write_text_output,
 )
+from .smoke_script_harness import (
+    SmokeScriptRunResult,
+    build_script_driver_source,
+    detail_safe_text,
+    find_prefixed_line_index,
+    load_script_module,
+    run_python_driver_in_temp_checkout,
+    run_script_module_main_in_temp_checkout,
+)
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
     NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS,
@@ -285,6 +294,11 @@ __all__ = [
     "resolve_review_artifact_paths",
     "sha256_text",
     "write_text_output",
+    "SmokeScriptRunResult",
+    "build_script_driver_source",
+    "detail_safe_text",
+    "find_prefixed_line_index",
+    "load_script_module",
     "NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS",
     "NON_MATRIX_SMOKE_WRAPPER_METADATA",
     "NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES",
@@ -308,6 +322,8 @@ __all__ = [
     "emit_smoke_check",
     "emit_smoke_checks",
     "emit_smoke_results",
+    "run_python_driver_in_temp_checkout",
+    "run_script_module_main_in_temp_checkout",
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",

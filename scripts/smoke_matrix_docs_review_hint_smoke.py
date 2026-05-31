@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import os
-import subprocess
 import sys
-import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    build_script_driver_source,
+    detail_safe_text,
     emit_smoke_results,
+    find_prefixed_line_index,
     load_review_matrix_summary,
     output_path_from_prefixed_lines,
+    run_python_driver_in_temp_checkout,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -28,69 +29,41 @@ EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-re
 EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
 
 
-def _line_index(lines: list[str], prefix: str) -> int | None:
-    for index, line in enumerate(lines):
-        if line.startswith(prefix):
-            return index
-    return None
-
-
-def _detail_safe_text(line: str) -> str:
-    return line.replace("= False", "=False")
-
-
 def _subprocess_driver_source() -> str:
-    return f"""
-from __future__ import annotations
+    return build_script_driver_source(
+        repo_root=REPO_ROOT,
+        script_path=SMOKE_MATRIX_SCRIPT_PATH,
+        module_name="scripts.smoke_matrix_docs_review_hint_target",
+        argv=["all-review"],
+        env_unsets=("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
+        hook_source="""
+        def fake_run_smoke_target(target, **kwargs):
+            stderr = kwargs['stderr']
+            if target.name == module.DOCS_REVIEW_ALL_TARGET_NAME:
+                print(f"{target.display_label} smoke failed fast: render_manifest_payload= False", file=stderr)
+                return 1
+            return 0
 
-import os
-import sys
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
-
-repo_root = Path({str(REPO_ROOT)!r})
-sys.path.insert(0, str(repo_root / 'src'))
-script_path = Path({str(SMOKE_MATRIX_SCRIPT_PATH)!r})
-spec = spec_from_file_location('scripts.smoke_matrix_docs_review_hint_target', script_path)
-assert spec is not None and spec.loader is not None
-module = module_from_spec(spec)
-spec.loader.exec_module(module)
-for name in ('STRANDS_AGENT_RUNTIME', 'OPENAI_API_KEY', 'STRANDS_AGENT_OPENAI_MODEL'):
-    os.environ.pop(name, None)
-
-def fake_run_smoke_target(target, **kwargs):
-    stderr = kwargs['stderr']
-    if target.name == module.DOCS_REVIEW_ALL_TARGET_NAME:
-        print(f"{{target.display_label}} smoke failed fast: render_manifest_payload= False", file=stderr)
-        return 1
-    return 0
-
-module.run_smoke_target = fake_run_smoke_target
-raise SystemExit(module.main(['all-review']))
-""".lstrip()
+        module.run_smoke_target = fake_run_smoke_target
+        """,
+    )
 
 
 def run_smoke_matrix_docs_review_hint_smoke() -> list[tuple[str, object]]:
-    with tempfile.TemporaryDirectory(prefix="smoke-matrix-docs-review-hint-") as temp_dir:
-        checkout_root = Path(temp_dir)
-        driver_path = checkout_root / "run_smoke_matrix_docs_review_hint.py"
-        driver_path.write_text(_subprocess_driver_source(), encoding="utf-8")
-
-        result = subprocess.run(
-            [sys.executable, str(driver_path)],
-            cwd=checkout_root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        stdout_lines = result.stdout.splitlines()
-        stderr_lines = result.stderr.splitlines()
+    smoke_run = run_python_driver_in_temp_checkout(
+        driver_source=_subprocess_driver_source(),
+        temp_prefix="smoke-matrix-docs-review-hint-",
+        driver_filename="run_smoke_matrix_docs_review_hint.py",
+    )
+    try:
+        checkout_root = smoke_run.checkout_root
+        stdout_lines = smoke_run.stdout_lines
+        stderr_lines = smoke_run.stderr_lines
         stdout_last_line = stdout_lines[-1] if stdout_lines else ""
-        failed_index = _line_index(stderr_lines, FAILED_LINE_PREFIX)
-        matrix_summary_index = _line_index(stderr_lines, REVIEW_MATRIX_SUMMARY_PREFIX)
-        hint_index = _line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
-        summary_index = _line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
+        failed_index = find_prefixed_line_index(stderr_lines, FAILED_LINE_PREFIX)
+        matrix_summary_index = find_prefixed_line_index(stderr_lines, REVIEW_MATRIX_SUMMARY_PREFIX)
+        hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
+        summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = stderr_lines[failed_index] if failed_index is not None else ""
         matrix_summary_line = stderr_lines[matrix_summary_index] if matrix_summary_index is not None else ""
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""
@@ -108,12 +81,12 @@ def run_smoke_matrix_docs_review_hint_smoke() -> list[tuple[str, object]]:
         return [
             ("checkout_root", str(checkout_root)),
             ("stdout_last_line", stdout_last_line),
-            ("stderr_failed_line", _detail_safe_text(failed_line)),
+            ("stderr_failed_line", detail_safe_text(failed_line)),
             ("stderr_matrix_summary_line", matrix_summary_line),
             ("stderr_hint_line", hint_line),
             ("stderr_summary_line", summary_line),
-            ("exit_code", result.returncode),
-            ("exit_code_non_zero", result.returncode != 0),
+            ("exit_code", smoke_run.exit_code),
+            ("exit_code_non_zero", smoke_run.exit_code != 0),
             ("failed_line_present", bool(failed_line)),
             ("matrix_summary_line_present", bool(matrix_summary_line)),
             ("hint_line_present", bool(hint_line)),
@@ -147,6 +120,8 @@ def run_smoke_matrix_docs_review_hint_smoke() -> list[tuple[str, object]]:
                 stdout_last_line.startswith(DOCS_REVIEW_RUNNING_PREFIX),
             ),
         ]
+    finally:
+        smoke_run.cleanup()
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
-import tempfile
 from collections.abc import Sequence
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
-from importlib.util import module_from_spec, spec_from_file_location
-from io import StringIO
 from pathlib import Path
-from typing import Iterator
 
 from strands_agent_tui.testing import (
     emit_smoke_results,
+    find_prefixed_line_index,
+    load_script_module,
     load_review_matrix_summary,
     output_path_from_prefixed_lines,
     resolve_checkout_path,
+    run_script_module_main_in_temp_checkout,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,63 +30,27 @@ EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-re
 EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
 
 
-@contextmanager
-def _pushd(path: Path) -> Iterator[None]:
-    previous_cwd = Path.cwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(previous_cwd)
-
-
-@contextmanager
-def _unset_env(*variable_names: str) -> Iterator[None]:
-    previous_values = {name: os.environ.get(name) for name in variable_names}
-    for name in variable_names:
-        os.environ.pop(name, None)
-    try:
-        yield
-    finally:
-        for name, value in previous_values.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
-
-
-def _load_smoke_matrix_module():
-    spec = spec_from_file_location("scripts.smoke_matrix_all_review_order_smoke_target", SMOKE_MATRIX_SCRIPT_PATH)
-    assert spec is not None and spec.loader is not None
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def _line_index(lines: list[str], prefix: str) -> int | None:
-    for index, line in enumerate(lines):
-        if line.startswith(prefix):
-            return index
-    return None
-
-
 def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
-    smoke_matrix_module = _load_smoke_matrix_module()
-    with tempfile.TemporaryDirectory(prefix="smoke-matrix-all-review-order-") as temp_dir:
-        checkout_root = Path(temp_dir)
-        stdout = StringIO()
-        stderr = StringIO()
-        with _pushd(checkout_root), _unset_env("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"):
-            with redirect_stdout(stdout), redirect_stderr(stderr):
-                exit_code = smoke_matrix_module.main(["all-review"])
-
-        stderr_lines = stderr.getvalue().splitlines()
-        metadata_index = _line_index(stderr_lines, REVIEW_METADATA_PREFIX)
-        artifacts_index = _line_index(stderr_lines, REVIEW_ARTIFACTS_PREFIX)
-        matrix_summary_index = _line_index(stderr_lines, REVIEW_MATRIX_SUMMARY_PREFIX)
-        hint_index = _line_index(stderr_lines, LIVE_HINT_PREFIX)
-        docs_hint_index = _line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
-        summary_index = _line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
+    smoke_matrix_module = load_script_module(
+        SMOKE_MATRIX_SCRIPT_PATH,
+        "scripts.smoke_matrix_all_review_order_smoke_target",
+    )
+    smoke_run = run_script_module_main_in_temp_checkout(
+        script_path=SMOKE_MATRIX_SCRIPT_PATH,
+        module_name="scripts.smoke_matrix_all_review_order_smoke_target",
+        argv=["all-review"],
+        temp_prefix="smoke-matrix-all-review-order-",
+        unset_env_names=("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
+    )
+    try:
+        checkout_root = smoke_run.checkout_root
+        stderr_lines = smoke_run.stderr_lines
+        metadata_index = find_prefixed_line_index(stderr_lines, REVIEW_METADATA_PREFIX)
+        artifacts_index = find_prefixed_line_index(stderr_lines, REVIEW_ARTIFACTS_PREFIX)
+        matrix_summary_index = find_prefixed_line_index(stderr_lines, REVIEW_MATRIX_SUMMARY_PREFIX)
+        hint_index = find_prefixed_line_index(stderr_lines, LIVE_HINT_PREFIX)
+        docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
+        summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = next(
             (line for line in stderr_lines if line == "standalone smoke failed fast: live_runtime_requested= False"),
             "",
@@ -101,9 +62,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""
         docs_hint_line = stderr_lines[docs_hint_index] if docs_hint_index is not None else ""
         summary_line = stderr_lines[summary_index] if summary_index is not None else ""
-        metadata_payload = (
-            json.loads(metadata_line.removeprefix(REVIEW_METADATA_PREFIX)) if metadata_line else {}
-        )
+        metadata_payload = json.loads(metadata_line.removeprefix(REVIEW_METADATA_PREFIX)) if metadata_line else {}
         matrix_summary_path_text = metadata_payload.get("matrix_summary_path", "")
         metadata_matrix_summary_path = (
             resolve_checkout_path(matrix_summary_path_text, checkout_root=checkout_root)
@@ -129,8 +88,8 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             ("stderr_hint_line", hint_line),
             ("stderr_docs_hint_line", docs_hint_line),
             ("stderr_summary_line", summary_line),
-            ("exit_code", exit_code),
-            ("exit_code_non_zero", exit_code != 0),
+            ("exit_code", smoke_run.exit_code),
+            ("exit_code_non_zero", smoke_run.exit_code != 0),
             ("failed_line_present", bool(failed_line)),
             ("metadata_line_present", bool(metadata_line)),
             ("artifacts_line_present", bool(artifacts_line)),
@@ -200,11 +159,11 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             ),
             (
                 "matrix_summary_before_failure_summary",
-                matrix_summary_index is not None
-                and summary_index is not None
-                and matrix_summary_index < summary_index,
+                matrix_summary_index is not None and summary_index is not None and matrix_summary_index < summary_index,
             ),
         ]
+    finally:
+        smoke_run.cleanup()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
