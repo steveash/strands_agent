@@ -1,38 +1,27 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import tempfile
 from collections.abc import Sequence
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
-from importlib.util import module_from_spec, spec_from_file_location
-from io import StringIO
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
 from strands_agent_tui.testing import (
     emit_smoke_results,
+    load_script_module,
     load_review_matrix_summary,
     output_path_from_prefixed_lines,
     resolve_checkout_path,
     resolve_review_artifact_paths,
+    run_loaded_script_module_main,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
 SUCCESS_SUMMARY_PREFIX = "[smoke-matrix] summary: 4/4 bundles passed in "
 REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
-
-
-@contextmanager
-def _pushd(path: Path) -> Iterator[None]:
-    previous_cwd = Path.cwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(previous_cwd)
 
 
 @contextmanager
@@ -110,11 +99,7 @@ def _patched_run_smoke_target(smoke_matrix_module, checkout_root: Path) -> Itera
 
 
 def _load_smoke_matrix_module():
-    spec = spec_from_file_location("scripts.smoke_matrix_artifact_roots_smoke_target", SMOKE_MATRIX_SCRIPT_PATH)
-    assert spec is not None and spec.loader is not None
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_script_module(SMOKE_MATRIX_SCRIPT_PATH, "scripts.smoke_matrix_artifact_roots_smoke_target")
 
 
 def _capture_success_summary_line(stdout_text: str) -> str:
@@ -124,12 +109,12 @@ def _capture_success_summary_line(stdout_text: str) -> str:
     return ""
 
 
-def _run_matrix_alias(smoke_matrix_module, alias: str, *, checkout_root: Path) -> tuple[int, str, str]:
-    stdout = StringIO()
-    stderr = StringIO()
-    with _pushd(checkout_root), redirect_stdout(stdout), redirect_stderr(stderr):
-        exit_code = smoke_matrix_module.main([alias])
-    return exit_code, stdout.getvalue(), stderr.getvalue()
+def _run_matrix_alias(smoke_matrix_module, alias: str, *, checkout_root: Path):
+    return run_loaded_script_module_main(
+        smoke_matrix_module,
+        argv=[alias],
+        checkout_root=checkout_root,
+    )
 
 
 def _resolved_docs_review_paths(smoke_matrix_module, requested_target_name: str, *, checkout_root: Path) -> dict[str, Path]:
@@ -158,11 +143,14 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
         )
 
         with _patched_run_smoke_target(smoke_matrix_module, checkout_root):
-            review_exit_code, review_stdout, review_stderr = _run_matrix_alias(
+            review_run = _run_matrix_alias(
                 smoke_matrix_module,
                 "review",
                 checkout_root=checkout_root,
             )
+            review_exit_code = review_run.exit_code
+            review_stdout = review_run.stdout
+            review_stderr = review_run.stderr
             review_summary_path_from_line = output_path_from_prefixed_lines(
                 review_stdout,
                 prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
@@ -184,11 +172,14 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 if review_summary_artifact_path is not None and review_summary_artifact_path.exists()
                 else None
             )
-            all_review_exit_code, all_review_stdout, all_review_stderr = _run_matrix_alias(
+            all_review_run = _run_matrix_alias(
                 smoke_matrix_module,
                 "all-review",
                 checkout_root=checkout_root,
             )
+            all_review_exit_code = all_review_run.exit_code
+            all_review_stdout = all_review_run.stdout
+            all_review_stderr = all_review_run.stderr
             all_review_summary_path_from_line = output_path_from_prefixed_lines(
                 all_review_stdout,
                 prefix=REVIEW_MATRIX_SUMMARY_PREFIX,

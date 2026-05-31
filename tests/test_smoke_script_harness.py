@@ -8,6 +8,8 @@ from strands_agent_tui.testing import (
     detail_safe_text,
     find_prefixed_line_index,
     run_python_driver_in_temp_checkout,
+    run_loaded_script_module_main,
+    load_script_module,
     run_script_module_main_in_temp_checkout,
 )
 
@@ -68,6 +70,53 @@ def main(argv=None):
         assert os.environ["HARNESS_CLEAR"] == "remove-me"
     finally:
         result.cleanup()
+
+
+def test_run_loaded_script_module_main_reuses_checkout_without_cleanup(tmp_path: Path, monkeypatch) -> None:
+    script_path = tmp_path / "loaded_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+from pathlib import Path
+import os
+
+
+def main(argv=None):
+    print(f"cwd_name={Path.cwd().name}")
+    print(f"argv={list(argv or [])}")
+    print(f"keep={os.environ.get('HARNESS_KEEP', '<missing>')}")
+    print(f"clear={os.environ.get('HARNESS_CLEAR', '<missing>')}")
+    return 5
+""".strip()
+        + "\n",
+    )
+    checkout_root = tmp_path / "loaded-checkout"
+    checkout_root.mkdir()
+    monkeypatch.setenv("HARNESS_KEEP", "present")
+    monkeypatch.setenv("HARNESS_CLEAR", "remove-me")
+
+    result = run_loaded_script_module_main(
+        load_script_module(script_path, "tests.loaded_target"),
+        argv=["review"],
+        checkout_root=checkout_root,
+        unset_env_names=("HARNESS_CLEAR",),
+    )
+
+    assert result.exit_code == 5
+    assert result.stderr == ""
+    assert result.checkout_root == checkout_root
+    assert result.stdout_lines == [
+        "cwd_name=loaded-checkout",
+        "argv=['review']",
+        "keep=present",
+        "clear=<missing>",
+    ]
+    result.cleanup()
+    assert checkout_root.exists()
+    assert os.environ["HARNESS_KEEP"] == "present"
+    assert os.environ["HARNESS_CLEAR"] == "remove-me"
 
 
 def test_build_script_driver_source_and_run_python_driver_in_temp_checkout(tmp_path: Path, monkeypatch) -> None:

@@ -412,18 +412,16 @@ class SmokeWrapperCliSpec:
             single_choice_description=self.single_choice_description,
         )
 
-    def help_required_snippets(self) -> tuple[str, ...]:
+    def help_alias_lines(self) -> tuple[str, ...]:
         selector = self._build_doc_selector()
-        snippets = [self.item_help, *self.help_required_snippets_extra]
-        if selector.alias_target_names:
-            snippets.append(
-                f"{self.alias_heading}: "
-                + " ".join(
-                    f"{name} -> {', '.join(selector.resolve_display_names(name))}"
-                    for name in selector.alias_target_names
-                )
-            )
-        snippets.extend(
+        return tuple(
+            f"{name} -> {', '.join(selector.resolve_display_names(name))}"
+            for name in selector.alias_target_names
+        )
+
+    def help_example_lines(self) -> tuple[str, ...]:
+        selector = self._build_doc_selector()
+        return tuple(
             f"{example.command} # "
             + _describe_cli_example(
                 example,
@@ -434,6 +432,13 @@ class SmokeWrapperCliSpec:
             )
             for example in self.examples
         )
+
+    def help_required_snippets(self) -> tuple[str, ...]:
+        snippets = [self.item_help, *self.help_required_snippets_extra]
+        help_alias_lines = self.help_alias_lines()
+        if help_alias_lines:
+            snippets.append(f"{self.alias_heading}: " + " ".join(help_alias_lines))
+        snippets.extend(self.help_example_lines())
         return tuple(snippets)
 
     def _format_readme_command(self, command: str) -> str:

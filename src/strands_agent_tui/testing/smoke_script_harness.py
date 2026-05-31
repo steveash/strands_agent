@@ -103,6 +103,27 @@ def run_script_module_main_in_temp_checkout(
     )
 
 
+def run_loaded_script_module_main(
+    module: Any,
+    *,
+    argv: Sequence[str],
+    checkout_root: Path,
+    unset_env_names: Iterable[str] = (),
+) -> SmokeScriptRunResult:
+    stdout = StringIO()
+    stderr = StringIO()
+    with _pushd(checkout_root), _unset_env(*tuple(unset_env_names)):
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = module.main(list(argv))
+    return SmokeScriptRunResult(
+        checkout_root=checkout_root,
+        exit_code=0 if exit_code is None else int(exit_code),
+        stdout=stdout.getvalue(),
+        stderr=stderr.getvalue(),
+        cleanup_callback=lambda: None,
+    )
+
+
 def build_script_driver_source(
     *,
     repo_root: Path,
