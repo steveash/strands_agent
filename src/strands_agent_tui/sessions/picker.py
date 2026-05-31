@@ -262,6 +262,17 @@ class SessionSummary:
             return "pending only until a test executes"
         return ""
 
+    def _focused_lane_pending_only_age_source(self, filter_mode: str) -> tuple[str, str, str]:
+        focused_lane_label, focused_lane_value = self._focused_lane_pending_only_state(filter_mode)
+        if not focused_lane_label or not focused_lane_value:
+            return "", "", ""
+        age_seconds, timestamp, used_activity_fallback = self.pending_only_lane_oldest_age_and_timestamp_source(
+            filter_mode
+        )
+        age_summary = _format_age_compact(age_seconds) if age_seconds > 0 else ""
+        age_source = "activity fallback" if used_activity_fallback else "approval created_at"
+        return age_summary, timestamp, age_source
+
     def has_pending_only_lane_match(self, filter_mode: str) -> bool:
         return bool(self._focused_lane_pending_only_state(filter_mode)[1])
 
@@ -565,6 +576,21 @@ class SessionSummary:
             focused_lane_label,
             self._focused_lane_pending_only_preview_value(filter_mode) if focused_lane_value else "",
         )
+        focused_lane_age_summary, focused_lane_timestamp, focused_lane_age_source = (
+            self._focused_lane_pending_only_age_source(filter_mode)
+        )
+        focused_lane_age_lines = render_preview_detail_line(
+            f"{focused_lane_label} age",
+            focused_lane_age_summary,
+        )
+        focused_lane_timestamp_lines = render_preview_detail_line(
+            f"{focused_lane_label} at",
+            focused_lane_timestamp,
+        )
+        focused_lane_age_source_lines = render_preview_detail_line(
+            f"{focused_lane_label} age source",
+            focused_lane_age_source,
+        )
 
         tool_lines = []
         if not focused_tool_filter:
@@ -575,6 +601,9 @@ class SessionSummary:
 
         workspace_lines = render_selected_preview_section_lines(
             focused_lane_preview_lines if filter_mode == "workspace-edit" else [],
+            focused_lane_age_lines if filter_mode == "workspace-edit" else [],
+            focused_lane_timestamp_lines if filter_mode == "workspace-edit" else [],
+            focused_lane_age_source_lines if filter_mode == "workspace-edit" else [],
             render_preview_badges_line("workspace lanes", self.workspace_lane_badges),
             render_preview_detail_line("last workspace tool", focused_workspace_preview),
             render_numbered_preview_section_lines("recent workspace tools", focused_workspace_previews),
@@ -582,6 +611,9 @@ class SessionSummary:
 
         shell_lines = render_selected_preview_section_lines(
             focused_lane_preview_lines if filter_mode == "shell-test" else [],
+            focused_lane_age_lines if filter_mode == "shell-test" else [],
+            focused_lane_timestamp_lines if filter_mode == "shell-test" else [],
+            focused_lane_age_source_lines if filter_mode == "shell-test" else [],
             render_preview_badges_line("shell", self.shell_activity_badges),
             render_preview_badges_line("shell lanes", self.shell_lane_badges),
             render_preview_badges_line("failures", self.failure_activity_badges),

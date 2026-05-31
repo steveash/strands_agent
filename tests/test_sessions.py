@@ -438,6 +438,74 @@ def test_render_session_picker_marks_pending_only_workspace_and_shell_lane_match
     assert "Shell test queue mix: pending-only: 1 session" in shell_test_rendered
 
 
+def test_render_session_picker_selected_preview_surfaces_pending_only_age_provenance(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    fallback_edit_at = now - timedelta(days=6)
+    fallback_test_at = now - timedelta(days=5)
+
+    edit_store = SessionArtifactStore(tmp_path, session_id="session-edit-fallback")
+    edit_store.append_turn(
+        TurnArtifact(
+            prompt="queue edit",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=fallback_edit_at.isoformat(),
+        )
+    )
+    edit_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-edit-fallback",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue edit",
+            )
+        ]
+    )
+    _set_session_artifact_mtime(edit_store, fallback_edit_at)
+
+    test_store = SessionArtifactStore(tmp_path, session_id="session-test-fallback")
+    test_store.append_turn(
+        TurnArtifact(
+            prompt="queue tests",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+            created_at=fallback_test_at.isoformat(),
+        )
+    )
+    test_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-test-fallback",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="queue tests",
+            )
+        ]
+    )
+    _set_session_artifact_mtime(test_store, fallback_test_at)
+
+    workspace_edit_rendered = render_session_picker(tmp_path, filter_mode="workspace-edit")
+    shell_test_rendered = render_session_picker(tmp_path, filter_mode="shell-test")
+
+    assert f"- workspace focus age: 6d" in workspace_edit_rendered
+    assert f"- workspace focus at: {_format_test_timestamp(fallback_edit_at)}" in workspace_edit_rendered
+    assert "- workspace focus age source: activity fallback" in workspace_edit_rendered
+    assert f"- shell focus age: 5d" in shell_test_rendered
+    assert f"- shell focus at: {_format_test_timestamp(fallback_test_at)}" in shell_test_rendered
+    assert "- shell focus age source: activity fallback" in shell_test_rendered
+
+
 def test_render_session_picker_surfaces_restored_pending_only_queue_age_cues(tmp_path: Path) -> None:
     now = datetime.now(UTC)
     fresh_edit_at = now - timedelta(days=2)

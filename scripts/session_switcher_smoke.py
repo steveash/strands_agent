@@ -365,6 +365,9 @@ async def run_smoke() -> None:
             )
             await pilot.press("e")
             await pilot.pause()
+            for _ in range(8):
+                await pilot.press("up")
+                await pilot.pause()
             workspace_edit_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_workspace_edit_filter=",
@@ -394,6 +397,10 @@ async def run_smoke() -> None:
                     excluded_session_ids=["session-tool"],
                     required=["workspace lanes: edit", "| overlap: mixed 1 session"],
                 ),
+            )
+            print(
+                "switcher_pending_only_preview_age_source=",
+                "- workspace focus age source:" in workspace_edit_output,
             )
             await pilot.press("h")
             await pilot.pause()
@@ -459,6 +466,9 @@ async def run_smoke() -> None:
             )
             await pilot.press("y")
             await pilot.pause()
+            for _ in range(8):
+                await pilot.press("up")
+                await pilot.pause()
             shell_test_output = str(first_app.query_one("#output").render())
             print(
                 "switcher_shell_test_filter=",
@@ -488,6 +498,10 @@ async def run_smoke() -> None:
                     excluded_session_ids=["session-tool"],
                     required=["| overlap: mixed 1 session"],
                 ),
+            )
+            print(
+                "switcher_shell_test_preview_age_source=",
+                "- shell focus age source:" in shell_test_output,
             )
             await pilot.press("o")
             await pilot.pause()

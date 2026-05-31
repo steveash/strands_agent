@@ -162,6 +162,11 @@ def main() -> None:
             sort_mode="attention",
         )
         workspace_edit_picker = render_session_picker(temp_dir, filter_mode="workspace-edit")
+        workspace_edit_pending_preview_picker = render_session_picker(
+            temp_dir,
+            filter_mode="workspace-edit",
+            selected_index=2,
+        )
         workspace_edit_attention_picker = render_session_picker(
             temp_dir,
             filter_mode="workspace-edit",
@@ -177,6 +182,11 @@ def main() -> None:
             sort_mode="attention",
         )
         shell_test_picker = render_session_picker(temp_dir, filter_mode="shell-test")
+        shell_test_pending_preview_picker = render_session_picker(
+            temp_dir,
+            filter_mode="shell-test",
+            selected_index=1,
+        )
         shell_test_attention_picker = render_session_picker(
             temp_dir,
             filter_mode="shell-test",
@@ -350,6 +360,11 @@ def main() -> None:
                 excluded_session_ids=["session-inspect"],
                 required=["workspace lanes: edit"],
             ),
+        )
+        print(
+            "picker_pending_only_preview_age_source=",
+            "- workspace focus age source:" in workspace_edit_pending_preview_picker
+            and "- shell focus age source:" in shell_test_pending_preview_picker,
         )
         print(
             "picker_workspace_overlap_summary=",

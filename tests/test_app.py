@@ -1810,6 +1810,9 @@ async def test_session_switcher_marks_pending_only_age_fallback_sources(tmp_path
         assert "Workspace edit queue mix:" in workspace_edit_output
         assert "oldest pending-only:" in workspace_edit_output
         assert "(activity fallback)" in workspace_edit_output
+        assert "- workspace focus age: 6d" in workspace_edit_output
+        assert f"- workspace focus at: {fallback_edit_at.strftime('%Y-%m-%d %H:%M UTC')}" in workspace_edit_output
+        assert "- workspace focus age source: activity fallback" in workspace_edit_output
 
         await pilot.press("y")
         await pilot.pause()
@@ -1817,6 +1820,9 @@ async def test_session_switcher_marks_pending_only_age_fallback_sources(tmp_path
         assert "Shell test queue mix:" in shell_test_output
         assert "oldest pending-only:" in shell_test_output
         assert "(activity fallback)" in shell_test_output
+        assert "- shell focus age: 5d" in shell_test_output
+        assert f"- shell focus at: {fallback_test_at.strftime('%Y-%m-%d %H:%M UTC')}" in shell_test_output
+        assert "- shell focus age source: activity fallback" in shell_test_output
 
 
 @pytest.mark.asyncio
