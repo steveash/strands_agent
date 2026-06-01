@@ -18,9 +18,9 @@ SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
 DOCS_REVIEW_RUNNING_PREFIX = "[smoke-matrix] running docs-review"
 FAILED_LINE_PREFIX = "docs-review smoke failed fast: "
 REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
-DOCS_FOCUSED_HINT_PREFIX = (
+DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-    "`standalone_smoke.py docs-focused`;"
+    "`standalone_smoke.py docs-review-only`;"
 )
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 3/4 bundles passed before failure in "
 EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
@@ -60,7 +60,7 @@ def run_smoke_matrix_docs_review_hint_smoke() -> list[tuple[str, object]]:
         stderr_lines = smoke_run.stderr_lines
         stdout_last_line = stdout_lines[-1] if stdout_lines else ""
         failed_index = find_prefixed_line_index(stderr_lines, FAILED_LINE_PREFIX)
-        hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
+        hint_index = find_prefixed_line_index(stderr_lines, DOCS_REVIEW_ONLY_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = stderr_lines[failed_index] if failed_index is not None else ""
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""

@@ -35,10 +35,10 @@ DOCS_REVIEW_FIX_CHECK_JSON_FLAG = "--fix-check-json-path"
 DOCS_REVIEW_FIX_REPAIR_JSON_FLAG = "--fix-repair-json-path"
 DOCS_REVIEW_FIX_POST_CHECK_JSON_FLAG = "--fix-post-check-json-path"
 DOCS_REVIEW_MATRIX_SUMMARY_FILENAME = "matrix-summary.json"
-DOCS_FOCUSED_RERUN_HINT = (
-    "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-focused`; rerun "
-    "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + docs-review "
-    "artifacts without the rest of the matrix."
+DOCS_REVIEW_ONLY_RERUN_HINT = (
+    "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
+    "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+    "without the broader docs parity bundle or the rest of the matrix."
 )
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
@@ -230,7 +230,7 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
 def _docs_review_rerun_hint(target: SmokeScriptTarget) -> str | None:
     if target.name not in {DOCS_REVIEW_TARGET_NAME, DOCS_REVIEW_ALL_TARGET_NAME}:
         return None
-    return DOCS_FOCUSED_RERUN_HINT
+    return DOCS_REVIEW_ONLY_RERUN_HINT
 
 
 def _pending_docs_review_rerun_hint(

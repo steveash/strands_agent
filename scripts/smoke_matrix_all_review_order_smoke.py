@@ -18,9 +18,9 @@ REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
 REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
 REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
 LIVE_HINT_PREFIX = "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
-DOCS_FOCUSED_HINT_PREFIX = (
+DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-    "`standalone_smoke.py docs-focused`;"
+    "`standalone_smoke.py docs-review-only`;"
 )
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
 EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
@@ -45,7 +45,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
     try:
         stderr_lines = smoke_run.stderr_lines
         hint_index = find_prefixed_line_index(stderr_lines, LIVE_HINT_PREFIX)
-        docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
+        docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_REVIEW_ONLY_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = next(
             (line for line in stderr_lines if line == "standalone smoke failed fast: live_runtime_requested= False"),

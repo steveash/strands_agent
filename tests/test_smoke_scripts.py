@@ -515,6 +515,15 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
                 "matrix-docs-review-hint",
             ],
         ),
+        (
+            ["docs-review-only"],
+            [
+                "matrix-artifact-roots",
+                "matrix-all-review-order",
+                "matrix-all-review-missing-api-key",
+                "matrix-docs-review-hint",
+            ],
+        ),
         (["summary-utils"], ["summary-utils"]),
         (["timeline"], ["timeline"]),
         (["docs"], ["docs"]),
@@ -2059,7 +2068,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
         (
             "standalone_smoke",
             "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,docs-focused,all}",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,docs-focused,docs-review-only,all}",
         ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
@@ -2779,9 +2788,9 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
         ),
         (
             "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-focused`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
-            "docs-review artifacts without the rest of the matrix."
+            "`standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the broader docs parity bundle or the rest of the matrix."
         ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=1, elapsed_seconds=2.5),
     ]
@@ -2858,9 +2867,9 @@ def test_smoke_matrix_all_review_docs_review_failure_emits_docs_focused_hint(mon
         ),
         (
             "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-focused`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
-            "docs-review artifacts without the rest of the matrix."
+            "`standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the broader docs parity bundle or the rest of the matrix."
         ),
         summary_metadata.failure_summary_line(passed_count=3, total_count=4, elapsed_seconds=5.8),
     ]
@@ -3010,9 +3019,9 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
         ),
         (
             "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-focused`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
-            "docs-review artifacts without the rest of the matrix."
+            "`standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the broader docs parity bundle or the rest of the matrix."
         ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=4, elapsed_seconds=2.0),
     ]
@@ -3061,9 +3070,9 @@ def test_smoke_matrix_all_review_failure_emits_missing_api_key_hint_and_docs_foc
         ),
         (
             "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-focused`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-focused` to recheck docs parity + "
-            "docs-review artifacts without the rest of the matrix."
+            "`standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the broader docs parity bundle or the rest of the matrix."
         ),
         summary_metadata.failure_summary_line(passed_count=0, total_count=4, elapsed_seconds=2.2),
     ]
@@ -3145,7 +3154,7 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
     assert any(
         line.startswith(
             "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-focused`;"
+            "`standalone_smoke.py docs-review-only`;"
         )
         for line in lines
     )
@@ -3220,7 +3229,7 @@ def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_meta
     assert any(
         line.startswith(
             "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-focused`;"
+            "`standalone_smoke.py docs-review-only`;"
         )
         for line in lines
     )

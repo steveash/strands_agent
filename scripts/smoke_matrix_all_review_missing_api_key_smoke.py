@@ -21,9 +21,9 @@ MISSING_API_KEY_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but "
     "`OPENAI_API_KEY` was missing;"
 )
-DOCS_FOCUSED_HINT_PREFIX = (
+DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-    "`standalone_smoke.py docs-focused`;"
+    "`standalone_smoke.py docs-review-only`;"
 )
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
 EXPECTED_TARGET_NAME = "docs-review-all"
@@ -68,7 +68,7 @@ def run_smoke_matrix_all_review_missing_api_key_smoke() -> list[tuple[str, objec
     try:
         stderr_lines = smoke_run.stderr_lines
         missing_api_key_hint_index = find_prefixed_line_index(stderr_lines, MISSING_API_KEY_HINT_PREFIX)
-        docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
+        docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_REVIEW_ONLY_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
 
         failed_line = next(
