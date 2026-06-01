@@ -140,9 +140,11 @@ from .smoke_script_harness import (
     find_prefixed_line_index,
     load_script_module,
     observe_loaded_review_artifact_output,
+    observe_loaded_review_artifact_output_in_temp_checkout,
     observe_subprocess_review_artifact_output,
     run_python_driver_in_temp_checkout,
     run_loaded_script_module_main,
+    run_loaded_script_module_main_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
@@ -307,8 +309,10 @@ __all__ = [
     "find_prefixed_line_index",
     "load_script_module",
     "observe_loaded_review_artifact_output",
+    "observe_loaded_review_artifact_output_in_temp_checkout",
     "observe_subprocess_review_artifact_output",
     "run_loaded_script_module_main",
+    "run_loaded_script_module_main_in_temp_checkout",
     "NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS",
     "NON_MATRIX_SMOKE_WRAPPER_METADATA",
     "NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES",

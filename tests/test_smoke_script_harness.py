@@ -13,8 +13,10 @@ from strands_agent_tui.testing import (
     find_prefixed_line_index,
     load_script_module,
     observe_loaded_review_artifact_output,
+    observe_loaded_review_artifact_output_in_temp_checkout,
     observe_subprocess_review_artifact_output,
     run_loaded_script_module_main,
+    run_loaded_script_module_main_in_temp_checkout,
     run_python_driver_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
 )
@@ -289,6 +291,42 @@ def main(argv=None):
     assert (checkout_root / "artifacts" / "all-review" / "matrix-summary.json").exists()
 
 
+def test_run_loaded_script_module_main_in_temp_checkout_creates_cleanup_root(tmp_path: Path) -> None:
+    script_path = tmp_path / "loaded_temp_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def main(argv=None):
+    print(f"cwd_name={Path.cwd().name}")
+    print(f"argv={list(argv or [])}")
+    return 7
+""".strip()
+        + "\n",
+    )
+    module = load_script_module(script_path, "tests.loaded_temp_target")
+
+    result = run_loaded_script_module_main_in_temp_checkout(
+        module,
+        argv=["docs-review"],
+        temp_prefix="loaded-temp-checkout-",
+    )
+
+    assert result.exit_code == 7
+    assert result.checkout_root.name.startswith("loaded-temp-checkout-")
+    assert result.stdout_lines == [
+        f"cwd_name={result.checkout_root.name}",
+        "argv=['docs-review']",
+    ]
+    assert result.checkout_root.exists()
+    result.cleanup()
+    assert not result.checkout_root.exists()
+
+
 def test_observe_loaded_review_artifact_output_supports_stderr_stream(tmp_path: Path) -> None:
     script_path = tmp_path / "stderr_review_target.py"
     _write_target_script(
@@ -337,6 +375,58 @@ def main(argv=None):
     assert review_output.metadata_targets("stderr-review") is True
     assert review_output.matrix_summary_targets("stderr-review") is True
     assert review_output.matrix_summary_artifact_exists is True
+
+
+def test_observe_loaded_review_artifact_output_in_temp_checkout_supports_stderr_stream(tmp_path: Path) -> None:
+    script_path = tmp_path / "stderr_temp_review_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main(argv=None):
+    target_name = 'stderr-temp-review'
+    artifact_root = Path('artifacts') / target_name
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    matrix_summary_path = artifact_root / 'matrix-summary.json'
+    payload = {
+        'display_name': target_name,
+        'target_name': target_name,
+        'artifact_root': artifact_root.as_posix(),
+        'matrix_summary_path': matrix_summary_path.as_posix(),
+    }
+    matrix_summary_path.write_text(json.dumps(payload, sort_keys=True) + '\\n', encoding='utf-8')
+    print(f"[matrix] metadata: {json.dumps(payload, sort_keys=True)}", file=sys.stderr)
+    print(f"[matrix] matrix summary: {matrix_summary_path.as_posix()}", file=sys.stderr)
+    return 0
+""".strip()
+        + "\n",
+    )
+    module = load_script_module(script_path, "tests.stderr_temp_review_target")
+
+    smoke_run, review_output = observe_loaded_review_artifact_output_in_temp_checkout(
+        module,
+        argv=["review"],
+        temp_prefix="stderr-temp-review-",
+        metadata_prefix="[matrix] metadata: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+        output_stream="stderr",
+    )
+    try:
+        assert smoke_run.exit_code == 0
+        assert smoke_run.stdout == ""
+        assert review_output.metadata_targets("stderr-temp-review") is True
+        assert review_output.matrix_summary_targets("stderr-temp-review") is True
+        assert review_output.matrix_summary_artifact_exists is True
+        assert smoke_run.checkout_root.exists()
+    finally:
+        smoke_run.cleanup()
+    assert not smoke_run.checkout_root.exists()
 
 
 def test_observe_subprocess_review_artifact_output_supports_stderr_stream(tmp_path: Path) -> None:
@@ -401,6 +491,13 @@ def main(argv=None):
             object(),
             argv=["review"],
             checkout_root=tmp_path,
+            matrix_summary_prefix="[matrix] matrix summary: ",
+            output_stream="invalid",
+        ),
+        lambda tmp_path: observe_loaded_review_artifact_output_in_temp_checkout(
+            object(),
+            argv=["review"],
+            temp_prefix="harness-invalid-temp-output-stream-",
             matrix_summary_prefix="[matrix] matrix summary: ",
             output_stream="invalid",
         ),

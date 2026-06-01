@@ -5,11 +5,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
-    collect_review_artifact_output,
+    detail_safe_text,
     emit_smoke_results,
     find_prefixed_line_index,
     load_script_module,
-    run_script_module_main_in_temp_checkout,
+    observe_loaded_review_artifact_output_in_temp_checkout,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -32,22 +32,18 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
         SMOKE_MATRIX_SCRIPT_PATH,
         "scripts.smoke_matrix_all_review_order_smoke_target",
     )
-    smoke_run = run_script_module_main_in_temp_checkout(
-        script_path=SMOKE_MATRIX_SCRIPT_PATH,
-        module_name="scripts.smoke_matrix_all_review_order_smoke_target",
+    smoke_run, review_output = observe_loaded_review_artifact_output_in_temp_checkout(
+        smoke_matrix_module,
         argv=["all-review"],
         temp_prefix="smoke-matrix-all-review-order-",
+        metadata_prefix=REVIEW_METADATA_PREFIX,
+        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
+        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
         unset_env_names=("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
+        output_stream="stderr",
     )
     try:
         stderr_lines = smoke_run.stderr_lines
-        review_output = collect_review_artifact_output(
-            stderr_lines,
-            checkout_root=smoke_run.checkout_root,
-            metadata_prefix=REVIEW_METADATA_PREFIX,
-            artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-            matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-        )
         hint_index = find_prefixed_line_index(stderr_lines, LIVE_HINT_PREFIX)
         docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
@@ -55,7 +51,7 @@ def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
             (line for line in stderr_lines if line == "standalone smoke failed fast: live_runtime_requested= False"),
             "",
         )
-        display_failed_line = failed_line.replace("= False", "=False")
+        display_failed_line = detail_safe_text(failed_line)
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""
         docs_hint_line = stderr_lines[docs_hint_index] if docs_hint_index is not None else ""
         summary_line = stderr_lines[summary_index] if summary_index is not None else ""

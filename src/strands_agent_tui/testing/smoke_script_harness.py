@@ -244,6 +244,29 @@ def run_loaded_script_module_main(
     )
 
 
+def run_loaded_script_module_main_in_temp_checkout(
+    module: Any,
+    *,
+    argv: Sequence[str],
+    temp_prefix: str,
+    unset_env_names: Iterable[str] = (),
+) -> SmokeScriptRunResult:
+    checkout_root = Path(tempfile.mkdtemp(prefix=temp_prefix))
+    smoke_run = run_loaded_script_module_main(
+        module,
+        argv=argv,
+        checkout_root=checkout_root,
+        unset_env_names=unset_env_names,
+    )
+    return SmokeScriptRunResult(
+        checkout_root=checkout_root,
+        exit_code=smoke_run.exit_code,
+        stdout=smoke_run.stdout,
+        stderr=smoke_run.stderr,
+        cleanup_callback=lambda: rmtree(checkout_root, ignore_errors=True),
+    )
+
+
 def _validate_review_output_stream(output_stream: Literal["stdout", "stderr"] | str) -> None:
     if output_stream not in {"stdout", "stderr"}:
         raise ValueError(f"output_stream must be 'stdout' or 'stderr', got {output_stream!r}")
@@ -279,6 +302,34 @@ def observe_loaded_review_artifact_output(
     review_output = collect_review_artifact_output(
         _review_output_lines(smoke_run, output_stream=output_stream),
         checkout_root=checkout_root,
+        metadata_prefix=metadata_prefix,
+        artifacts_prefix=artifacts_prefix,
+        matrix_summary_prefix=matrix_summary_prefix,
+    )
+    return smoke_run, review_output
+
+
+def observe_loaded_review_artifact_output_in_temp_checkout(
+    module: Any,
+    *,
+    argv: Sequence[str],
+    temp_prefix: str,
+    matrix_summary_prefix: str,
+    metadata_prefix: str | None = None,
+    artifacts_prefix: str | None = None,
+    unset_env_names: Iterable[str] = (),
+    output_stream: Literal["stdout", "stderr"] = "stdout",
+) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
+    _validate_review_output_stream(output_stream)
+    smoke_run = run_loaded_script_module_main_in_temp_checkout(
+        module,
+        argv=argv,
+        temp_prefix=temp_prefix,
+        unset_env_names=unset_env_names,
+    )
+    review_output = collect_review_artifact_output(
+        _review_output_lines(smoke_run, output_stream=output_stream),
+        checkout_root=smoke_run.checkout_root,
         metadata_prefix=metadata_prefix,
         artifacts_prefix=artifacts_prefix,
         matrix_summary_prefix=matrix_summary_prefix,
