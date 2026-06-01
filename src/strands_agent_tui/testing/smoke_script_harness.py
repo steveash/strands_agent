@@ -281,6 +281,56 @@ def _review_output_lines(
     return smoke_run.stdout_lines if output_stream == "stdout" else smoke_run.stderr_lines
 
 
+def observe_review_artifact_output_in_temp_checkout(
+    *,
+    temp_prefix: str,
+    matrix_summary_prefix: str,
+    metadata_prefix: str | None = None,
+    artifacts_prefix: str | None = None,
+    output_stream: Literal["stdout", "stderr"] = "stdout",
+    module: Any | None = None,
+    argv: Sequence[str] | None = None,
+    unset_env_names: Iterable[str] = (),
+    driver_source: str | None = None,
+    driver_filename: str | None = None,
+    python_executable: str | None = None,
+) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
+    _validate_review_output_stream(output_stream)
+
+    module_selected = module is not None
+    driver_selected = driver_source is not None
+    if module_selected == driver_selected:
+        raise ValueError("provide exactly one review artifact source: module or driver_source")
+
+    if module is not None:
+        if argv is None:
+            raise ValueError("argv is required when observing a loaded review artifact module")
+        smoke_run = run_loaded_script_module_main_in_temp_checkout(
+            module,
+            argv=argv,
+            temp_prefix=temp_prefix,
+            unset_env_names=unset_env_names,
+        )
+    else:
+        if driver_filename is None:
+            raise ValueError("driver_filename is required when driver_source is provided")
+        smoke_run = run_python_driver_in_temp_checkout(
+            driver_source=driver_source,
+            temp_prefix=temp_prefix,
+            driver_filename=driver_filename,
+            python_executable=python_executable,
+        )
+
+    review_output = collect_review_artifact_output(
+        _review_output_lines(smoke_run, output_stream=output_stream),
+        checkout_root=smoke_run.checkout_root,
+        metadata_prefix=metadata_prefix,
+        artifacts_prefix=artifacts_prefix,
+        matrix_summary_prefix=matrix_summary_prefix,
+    )
+    return smoke_run, review_output
+
+
 def observe_loaded_review_artifact_output(
     module: Any,
     *,
@@ -320,21 +370,16 @@ def observe_loaded_review_artifact_output_in_temp_checkout(
     unset_env_names: Iterable[str] = (),
     output_stream: Literal["stdout", "stderr"] = "stdout",
 ) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
-    _validate_review_output_stream(output_stream)
-    smoke_run = run_loaded_script_module_main_in_temp_checkout(
-        module,
+    return observe_review_artifact_output_in_temp_checkout(
+        module=module,
         argv=argv,
         temp_prefix=temp_prefix,
-        unset_env_names=unset_env_names,
-    )
-    review_output = collect_review_artifact_output(
-        _review_output_lines(smoke_run, output_stream=output_stream),
-        checkout_root=smoke_run.checkout_root,
         metadata_prefix=metadata_prefix,
         artifacts_prefix=artifacts_prefix,
         matrix_summary_prefix=matrix_summary_prefix,
+        unset_env_names=unset_env_names,
+        output_stream=output_stream,
     )
-    return smoke_run, review_output
 
 
 def build_script_driver_source(
@@ -412,18 +457,13 @@ def observe_subprocess_review_artifact_output(
     python_executable: str | None = None,
     output_stream: Literal["stdout", "stderr"] = "stdout",
 ) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
-    _validate_review_output_stream(output_stream)
-    smoke_run = run_python_driver_in_temp_checkout(
+    return observe_review_artifact_output_in_temp_checkout(
         driver_source=driver_source,
         temp_prefix=temp_prefix,
         driver_filename=driver_filename,
-        python_executable=python_executable,
-    )
-    review_output = collect_review_artifact_output(
-        _review_output_lines(smoke_run, output_stream=output_stream),
-        checkout_root=smoke_run.checkout_root,
         metadata_prefix=metadata_prefix,
         artifacts_prefix=artifacts_prefix,
         matrix_summary_prefix=matrix_summary_prefix,
+        python_executable=python_executable,
+        output_stream=output_stream,
     )
-    return smoke_run, review_output

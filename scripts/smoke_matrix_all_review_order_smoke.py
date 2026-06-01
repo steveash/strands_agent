@@ -9,7 +9,7 @@ from strands_agent_tui.testing import (
     emit_smoke_results,
     find_prefixed_line_index,
     load_script_module,
-    observe_loaded_review_artifact_output_in_temp_checkout,
+    observe_review_artifact_output_in_temp_checkout,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -27,20 +27,20 @@ EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-re
 EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
 
 
-def run_smoke_matrix_all_review_order_smoke() -> list[tuple[str, object]]:
+def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
     smoke_matrix_module = load_script_module(
         SMOKE_MATRIX_SCRIPT_PATH,
         "scripts.smoke_matrix_all_review_order_smoke_target",
     )
-    smoke_run, review_output = observe_loaded_review_artifact_output_in_temp_checkout(
-        smoke_matrix_module,
+    smoke_run, review_output = observe_review_artifact_output_in_temp_checkout(
+        module=smoke_matrix_module,
         argv=["all-review"],
         temp_prefix="smoke-matrix-all-review-order-",
         metadata_prefix=REVIEW_METADATA_PREFIX,
         artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
         matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
         unset_env_names=("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
-        output_stream="stderr",
+        output_stream=output_stream,
     )
     try:
         stderr_lines = smoke_run.stderr_lines

@@ -8,7 +8,7 @@ from strands_agent_tui.testing import (
     build_script_driver_source,
     emit_smoke_results,
     find_prefixed_line_index,
-    observe_subprocess_review_artifact_output,
+    observe_review_artifact_output_in_temp_checkout,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -55,15 +55,15 @@ def _subprocess_driver_source() -> str:
     )
 
 
-def run_smoke_matrix_all_review_missing_api_key_smoke() -> list[tuple[str, object]]:
-    smoke_run, review_output = observe_subprocess_review_artifact_output(
+def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
+    smoke_run, review_output = observe_review_artifact_output_in_temp_checkout(
         driver_source=_subprocess_driver_source(),
         temp_prefix="smoke-matrix-all-review-missing-api-key-",
         driver_filename="run_smoke_matrix_all_review_missing_api_key.py",
         metadata_prefix=REVIEW_METADATA_PREFIX,
         artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
         matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-        output_stream="stderr",
+        output_stream=output_stream,
     )
     try:
         stderr_lines = smoke_run.stderr_lines

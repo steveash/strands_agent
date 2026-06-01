@@ -563,6 +563,24 @@ def test_standalone_smoke_selects_expected_targets(monkeypatch, argv, expected_n
 
 
 @pytest.mark.parametrize(
+    ("script_name", "runner_name"),
+    [
+        ("smoke_matrix_all_review_order_smoke", "run_smoke_matrix_all_review_order_smoke"),
+        (
+            "smoke_matrix_all_review_missing_api_key_smoke",
+            "run_smoke_matrix_all_review_missing_api_key_smoke",
+        ),
+        ("smoke_matrix_docs_review_hint_smoke", "run_smoke_matrix_docs_review_hint_smoke"),
+    ],
+)
+def test_docs_review_matrix_smokes_reject_invalid_output_stream(script_name: str, runner_name: str) -> None:
+    module = _load_script_module(script_name)
+
+    with pytest.raises(ValueError, match="output_stream must be 'stdout' or 'stderr', got 'invalid'"):
+        getattr(module, runner_name)(output_stream="invalid")
+
+
+@pytest.mark.parametrize(
     ("argv", "expected_names"),
     [
         ([], ["picker", "switcher"]),

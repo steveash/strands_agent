@@ -14,6 +14,7 @@ from strands_agent_tui.testing import (
     load_script_module,
     observe_loaded_review_artifact_output,
     observe_loaded_review_artifact_output_in_temp_checkout,
+    observe_review_artifact_output_in_temp_checkout,
     observe_subprocess_review_artifact_output,
     run_loaded_script_module_main,
     run_loaded_script_module_main_in_temp_checkout,
@@ -484,6 +485,109 @@ def main(argv=None):
         smoke_run.cleanup()
 
 
+def test_observe_review_artifact_output_in_temp_checkout_supports_loaded_and_subprocess_sources(
+    tmp_path: Path,
+) -> None:
+    script_path = tmp_path / "generic_review_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main(argv=None):
+    target_name = 'generic-review'
+    artifact_root = Path('artifacts') / target_name
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    matrix_summary_path = artifact_root / 'matrix-summary.json'
+    payload = {
+        'display_name': target_name,
+        'target_name': target_name,
+        'artifact_root': artifact_root.as_posix(),
+        'matrix_summary_path': matrix_summary_path.as_posix(),
+    }
+    matrix_summary_path.write_text(json.dumps(payload, sort_keys=True) + '\\n', encoding='utf-8')
+    print(f"[matrix] metadata: {json.dumps(payload, sort_keys=True)}", file=sys.stderr)
+    print(f"[matrix] matrix summary: {matrix_summary_path.as_posix()}", file=sys.stderr)
+    return 0
+""".strip()
+        + "\n",
+    )
+    module = load_script_module(script_path, "tests.generic_review_target")
+
+    loaded_run, loaded_output = observe_review_artifact_output_in_temp_checkout(
+        module=module,
+        argv=["review"],
+        temp_prefix="generic-loaded-review-",
+        metadata_prefix="[matrix] metadata: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+        output_stream="stderr",
+    )
+    try:
+        assert loaded_run.exit_code == 0
+        assert loaded_output.metadata_targets("generic-review") is True
+        assert loaded_output.matrix_summary_targets("generic-review") is True
+    finally:
+        loaded_run.cleanup()
+
+    driver_source = build_script_driver_source(
+        repo_root=tmp_path,
+        script_path=script_path,
+        module_name="tests.generic_review_driver_target",
+        argv=["review"],
+    )
+    subprocess_run, subprocess_output = observe_review_artifact_output_in_temp_checkout(
+        driver_source=driver_source,
+        temp_prefix="generic-subprocess-review-",
+        driver_filename="run_generic_review_target.py",
+        metadata_prefix="[matrix] metadata: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+        output_stream="stderr",
+    )
+    try:
+        assert subprocess_run.exit_code == 0
+        assert subprocess_output.metadata_targets("generic-review") is True
+        assert subprocess_output.matrix_summary_targets("generic-review") is True
+    finally:
+        subprocess_run.cleanup()
+
+
+def test_observe_review_artifact_output_in_temp_checkout_validates_source_contract() -> None:
+    with pytest.raises(ValueError, match="provide exactly one review artifact source: module or driver_source"):
+        observe_review_artifact_output_in_temp_checkout(
+            temp_prefix="missing-review-source-",
+            matrix_summary_prefix="[matrix] matrix summary: ",
+        )
+
+    with pytest.raises(ValueError, match="provide exactly one review artifact source: module or driver_source"):
+        observe_review_artifact_output_in_temp_checkout(
+            module=object(),
+            driver_source="raise SystemExit(0)\n",
+            argv=["review"],
+            temp_prefix="duplicate-review-source-",
+            driver_filename="run_duplicate_review_source.py",
+            matrix_summary_prefix="[matrix] matrix summary: ",
+        )
+
+    with pytest.raises(ValueError, match="argv is required when observing a loaded review artifact module"):
+        observe_review_artifact_output_in_temp_checkout(
+            module=object(),
+            temp_prefix="missing-review-argv-",
+            matrix_summary_prefix="[matrix] matrix summary: ",
+        )
+
+    with pytest.raises(ValueError, match="driver_filename is required when driver_source is provided"):
+        observe_review_artifact_output_in_temp_checkout(
+            driver_source="raise SystemExit(0)\n",
+            temp_prefix="missing-review-driver-filename-",
+            matrix_summary_prefix="[matrix] matrix summary: ",
+        )
+
+
 @pytest.mark.parametrize(
     "observer",
     (
@@ -501,10 +605,24 @@ def main(argv=None):
             matrix_summary_prefix="[matrix] matrix summary: ",
             output_stream="invalid",
         ),
+        lambda tmp_path: observe_review_artifact_output_in_temp_checkout(
+            module=object(),
+            argv=["review"],
+            temp_prefix="harness-invalid-generic-temp-output-stream-",
+            matrix_summary_prefix="[matrix] matrix summary: ",
+            output_stream="invalid",
+        ),
         lambda tmp_path: observe_subprocess_review_artifact_output(
             driver_source="raise SystemExit(0)\n",
             temp_prefix="harness-invalid-output-stream-",
             driver_filename="run_invalid_output_stream.py",
+            matrix_summary_prefix="[matrix] matrix summary: ",
+            output_stream="invalid",
+        ),
+        lambda tmp_path: observe_review_artifact_output_in_temp_checkout(
+            driver_source="raise SystemExit(0)\n",
+            temp_prefix="harness-invalid-generic-driver-output-stream-",
+            driver_filename="run_invalid_generic_output_stream.py",
             matrix_summary_prefix="[matrix] matrix summary: ",
             output_stream="invalid",
         ),
