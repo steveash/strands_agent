@@ -213,6 +213,54 @@ def main() -> None:
             )
             mixed_pending_picker = render_session_picker(mixed_pending_root, filter_mode="pending")
 
+        with TemporaryDirectory() as queue_provenance_root:
+            queue_now = datetime.now(UTC)
+            queue_workspace_fresh_store = seed_workspace_edit_session(
+                queue_provenance_root,
+                session_id="session-edit-fresh",
+                created_at=(queue_now - timedelta(days=2)).isoformat(),
+            )
+            queue_workspace_restored_store = seed_workspace_edit_session(
+                queue_provenance_root,
+                session_id="session-edit-restored",
+                restored_from_session=True,
+                created_at=(queue_now - timedelta(days=6)).isoformat(),
+            )
+            queue_shell_fresh_store = seed_shell_test_session(
+                queue_provenance_root,
+                session_id="session-test-fresh",
+                created_at=(queue_now - timedelta(days=3)).isoformat(),
+            )
+            queue_shell_restored_store = seed_shell_test_session(
+                queue_provenance_root,
+                session_id="session-test-restored",
+                restored_from_session=True,
+                created_at=(queue_now - timedelta(days=7)).isoformat(),
+            )
+            set_session_artifact_mtime(queue_workspace_fresh_store, queue_now - timedelta(days=2))
+            set_session_artifact_mtime(queue_workspace_restored_store, queue_now - timedelta(days=6))
+            set_session_artifact_mtime(queue_shell_fresh_store, queue_now - timedelta(days=3))
+            set_session_artifact_mtime(queue_shell_restored_store, queue_now - timedelta(days=7))
+
+            queue_workspace_fresh_picker = render_session_picker(
+                queue_provenance_root,
+                filter_mode="workspace-edit",
+            )
+            queue_workspace_alt_picker = render_session_picker(
+                queue_provenance_root,
+                filter_mode="workspace-edit",
+                selected_index=1,
+            )
+            queue_shell_fresh_picker = render_session_picker(
+                queue_provenance_root,
+                filter_mode="shell-test",
+            )
+            queue_shell_alt_picker = render_session_picker(
+                queue_provenance_root,
+                filter_mode="shell-test",
+                selected_index=1,
+            )
+
         with TemporaryDirectory() as pending_rollup_root:
             pending_rollup_now = datetime.now(UTC)
             seed_pending_approval_rollup_scenario(pending_rollup_root, now=pending_rollup_now)
@@ -365,6 +413,25 @@ def main() -> None:
             "picker_pending_only_preview_age_source=",
             "- workspace focus age source:" in workspace_edit_pending_preview_picker
             and "- shell focus age source:" in shell_test_pending_preview_picker,
+        )
+        print(
+            "picker_pending_only_preview_queue_provenance=",
+            any(
+                "- workspace focus queue provenance: fresh approval queue" in output
+                for output in [queue_workspace_fresh_picker, queue_workspace_alt_picker]
+            )
+            and any(
+                "- workspace focus queue provenance: restored approval queue" in output
+                for output in [queue_workspace_fresh_picker, queue_workspace_alt_picker]
+            )
+            and any(
+                "- shell focus queue provenance: fresh approval queue" in output
+                for output in [queue_shell_fresh_picker, queue_shell_alt_picker]
+            )
+            and any(
+                "- shell focus queue provenance: restored approval queue" in output
+                for output in [queue_shell_fresh_picker, queue_shell_alt_picker]
+            ),
         )
         print(
             "picker_workspace_overlap_summary=",

@@ -171,6 +171,7 @@ class SessionSummary:
     has_workspace_inspect_activity: bool = False
     has_workspace_edit_activity: bool = False
     has_pending_workspace_edit_approval: bool = False
+    has_fresh_pending_workspace_edit_approval: bool = False
     has_restored_pending_workspace_edit_approval: bool = False
     pending_workspace_edit_age_sort_key: int = 0
     pending_workspace_edit_oldest_at: str = ""
@@ -189,6 +190,7 @@ class SessionSummary:
     has_shell_inspect_activity: bool = False
     has_shell_test_activity: bool = False
     has_pending_shell_test_approval: bool = False
+    has_fresh_pending_shell_test_approval: bool = False
     has_restored_pending_shell_test_approval: bool = False
     pending_shell_test_age_sort_key: int = 0
     pending_shell_test_oldest_at: str = ""
@@ -261,6 +263,25 @@ class SessionSummary:
         if filter_mode == "shell-test":
             return "pending only until a test executes"
         return ""
+
+    def _focused_lane_pending_only_queue_provenance(self, filter_mode: str) -> str:
+        if not self.has_pending_only_lane_match(filter_mode):
+            return ""
+        if filter_mode == "workspace-edit":
+            has_fresh = self.has_fresh_pending_workspace_edit_approval
+            has_restored = self.has_restored_pending_workspace_edit_approval
+        elif filter_mode == "shell-test":
+            has_fresh = self.has_fresh_pending_shell_test_approval
+            has_restored = self.has_restored_pending_shell_test_approval
+        else:
+            return ""
+        if has_fresh and has_restored:
+            return "fresh + restored approval queue"
+        if has_restored:
+            return "restored approval queue"
+        if has_fresh:
+            return "fresh approval queue"
+        return "approval queue"
 
     def _focused_lane_pending_only_age_source(self, filter_mode: str) -> tuple[str, str, str]:
         focused_lane_label, focused_lane_value = self._focused_lane_pending_only_state(filter_mode)
@@ -591,6 +612,10 @@ class SessionSummary:
             f"{focused_lane_label} age source",
             focused_lane_age_source,
         )
+        focused_lane_queue_provenance_lines = render_preview_detail_line(
+            f"{focused_lane_label} queue provenance",
+            self._focused_lane_pending_only_queue_provenance(filter_mode),
+        )
 
         tool_lines = []
         if not focused_tool_filter:
@@ -601,6 +626,7 @@ class SessionSummary:
 
         workspace_lines = render_selected_preview_section_lines(
             focused_lane_preview_lines if filter_mode == "workspace-edit" else [],
+            focused_lane_queue_provenance_lines if filter_mode == "workspace-edit" else [],
             focused_lane_age_lines if filter_mode == "workspace-edit" else [],
             focused_lane_timestamp_lines if filter_mode == "workspace-edit" else [],
             focused_lane_age_source_lines if filter_mode == "workspace-edit" else [],
@@ -611,6 +637,7 @@ class SessionSummary:
 
         shell_lines = render_selected_preview_section_lines(
             focused_lane_preview_lines if filter_mode == "shell-test" else [],
+            focused_lane_queue_provenance_lines if filter_mode == "shell-test" else [],
             focused_lane_age_lines if filter_mode == "shell-test" else [],
             focused_lane_timestamp_lines if filter_mode == "shell-test" else [],
             focused_lane_age_source_lines if filter_mode == "shell-test" else [],
@@ -833,12 +860,22 @@ def _ordered_recent_sessions(
         has_shell_inspect_activity, has_shell_test_activity = _shell_activity_presence(turns, pending_approvals)
         intervention_activity = _summarize_intervention_activity(turns, pending_approvals)
         pending_workspace_edit_approvals = _pending_approvals_for_filter_mode(pending_approvals, "workspace-edit")
+        fresh_pending_workspace_edit_approvals = _pending_approvals_for_filter_mode(
+            pending_approvals,
+            "workspace-edit",
+            restored_only=False,
+        )
         restored_pending_workspace_edit_approvals = _pending_approvals_for_filter_mode(
             pending_approvals,
             "workspace-edit",
             restored_only=True,
         )
         pending_shell_test_approvals = _pending_approvals_for_filter_mode(pending_approvals, "shell-test")
+        fresh_pending_shell_test_approvals = _pending_approvals_for_filter_mode(
+            pending_approvals,
+            "shell-test",
+            restored_only=False,
+        )
         restored_pending_shell_test_approvals = _pending_approvals_for_filter_mode(
             pending_approvals,
             "shell-test",
@@ -905,6 +942,7 @@ def _ordered_recent_sessions(
             has_workspace_inspect_activity=has_workspace_inspect_activity,
             has_workspace_edit_activity=has_workspace_edit_activity,
             has_pending_workspace_edit_approval=bool(pending_workspace_edit_approvals),
+            has_fresh_pending_workspace_edit_approval=bool(fresh_pending_workspace_edit_approvals),
             has_restored_pending_workspace_edit_approval=bool(restored_pending_workspace_edit_approvals),
             pending_workspace_edit_age_sort_key=_pending_approval_age_seconds(pending_workspace_edit_approvals) or 0,
             pending_workspace_edit_oldest_at=_oldest_approval_timestamp_display(pending_workspace_edit_approvals),
@@ -927,6 +965,7 @@ def _ordered_recent_sessions(
             has_shell_inspect_activity=has_shell_inspect_activity,
             has_shell_test_activity=has_shell_test_activity,
             has_pending_shell_test_approval=bool(pending_shell_test_approvals),
+            has_fresh_pending_shell_test_approval=bool(fresh_pending_shell_test_approvals),
             has_restored_pending_shell_test_approval=bool(restored_pending_shell_test_approvals),
             pending_shell_test_age_sort_key=_pending_approval_age_seconds(pending_shell_test_approvals) or 0,
             pending_shell_test_oldest_at=_oldest_approval_timestamp_display(pending_shell_test_approvals),

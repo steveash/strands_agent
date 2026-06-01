@@ -514,42 +514,65 @@ def test_render_session_picker_surfaces_restored_pending_only_queue_age_cues(tmp
     restored_test_at = now - timedelta(days=7)
 
     workspace_root = tmp_path / "workspace-restored"
-    seed_workspace_edit_session(
+    fresh_workspace_store = seed_workspace_edit_session(
         workspace_root,
         session_id="session-workspace-edit-fresh",
         created_at=fresh_edit_at.isoformat(),
     )
-    seed_workspace_edit_session(
+    restored_workspace_store = seed_workspace_edit_session(
         workspace_root,
         session_id="session-workspace-edit-restored",
         restored_from_session=True,
         created_at=restored_edit_at.isoformat(),
     )
+    _set_session_artifact_mtime(fresh_workspace_store, fresh_edit_at)
+    _set_session_artifact_mtime(restored_workspace_store, restored_edit_at)
 
     shell_root = tmp_path / "shell-restored"
-    seed_shell_test_session(
+    fresh_shell_store = seed_shell_test_session(
         shell_root,
         session_id="session-shell-test-fresh",
         created_at=fresh_test_at.isoformat(),
     )
-    seed_shell_test_session(
+    restored_shell_store = seed_shell_test_session(
         shell_root,
         session_id="session-shell-test-restored",
         restored_from_session=True,
         created_at=restored_test_at.isoformat(),
     )
+    _set_session_artifact_mtime(fresh_shell_store, fresh_test_at)
+    _set_session_artifact_mtime(restored_shell_store, restored_test_at)
 
     workspace_edit_rendered = render_session_picker(workspace_root, filter_mode="workspace-edit")
+    workspace_edit_alt_rendered = render_session_picker(
+        workspace_root,
+        filter_mode="workspace-edit",
+        selected_index=1,
+    )
     shell_test_rendered = render_session_picker(shell_root, filter_mode="shell-test")
+    shell_test_alt_rendered = render_session_picker(
+        shell_root,
+        filter_mode="shell-test",
+        selected_index=1,
+    )
 
     assert (
         f"oldest restored pending-only: 6d @ {_format_test_timestamp(restored_edit_at)}"
         in workspace_edit_rendered
     )
+    workspace_queue_outputs = {workspace_edit_rendered, workspace_edit_alt_rendered}
+    assert any("- workspace focus queue provenance: fresh approval queue" in output for output in workspace_queue_outputs)
+    assert any(
+        "- workspace focus queue provenance: restored approval queue" in output
+        for output in workspace_queue_outputs
+    )
     assert (
         f"oldest restored pending-only: 7d @ {_format_test_timestamp(restored_test_at)}"
         in shell_test_rendered
     )
+    shell_queue_outputs = {shell_test_rendered, shell_test_alt_rendered}
+    assert any("- shell focus queue provenance: fresh approval queue" in output for output in shell_queue_outputs)
+    assert any("- shell focus queue provenance: restored approval queue" in output for output in shell_queue_outputs)
 
 
 def test_render_session_picker_falls_back_to_session_activity_for_missing_pending_only_timestamps(

@@ -1826,6 +1826,101 @@ async def test_session_switcher_marks_pending_only_age_fallback_sources(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_marks_pending_only_queue_provenance(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    now = datetime.now(UTC)
+    fresh_edit_at = now - timedelta(days=2)
+    restored_edit_at = now - timedelta(days=6)
+    fresh_test_at = now - timedelta(days=3)
+    restored_test_at = now - timedelta(days=7)
+
+    fresh_workspace_store = seed_workspace_edit_session(
+        tmp_path,
+        session_id="session-edit-fresh",
+        created_at=fresh_edit_at.isoformat(),
+    )
+    restored_workspace_store = seed_workspace_edit_session(
+        tmp_path,
+        session_id="session-edit-restored",
+        restored_from_session=True,
+        created_at=restored_edit_at.isoformat(),
+    )
+    set_session_artifact_mtime(fresh_workspace_store, fresh_edit_at)
+    set_session_artifact_mtime(restored_workspace_store, restored_edit_at)
+    fresh_shell_store = seed_shell_test_session(
+        tmp_path,
+        session_id="session-test-fresh",
+        created_at=fresh_test_at.isoformat(),
+    )
+    restored_shell_store = seed_shell_test_session(
+        tmp_path,
+        session_id="session-test-restored",
+        restored_from_session=True,
+        created_at=restored_test_at.isoformat(),
+    )
+    set_session_artifact_mtime(fresh_shell_store, fresh_test_at)
+    set_session_artifact_mtime(restored_shell_store, restored_test_at)
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        workspace_edit_output = str(app.query_one("#output").render())
+
+        await pilot.press("down")
+        await pilot.pause()
+        workspace_edit_restored_output = str(app.query_one("#output").render())
+        workspace_queue_outputs = {workspace_edit_output, workspace_edit_restored_output}
+        assert any(
+            "- workspace focus queue provenance: fresh approval queue" in output
+            for output in workspace_queue_outputs
+        )
+        assert any(
+            "- workspace focus queue provenance: restored approval queue" in output
+            for output in workspace_queue_outputs
+        )
+
+        await pilot.press("y")
+        await pilot.pause()
+        shell_test_output = str(app.query_one("#output").render())
+
+        await pilot.press("down")
+        await pilot.pause()
+        shell_test_restored_output = str(app.query_one("#output").render())
+        shell_queue_outputs = {shell_test_output, shell_test_restored_output}
+        assert any("- shell focus queue provenance: fresh approval queue" in output for output in shell_queue_outputs)
+        assert any(
+            "- shell focus queue provenance: restored approval queue" in output
+            for output in shell_queue_outputs
+        )
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_supports_stale_pending_denied_and_restored_subfilters(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(

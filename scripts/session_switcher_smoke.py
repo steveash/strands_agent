@@ -1144,6 +1144,89 @@ async def run_smoke() -> None:
                 ),
             )
 
+    with TemporaryDirectory() as queue_provenance_root:
+        current_store = seed_plain_session(
+            queue_provenance_root,
+            session_id="session-current",
+            prompt="current session",
+            response="current response",
+        )
+        queue_now = datetime.now(UTC)
+        queue_workspace_fresh_store = seed_workspace_edit_session(
+            queue_provenance_root,
+            session_id="session-edit-fresh",
+            created_at=(queue_now - timedelta(days=2)).isoformat(),
+        )
+        queue_workspace_restored_store = seed_workspace_edit_session(
+            queue_provenance_root,
+            session_id="session-edit-restored",
+            restored_from_session=True,
+            created_at=(queue_now - timedelta(days=6)).isoformat(),
+        )
+        queue_shell_fresh_store = seed_shell_test_session(
+            queue_provenance_root,
+            session_id="session-test-fresh",
+            created_at=(queue_now - timedelta(days=3)).isoformat(),
+        )
+        queue_shell_restored_store = seed_shell_test_session(
+            queue_provenance_root,
+            session_id="session-test-restored",
+            restored_from_session=True,
+            created_at=(queue_now - timedelta(days=7)).isoformat(),
+        )
+        set_session_artifact_mtime(queue_workspace_fresh_store, queue_now - timedelta(days=2))
+        set_session_artifact_mtime(queue_workspace_restored_store, queue_now - timedelta(days=6))
+        set_session_artifact_mtime(queue_shell_fresh_store, queue_now - timedelta(days=3))
+        set_session_artifact_mtime(queue_shell_restored_store, queue_now - timedelta(days=7))
+
+        provenance_app = StrandsAgentApp(
+            runtime=FakeStrandsRuntime(),
+            config=AppConfig(
+                runtime_mode="fake",
+                openai_model="gpt-4o-mini",
+                workspace_root=".",
+                artifacts_root=queue_provenance_root,
+                session_id="session-current",
+            ),
+            artifact_store=current_store,
+        )
+
+        async with provenance_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("f11")
+            await pilot.pause()
+            await pilot.press("e")
+            await pilot.pause()
+            workspace_fresh_output = str(provenance_app.query_one("#output").render())
+            await pilot.press("down")
+            await pilot.pause()
+            workspace_alt_output = str(provenance_app.query_one("#output").render())
+            await pilot.press("y")
+            await pilot.pause()
+            shell_fresh_output = str(provenance_app.query_one("#output").render())
+            await pilot.press("down")
+            await pilot.pause()
+            shell_alt_output = str(provenance_app.query_one("#output").render())
+            print(
+                "switcher_pending_only_preview_queue_provenance=",
+                any(
+                    "- workspace focus queue provenance: fresh approval queue" in output
+                    for output in [workspace_fresh_output, workspace_alt_output]
+                )
+                and any(
+                    "- workspace focus queue provenance: restored approval queue" in output
+                    for output in [workspace_fresh_output, workspace_alt_output]
+                )
+                and any(
+                    "- shell focus queue provenance: fresh approval queue" in output
+                    for output in [shell_fresh_output, shell_alt_output]
+                )
+                and any(
+                    "- shell focus queue provenance: restored approval queue" in output
+                    for output in [shell_fresh_output, shell_alt_output]
+                ),
+            )
+
 
 def main() -> None:
     asyncio.run(run_smoke())
