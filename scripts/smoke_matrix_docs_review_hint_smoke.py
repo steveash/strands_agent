@@ -6,11 +6,10 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     build_script_driver_source,
-    collect_review_artifact_output,
     detail_safe_text,
     emit_smoke_results,
     find_prefixed_line_index,
-    run_python_driver_in_temp_checkout,
+    observe_subprocess_review_artifact_output,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -49,19 +48,16 @@ def _subprocess_driver_source() -> str:
 
 
 def run_smoke_matrix_docs_review_hint_smoke() -> list[tuple[str, object]]:
-    smoke_run = run_python_driver_in_temp_checkout(
+    smoke_run, review_output = observe_subprocess_review_artifact_output(
         driver_source=_subprocess_driver_source(),
         temp_prefix="smoke-matrix-docs-review-hint-",
         driver_filename="run_smoke_matrix_docs_review_hint.py",
+        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+        output_stream="stderr",
     )
     try:
         stdout_lines = smoke_run.stdout_lines
         stderr_lines = smoke_run.stderr_lines
-        review_output = collect_review_artifact_output(
-            stderr_lines,
-            checkout_root=smoke_run.checkout_root,
-            matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-        )
         stdout_last_line = stdout_lines[-1] if stdout_lines else ""
         failed_index = find_prefixed_line_index(stderr_lines, FAILED_LINE_PREFIX)
         hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)

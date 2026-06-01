@@ -244,6 +244,20 @@ def run_loaded_script_module_main(
     )
 
 
+def _validate_review_output_stream(output_stream: Literal["stdout", "stderr"] | str) -> None:
+    if output_stream not in {"stdout", "stderr"}:
+        raise ValueError(f"output_stream must be 'stdout' or 'stderr', got {output_stream!r}")
+
+
+def _review_output_lines(
+    smoke_run: SmokeScriptRunResult,
+    *,
+    output_stream: Literal["stdout", "stderr"] = "stdout",
+) -> list[str]:
+    _validate_review_output_stream(output_stream)
+    return smoke_run.stdout_lines if output_stream == "stdout" else smoke_run.stderr_lines
+
+
 def observe_loaded_review_artifact_output(
     module: Any,
     *,
@@ -255,18 +269,15 @@ def observe_loaded_review_artifact_output(
     unset_env_names: Iterable[str] = (),
     output_stream: Literal["stdout", "stderr"] = "stdout",
 ) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
-    if output_stream not in {"stdout", "stderr"}:
-        raise ValueError("output_stream must be 'stdout' or 'stderr'")
-
+    _validate_review_output_stream(output_stream)
     smoke_run = run_loaded_script_module_main(
         module,
         argv=argv,
         checkout_root=checkout_root,
         unset_env_names=unset_env_names,
     )
-    output_lines = smoke_run.stdout_lines if output_stream == "stdout" else smoke_run.stderr_lines
     review_output = collect_review_artifact_output(
-        output_lines,
+        _review_output_lines(smoke_run, output_stream=output_stream),
         checkout_root=checkout_root,
         metadata_prefix=metadata_prefix,
         artifacts_prefix=artifacts_prefix,
@@ -337,3 +348,31 @@ def run_python_driver_in_temp_checkout(
         stderr=result.stderr,
         cleanup_callback=lambda: rmtree(checkout_root, ignore_errors=True),
     )
+
+
+def observe_subprocess_review_artifact_output(
+    *,
+    driver_source: str,
+    temp_prefix: str,
+    driver_filename: str,
+    matrix_summary_prefix: str,
+    metadata_prefix: str | None = None,
+    artifacts_prefix: str | None = None,
+    python_executable: str | None = None,
+    output_stream: Literal["stdout", "stderr"] = "stdout",
+) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
+    _validate_review_output_stream(output_stream)
+    smoke_run = run_python_driver_in_temp_checkout(
+        driver_source=driver_source,
+        temp_prefix=temp_prefix,
+        driver_filename=driver_filename,
+        python_executable=python_executable,
+    )
+    review_output = collect_review_artifact_output(
+        _review_output_lines(smoke_run, output_stream=output_stream),
+        checkout_root=smoke_run.checkout_root,
+        metadata_prefix=metadata_prefix,
+        artifacts_prefix=artifacts_prefix,
+        matrix_summary_prefix=matrix_summary_prefix,
+    )
+    return smoke_run, review_output

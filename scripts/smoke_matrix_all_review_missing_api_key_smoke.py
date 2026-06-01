@@ -6,10 +6,9 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     build_script_driver_source,
-    collect_review_artifact_output,
     emit_smoke_results,
     find_prefixed_line_index,
-    run_python_driver_in_temp_checkout,
+    observe_subprocess_review_artifact_output,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -57,20 +56,17 @@ def _subprocess_driver_source() -> str:
 
 
 def run_smoke_matrix_all_review_missing_api_key_smoke() -> list[tuple[str, object]]:
-    smoke_run = run_python_driver_in_temp_checkout(
+    smoke_run, review_output = observe_subprocess_review_artifact_output(
         driver_source=_subprocess_driver_source(),
         temp_prefix="smoke-matrix-all-review-missing-api-key-",
         driver_filename="run_smoke_matrix_all_review_missing_api_key.py",
+        metadata_prefix=REVIEW_METADATA_PREFIX,
+        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
+        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+        output_stream="stderr",
     )
     try:
         stderr_lines = smoke_run.stderr_lines
-        review_output = collect_review_artifact_output(
-            stderr_lines,
-            checkout_root=smoke_run.checkout_root,
-            metadata_prefix=REVIEW_METADATA_PREFIX,
-            artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-            matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-        )
         missing_api_key_hint_index = find_prefixed_line_index(stderr_lines, MISSING_API_KEY_HINT_PREFIX)
         docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_FOCUSED_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)

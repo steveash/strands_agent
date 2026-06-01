@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from strands_agent_tui.testing import (
     build_script_driver_source,
     collect_review_artifact_output,
@@ -11,6 +13,7 @@ from strands_agent_tui.testing import (
     find_prefixed_line_index,
     load_script_module,
     observe_loaded_review_artifact_output,
+    observe_subprocess_review_artifact_output,
     run_loaded_script_module_main,
     run_python_driver_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
@@ -334,6 +337,88 @@ def main(argv=None):
     assert review_output.metadata_targets("stderr-review") is True
     assert review_output.matrix_summary_targets("stderr-review") is True
     assert review_output.matrix_summary_artifact_exists is True
+
+
+def test_observe_subprocess_review_artifact_output_supports_stderr_stream(tmp_path: Path) -> None:
+    script_path = tmp_path / "stderr_subprocess_review_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main(argv=None):
+    target_name = 'stderr-subprocess-review'
+    artifact_root = Path('artifacts') / target_name
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    matrix_summary_path = artifact_root / 'matrix-summary.json'
+    payload = {
+        'display_name': target_name,
+        'target_name': target_name,
+        'artifact_root': artifact_root.as_posix(),
+        'matrix_summary_path': matrix_summary_path.as_posix(),
+    }
+    matrix_summary_path.write_text(json.dumps(payload, sort_keys=True) + '\\n', encoding='utf-8')
+    print(f"[matrix] metadata: {json.dumps(payload, sort_keys=True)}", file=sys.stderr)
+    print(f"[matrix] matrix summary: {matrix_summary_path.as_posix()}", file=sys.stderr)
+    return 0
+""".strip()
+        + "\n",
+    )
+    driver_source = build_script_driver_source(
+        repo_root=tmp_path,
+        script_path=script_path,
+        module_name="tests.stderr_subprocess_review_target",
+        argv=["review"],
+    )
+
+    smoke_run, review_output = observe_subprocess_review_artifact_output(
+        driver_source=driver_source,
+        temp_prefix="harness-driver-review-",
+        driver_filename="run_stderr_subprocess_review_target.py",
+        metadata_prefix="[matrix] metadata: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+        output_stream="stderr",
+    )
+    try:
+        assert smoke_run.exit_code == 0
+        assert smoke_run.stdout == ""
+        assert review_output.metadata_targets("stderr-subprocess-review") is True
+        assert review_output.matrix_summary_targets("stderr-subprocess-review") is True
+        assert review_output.matrix_summary_artifact_exists is True
+    finally:
+        smoke_run.cleanup()
+
+
+@pytest.mark.parametrize(
+    "observer",
+    (
+        lambda tmp_path: observe_loaded_review_artifact_output(
+            object(),
+            argv=["review"],
+            checkout_root=tmp_path,
+            matrix_summary_prefix="[matrix] matrix summary: ",
+            output_stream="invalid",
+        ),
+        lambda tmp_path: observe_subprocess_review_artifact_output(
+            driver_source="raise SystemExit(0)\n",
+            temp_prefix="harness-invalid-output-stream-",
+            driver_filename="run_invalid_output_stream.py",
+            matrix_summary_prefix="[matrix] matrix summary: ",
+            output_stream="invalid",
+        ),
+    ),
+)
+def test_review_artifact_observers_reject_invalid_output_stream(
+    tmp_path: Path,
+    observer,
+) -> None:
+    with pytest.raises(ValueError, match="output_stream must be 'stdout' or 'stderr', got 'invalid'"):
+        observer(tmp_path)
 
 
 def test_build_script_driver_source_and_run_python_driver_in_temp_checkout(tmp_path: Path, monkeypatch) -> None:
