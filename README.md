@@ -413,7 +413,7 @@ To verify the remaining local smoke surfaces with shared fail-fast `= False` han
 .venv/bin/python scripts/standalone_smoke.py
 ```
 
-This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py docs-review-only` to rerun just the docs-review lane regressions, `.venv/bin/python scripts/standalone_smoke.py docs-focused` for the broader docs parity + docs-review lane bundle, or `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
+This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to rerun just the docs parity alias, `.venv/bin/python scripts/standalone_smoke.py docs-review-only` to rerun just the docs-review lane regressions, `.venv/bin/python scripts/standalone_smoke.py docs-focused` for the broader docs parity + docs-review lane bundle, or `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.
 
 Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py local` explicitly re-runs the default `local` alias (`summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, `smoke_cli_docs_artifacts`)
@@ -421,7 +421,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/standalone_smoke.py timeline` runs just the timeline smoke target
 - `.venv/bin/python scripts/standalone_smoke.py docs` runs just the smoke CLI docs parity target
 - `.venv/bin/python scripts/standalone_smoke.py docs-artifacts` runs the smoke CLI render/fix artifact contract smoke end-to-end
-- `.venv/bin/python scripts/standalone_smoke.py docs-focused` re-runs the broader docs parity + docs-review lane alias (`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, `matrix-all-review-missing-api-key`, `matrix-docs-review-hint`)
+- `.venv/bin/python scripts/standalone_smoke.py docs-parity-only` re-runs only the docs parity alias (`docs`, `docs-artifacts`)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)
 - `.venv/bin/python scripts/smoke_cli_docs_smoke.py all` re-runs docs parity for every public smoke wrapper without the rest of the standalone bundle
 - `.venv/bin/python scripts/smoke_cli_docs_artifacts_smoke.py` exercises drifted README render/fix review artifacts end-to-end with fail-fast contract checks
@@ -438,6 +438,7 @@ Operator shortcuts:
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all --check --json-output artifacts/smoke-cli-docs-fix.json` persists the same machine-readable drift report with manifest-style summaries/checksums alongside the normal console summary
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py standalone_smoke` repairs the standalone wrapper README section in place from shared metadata
 - `.venv/bin/python scripts/smoke_cli_docs_fix.py all` repairs every public smoke wrapper README section in place
+- `.venv/bin/python scripts/standalone_smoke.py docs-focused` re-runs the broader docs parity + docs-review lane alias (`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, `matrix-all-review-missing-api-key`, `matrix-docs-review-hint`)
 - `.venv/bin/python scripts/standalone_smoke.py docs-review-only` re-runs only the docs-review lane regressions (`matrix-artifact-roots`, `matrix-all-review-order`, `matrix-all-review-missing-api-key`, `matrix-docs-review-hint`)
 - `.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` runs the fake-live smoke-matrix artifact-root regression that proves `review` and `all-review` keep distinct docs-review bundles
 - `.venv/bin/python scripts/standalone_smoke.py matrix-all-review-order` runs the real `all-review` smoke-matrix regression that proves pending docs-review breadcrumbs appear before the live-runtime hint and the docs-review-only rerun hint lands before the fail-fast summary
