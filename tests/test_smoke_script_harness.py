@@ -10,6 +10,7 @@ from strands_agent_tui.testing import (
     detail_safe_text,
     find_prefixed_line_index,
     load_script_module,
+    observe_loaded_review_artifact_output,
     run_loaded_script_module_main,
     run_python_driver_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
@@ -210,6 +211,129 @@ def main(argv=None):
     assert checkout_root.exists()
     assert os.environ["HARNESS_KEEP"] == "present"
     assert os.environ["HARNESS_CLEAR"] == "remove-me"
+
+
+def test_observe_loaded_review_artifact_output_reuses_loaded_module_and_shared_checkout(tmp_path: Path) -> None:
+    script_path = tmp_path / "review_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main(argv=None):
+    args = list(argv or [])
+    target_name = args[0] if args else 'review'
+    stream_name = args[1] if len(args) > 1 else 'stdout'
+    stream = getattr(sys, stream_name)
+    artifact_root = Path('artifacts') / target_name
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    bundle_index_path = artifact_root / 'index.json'
+    bundle_index_path.write_text(json.dumps({'target_name': target_name}, sort_keys=True) + '\\n', encoding='utf-8')
+    matrix_summary_path = artifact_root / 'matrix-summary.json'
+    payload = {
+        'display_name': target_name,
+        'target_name': target_name,
+        'artifact_root': artifact_root.as_posix(),
+        'bundle_index_path': bundle_index_path.as_posix(),
+        'matrix_summary_path': matrix_summary_path.as_posix(),
+    }
+    matrix_summary_path.write_text(json.dumps(payload, sort_keys=True) + '\\n', encoding='utf-8')
+    print(f"[matrix] metadata: {json.dumps(payload, sort_keys=True)}", file=stream)
+    print(f"[matrix] artifacts: {artifact_root.as_posix()}", file=stream)
+    print(f"[matrix] matrix summary: {matrix_summary_path.as_posix()}", file=stream)
+    return 0
+""".strip()
+        + "\n",
+    )
+    module = load_script_module(script_path, "tests.review_target")
+    checkout_root = tmp_path / "shared-checkout"
+    checkout_root.mkdir()
+
+    review_run, review_output = observe_loaded_review_artifact_output(
+        module,
+        argv=["review"],
+        checkout_root=checkout_root,
+        metadata_prefix="[matrix] metadata: ",
+        artifacts_prefix="[matrix] artifacts: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+    )
+    all_review_run, all_review_output = observe_loaded_review_artifact_output(
+        module,
+        argv=["all-review"],
+        checkout_root=checkout_root,
+        metadata_prefix="[matrix] metadata: ",
+        artifacts_prefix="[matrix] artifacts: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+    )
+
+    assert review_run.exit_code == 0
+    assert all_review_run.exit_code == 0
+    assert review_run.checkout_root == checkout_root
+    assert all_review_run.checkout_root == checkout_root
+    assert review_output.metadata_targets("review") is True
+    assert all_review_output.metadata_targets("all-review") is True
+    assert review_output.matrix_summary_artifact_exists is True
+    assert all_review_output.matrix_summary_artifact_exists is True
+    assert review_output.matrix_summary_path_matches_metadata() is True
+    assert all_review_output.matrix_summary_path_matches_metadata() is True
+    assert review_output.matrix_summary_path != all_review_output.matrix_summary_path
+    assert (checkout_root / "artifacts" / "review" / "matrix-summary.json").exists()
+    assert (checkout_root / "artifacts" / "all-review" / "matrix-summary.json").exists()
+
+
+def test_observe_loaded_review_artifact_output_supports_stderr_stream(tmp_path: Path) -> None:
+    script_path = tmp_path / "stderr_review_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main(argv=None):
+    target_name = 'stderr-review'
+    artifact_root = Path('artifacts') / target_name
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    matrix_summary_path = artifact_root / 'matrix-summary.json'
+    payload = {
+        'display_name': target_name,
+        'target_name': target_name,
+        'artifact_root': artifact_root.as_posix(),
+        'matrix_summary_path': matrix_summary_path.as_posix(),
+    }
+    matrix_summary_path.write_text(json.dumps(payload, sort_keys=True) + '\\n', encoding='utf-8')
+    print(f"[matrix] metadata: {json.dumps(payload, sort_keys=True)}", file=sys.stderr)
+    print(f"[matrix] matrix summary: {matrix_summary_path.as_posix()}", file=sys.stderr)
+    return 0
+""".strip()
+        + "\n",
+    )
+    module = load_script_module(script_path, "tests.stderr_review_target")
+    checkout_root = tmp_path / "stderr-checkout"
+    checkout_root.mkdir()
+
+    smoke_run, review_output = observe_loaded_review_artifact_output(
+        module,
+        argv=["review"],
+        checkout_root=checkout_root,
+        metadata_prefix="[matrix] metadata: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+        output_stream="stderr",
+    )
+
+    assert smoke_run.exit_code == 0
+    assert smoke_run.stdout == ""
+    assert review_output.metadata_targets("stderr-review") is True
+    assert review_output.matrix_summary_targets("stderr-review") is True
+    assert review_output.matrix_summary_artifact_exists is True
 
 
 def test_build_script_driver_source_and_run_python_driver_in_temp_checkout(tmp_path: Path, monkeypatch) -> None:

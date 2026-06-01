@@ -13,7 +13,7 @@ from io import StringIO
 from pathlib import Path
 from shutil import rmtree
 from textwrap import dedent
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Literal
 
 from .smoke_cli_doc_artifacts import (
     load_review_matrix_summary,
@@ -242,6 +242,37 @@ def run_loaded_script_module_main(
         stderr=stderr.getvalue(),
         cleanup_callback=lambda: None,
     )
+
+
+def observe_loaded_review_artifact_output(
+    module: Any,
+    *,
+    argv: Sequence[str],
+    checkout_root: Path,
+    matrix_summary_prefix: str,
+    metadata_prefix: str | None = None,
+    artifacts_prefix: str | None = None,
+    unset_env_names: Iterable[str] = (),
+    output_stream: Literal["stdout", "stderr"] = "stdout",
+) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
+    if output_stream not in {"stdout", "stderr"}:
+        raise ValueError("output_stream must be 'stdout' or 'stderr'")
+
+    smoke_run = run_loaded_script_module_main(
+        module,
+        argv=argv,
+        checkout_root=checkout_root,
+        unset_env_names=unset_env_names,
+    )
+    output_lines = smoke_run.stdout_lines if output_stream == "stdout" else smoke_run.stderr_lines
+    review_output = collect_review_artifact_output(
+        output_lines,
+        checkout_root=checkout_root,
+        metadata_prefix=metadata_prefix,
+        artifacts_prefix=artifacts_prefix,
+        matrix_summary_prefix=matrix_summary_prefix,
+    )
+    return smoke_run, review_output
 
 
 def build_script_driver_source(

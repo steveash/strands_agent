@@ -9,12 +9,11 @@ from pathlib import Path
 from typing import Iterator
 
 from strands_agent_tui.testing import (
-    collect_review_artifact_output,
     emit_smoke_results,
     load_script_module,
+    observe_loaded_review_artifact_output,
     resolve_checkout_path,
     resolve_review_artifact_paths,
-    run_loaded_script_module_main,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -110,30 +109,6 @@ def _capture_success_summary_line(stdout_text: str) -> str:
     return ""
 
 
-def _run_matrix_alias(smoke_matrix_module, alias: str, *, checkout_root: Path):
-    return run_loaded_script_module_main(
-        smoke_matrix_module,
-        argv=[alias],
-        checkout_root=checkout_root,
-    )
-
-
-def _observe_matrix_alias(smoke_matrix_module, alias: str, *, checkout_root: Path):
-    smoke_run = _run_matrix_alias(
-        smoke_matrix_module,
-        alias,
-        checkout_root=checkout_root,
-    )
-    review_output = collect_review_artifact_output(
-        smoke_run.stdout,
-        checkout_root=checkout_root,
-        metadata_prefix=REVIEW_METADATA_PREFIX,
-        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
-    )
-    return smoke_run, review_output
-
-
 def _expected_docs_review_metadata(smoke_matrix_module, requested_target_name: str) -> dict[str, str]:
     target = smoke_matrix_module.CLI_SPEC.resolve_targets(
         script_dir=smoke_matrix_module.SCRIPT_DIR,
@@ -173,10 +148,13 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
         )
 
         with _patched_run_smoke_target(smoke_matrix_module, checkout_root):
-            review_run, review_output = _observe_matrix_alias(
+            review_run, review_output = observe_loaded_review_artifact_output(
                 smoke_matrix_module,
-                "review",
+                argv=["review"],
                 checkout_root=checkout_root,
+                metadata_prefix=REVIEW_METADATA_PREFIX,
+                artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
+                matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
             )
             review_exit_code = review_run.exit_code
             review_stdout = review_run.stdout
@@ -195,10 +173,13 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 if review_summary_artifact_path is not None and review_summary_artifact_path.exists()
                 else None
             )
-            all_review_run, all_review_output = _observe_matrix_alias(
+            all_review_run, all_review_output = observe_loaded_review_artifact_output(
                 smoke_matrix_module,
-                "all-review",
+                argv=["all-review"],
                 checkout_root=checkout_root,
+                metadata_prefix=REVIEW_METADATA_PREFIX,
+                artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
+                matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
             )
             all_review_exit_code = all_review_run.exit_code
             all_review_stdout = all_review_run.stdout
