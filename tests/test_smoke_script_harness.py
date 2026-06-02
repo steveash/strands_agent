@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 from strands_agent_tui.testing import (
+    SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+    SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
+    SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
     build_script_driver_source,
+    build_smoke_matrix_docs_review_observer_spec,
     collect_review_artifact_output,
     detail_safe_text,
     find_prefixed_line_index,
@@ -804,3 +808,63 @@ def main(argv=None):
         assert review_output.matrix_summary_artifact_exists is True
     finally:
         smoke_run.cleanup()
+
+
+
+def test_build_smoke_matrix_docs_review_observer_spec_uses_smoke_matrix_target_metadata() -> None:
+    smoke_matrix_module = load_script_module(
+        Path(__file__).resolve().parent.parent / "scripts" / "smoke_matrix.py",
+        "tests.smoke_matrix_docs_review_observer_spec_target",
+    )
+
+    review_spec = build_smoke_matrix_docs_review_observer_spec(
+        smoke_matrix_module,
+        requested_target_name="review",
+        driver_stem="smoke_matrix_docs_review_hint",
+    )
+    all_review_spec = build_smoke_matrix_docs_review_observer_spec(
+        smoke_matrix_module,
+        requested_target_name="all-review",
+        driver_stem="run_smoke_matrix_all_review_missing_api_key.py",
+    )
+
+    assert review_spec.requested_target_name == "review"
+    assert review_spec.expected_target_name == smoke_matrix_module.DOCS_REVIEW_TARGET_NAME
+    assert review_spec.expected_artifact_root == "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review"
+    assert review_spec.expected_matrix_summary_path == (
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
+    )
+    assert review_spec.driver_filename == "run_smoke_matrix_docs_review_hint.py"
+    assert review_spec.observer_kwargs() == {
+        "metadata_prefix": SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+        "artifacts_prefix": SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+        "matrix_summary_prefix": SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
+    }
+
+    assert all_review_spec.requested_target_name == "all-review"
+    assert all_review_spec.expected_target_name == smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME
+    assert all_review_spec.expected_artifact_root == (
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
+    )
+    assert all_review_spec.expected_matrix_summary_path == (
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
+    )
+    assert all_review_spec.driver_filename == "run_smoke_matrix_all_review_missing_api_key.py"
+
+
+
+def test_build_smoke_matrix_docs_review_observer_spec_rejects_non_docs_review_targets() -> None:
+    smoke_matrix_module = load_script_module(
+        Path(__file__).resolve().parent.parent / "scripts" / "smoke_matrix.py",
+        "tests.smoke_matrix_docs_review_observer_spec_invalid_target",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="requested_target_name must resolve to exactly one docs-review smoke-matrix target",
+    ):
+        build_smoke_matrix_docs_review_observer_spec(
+            smoke_matrix_module,
+            requested_target_name="all",
+            driver_stem="smoke_matrix_docs_review_hint",
+        )

@@ -5,8 +5,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    build_smoke_matrix_docs_review_observer_spec,
     emit_smoke_results,
     find_prefixed_line_index,
+    load_script_module,
     observe_script_module_main_via_driver_review_artifact_output,
     smoke_cli_docs_parity_rerun_hint,
 )
@@ -14,9 +16,6 @@ from strands_agent_tui.testing import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
-REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
-REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
-REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
 MISSING_API_KEY_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but "
     "`OPENAI_API_KEY` was missing;"
@@ -26,22 +25,30 @@ DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "`standalone_smoke.py docs-review-only`;"
 )
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
-EXPECTED_TARGET_NAME = "docs-review-all"
-EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
-EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
+
+
+def _docs_review_all_spec():
+    smoke_matrix_module = load_script_module(
+        SMOKE_MATRIX_SCRIPT_PATH,
+        "scripts.smoke_matrix_all_review_missing_api_key_spec_target",
+    )
+    return build_smoke_matrix_docs_review_observer_spec(
+        smoke_matrix_module,
+        requested_target_name="all-review",
+        driver_stem="smoke_matrix_all_review_missing_api_key",
+    )
 
 
 def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
+    review_spec = _docs_review_all_spec()
     smoke_run, review_output = observe_script_module_main_via_driver_review_artifact_output(
         repo_root=REPO_ROOT,
         script_path=SMOKE_MATRIX_SCRIPT_PATH,
         module_name="scripts.smoke_matrix_all_review_missing_api_key_target",
-        argv=["all-review"],
+        argv=[review_spec.requested_target_name],
         temp_prefix="smoke-matrix-all-review-missing-api-key-",
-        driver_filename="run_smoke_matrix_all_review_missing_api_key.py",
-        metadata_prefix=REVIEW_METADATA_PREFIX,
-        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+        driver_filename=review_spec.driver_filename,
+        **review_spec.observer_kwargs(),
         env_assignments={"STRANDS_AGENT_RUNTIME": "live"},
         env_unsets=("OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
         hook_source="""
@@ -95,15 +102,15 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             ("summary_line_present", bool(summary_line)),
             (
                 "metadata_targets_docs_review_all",
-                review_output.metadata_targets(EXPECTED_TARGET_NAME),
+                review_output.metadata_targets(review_spec.expected_target_name),
             ),
             (
                 "metadata_artifact_root_matches_all_review",
-                review_output.metadata_artifact_root_matches(EXPECTED_ARTIFACT_ROOT),
+                review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
             ),
             (
                 "metadata_matrix_summary_matches_all_review",
-                review_output.metadata_matrix_summary_matches(EXPECTED_MATRIX_SUMMARY_PATH),
+                review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
             ),
             (
                 "metadata_bundle_index_rerun_hint_matches",
@@ -115,11 +122,11 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             ),
             (
                 "matrix_summary_targets_docs_review_all",
-                review_output.matrix_summary_targets(EXPECTED_TARGET_NAME),
+                review_output.matrix_summary_targets(review_spec.expected_target_name),
             ),
             (
                 "matrix_summary_artifact_root_matches_all_review",
-                review_output.matrix_summary_artifact_root_matches(EXPECTED_ARTIFACT_ROOT),
+                review_output.matrix_summary_artifact_root_matches(review_spec.expected_artifact_root),
             ),
             (
                 "matrix_summary_path_matches_metadata",

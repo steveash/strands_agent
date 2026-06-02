@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    build_smoke_matrix_docs_review_observer_spec,
     detail_safe_text,
     emit_smoke_results,
     find_prefixed_line_index,
@@ -15,17 +16,12 @@ from strands_agent_tui.testing import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
-REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
-REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
-REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
 LIVE_HINT_PREFIX = "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
 DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
     "`standalone_smoke.py docs-review-only`;"
 )
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
-EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
-EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
 
 
 def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
@@ -33,13 +29,16 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
         SMOKE_MATRIX_SCRIPT_PATH,
         "scripts.smoke_matrix_all_review_order_smoke_target",
     )
+    review_spec = build_smoke_matrix_docs_review_observer_spec(
+        smoke_matrix_module,
+        requested_target_name="all-review",
+        driver_stem="smoke_matrix_all_review_order",
+    )
     smoke_run, review_output = observe_review_artifact_output_in_temp_checkout(
         module=smoke_matrix_module,
-        argv=["all-review"],
+        argv=[review_spec.requested_target_name],
         temp_prefix="smoke-matrix-all-review-order-",
-        metadata_prefix=REVIEW_METADATA_PREFIX,
-        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+        **review_spec.observer_kwargs(),
         unset_env_names=("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
         output_stream=output_stream,
     )
@@ -77,15 +76,15 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
             ("summary_line_present", bool(summary_line)),
             (
                 "metadata_targets_docs_review_all",
-                review_output.metadata_targets(smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME),
+                review_output.metadata_targets(review_spec.expected_target_name),
             ),
             (
                 "metadata_artifact_root_matches_all_review",
-                review_output.metadata_artifact_root_matches(EXPECTED_ARTIFACT_ROOT),
+                review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
             ),
             (
                 "metadata_matrix_summary_matches_all_review",
-                review_output.metadata_matrix_summary_matches(EXPECTED_MATRIX_SUMMARY_PATH),
+                review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
             ),
             (
                 "metadata_bundle_index_rerun_hint_matches",
@@ -97,11 +96,11 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
             ),
             (
                 "matrix_summary_targets_docs_review_all",
-                review_output.matrix_summary_targets(smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME),
+                review_output.matrix_summary_targets(review_spec.expected_target_name),
             ),
             (
                 "matrix_summary_artifact_root_matches_all_review",
-                review_output.matrix_summary_artifact_root_matches(EXPECTED_ARTIFACT_ROOT),
+                review_output.matrix_summary_artifact_root_matches(review_spec.expected_artifact_root),
             ),
             (
                 "matrix_summary_path_matches_metadata",

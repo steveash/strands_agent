@@ -21,6 +21,10 @@ from .smoke_cli_doc_artifacts import (
     resolve_review_artifact_paths,
 )
 
+SMOKE_MATRIX_REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
+SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
+SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
+
 
 @dataclass(frozen=True)
 class SmokeScriptRunResult:
@@ -105,6 +109,72 @@ class ReviewArtifactOutputObservation:
 
     def matrix_summary_line_matches_metadata_path(self) -> bool:
         return self.matrix_summary_path == self.metadata_matrix_summary_path
+
+
+@dataclass(frozen=True)
+class SmokeMatrixDocsReviewObserverSpec:
+    requested_target_name: str
+    expected_target_name: str
+    expected_artifact_root: str
+    expected_matrix_summary_path: str
+    driver_filename: str
+    metadata_prefix: str = SMOKE_MATRIX_REVIEW_METADATA_PREFIX
+    artifacts_prefix: str = SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX
+    matrix_summary_prefix: str = SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX
+
+    def observer_kwargs(self) -> dict[str, str]:
+        return {
+            "metadata_prefix": self.metadata_prefix,
+            "artifacts_prefix": self.artifacts_prefix,
+            "matrix_summary_prefix": self.matrix_summary_prefix,
+        }
+
+
+def build_smoke_matrix_docs_review_observer_spec(
+    smoke_matrix_module: Any,
+    *,
+    requested_target_name: Literal["review", "all-review"],
+    driver_stem: str,
+) -> SmokeMatrixDocsReviewObserverSpec:
+    targets = smoke_matrix_module.CLI_SPEC.resolve_targets(
+        script_dir=smoke_matrix_module.SCRIPT_DIR,
+        requested_target_name=requested_target_name,
+    )
+    docs_review_targets = [
+        target
+        for target in targets
+        if target.name
+        in {
+            smoke_matrix_module.DOCS_REVIEW_TARGET_NAME,
+            smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME,
+        }
+    ]
+    if len(docs_review_targets) != 1:
+        raise ValueError(
+            "requested_target_name must resolve to exactly one docs-review smoke-matrix target"
+        )
+    target = docs_review_targets[0]
+    metadata = smoke_matrix_module._docs_review_artifact_metadata(target)
+    if not isinstance(metadata, dict):
+        raise ValueError("docs-review smoke-matrix target metadata is required")
+
+    artifact_root = metadata.get("artifact_root")
+    matrix_summary_path = metadata.get("matrix_summary_path")
+    if not isinstance(artifact_root, str) or not artifact_root:
+        raise ValueError("docs-review smoke-matrix target metadata must include artifact_root")
+    if not isinstance(matrix_summary_path, str) or not matrix_summary_path:
+        raise ValueError("docs-review smoke-matrix target metadata must include matrix_summary_path")
+
+    normalized_driver_stem = driver_stem.removesuffix(".py")
+    if not normalized_driver_stem.startswith("run_"):
+        normalized_driver_stem = f"run_{normalized_driver_stem}"
+    return SmokeMatrixDocsReviewObserverSpec(
+        requested_target_name=requested_target_name,
+        expected_target_name=target.name,
+        expected_artifact_root=artifact_root,
+        expected_matrix_summary_path=matrix_summary_path,
+        driver_filename=f"{normalized_driver_stem}.py",
+    )
 
 
 def find_prefixed_line_index(lines: Sequence[str], prefix: str) -> int | None:
