@@ -11,6 +11,7 @@ from strands_agent_tui.testing import (
     render_smoke_cli_readme_section,
     repair_smoke_cli_readme_sections,
     resolve_smoke_cli_doc_target_names,
+    smoke_cli_docs_parity_rerun_hint,
 )
 from strands_agent_tui.testing.smoke_cli_doc_artifacts import (
     build_smoke_cli_doc_drift_report_payload,
@@ -116,6 +117,12 @@ def _json_repair_report(
     )
 
 
+def _emit_drift_summary(readme_path: Path, diff_sections: tuple[tuple[str, tuple[str, ...]], ...]) -> None:
+    drifted_names = ", ".join(script_name for script_name, _ in diff_sections)
+    print(f"smoke README drift detected in {len(diff_sections)} section(s) for {readme_path}: {drifted_names}")
+    print(smoke_cli_docs_parity_rerun_hint())
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -170,19 +177,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for line in diff_lines:
                     print(line)
             if args.check:
-                drifted_names = ", ".join(script_name for script_name, _ in diff_sections)
-                print(
-                    f"smoke README drift detected in {len(diff_sections)} section(s) for {readme_path}: {drifted_names}"
-                )
+                _emit_drift_summary(readme_path, diff_sections)
                 return 1
             return 0
         if not diff_sections:
             print(f"smoke README already up to date: {readme_path}")
             return 0
-        drifted_names = ", ".join(script_name for script_name, _ in diff_sections)
-        print(
-            f"smoke README drift detected in {len(diff_sections)} section(s) for {readme_path}: {drifted_names}"
-        )
+        _emit_drift_summary(readme_path, diff_sections)
         return 1
 
     original_markdown, repaired_markdown, repaired_script_names = repair_readme(

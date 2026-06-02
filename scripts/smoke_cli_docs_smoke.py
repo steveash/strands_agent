@@ -11,6 +11,7 @@ from strands_agent_tui.testing import (
     collect_smoke_cli_doc_parity,
     emit_smoke_results,
     resolve_smoke_cli_doc_target_names,
+    smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
 )
 
@@ -43,6 +44,7 @@ def run_smoke_cli_docs_smoke(
 ) -> list[tuple[str, object]]:
     markdown = load_readme_text() if markdown is None else markdown
     results: list[tuple[str, object]] = []
+    emitted_rerun_hint = False
 
     for script_name in resolve_target_names(requested_target_name):
         help_text = smoke_wrapper_cli_spec(script_name).build_parser(script_dir=SCRIPT_DIR).format_help()
@@ -58,6 +60,13 @@ def run_smoke_cli_docs_smoke(
                 (f"{prefix}_help_missing", _render_missing_snippets(parity.missing_help_snippets)),
                 (f"{prefix}_readme_missing", _render_missing_snippets(parity.missing_readme_snippets)),
                 (f"{prefix}_readme_diff", parity.readme_diff_summary),
+            ]
+        )
+        if not parity.matches and not emitted_rerun_hint:
+            results.append(("rerun_hint", smoke_cli_docs_parity_rerun_hint()))
+            emitted_rerun_hint = True
+        results.extend(
+            [
                 (f"{prefix}_help", parity.help_matches),
                 (f"{prefix}_readme", parity.readme_matches),
                 (f"{prefix}_doc_parity", parity.matches),

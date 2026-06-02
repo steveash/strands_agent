@@ -111,6 +111,15 @@ def build_smoke_cli_doc_spec_registry(
 SMOKE_CLI_DOC_SPECS = build_smoke_cli_doc_specs(SMOKE_WRAPPER_CLI_SPECS)
 SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME = build_smoke_cli_doc_spec_registry(SMOKE_CLI_DOC_SPECS)
 SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME = "smoke_cli_docs_smoke"
+SMOKE_CLI_DOCS_PARITY_RERUN_HINT = (
+    "hint: standalone wrapper docs drift is easiest to isolate with `standalone_smoke.py docs-parity-only`; rerun "
+    "`.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to recheck the docs parity lane "
+    "without the broader docs-review regressions or the rest of the local bundle."
+)
+
+
+def smoke_cli_docs_parity_rerun_hint() -> str:
+    return SMOKE_CLI_DOCS_PARITY_RERUN_HINT
 
 
 def build_smoke_cli_doc_audit_selector() -> SmokeTargetSelector:

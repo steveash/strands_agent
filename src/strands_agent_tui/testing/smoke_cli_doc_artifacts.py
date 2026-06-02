@@ -5,6 +5,8 @@ import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
+
 REVIEW_ARTIFACT_METADATA_SKIP_KEYS = frozenset({"display_name", "target_name"})
 
 
@@ -224,6 +226,7 @@ def build_smoke_cli_doc_drift_report_payload(
             include_diff_lines=include_diff_lines,
         ),
         "selected_targets": list(selected_script_names),
+        "rerun_hint": smoke_cli_docs_parity_rerun_hint() if diff_sections else None,
         "up_to_date": not diff_sections,
     }
 

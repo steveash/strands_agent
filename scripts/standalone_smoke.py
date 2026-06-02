@@ -7,6 +7,7 @@ from pathlib import Path
 from strands_agent_tui.testing import (
     SmokeScriptTarget,
     run_smoke_targets,
+    smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
 )
 
@@ -19,11 +20,6 @@ LIVE_TARGET_NAME = "live"
 DOCS_PARITY_TARGET_NAMES = {"docs", "docs-artifacts"}
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
-DOCS_PARITY_ONLY_RERUN_HINT = (
-    "hint: standalone wrapper docs drift is easiest to isolate with `standalone_smoke.py docs-parity-only`; rerun "
-    "`.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to recheck the docs parity lane "
-    "without the broader docs-review regressions or the rest of the local bundle."
-)
 
 
 def _build_live_failure_hint(requested_target_name: str):
@@ -69,7 +65,7 @@ def _build_failure_hint(requested_target_name: str):
             if hint is not None:
                 return hint
         if target.name in DOCS_PARITY_TARGET_NAMES:
-            return DOCS_PARITY_ONLY_RERUN_HINT
+            return smoke_cli_docs_parity_rerun_hint()
         return None
 
     return _failure_hint

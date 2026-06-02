@@ -50,6 +50,7 @@ from strands_agent_tui.testing import (
     seed_workspace_inspect_session,
     set_session_artifact_mtime,
     smoke_cli_doc_spec,
+    smoke_cli_docs_parity_rerun_hint,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -1175,6 +1176,7 @@ def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> 
     )
 
     assert set(results) == {
+        "rerun_hint",
         "standalone_smoke_diagnostic",
         "standalone_smoke_help_missing",
         "standalone_smoke_readme_missing",
@@ -1191,6 +1193,46 @@ def test_smoke_cli_docs_smoke_reports_surface_diagnostics_for_readme_drift() -> 
     assert results["standalone_smoke_help"] is True
     assert results["standalone_smoke_readme"] is False
     assert results["standalone_smoke_doc_parity"] is False
+    assert results["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
+
+
+def test_smoke_cli_docs_smoke_emits_docs_parity_rerun_hint_for_failures(monkeypatch) -> None:
+    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
+    standalone_spec = smoke_cli_doc_spec("standalone_smoke")
+    broken_markdown = README_TEXT.replace(
+        standalone_spec.readme_required_snippets[4],
+        "missing standalone docs snippet",
+        1,
+    )
+    output = StringIO()
+    real_emit_smoke_results = smoke_cli_docs_smoke.emit_smoke_results
+    monkeypatch.setattr(smoke_cli_docs_smoke, "load_readme_text", lambda: broken_markdown)
+    monkeypatch.setattr(
+        smoke_cli_docs_smoke,
+        "emit_smoke_results",
+        lambda results: real_emit_smoke_results(results, stdout=output),
+    )
+
+    exit_code = smoke_cli_docs_smoke.main(["standalone_smoke"])
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 1
+    assert any(
+        line.startswith(
+            "standalone_smoke_diagnostic: help ok; README 'Standalone local smoke bundle' missing:"
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith("standalone_smoke_readme_diff: --- expected | +++ README | @@ ") for line in lines
+    )
+    assert f"rerun_hint: {smoke_cli_docs_parity_rerun_hint()}" in lines
+    assert lines.index(f"rerun_hint: {smoke_cli_docs_parity_rerun_hint()}") < lines.index(
+        "standalone_smoke_doc_parity= False"
+    )
+    assert "standalone_smoke_help= True" in lines
+    assert "standalone_smoke_readme= False" in lines
+    assert "standalone_smoke_doc_parity= False" in lines
 
 
 
@@ -1599,10 +1641,10 @@ def test_smoke_cli_docs_fix_check_reports_drift_without_writing(tmp_path, capsys
 
     assert exit_code == 1
     assert captured.err == ""
-    assert (
-        captured.out
-        == f"smoke README drift detected in 1 section(s) for {readme_path}: standalone_smoke\n"
-    )
+    assert captured.out.splitlines() == [
+        f"smoke README drift detected in 1 section(s) for {readme_path}: standalone_smoke",
+        smoke_cli_docs_parity_rerun_hint(),
+    ]
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
 
 
@@ -1625,8 +1667,10 @@ def test_smoke_cli_docs_fix_diff_and_check_report_drift_without_writing(tmp_path
     assert exit_code == 1
     assert captured.err == ""
     assert captured.out.startswith("### standalone_smoke\n--- expected\n+++ README\n@@ ")
-    assert captured.out.rstrip().endswith(
-        f"smoke README drift detected in 1 section(s) for {readme_path}: standalone_smoke"
+    assert captured.out.rstrip().endswith(smoke_cli_docs_parity_rerun_hint())
+    assert (
+        f"smoke README drift detected in 1 section(s) for {readme_path}: standalone_smoke\n"
+        in captured.out
     )
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
 
@@ -1662,6 +1706,7 @@ def test_smoke_cli_docs_fix_check_json_reports_machine_readable_drift_without_wr
         include_diff_lines=False,
         check=True,
     )
+    assert payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
 
 
 
@@ -1693,6 +1738,7 @@ def test_smoke_cli_docs_fix_diff_and_check_json_include_machine_readable_diffs(t
         include_diff_lines=True,
         check=True,
     )
+    assert payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
     assert payload["drifted_sections"][0]["diff_lines"][0] == "--- expected"
     assert payload["drifted_sections"][0]["diff_lines"][1] == "+++ README"
     assert any(line.startswith("@@ ") for line in payload["drifted_sections"][0]["diff_lines"])
@@ -1742,10 +1788,10 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
 
     assert exit_code == 1
     assert captured.err == ""
-    assert (
-        captured.out
-        == f"smoke README drift detected in 1 section(s) for {readme_path}: standalone_smoke\n"
-    )
+    assert captured.out.splitlines() == [
+        f"smoke README drift detected in 1 section(s) for {readme_path}: standalone_smoke",
+        smoke_cli_docs_parity_rerun_hint(),
+    ]
     assert readme_path.read_text(encoding="utf-8") == drifted_markdown
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     _assert_smoke_cli_doc_drift_report_payload(
@@ -1761,6 +1807,7 @@ def test_smoke_cli_docs_fix_check_json_output_writes_machine_readable_report_alo
         render_diff_path=render_diff_path,
         bundle_index_path=bundle_index_path,
     )
+    assert payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
 
 
 
