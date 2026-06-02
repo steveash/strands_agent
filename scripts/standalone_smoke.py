@@ -16,8 +16,14 @@ SMOKE_TARGETS = CLI_SPEC.build_targets(script_dir=SCRIPT_DIR)
 DEFAULT_TARGET_NAMES = list(CLI_SPEC.default_target_names())
 ALL_TARGET_NAMES = list(CLI_SPEC.resolve_target_names("all"))
 LIVE_TARGET_NAME = "live"
+DOCS_PARITY_TARGET_NAMES = {"docs", "docs-artifacts"}
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
+DOCS_PARITY_ONLY_RERUN_HINT = (
+    "hint: standalone wrapper docs drift is easiest to isolate with `standalone_smoke.py docs-parity-only`; rerun "
+    "`.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to recheck the docs parity lane "
+    "without the broader docs-review regressions or the rest of the local bundle."
+)
 
 
 def _build_live_failure_hint(requested_target_name: str):
@@ -52,6 +58,23 @@ def _build_live_failure_hint(requested_target_name: str):
     return _live_failure_hint
 
 
+def _build_failure_hint(requested_target_name: str):
+    live_failure_hint = None
+    if requested_target_name in {"all", LIVE_TARGET_NAME}:
+        live_failure_hint = _build_live_failure_hint(requested_target_name)
+
+    def _failure_hint(target: SmokeScriptTarget, observed_lines: Sequence[str]) -> str | None:
+        if live_failure_hint is not None:
+            hint = live_failure_hint(target, observed_lines)
+            if hint is not None:
+                return hint
+        if target.name in DOCS_PARITY_TARGET_NAMES:
+            return DOCS_PARITY_ONLY_RERUN_HINT
+        return None
+
+    return _failure_hint
+
+
 def build_parser() -> argparse.ArgumentParser:
     return CLI_SPEC.build_parser(script_dir=SCRIPT_DIR)
 
@@ -60,13 +83,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    kwargs = {"wrapper_metadata": CLI_SPEC.wrapper_metadata}
-    if args.target in {"all", LIVE_TARGET_NAME}:
-        kwargs["failure_hint_builder"] = _build_live_failure_hint(args.target)
-
     return run_smoke_targets(
         CLI_SPEC.resolve_targets(script_dir=SCRIPT_DIR, requested_target_name=args.target),
-        **kwargs,
+        wrapper_metadata=CLI_SPEC.wrapper_metadata,
+        failure_hint_builder=_build_failure_hint(args.target),
     )
 
 
