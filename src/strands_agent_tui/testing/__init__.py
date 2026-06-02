@@ -143,11 +143,13 @@ from .smoke_script_harness import (
     observe_loaded_review_artifact_output,
     observe_loaded_review_artifact_output_in_temp_checkout,
     observe_review_artifact_output_in_temp_checkout,
+    observe_script_module_main_via_driver_review_artifact_output,
     observe_subprocess_review_artifact_output,
     run_python_driver_in_temp_checkout,
     run_loaded_script_module_main,
     run_loaded_script_module_main_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
+    run_script_module_main_via_driver_in_temp_checkout,
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
@@ -314,6 +316,7 @@ __all__ = [
     "observe_loaded_review_artifact_output",
     "observe_loaded_review_artifact_output_in_temp_checkout",
     "observe_review_artifact_output_in_temp_checkout",
+    "observe_script_module_main_via_driver_review_artifact_output",
     "observe_subprocess_review_artifact_output",
     "run_loaded_script_module_main",
     "run_loaded_script_module_main_in_temp_checkout",
@@ -343,6 +346,7 @@ __all__ = [
     "run_python_driver_in_temp_checkout",
     "run_loaded_script_module_main",
     "run_script_module_main_in_temp_checkout",
+    "run_script_module_main_via_driver_in_temp_checkout",
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",

@@ -5,11 +5,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
-    build_script_driver_source,
     detail_safe_text,
     emit_smoke_results,
     find_prefixed_line_index,
-    observe_review_artifact_output_in_temp_checkout,
+    observe_script_module_main_via_driver_review_artifact_output,
     smoke_cli_docs_parity_rerun_hint,
 )
 
@@ -28,12 +27,15 @@ EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-re
 EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
 
 
-def _subprocess_driver_source() -> str:
-    return build_script_driver_source(
+def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
+    smoke_run, review_output = observe_script_module_main_via_driver_review_artifact_output(
         repo_root=REPO_ROOT,
         script_path=SMOKE_MATRIX_SCRIPT_PATH,
         module_name="scripts.smoke_matrix_docs_review_hint_target",
         argv=["all-review"],
+        temp_prefix="smoke-matrix-docs-review-hint-",
+        driver_filename="run_smoke_matrix_docs_review_hint.py",
+        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
         env_unsets=("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
         hook_source="""
         def fake_run_smoke_target(target, **kwargs):
@@ -45,15 +47,6 @@ def _subprocess_driver_source() -> str:
 
         module.run_smoke_target = fake_run_smoke_target
         """,
-    )
-
-
-def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
-    smoke_run, review_output = observe_review_artifact_output_in_temp_checkout(
-        driver_source=_subprocess_driver_source(),
-        temp_prefix="smoke-matrix-docs-review-hint-",
-        driver_filename="run_smoke_matrix_docs_review_hint.py",
-        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
         output_stream=output_stream,
     )
     try:

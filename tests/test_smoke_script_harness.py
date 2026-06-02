@@ -15,11 +15,13 @@ from strands_agent_tui.testing import (
     observe_loaded_review_artifact_output,
     observe_loaded_review_artifact_output_in_temp_checkout,
     observe_review_artifact_output_in_temp_checkout,
+    observe_script_module_main_via_driver_review_artifact_output,
     observe_subprocess_review_artifact_output,
     run_loaded_script_module_main,
     run_loaded_script_module_main_in_temp_checkout,
     run_python_driver_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
+    run_script_module_main_via_driver_in_temp_checkout,
 )
 
 
@@ -696,3 +698,109 @@ def main(argv=None):
         assert os.environ["HARNESS_CLEAR"] == "remove-me"
     finally:
         result.cleanup()
+
+
+
+def test_run_script_module_main_via_driver_in_temp_checkout(tmp_path: Path, monkeypatch) -> None:
+    script_path = tmp_path / "driver_wrapper_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+from pathlib import Path
+import os
+
+VALUE = 'script'
+
+
+def main(argv=None):
+    print(f"cwd_name={Path.cwd().name}")
+    print(f"argv={list(argv or [])}")
+    print(f"value={VALUE}")
+    print(f"set={os.environ.get('HARNESS_SET', '<missing>')}")
+    print(f"clear={os.environ.get('HARNESS_CLEAR', '<missing>')}")
+    return 6
+""".strip()
+        + "\n",
+    )
+    monkeypatch.setenv("HARNESS_CLEAR", "remove-me")
+
+    result = run_script_module_main_via_driver_in_temp_checkout(
+        repo_root=tmp_path,
+        script_path=script_path,
+        module_name="tests.driver_wrapper_target",
+        argv=["docs-review-only"],
+        temp_prefix="harness-driver-wrapper-run-",
+        driver_filename="run_driver_wrapper_target.py",
+        env_assignments={"HARNESS_SET": "enabled"},
+        env_unsets=("HARNESS_CLEAR",),
+        hook_source="module.VALUE = 'hooked'",
+    )
+    try:
+        assert result.exit_code == 6
+        assert result.stderr == ""
+        assert result.checkout_root.name.startswith("harness-driver-wrapper-run-")
+        assert result.stdout_lines == [
+            f"cwd_name={result.checkout_root.name}",
+            "argv=['docs-review-only']",
+            "value=hooked",
+            "set=enabled",
+            "clear=<missing>",
+        ]
+        assert os.environ["HARNESS_CLEAR"] == "remove-me"
+    finally:
+        result.cleanup()
+
+
+
+def test_observe_script_module_main_via_driver_review_artifact_output(tmp_path: Path) -> None:
+    script_path = tmp_path / "driver_wrapper_review_target.py"
+    _write_target_script(
+        script_path,
+        """
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main(argv=None):
+    target_name = 'driver-wrapper-review'
+    artifact_root = Path('artifacts') / target_name
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    matrix_summary_path = artifact_root / 'matrix-summary.json'
+    payload = {
+        'display_name': target_name,
+        'target_name': target_name,
+        'artifact_root': artifact_root.as_posix(),
+        'matrix_summary_path': matrix_summary_path.as_posix(),
+    }
+    matrix_summary_path.write_text(json.dumps(payload, sort_keys=True) + '\\n', encoding='utf-8')
+    print(f"[matrix] metadata: {json.dumps(payload, sort_keys=True)}", file=sys.stderr)
+    print(f"[matrix] matrix summary: {matrix_summary_path.as_posix()}", file=sys.stderr)
+    return 0
+""".strip()
+        + "\n",
+    )
+
+    smoke_run, review_output = observe_script_module_main_via_driver_review_artifact_output(
+        repo_root=tmp_path,
+        script_path=script_path,
+        module_name="tests.driver_wrapper_review_target",
+        argv=["review"],
+        temp_prefix="harness-driver-wrapper-review-",
+        driver_filename="run_driver_wrapper_review_target.py",
+        metadata_prefix="[matrix] metadata: ",
+        matrix_summary_prefix="[matrix] matrix summary: ",
+        output_stream="stderr",
+    )
+    try:
+        assert smoke_run.exit_code == 0
+        assert smoke_run.stdout == ""
+        assert review_output.metadata_targets("driver-wrapper-review") is True
+        assert review_output.matrix_summary_targets("driver-wrapper-review") is True
+        assert review_output.matrix_summary_artifact_exists is True
+    finally:
+        smoke_run.cleanup()

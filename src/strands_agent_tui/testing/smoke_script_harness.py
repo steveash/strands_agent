@@ -452,6 +452,36 @@ def run_python_driver_in_temp_checkout(
     )
 
 
+def run_script_module_main_via_driver_in_temp_checkout(
+    *,
+    repo_root: Path,
+    script_path: Path,
+    module_name: str,
+    argv: Sequence[str],
+    temp_prefix: str,
+    driver_filename: str,
+    env_assignments: Mapping[str, str] | None = None,
+    env_unsets: Sequence[str] = (),
+    hook_source: str = "",
+    python_executable: str | None = None,
+) -> SmokeScriptRunResult:
+    return run_python_driver_in_temp_checkout(
+        driver_source=build_script_driver_source(
+            repo_root=repo_root,
+            script_path=script_path,
+            module_name=module_name,
+            argv=argv,
+            env_assignments=env_assignments,
+            env_unsets=env_unsets,
+            hook_source=hook_source,
+        ),
+        temp_prefix=temp_prefix,
+        driver_filename=driver_filename,
+        python_executable=python_executable,
+    )
+
+
+
 def observe_subprocess_review_artifact_output(
     *,
     driver_source: str,
@@ -465,6 +495,44 @@ def observe_subprocess_review_artifact_output(
 ) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
     return observe_review_artifact_output_in_temp_checkout(
         driver_source=driver_source,
+        temp_prefix=temp_prefix,
+        driver_filename=driver_filename,
+        metadata_prefix=metadata_prefix,
+        artifacts_prefix=artifacts_prefix,
+        matrix_summary_prefix=matrix_summary_prefix,
+        python_executable=python_executable,
+        output_stream=output_stream,
+    )
+
+
+
+def observe_script_module_main_via_driver_review_artifact_output(
+    *,
+    repo_root: Path,
+    script_path: Path,
+    module_name: str,
+    argv: Sequence[str],
+    temp_prefix: str,
+    driver_filename: str,
+    matrix_summary_prefix: str,
+    metadata_prefix: str | None = None,
+    artifacts_prefix: str | None = None,
+    env_assignments: Mapping[str, str] | None = None,
+    env_unsets: Sequence[str] = (),
+    hook_source: str = "",
+    python_executable: str | None = None,
+    output_stream: Literal["stdout", "stderr"] = "stdout",
+) -> tuple[SmokeScriptRunResult, ReviewArtifactOutputObservation]:
+    return observe_subprocess_review_artifact_output(
+        driver_source=build_script_driver_source(
+            repo_root=repo_root,
+            script_path=script_path,
+            module_name=module_name,
+            argv=argv,
+            env_assignments=env_assignments,
+            env_unsets=env_unsets,
+            hook_source=hook_source,
+        ),
         temp_prefix=temp_prefix,
         driver_filename=driver_filename,
         metadata_prefix=metadata_prefix,

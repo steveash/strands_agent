@@ -5,10 +5,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
-    build_script_driver_source,
     emit_smoke_results,
     find_prefixed_line_index,
-    observe_review_artifact_output_in_temp_checkout,
+    observe_script_module_main_via_driver_review_artifact_output,
     smoke_cli_docs_parity_rerun_hint,
 )
 
@@ -32,12 +31,17 @@ EXPECTED_ARTIFACT_ROOT = "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-re
 EXPECTED_MATRIX_SUMMARY_PATH = f"{EXPECTED_ARTIFACT_ROOT}/matrix-summary.json"
 
 
-def _subprocess_driver_source() -> str:
-    return build_script_driver_source(
+def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
+    smoke_run, review_output = observe_script_module_main_via_driver_review_artifact_output(
         repo_root=REPO_ROOT,
         script_path=SMOKE_MATRIX_SCRIPT_PATH,
         module_name="scripts.smoke_matrix_all_review_missing_api_key_target",
         argv=["all-review"],
+        temp_prefix="smoke-matrix-all-review-missing-api-key-",
+        driver_filename="run_smoke_matrix_all_review_missing_api_key.py",
+        metadata_prefix=REVIEW_METADATA_PREFIX,
+        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
+        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
         env_assignments={"STRANDS_AGENT_RUNTIME": "live"},
         env_unsets=("OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
         hook_source="""
@@ -53,17 +57,6 @@ def _subprocess_driver_source() -> str:
 
         module.run_smoke_target = fake_run_smoke_target
         """,
-    )
-
-
-def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
-    smoke_run, review_output = observe_review_artifact_output_in_temp_checkout(
-        driver_source=_subprocess_driver_source(),
-        temp_prefix="smoke-matrix-all-review-missing-api-key-",
-        driver_filename="run_smoke_matrix_all_review_missing_api_key.py",
-        metadata_prefix=REVIEW_METADATA_PREFIX,
-        artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-        matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
         output_stream=output_stream,
     )
     try:

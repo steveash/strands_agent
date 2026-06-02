@@ -5,11 +5,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
-    build_script_driver_source,
     detail_safe_text,
     emit_smoke_results,
     find_prefixed_line_index,
-    run_python_driver_in_temp_checkout,
+    run_script_module_main_via_driver_in_temp_checkout,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -24,12 +23,14 @@ EXPECTED_FIX_SUMMARY_LINE = (
 EXPECTED_FALSE_LINE = "fix_post_check= False"
 
 
-def _subprocess_driver_source() -> str:
-    return build_script_driver_source(
+def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
+    smoke_run = run_script_module_main_via_driver_in_temp_checkout(
         repo_root=REPO_ROOT,
         script_path=STANDALONE_SMOKE_SCRIPT_PATH,
         module_name="scripts.standalone_docs_rerun_hint_smoke_target",
         argv=["local"],
+        temp_prefix="standalone-docs-rerun-hint-",
+        driver_filename="run_standalone_docs_rerun_hint.py",
         hook_source="""
         from strands_agent_tui.testing import smoke_runner
 
@@ -53,14 +54,6 @@ def _subprocess_driver_source() -> str:
         smoke_runner.run_smoke_target = fake_run_smoke_target
         module.run_smoke_target = fake_run_smoke_target
         """,
-    )
-
-
-def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
-    smoke_run = run_python_driver_in_temp_checkout(
-        driver_source=_subprocess_driver_source(),
-        temp_prefix="standalone-docs-rerun-hint-",
-        driver_filename="run_standalone_docs_rerun_hint.py",
     )
     try:
         stdout_lines = smoke_run.stdout_lines
