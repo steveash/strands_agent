@@ -294,11 +294,13 @@ def _build_bundle_index_payload(
     selected_script_names: Sequence[str],
     paths: ArtifactContractPaths,
     results: Sequence[tuple[str, object]],
+    rerun_hint: str | None,
 ) -> dict[str, object]:
     details, checks = _split_smoke_results(results)
     return {
         "requested_target_name": requested_target_name,
         "selected_script_names": list(selected_script_names),
+        "rerun_hint": rerun_hint,
         "artifact_paths": {
             "artifact_root": str(paths.artifact_root),
             "source_readme_path": str(paths.source_readme_path),
@@ -527,6 +529,7 @@ def _run_artifact_contract(
         selected_script_names=selected_script_names,
         paths=paths,
         results=results,
+        rerun_hint=fix_check_payload.get("rerun_hint") if isinstance(fix_check_payload, dict) else None,
     )
     paths.bundle_index_path.parent.mkdir(parents=True, exist_ok=True)
     paths.bundle_index_path.write_text(

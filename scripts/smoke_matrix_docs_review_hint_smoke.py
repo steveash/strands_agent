@@ -10,6 +10,7 @@ from strands_agent_tui.testing import (
     emit_smoke_results,
     find_prefixed_line_index,
     observe_review_artifact_output_in_temp_checkout,
+    smoke_cli_docs_parity_rerun_hint,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -94,6 +95,12 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             (
                 "matrix_summary_path_matches_all_review",
                 review_output.matrix_summary_path_matches(EXPECTED_MATRIX_SUMMARY_PATH),
+            ),
+            (
+                "matrix_summary_bundle_index_rerun_hint_matches",
+                review_output.matrix_summary_bundle_index_rerun_hint_matches(
+                    smoke_cli_docs_parity_rerun_hint()
+                ),
             ),
             (
                 "hint_after_matrix_summary",

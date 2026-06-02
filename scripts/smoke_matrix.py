@@ -13,6 +13,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_WRAPPER,
     SmokeScriptTarget,
     run_smoke_target,
+    smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
 )
 
@@ -54,6 +55,7 @@ DOCS_REVIEW_ARTIFACT_METADATA_KEYS = (
     "fix_post_check_json_path",
     "matrix_summary_path",
 )
+DOCS_REVIEW_BUNDLE_INDEX_RERUN_HINT_KEY = "bundle_index_rerun_hint"
 
 
 def _emit_matrix_line(message: str, *, stream) -> None:
@@ -144,11 +146,38 @@ def _docs_review_artifact_metadata(target: SmokeScriptTarget) -> dict[str, str] 
     paths = _docs_review_artifact_paths(target)
     if not paths:
         return None
+    rerun_hint = _docs_review_bundle_index_rerun_hint(target, paths=paths)
     return {
         "display_name": target.display_label,
         "target_name": target.name,
+        **(
+            {DOCS_REVIEW_BUNDLE_INDEX_RERUN_HINT_KEY: rerun_hint}
+            if rerun_hint is not None
+            else {}
+        ),
         **paths,
     }
+
+
+def _docs_review_bundle_index_rerun_hint(
+    target: SmokeScriptTarget,
+    *,
+    paths: dict[str, str] | None = None,
+) -> str | None:
+    if target.name not in {DOCS_REVIEW_TARGET_NAME, DOCS_REVIEW_ALL_TARGET_NAME}:
+        return None
+    paths = _docs_review_artifact_paths(target) if paths is None else paths
+    bundle_index_path = paths.get("bundle_index_path")
+    if bundle_index_path:
+        try:
+            payload = json.loads(Path(bundle_index_path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict):
+            rerun_hint = payload.get("rerun_hint")
+            if isinstance(rerun_hint, str) and rerun_hint:
+                return rerun_hint
+    return smoke_cli_docs_parity_rerun_hint()
 
 
 def _persist_docs_review_artifact_metadata_summary(metadata: dict[str, str] | None) -> dict[str, str] | None:

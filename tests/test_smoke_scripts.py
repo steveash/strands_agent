@@ -992,6 +992,7 @@ def test_smoke_cli_docs_artifacts_smoke_supports_nondefault_target_and_persisted
     bundle_index_payload = json.loads(bundle_index_path.read_text(encoding="utf-8"))
     assert bundle_index_payload["requested_target_name"] == "smoke_matrix"
     assert bundle_index_payload["selected_script_names"] == ["smoke_matrix"]
+    assert bundle_index_payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
     assert bundle_index_payload["artifact_paths"]["bundle_index_path"] == str(bundle_index_path)
     assert bundle_index_payload["checks"]["render_exit"] is True
     assert bundle_index_payload["details"]["bundle_index_path"] == str(bundle_index_path)
@@ -1083,6 +1084,7 @@ def test_smoke_cli_docs_artifacts_smoke_supports_custom_readme_and_explicit_arti
     bundle_index_payload = json.loads(bundle_index_path.read_text(encoding="utf-8"))
     assert bundle_index_payload["requested_target_name"] == "session_triage_smoke"
     assert bundle_index_payload["selected_script_names"] == ["session_triage_smoke"]
+    assert bundle_index_payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
     assert bundle_index_payload["artifact_paths"]["source_readme_path"] == str(readme_path)
     assert bundle_index_payload["artifact_paths"]["bundle_index_path"] == str(bundle_index_path)
     assert bundle_index_payload["checks"]["render_exit"] is True
@@ -2140,6 +2142,7 @@ def test_smoke_cli_doc_specs_follow_shared_wrapper_registry_order() -> None:
 def _expected_smoke_matrix_review_metadata_line(*, artifact_root: str, target_name: str) -> str:
     payload = {
         "artifact_root": artifact_root,
+        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
         "bundle_index_path": f"{artifact_root}/index.json",
         "display_name": "docs-review",
         "drifted_readme_path": f"{artifact_root}/README-drifted.md",
@@ -2649,6 +2652,7 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
 
     assert smoke_matrix._docs_review_artifact_metadata(target) == {
         "artifact_root": "artifacts/review",
+        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
         "bundle_index_path": "artifacts/review/index.json",
         "display_name": "docs-review",
         "drifted_readme_path": "artifacts/custom/README-review.md",
@@ -2705,6 +2709,7 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_success(monkeyp
     assert summary_path.exists()
     assert json.loads(summary_path.read_text(encoding="utf-8")) == {
         "artifact_root": str(artifact_root),
+        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
         "bundle_index_path": str(artifact_root / "index.json"),
         "display_name": "docs-review",
         "drifted_readme_path": str(artifact_root / "README-drifted.md"),
@@ -2749,7 +2754,9 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_failure(monkeyp
     assert exit_code == 1
     summary_path = artifact_root / "matrix-summary.json"
     assert summary_path.exists()
-    assert json.loads(summary_path.read_text(encoding="utf-8"))["target_name"] == "docs-review"
+    summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary_payload["target_name"] == "docs-review"
+    assert summary_payload["bundle_index_rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
     assert f"[smoke-matrix] review matrix summary: {summary_path}" in stderr.getvalue().splitlines()
 
 
@@ -3260,6 +3267,7 @@ def test_smoke_matrix_all_review_failure_persists_pending_review_metadata_artifa
     assert summary_path.exists()
     assert json.loads(summary_path.read_text(encoding="utf-8")) == {
         "artifact_root": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
         "bundle_index_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json",
         "display_name": "docs-review",
         "drifted_readme_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/README-drifted.md",
@@ -3330,10 +3338,12 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "metadata_targets_docs_review_all",
         "metadata_artifact_root_matches_all_review",
         "metadata_matrix_summary_matches_all_review",
+        "metadata_bundle_index_rerun_hint_matches",
         "matrix_summary_artifact_exists",
         "matrix_summary_targets_docs_review_all",
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_metadata",
+        "matrix_summary_bundle_index_rerun_hint_matches",
         "matrix_summary_line_matches_metadata_path",
         "metadata_before_hint",
         "artifacts_before_hint",
@@ -3405,10 +3415,12 @@ def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_meta
         "metadata_targets_docs_review_all",
         "metadata_artifact_root_matches_all_review",
         "metadata_matrix_summary_matches_all_review",
+        "metadata_bundle_index_rerun_hint_matches",
         "matrix_summary_artifact_exists",
         "matrix_summary_targets_docs_review_all",
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_metadata",
+        "matrix_summary_bundle_index_rerun_hint_matches",
         "matrix_summary_line_matches_metadata_path",
         "metadata_before_missing_api_key_hint",
         "artifacts_before_missing_api_key_hint",
@@ -3472,7 +3484,9 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "review_metadata_artifact_root_matches_review",
         "all_review_metadata_artifact_root_matches_all_review",
         "review_metadata_matrix_summary_matches_expected_path",
+        "review_metadata_bundle_index_rerun_hint_matches",
         "all_review_metadata_matrix_summary_matches_expected_path",
+        "all_review_metadata_bundle_index_rerun_hint_matches",
         "review_matrix_summary_line_matches_expected_path",
         "all_review_matrix_summary_line_matches_expected_path",
         "review_paths_loaded_from_matrix_summary",
@@ -3483,7 +3497,9 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "review_summary_targets_docs_review",
         "all_review_summary_targets_docs_review_all",
         "review_summary_path_keeps_review_root",
+        "review_summary_bundle_index_rerun_hint_matches",
         "all_review_summary_path_keeps_all_review_root",
+        "all_review_summary_bundle_index_rerun_hint_matches",
         "review_matrix_summary_path_matches_metadata",
         "all_review_matrix_summary_path_matches_metadata",
         "review_matrix_summary_line_matches_metadata_path",
@@ -3539,6 +3555,7 @@ def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering
         "matrix_summary_targets_docs_review_all",
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_all_review",
+        "matrix_summary_bundle_index_rerun_hint_matches",
         "hint_after_matrix_summary",
         "hint_before_failure_summary",
         "stdout_docs_review_started",

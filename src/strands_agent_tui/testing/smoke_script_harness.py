@@ -83,6 +83,9 @@ class ReviewArtifactOutputObservation:
     def metadata_matrix_summary_matches(self, matrix_summary_path: str) -> bool:
         return self.metadata_payload.get("matrix_summary_path") == matrix_summary_path
 
+    def metadata_bundle_index_rerun_hint_matches(self, rerun_hint: str) -> bool:
+        return self.metadata_payload.get("bundle_index_rerun_hint") == rerun_hint
+
     def matrix_summary_targets(self, target_name: str) -> bool:
         return self.matrix_summary_payload.get("target_name") == target_name
 
@@ -91,6 +94,9 @@ class ReviewArtifactOutputObservation:
 
     def matrix_summary_path_matches(self, matrix_summary_path: str) -> bool:
         return self.matrix_summary_payload.get("matrix_summary_path") == matrix_summary_path
+
+    def matrix_summary_bundle_index_rerun_hint_matches(self, rerun_hint: str) -> bool:
+        return self.matrix_summary_payload.get("bundle_index_rerun_hint") == rerun_hint
 
     def matrix_summary_path_matches_metadata(self) -> bool:
         return self.matrix_summary_payload.get("matrix_summary_path") == self.metadata_payload.get(

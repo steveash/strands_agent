@@ -40,6 +40,7 @@ def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_p
     summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_payload = {
+        "bundle_index_rerun_hint": "rerun docs parity",
         "display_name": "docs-review",
         "target_name": "docs-review",
         "artifact_root": "artifacts/review",
@@ -48,6 +49,7 @@ def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_p
     }
     summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
     metadata_payload = {
+        "bundle_index_rerun_hint": "rerun docs parity",
         "display_name": "docs-review",
         "target_name": "docs-review",
         "artifact_root": "artifacts/review",
@@ -76,10 +78,12 @@ def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_p
     assert observed.metadata_targets("docs-review") is True
     assert observed.metadata_artifact_root_matches("artifacts/review") is True
     assert observed.metadata_matrix_summary_matches("artifacts/review/matrix-summary.json") is True
+    assert observed.metadata_bundle_index_rerun_hint_matches("rerun docs parity") is True
     assert observed.matrix_summary_artifact_exists is True
     assert observed.matrix_summary_targets("docs-review") is True
     assert observed.matrix_summary_artifact_root_matches("artifacts/review") is True
     assert observed.matrix_summary_path_matches("artifacts/review/matrix-summary.json") is True
+    assert observed.matrix_summary_bundle_index_rerun_hint_matches("rerun docs parity") is True
     assert observed.matrix_summary_path_matches_metadata() is True
     assert observed.matrix_summary_line_matches_metadata_path() is True
     assert observed.metadata_paths == {
@@ -97,6 +101,7 @@ def test_collect_review_artifact_output_supports_matrix_summary_without_metadata
     summary_path.write_text(
         json.dumps(
             {
+                "bundle_index_rerun_hint": "rerun docs parity",
                 "display_name": "docs-review-all",
                 "target_name": "docs-review-all",
                 "artifact_root": "artifacts/review",
@@ -124,6 +129,7 @@ def test_collect_review_artifact_output_supports_matrix_summary_without_metadata
     assert observed.matrix_summary_targets("docs-review-all") is True
     assert observed.matrix_summary_artifact_root_matches("artifacts/review") is True
     assert observed.matrix_summary_path_matches("artifacts/review/matrix-summary.json") is True
+    assert observed.matrix_summary_bundle_index_rerun_hint_matches("rerun docs parity") is True
 
 
 def test_run_script_module_main_in_temp_checkout_changes_cwd_and_unsets_env(tmp_path: Path, monkeypatch) -> None:

@@ -14,6 +14,7 @@ from strands_agent_tui.testing import (
     observe_loaded_review_artifact_output,
     resolve_checkout_path,
     resolve_review_artifact_paths,
+    smoke_cli_docs_parity_rerun_hint,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -40,7 +41,7 @@ def _patched_run_smoke_target(smoke_matrix_module, checkout_root: Path) -> Itera
         if metadata is None:
             return
         for key, value in metadata.items():
-            if key in {"display_name", "target_name"}:
+            if key in {"display_name", "target_name", "bundle_index_rerun_hint"}:
                 continue
             resolved_path = resolve_checkout_path(value, checkout_root=checkout_root)
             if key in {"artifact_root", "render_output_dir"}:
@@ -252,8 +253,16 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 review_output.metadata_matrix_summary_matches(expected_review_metadata["matrix_summary_path"]),
             ),
             (
+                "review_metadata_bundle_index_rerun_hint_matches",
+                review_output.metadata_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
+            ),
+            (
                 "all_review_metadata_matrix_summary_matches_expected_path",
                 all_review_output.metadata_matrix_summary_matches(expected_all_review_metadata["matrix_summary_path"]),
+            ),
+            (
+                "all_review_metadata_bundle_index_rerun_hint_matches",
+                all_review_output.metadata_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
             ),
             (
                 "review_matrix_summary_line_matches_expected_path",
@@ -284,11 +293,21 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 else False,
             ),
             (
+                "review_summary_bundle_index_rerun_hint_matches",
+                review_output.matrix_summary_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
+            ),
+            (
                 "all_review_summary_path_keeps_all_review_root",
                 resolve_review_artifact_paths(all_review_summary_payload, checkout_root=checkout_root).get("artifact_root")
                 == all_review_root
                 if all_review_root is not None
                 else False,
+            ),
+            (
+                "all_review_summary_bundle_index_rerun_hint_matches",
+                all_review_output.matrix_summary_bundle_index_rerun_hint_matches(
+                    smoke_cli_docs_parity_rerun_hint()
+                ),
             ),
             (
                 "review_matrix_summary_path_matches_metadata",

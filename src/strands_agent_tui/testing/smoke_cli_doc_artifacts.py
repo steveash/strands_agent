@@ -7,7 +7,9 @@ from pathlib import Path
 
 from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
 
-REVIEW_ARTIFACT_METADATA_SKIP_KEYS = frozenset({"display_name", "target_name"})
+REVIEW_ARTIFACT_METADATA_SKIP_KEYS = frozenset(
+    {"display_name", "target_name", "bundle_index_rerun_hint"}
+)
 
 
 def normalize_text_output(payload: str) -> str:
