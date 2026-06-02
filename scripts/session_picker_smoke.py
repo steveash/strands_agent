@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
+from strands_agent_tui.runtime import ApprovalRequest
 from strands_agent_tui.sessions import (
     SessionArtifactStore,
     latest_session,
@@ -261,6 +262,77 @@ def main() -> None:
                 selected_index=1,
             )
 
+        with TemporaryDirectory() as queue_breakdown_root:
+            queue_breakdown_now = datetime.now(UTC)
+            workspace_multi_store = seed_plain_session(
+                queue_breakdown_root,
+                session_id="session-edit-multi",
+                prompt="queue multiple edits",
+                response="queued",
+            )
+            workspace_multi_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-workspace-fresh",
+                        tool_name="write_file",
+                        reason="Needs confirmation",
+                        args={"relative_path": "notes.txt", "overwrite": True},
+                        source="fake_runtime",
+                        prompt="queue write",
+                        created_at=(queue_breakdown_now - timedelta(days=2)).isoformat(),
+                    ),
+                    ApprovalRequest(
+                        request_id="approval-workspace-restored",
+                        tool_name="replace_text",
+                        reason="Needs confirmation",
+                        args={"relative_path": "src/app.py", "expected_occurrences": 2},
+                        source="fake_runtime",
+                        prompt="queue replace",
+                        restored_from_session=True,
+                        created_at=(queue_breakdown_now - timedelta(days=6)).isoformat(),
+                    ),
+                ]
+            )
+
+            shell_multi_store = seed_plain_session(
+                queue_breakdown_root,
+                session_id="session-test-multi",
+                prompt="queue multiple tests",
+                response="queued",
+            )
+            shell_multi_store.save_pending_approvals(
+                [
+                    ApprovalRequest(
+                        request_id="approval-shell-fresh",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "pytest -q"},
+                        source="fake_runtime",
+                        prompt="run pytest",
+                        created_at=(queue_breakdown_now - timedelta(days=3)).isoformat(),
+                    ),
+                    ApprovalRequest(
+                        request_id="approval-shell-restored",
+                        tool_name="run_shell_command",
+                        reason="Needs confirmation",
+                        args={"command": "python -m pytest -q"},
+                        source="fake_runtime",
+                        prompt="rerun restored tests",
+                        restored_from_session=True,
+                        created_at=(queue_breakdown_now - timedelta(days=7)).isoformat(),
+                    ),
+                ]
+            )
+
+            queue_breakdown_workspace_picker = render_session_picker(
+                queue_breakdown_root,
+                filter_mode="workspace-edit",
+            )
+            queue_breakdown_shell_picker = render_session_picker(
+                queue_breakdown_root,
+                filter_mode="shell-test",
+            )
+
         with TemporaryDirectory() as pending_rollup_root:
             pending_rollup_now = datetime.now(UTC)
             seed_pending_approval_rollup_scenario(pending_rollup_root, now=pending_rollup_now)
@@ -432,6 +504,15 @@ def main() -> None:
                 "- shell focus queue provenance: restored approval queue" in output
                 for output in [queue_shell_fresh_picker, queue_shell_alt_picker]
             ),
+        )
+        print(
+            "picker_pending_only_preview_queue_breakdown=",
+            "- workspace focus queue (2):" in queue_breakdown_workspace_picker
+            and "1. fresh write_file | path notes.txt" in queue_breakdown_workspace_picker
+            and "2. restored replace_text | path src/app.py" in queue_breakdown_workspace_picker
+            and "- shell focus queue (2):" in queue_breakdown_shell_picker
+            and "1. fresh run_shell_command | cmd pytest -q" in queue_breakdown_shell_picker
+            and "2. restored run_shell_command | cmd python -m pytest -q" in queue_breakdown_shell_picker,
         )
         print(
             "picker_workspace_overlap_summary=",

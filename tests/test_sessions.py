@@ -575,6 +575,109 @@ def test_render_session_picker_surfaces_restored_pending_only_queue_age_cues(tmp
     assert any("- shell focus queue provenance: restored approval queue" in output for output in shell_queue_outputs)
 
 
+def test_render_session_picker_enumerates_multi_approval_pending_only_lane_queues(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    fresh_edit_at = now - timedelta(days=2)
+    restored_edit_at = now - timedelta(days=6)
+    fresh_test_at = now - timedelta(days=3)
+    restored_test_at = now - timedelta(days=7)
+
+    workspace_store = SessionArtifactStore(tmp_path, session_id="session-workspace-edit-multi")
+    workspace_store.append_turn(
+        TurnArtifact(
+            prompt="queue multiple edits",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    workspace_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-workspace-fresh",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue write",
+                created_at=fresh_edit_at.isoformat(),
+            ),
+            ApprovalRequest(
+                request_id="approval-workspace-restored",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "src/app.py", "expected_occurrences": 2},
+                source="fake_runtime",
+                prompt="queue replace",
+                restored_from_session=True,
+                created_at=restored_edit_at.isoformat(),
+            ),
+        ]
+    )
+
+    shell_store = SessionArtifactStore(tmp_path, session_id="session-shell-test-multi")
+    shell_store.append_turn(
+        TurnArtifact(
+            prompt="queue multiple tests",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    shell_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-shell-fresh",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run pytest",
+                created_at=fresh_test_at.isoformat(),
+            ),
+            ApprovalRequest(
+                request_id="approval-shell-restored",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "python -m pytest -q"},
+                source="fake_runtime",
+                prompt="rerun restored tests",
+                restored_from_session=True,
+                created_at=restored_test_at.isoformat(),
+            ),
+        ]
+    )
+
+    workspace_output = render_session_picker(tmp_path, filter_mode="workspace-edit")
+    shell_output = render_session_picker(tmp_path, filter_mode="shell-test")
+
+    assert "- workspace focus queue provenance: fresh + restored approval queue" in workspace_output
+    assert "- workspace focus queue (2):" in workspace_output
+    assert (
+        f"1. fresh write_file | path notes.txt | age 2d | at {_format_test_timestamp(fresh_edit_at)} | approval created_at"
+        in workspace_output
+    )
+    assert (
+        f"2. restored replace_text | path src/app.py | age 6d | at {_format_test_timestamp(restored_edit_at)} | approval created_at"
+        in workspace_output
+    )
+
+    assert "- shell focus queue provenance: fresh + restored approval queue" in shell_output
+    assert "- shell focus queue (2):" in shell_output
+    assert (
+        f"1. fresh run_shell_command | cmd pytest -q | age 3d | at {_format_test_timestamp(fresh_test_at)} | approval created_at"
+        in shell_output
+    )
+    assert (
+        f"2. restored run_shell_command | cmd python -m pytest -q | age 7d | at {_format_test_timestamp(restored_test_at)} | approval created_at"
+        in shell_output
+    )
+
+
 def test_render_session_picker_falls_back_to_session_activity_for_missing_pending_only_timestamps(
     tmp_path: Path,
 ) -> None:

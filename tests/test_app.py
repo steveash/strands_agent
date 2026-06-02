@@ -1921,6 +1921,145 @@ async def test_session_switcher_marks_pending_only_queue_provenance(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_enumerates_multi_approval_pending_only_lane_queues(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    now = datetime.now(UTC)
+    fresh_edit_at = now - timedelta(days=2)
+    restored_edit_at = now - timedelta(days=6)
+    fresh_test_at = now - timedelta(days=3)
+    restored_test_at = now - timedelta(days=7)
+
+    workspace_store = SessionArtifactStore(tmp_path, session_id="session-workspace-edit-multi")
+    workspace_store.append_turn(
+        TurnArtifact(
+            prompt="queue multiple edits",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    workspace_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-workspace-fresh",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue write",
+                created_at=fresh_edit_at.isoformat(),
+            ),
+            ApprovalRequest(
+                request_id="approval-workspace-restored",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "src/app.py", "expected_occurrences": 2},
+                source="fake_runtime",
+                prompt="queue replace",
+                restored_from_session=True,
+                created_at=restored_edit_at.isoformat(),
+            ),
+        ]
+    )
+    set_session_artifact_mtime(workspace_store, now - timedelta(minutes=2))
+
+    shell_store = SessionArtifactStore(tmp_path, session_id="session-shell-test-multi")
+    shell_store.append_turn(
+        TurnArtifact(
+            prompt="queue multiple tests",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    shell_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-shell-fresh",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="run pytest",
+                created_at=fresh_test_at.isoformat(),
+            ),
+            ApprovalRequest(
+                request_id="approval-shell-restored",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "python -m pytest -q"},
+                source="fake_runtime",
+                prompt="rerun restored tests",
+                restored_from_session=True,
+                created_at=restored_test_at.isoformat(),
+            ),
+        ]
+    )
+    set_session_artifact_mtime(shell_store, now - timedelta(minutes=1))
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        workspace_output = str(app.query_one("#output").render())
+
+        assert "- workspace focus queue provenance: fresh + restored approval queue" in workspace_output
+        assert "- workspace focus queue (2):" in workspace_output
+        assert (
+            f"1. fresh write_file | path notes.txt | age 2d | at {fresh_edit_at.strftime('%Y-%m-%d %H:%M UTC')} | approval created_at"
+            in workspace_output
+        )
+        assert (
+            f"2. restored replace_text | path src/app.py | age 6d | at {restored_edit_at.strftime('%Y-%m-%d %H:%M UTC')} | approval created_at"
+            in workspace_output
+        )
+
+        await pilot.press("y")
+        await pilot.pause()
+        shell_output = str(app.query_one("#output").render())
+
+        assert "- shell focus queue provenance: fresh + restored approval queue" in shell_output
+        assert "- shell focus queue (2):" in shell_output
+        assert (
+            f"1. fresh run_shell_command | cmd pytest -q | age 3d | at {fresh_test_at.strftime('%Y-%m-%d %H:%M UTC')} | approval created_at"
+            in shell_output
+        )
+        assert (
+            f"2. restored run_shell_command | cmd python -m pytest -q | age 7d | at {restored_test_at.strftime('%Y-%m-%d %H:%M UTC')} | approval created_at"
+            in shell_output
+        )
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_supports_stale_pending_denied_and_restored_subfilters(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(

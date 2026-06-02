@@ -173,6 +173,7 @@ class SessionSummary:
     has_pending_workspace_edit_approval: bool = False
     has_fresh_pending_workspace_edit_approval: bool = False
     has_restored_pending_workspace_edit_approval: bool = False
+    pending_workspace_edit_queue_previews: list[str] = field(default_factory=list)
     pending_workspace_edit_age_sort_key: int = 0
     pending_workspace_edit_oldest_at: str = ""
     restored_pending_workspace_edit_age_sort_key: int = 0
@@ -192,6 +193,7 @@ class SessionSummary:
     has_pending_shell_test_approval: bool = False
     has_fresh_pending_shell_test_approval: bool = False
     has_restored_pending_shell_test_approval: bool = False
+    pending_shell_test_queue_previews: list[str] = field(default_factory=list)
     pending_shell_test_age_sort_key: int = 0
     pending_shell_test_oldest_at: str = ""
     restored_pending_shell_test_age_sort_key: int = 0
@@ -263,6 +265,15 @@ class SessionSummary:
         if filter_mode == "shell-test":
             return "pending only until a test executes"
         return ""
+
+    def _focused_lane_pending_only_queue_previews(self, filter_mode: str) -> list[str]:
+        if not self.has_pending_only_lane_match(filter_mode):
+            return []
+        if filter_mode == "workspace-edit":
+            return self.pending_workspace_edit_queue_previews
+        if filter_mode == "shell-test":
+            return self.pending_shell_test_queue_previews
+        return []
 
     def _focused_lane_pending_only_queue_provenance(self, filter_mode: str) -> str:
         if not self.has_pending_only_lane_match(filter_mode):
@@ -616,6 +627,10 @@ class SessionSummary:
             f"{focused_lane_label} queue provenance",
             self._focused_lane_pending_only_queue_provenance(filter_mode),
         )
+        focused_lane_queue_preview_lines = render_numbered_preview_section_lines(
+            f"{focused_lane_label} queue",
+            self._focused_lane_pending_only_queue_previews(filter_mode),
+        )
 
         tool_lines = []
         if not focused_tool_filter:
@@ -627,6 +642,7 @@ class SessionSummary:
         workspace_lines = render_selected_preview_section_lines(
             focused_lane_preview_lines if filter_mode == "workspace-edit" else [],
             focused_lane_queue_provenance_lines if filter_mode == "workspace-edit" else [],
+            focused_lane_queue_preview_lines if filter_mode == "workspace-edit" else [],
             focused_lane_age_lines if filter_mode == "workspace-edit" else [],
             focused_lane_timestamp_lines if filter_mode == "workspace-edit" else [],
             focused_lane_age_source_lines if filter_mode == "workspace-edit" else [],
@@ -638,6 +654,7 @@ class SessionSummary:
         shell_lines = render_selected_preview_section_lines(
             focused_lane_preview_lines if filter_mode == "shell-test" else [],
             focused_lane_queue_provenance_lines if filter_mode == "shell-test" else [],
+            focused_lane_queue_preview_lines if filter_mode == "shell-test" else [],
             focused_lane_age_lines if filter_mode == "shell-test" else [],
             focused_lane_timestamp_lines if filter_mode == "shell-test" else [],
             focused_lane_age_source_lines if filter_mode == "shell-test" else [],
@@ -842,6 +859,8 @@ def _ordered_recent_sessions(
         if session_state.draft_prompt:
             draft_prompt_preview = _truncate(session_state.draft_prompt.replace("\n", " ").strip(), MAX_PROMPT_PREVIEW)
         activity_timestamp = _session_activity_timestamp(session_dir, turns)
+        activity_timestamp_display = _format_timestamp(activity_timestamp)
+        session_activity_age_sort_key = max(int(datetime.now(UTC).timestamp() - activity_timestamp), 0)
         pending_approval_age_seconds = _pending_approval_age_seconds(pending_approvals)
         stale_session_summary, stale_session_badges, stale_session_sort_key = _stale_session_status(activity_timestamp)
         recent_failure_count = _recent_tool_failure_count(turns)
@@ -944,6 +963,11 @@ def _ordered_recent_sessions(
             has_pending_workspace_edit_approval=bool(pending_workspace_edit_approvals),
             has_fresh_pending_workspace_edit_approval=bool(fresh_pending_workspace_edit_approvals),
             has_restored_pending_workspace_edit_approval=bool(restored_pending_workspace_edit_approvals),
+            pending_workspace_edit_queue_previews=_pending_lane_queue_preview_items(
+                pending_workspace_edit_approvals,
+                fallback_age_seconds=session_activity_age_sort_key,
+                fallback_timestamp=activity_timestamp_display,
+            ),
             pending_workspace_edit_age_sort_key=_pending_approval_age_seconds(pending_workspace_edit_approvals) or 0,
             pending_workspace_edit_oldest_at=_oldest_approval_timestamp_display(pending_workspace_edit_approvals),
             restored_pending_workspace_edit_age_sort_key=(
@@ -967,6 +991,11 @@ def _ordered_recent_sessions(
             has_pending_shell_test_approval=bool(pending_shell_test_approvals),
             has_fresh_pending_shell_test_approval=bool(fresh_pending_shell_test_approvals),
             has_restored_pending_shell_test_approval=bool(restored_pending_shell_test_approvals),
+            pending_shell_test_queue_previews=_pending_lane_queue_preview_items(
+                pending_shell_test_approvals,
+                fallback_age_seconds=session_activity_age_sort_key,
+                fallback_timestamp=activity_timestamp_display,
+            ),
             pending_shell_test_age_sort_key=_pending_approval_age_seconds(pending_shell_test_approvals) or 0,
             pending_shell_test_oldest_at=_oldest_approval_timestamp_display(pending_shell_test_approvals),
             restored_pending_shell_test_age_sort_key=(
@@ -994,7 +1023,7 @@ def _ordered_recent_sessions(
             stale_session_badges=stale_session_badges,
             stale_session_summary=stale_session_summary,
             pending_approval_age_sort_key=int(pending_approval_age_seconds or 0),
-            session_activity_age_sort_key=max(int(datetime.now(UTC).timestamp() - activity_timestamp), 0),
+            session_activity_age_sort_key=session_activity_age_sort_key,
             stale_session_sort_key=int(stale_session_sort_key),
             restore_badges=_restore_badges(session_state, len(turns)),
             draft_prompt_preview=draft_prompt_preview,
@@ -2588,6 +2617,94 @@ def _pending_approvals_for_filter_mode(
             )
         ]
     return []
+
+
+def _pending_lane_queue_preview_items(
+    approvals: Sequence[ApprovalRequest],
+    *,
+    fallback_age_seconds: int = 0,
+    fallback_timestamp: str = "",
+) -> list[str]:
+    if len(approvals) <= 1:
+        return []
+    return [
+        _format_pending_lane_queue_preview_item(
+            approval,
+            fallback_age_seconds=fallback_age_seconds,
+            fallback_timestamp=fallback_timestamp,
+        )
+        for approval in approvals
+    ]
+
+
+def _format_pending_lane_queue_preview_item(
+    approval: ApprovalRequest,
+    *,
+    fallback_age_seconds: int = 0,
+    fallback_timestamp: str = "",
+) -> str:
+    origin = "restored" if approval.restored_from_session else "fresh"
+    tool_name = str(approval.tool_name or "tool").strip() or "tool"
+    bits = [f"{origin} {tool_name}"]
+
+    target_preview = _approval_target_preview(approval)
+    if target_preview:
+        bits.append(target_preview)
+
+    age_summary, timestamp, age_source = _approval_preview_age_and_timestamp(
+        approval,
+        fallback_age_seconds=fallback_age_seconds,
+        fallback_timestamp=fallback_timestamp,
+    )
+    if age_summary:
+        bits.append(f"age {age_summary}")
+    if timestamp:
+        bits.append(f"at {timestamp}")
+    if age_source:
+        bits.append(age_source)
+    return " | ".join(bits)
+
+
+def _approval_target_preview(approval: ApprovalRequest) -> str:
+    command = _approval_command_from_args(approval.args)
+    if command:
+        return f"cmd {command}"
+
+    if isinstance(approval.args, dict):
+        relative_path = str(approval.args.get("relative_path", "") or "").strip()
+        if relative_path:
+            return f"path {relative_path}"
+
+        expected_occurrences = approval.args.get("expected_occurrences")
+        if isinstance(expected_occurrences, int) and expected_occurrences > 1:
+            return f"occurrences {expected_occurrences}"
+
+    return ""
+
+
+def _approval_preview_age_and_timestamp(
+    approval: ApprovalRequest,
+    *,
+    fallback_age_seconds: int = 0,
+    fallback_timestamp: str = "",
+) -> tuple[str, str, str]:
+    age_seconds = approval.age_seconds()
+    timestamp = _format_iso_timestamp(approval.created_at)
+    if age_seconds is not None:
+        return (
+            _format_age_compact(age_seconds) if age_seconds > 0 else "",
+            timestamp,
+            "approval created_at",
+        )
+
+    if fallback_age_seconds > 0 or fallback_timestamp:
+        return (
+            _format_age_compact(fallback_age_seconds) if fallback_age_seconds > 0 else "",
+            fallback_timestamp,
+            "activity fallback",
+        )
+
+    return "", "", ""
 
 
 def _render_approval_focus_badges(record: dict[str, object] | None) -> list[str]:
