@@ -510,6 +510,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
             [
                 "docs",
                 "docs-artifacts",
+                "docs-rerun-hint",
             ],
         ),
         (
@@ -517,6 +518,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
             [
                 "docs",
                 "docs-artifacts",
+                "docs-rerun-hint",
                 "matrix-artifact-roots",
                 "matrix-all-review-order",
                 "matrix-all-review-missing-api-key",
@@ -536,6 +538,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         (["timeline"], ["timeline"]),
         (["docs"], ["docs"]),
         (["docs-artifacts"], ["docs-artifacts"]),
+        (["docs-rerun-hint"], ["docs-rerun-hint"]),
         (["matrix-artifact-roots"], ["matrix-artifact-roots"]),
         (["matrix-all-review-order"], ["matrix-all-review-order"]),
         (["matrix-all-review-missing-api-key"], ["matrix-all-review-missing-api-key"]),
@@ -579,6 +582,36 @@ def test_docs_review_matrix_smokes_reject_invalid_output_stream(script_name: str
 
     with pytest.raises(ValueError, match="output_stream must be 'stdout' or 'stderr', got 'invalid'"):
         getattr(module, runner_name)(output_stream="invalid")
+
+
+def test_standalone_docs_rerun_hint_smoke_exercises_end_to_end_hint_contract() -> None:
+    standalone_docs_rerun_hint_smoke = _load_script_module("standalone_docs_rerun_hint_smoke")
+
+    results = dict(standalone_docs_rerun_hint_smoke.run_standalone_docs_rerun_hint_smoke())
+
+    assert results["exit_code"] == 1
+    assert results["stdout_fix_check_summary"] == (
+        "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke"
+    )
+    assert results["stdout_false_line"] == "fix_post_check=False"
+    assert results["stderr_failed_line"] == "docs-artifacts smoke failed fast: fix_post_check=False"
+    assert results["stderr_hint_line"] == STANDALONE_SMOKE_WRAPPER.format_line(
+        smoke_cli_docs_parity_rerun_hint()
+    )
+    assert results["stderr_summary_line"].startswith(
+        "[standalone-smoke] summary: 5/6 targets passed before failure in "
+    )
+    for key in (
+        "exit_code_non_zero",
+        "fix_check_summary_present",
+        "false_line_present",
+        "failed_line_present",
+        "hint_line_present",
+        "summary_line_present",
+        "hint_after_failed_line",
+        "hint_before_failure_summary",
+    ):
+        assert results[key] is True
 
 
 @pytest.mark.parametrize(
@@ -2191,7 +2224,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
         (
             "standalone_smoke",
             "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,docs-parity-only,docs-focused,docs-review-only,all}",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,docs-rerun-hint,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,docs-parity-only,docs-focused,docs-review-only,all}",
         ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (

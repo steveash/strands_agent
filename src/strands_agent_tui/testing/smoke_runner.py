@@ -521,6 +521,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("timeline", "timeline_smoke.py"),
         SmokeScriptTargetTemplate("docs", "smoke_cli_docs_smoke.py"),
         SmokeScriptTargetTemplate("docs-artifacts", "smoke_cli_docs_artifacts_smoke.py"),
+        SmokeScriptTargetTemplate("docs-rerun-hint", "standalone_docs_rerun_hint_smoke.py"),
         SmokeScriptTargetTemplate("matrix-artifact-roots", "smoke_matrix_artifact_roots_smoke.py"),
         SmokeScriptTargetTemplate("matrix-all-review-order", "smoke_matrix_all_review_order_smoke.py"),
         SmokeScriptTargetTemplate(
@@ -533,10 +534,11 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     default_target_name="local",
     alias_target_names={
         "local": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"),
-        "docs-parity-only": ("docs", "docs-artifacts"),
+        "docs-parity-only": ("docs", "docs-artifacts", "docs-rerun-hint"),
         "docs-focused": (
             "docs",
             "docs-artifacts",
+            "docs-rerun-hint",
             "matrix-artifact-roots",
             "matrix-all-review-order",
             "matrix-all-review-missing-api-key",
@@ -584,11 +586,19 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             readme_description="runs the smoke CLI render/fix artifact contract smoke end-to-end",
         ),
         SmokeCliExample(
+            "standalone_smoke.py docs-rerun-hint",
+            target_name="docs-rerun-hint",
+            readme_description=(
+                "runs the real subprocess standalone wrapper docs-drift regression that proves the "
+                "docs-parity-only rerun hint lands before the fail-fast summary"
+            ),
+        ),
+        SmokeCliExample(
             "standalone_smoke.py docs-parity-only",
             target_name="docs-parity-only",
             readme_description=(
                 "re-runs only the docs parity alias "
-                "(`docs`, `docs-artifacts`)"
+                "(`docs`, `docs-artifacts`, `docs-rerun-hint`)"
             ),
         ),
         SmokeCliExample(
@@ -596,8 +606,8 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
             target_name="docs-focused",
             readme_description=(
                 "re-runs the broader docs parity + docs-review lane alias "
-                "(`docs`, `docs-artifacts`, `matrix-artifact-roots`, `matrix-all-review-order`, "
-                "`matrix-all-review-missing-api-key`, "
+                "(`docs`, `docs-artifacts`, `docs-rerun-hint`, `matrix-artifact-roots`, "
+                "`matrix-all-review-order`, `matrix-all-review-missing-api-key`, "
                 "`matrix-docs-review-hint`)"
             ),
         ),
@@ -654,7 +664,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     readme_section_heading="Standalone local smoke bundle",
     readme_section_intro="To verify the remaining local smoke surfaces with shared fail-fast `= False` handling:",
     readme_intro_paragraphs=(
-        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to rerun just the docs parity alias, `.venv/bin/python scripts/standalone_smoke.py docs-review-only` to rerun just the docs-review lane regressions, `.venv/bin/python scripts/standalone_smoke.py docs-focused` for the broader docs parity + docs-review lane bundle, or `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
+        "This default `local` bundle runs `summary_utils`, `shell_tool`, `replay`, `timeline`, `smoke_cli_docs`, and `smoke_cli_docs_artifacts` smokes together, exits non-zero on the first failing boolean result line, and ends with a concise `[standalone-smoke] summary: ...` footer. Use `.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to rerun the docs parity alias plus its dedicated subprocess rerun-hint regression, `.venv/bin/python scripts/standalone_smoke.py docs-review-only` to rerun just the docs-review lane regressions, `.venv/bin/python scripts/standalone_smoke.py docs-focused` for the broader docs parity + docs-review lane bundle, or `.venv/bin/python scripts/standalone_smoke.py all` after exporting live-runtime env vars if you also want to include the live smoke target.",
     ),
     readme_extra_shortcut_snippets=(
         "`.venv/bin/python scripts/smoke_cli_docs_smoke.py standalone_smoke` audits only the standalone wrapper docs (`session_triage_smoke`, `session_recovery_smoke`, and `smoke_matrix` also work here)",
