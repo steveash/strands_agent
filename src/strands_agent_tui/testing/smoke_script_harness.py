@@ -18,6 +18,7 @@ from typing import Any, Callable, Iterator, Literal
 from .smoke_cli_doc_artifacts import (
     load_review_matrix_summary,
     output_path_from_prefixed_lines,
+    resolve_checkout_path,
     resolve_review_artifact_paths,
 )
 
@@ -117,6 +118,8 @@ class SmokeMatrixDocsReviewObserverSpec:
     expected_target_name: str
     expected_artifact_root: str
     expected_matrix_summary_path: str
+    expected_bundle_index_rerun_hint: str
+    expected_artifact_paths: dict[str, str]
     driver_filename: str
     metadata_prefix: str = SMOKE_MATRIX_REVIEW_METADATA_PREFIX
     artifacts_prefix: str = SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX
@@ -127,6 +130,15 @@ class SmokeMatrixDocsReviewObserverSpec:
             "metadata_prefix": self.metadata_prefix,
             "artifacts_prefix": self.artifacts_prefix,
             "matrix_summary_prefix": self.matrix_summary_prefix,
+        }
+
+    def expected_path(self, key: str) -> str | None:
+        return self.expected_artifact_paths.get(key)
+
+    def resolve_expected_paths(self, *, checkout_root: Path) -> dict[str, Path]:
+        return {
+            key: resolve_checkout_path(value, checkout_root=checkout_root)
+            for key, value in self.expected_artifact_paths.items()
         }
 
 
@@ -158,21 +170,39 @@ def build_smoke_matrix_docs_review_observer_spec(
     if not isinstance(metadata, dict):
         raise ValueError("docs-review smoke-matrix target metadata is required")
 
+    target_name = metadata.get("target_name")
     artifact_root = metadata.get("artifact_root")
     matrix_summary_path = metadata.get("matrix_summary_path")
+    bundle_index_rerun_hint = metadata.get("bundle_index_rerun_hint")
+    artifact_paths = {
+        key: value
+        for key, value in metadata.items()
+        if key not in {"display_name", "target_name", "bundle_index_rerun_hint"}
+        and isinstance(value, str)
+        and value
+    }
+
+    if not isinstance(target_name, str) or not target_name:
+        raise ValueError("docs-review smoke-matrix target metadata must include target_name")
     if not isinstance(artifact_root, str) or not artifact_root:
         raise ValueError("docs-review smoke-matrix target metadata must include artifact_root")
     if not isinstance(matrix_summary_path, str) or not matrix_summary_path:
         raise ValueError("docs-review smoke-matrix target metadata must include matrix_summary_path")
+    if not isinstance(bundle_index_rerun_hint, str) or not bundle_index_rerun_hint:
+        raise ValueError(
+            "docs-review smoke-matrix target metadata must include bundle_index_rerun_hint"
+        )
 
     normalized_driver_stem = driver_stem.removesuffix(".py")
     if not normalized_driver_stem.startswith("run_"):
         normalized_driver_stem = f"run_{normalized_driver_stem}"
     return SmokeMatrixDocsReviewObserverSpec(
         requested_target_name=requested_target_name,
-        expected_target_name=target.name,
+        expected_target_name=target_name,
         expected_artifact_root=artifact_root,
         expected_matrix_summary_path=matrix_summary_path,
+        expected_bundle_index_rerun_hint=bundle_index_rerun_hint,
+        expected_artifact_paths=artifact_paths,
         driver_filename=f"{normalized_driver_stem}.py",
     )
 

@@ -9,20 +9,20 @@ from pathlib import Path
 from typing import Iterator
 
 from strands_agent_tui.testing import (
+    SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+    SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
+    SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+    build_smoke_matrix_docs_review_observer_spec,
     emit_smoke_results,
     load_script_module,
     observe_loaded_review_artifact_output,
     resolve_checkout_path,
     resolve_review_artifact_paths,
-    smoke_cli_docs_parity_rerun_hint,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
 SUCCESS_SUMMARY_PREFIX = "[smoke-matrix] summary: 4/4 bundles passed in "
-REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
-REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
-REVIEW_MATRIX_SUMMARY_PREFIX = "[smoke-matrix] review matrix summary: "
 
 
 @contextmanager
@@ -109,53 +109,29 @@ def _capture_success_summary_line(stdout_text: str) -> str:
             return line
     return ""
 
-
-def _expected_docs_review_metadata(smoke_matrix_module, requested_target_name: str) -> dict[str, str]:
-    target = smoke_matrix_module.CLI_SPEC.resolve_targets(
-        script_dir=smoke_matrix_module.SCRIPT_DIR,
-        requested_target_name=requested_target_name,
-    )[-1]
-    metadata = smoke_matrix_module._docs_review_artifact_metadata(target)
-    assert metadata is not None
-    return metadata
-
-
-def _resolved_docs_review_paths(smoke_matrix_module, requested_target_name: str, *, checkout_root: Path) -> dict[str, Path]:
-    return resolve_review_artifact_paths(
-        _expected_docs_review_metadata(smoke_matrix_module, requested_target_name),
-        checkout_root=checkout_root,
-    )
-
-
 def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
     smoke_matrix_module = _load_smoke_matrix_module()
     with tempfile.TemporaryDirectory(prefix="smoke-matrix-artifact-roots-") as temp_dir:
         checkout_root = Path(temp_dir)
-        expected_review_metadata = _expected_docs_review_metadata(
+        review_spec = build_smoke_matrix_docs_review_observer_spec(
             smoke_matrix_module,
-            "docs-review",
+            requested_target_name="review",
+            driver_stem="smoke_matrix_artifact_roots_review",
         )
-        expected_all_review_metadata = _expected_docs_review_metadata(
+        all_review_spec = build_smoke_matrix_docs_review_observer_spec(
             smoke_matrix_module,
-            "all-review",
+            requested_target_name="all-review",
+            driver_stem="smoke_matrix_artifact_roots_all_review",
         )
-        expected_review_paths = resolve_review_artifact_paths(
-            expected_review_metadata,
-            checkout_root=checkout_root,
-        )
-        expected_all_review_paths = resolve_review_artifact_paths(
-            expected_all_review_metadata,
-            checkout_root=checkout_root,
-        )
+        expected_review_paths = review_spec.resolve_expected_paths(checkout_root=checkout_root)
+        expected_all_review_paths = all_review_spec.resolve_expected_paths(checkout_root=checkout_root)
 
         with _patched_run_smoke_target(smoke_matrix_module, checkout_root):
             review_run, review_output = observe_loaded_review_artifact_output(
                 smoke_matrix_module,
-                argv=["review"],
+                argv=[review_spec.requested_target_name],
                 checkout_root=checkout_root,
-                metadata_prefix=REVIEW_METADATA_PREFIX,
-                artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-                matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+                **review_spec.observer_kwargs(),
             )
             review_exit_code = review_run.exit_code
             review_stdout = review_run.stdout
@@ -176,11 +152,9 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             )
             all_review_run, all_review_output = observe_loaded_review_artifact_output(
                 smoke_matrix_module,
-                argv=["all-review"],
+                argv=[all_review_spec.requested_target_name],
                 checkout_root=checkout_root,
-                metadata_prefix=REVIEW_METADATA_PREFIX,
-                artifacts_prefix=REVIEW_ARTIFACTS_PREFIX,
-                matrix_summary_prefix=REVIEW_MATRIX_SUMMARY_PREFIX,
+                **all_review_spec.observer_kwargs(),
             )
             all_review_exit_code = all_review_run.exit_code
             all_review_stdout = all_review_run.stdout
@@ -234,35 +208,39 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             ("all_review_matrix_summary_line_present", all_review_output.matrix_summary_line_present),
             (
                 "review_metadata_targets_docs_review",
-                review_output.metadata_targets(smoke_matrix_module.DOCS_REVIEW_TARGET_NAME),
+                review_output.metadata_targets(review_spec.expected_target_name),
             ),
             (
                 "all_review_metadata_targets_docs_review_all",
-                all_review_output.metadata_targets(smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME),
+                all_review_output.metadata_targets(all_review_spec.expected_target_name),
             ),
             (
                 "review_metadata_artifact_root_matches_review",
-                review_output.metadata_artifact_root_matches(expected_review_metadata["artifact_root"]),
+                review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
             ),
             (
                 "all_review_metadata_artifact_root_matches_all_review",
-                all_review_output.metadata_artifact_root_matches(expected_all_review_metadata["artifact_root"]),
+                all_review_output.metadata_artifact_root_matches(all_review_spec.expected_artifact_root),
             ),
             (
                 "review_metadata_matrix_summary_matches_expected_path",
-                review_output.metadata_matrix_summary_matches(expected_review_metadata["matrix_summary_path"]),
+                review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
             ),
             (
                 "review_metadata_bundle_index_rerun_hint_matches",
-                review_output.metadata_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
+                review_output.metadata_bundle_index_rerun_hint_matches(
+                    review_spec.expected_bundle_index_rerun_hint
+                ),
             ),
             (
                 "all_review_metadata_matrix_summary_matches_expected_path",
-                all_review_output.metadata_matrix_summary_matches(expected_all_review_metadata["matrix_summary_path"]),
+                all_review_output.metadata_matrix_summary_matches(all_review_spec.expected_matrix_summary_path),
             ),
             (
                 "all_review_metadata_bundle_index_rerun_hint_matches",
-                all_review_output.metadata_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
+                all_review_output.metadata_bundle_index_rerun_hint_matches(
+                    all_review_spec.expected_bundle_index_rerun_hint
+                ),
             ),
             (
                 "review_matrix_summary_line_matches_expected_path",
@@ -279,11 +257,11 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             ("all_review_artifacts_exist", all_review_files_exist),
             (
                 "review_summary_targets_docs_review",
-                review_summary_payload.get("target_name") == smoke_matrix_module.DOCS_REVIEW_TARGET_NAME,
+                review_summary_payload.get("target_name") == review_spec.expected_target_name,
             ),
             (
                 "all_review_summary_targets_docs_review_all",
-                all_review_summary_payload.get("target_name") == smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME,
+                all_review_summary_payload.get("target_name") == all_review_spec.expected_target_name,
             ),
             (
                 "review_summary_path_keeps_review_root",
@@ -294,7 +272,9 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             ),
             (
                 "review_summary_bundle_index_rerun_hint_matches",
-                review_output.matrix_summary_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
+                review_output.matrix_summary_bundle_index_rerun_hint_matches(
+                    review_spec.expected_bundle_index_rerun_hint
+                ),
             ),
             (
                 "all_review_summary_path_keeps_all_review_root",
@@ -306,7 +286,7 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             (
                 "all_review_summary_bundle_index_rerun_hint_matches",
                 all_review_output.matrix_summary_bundle_index_rerun_hint_matches(
-                    smoke_cli_docs_parity_rerun_hint()
+                    all_review_spec.expected_bundle_index_rerun_hint
                 ),
             ),
             (

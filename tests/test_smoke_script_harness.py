@@ -26,6 +26,7 @@ from strands_agent_tui.testing import (
     run_python_driver_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
     run_script_module_main_via_driver_in_temp_checkout,
+    smoke_cli_docs_parity_rerun_hint,
 )
 
 
@@ -834,6 +835,12 @@ def test_build_smoke_matrix_docs_review_observer_spec_uses_smoke_matrix_target_m
     assert review_spec.expected_matrix_summary_path == (
         "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
     )
+    assert review_spec.expected_bundle_index_rerun_hint == smoke_cli_docs_parity_rerun_hint()
+    assert review_spec.expected_path("artifact_root") == review_spec.expected_artifact_root
+    assert review_spec.expected_path("matrix_summary_path") == review_spec.expected_matrix_summary_path
+    assert review_spec.expected_path("bundle_index_path") == (
+        "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json"
+    )
     assert review_spec.driver_filename == "run_smoke_matrix_docs_review_hint.py"
     assert review_spec.observer_kwargs() == {
         "metadata_prefix": SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
@@ -849,7 +856,37 @@ def test_build_smoke_matrix_docs_review_observer_spec_uses_smoke_matrix_target_m
     assert all_review_spec.expected_matrix_summary_path == (
         "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
     )
+    assert all_review_spec.expected_bundle_index_rerun_hint == smoke_cli_docs_parity_rerun_hint()
+    assert all_review_spec.expected_path("artifact_root") == all_review_spec.expected_artifact_root
+    assert all_review_spec.expected_path("matrix_summary_path") == all_review_spec.expected_matrix_summary_path
     assert all_review_spec.driver_filename == "run_smoke_matrix_all_review_missing_api_key.py"
+
+
+def test_smoke_matrix_docs_review_observer_spec_resolves_expected_paths_from_checkout_root(
+    tmp_path: Path,
+) -> None:
+    smoke_matrix_module = load_script_module(
+        Path(__file__).resolve().parent.parent / "scripts" / "smoke_matrix.py",
+        "tests.smoke_matrix_docs_review_observer_spec_paths",
+    )
+
+    review_spec = build_smoke_matrix_docs_review_observer_spec(
+        smoke_matrix_module,
+        requested_target_name="review",
+        driver_stem="smoke_matrix_docs_review_hint",
+    )
+
+    resolved_paths = review_spec.resolve_expected_paths(checkout_root=tmp_path)
+
+    assert resolved_paths["artifact_root"] == (
+        tmp_path / "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review"
+    )
+    assert resolved_paths["matrix_summary_path"] == (
+        tmp_path / "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
+    )
+    assert resolved_paths["bundle_index_path"] == (
+        tmp_path / "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json"
+    )
 
 
 
