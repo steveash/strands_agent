@@ -269,6 +269,30 @@ def _approval_tool_family(tool_name: str, args: dict[str, object]) -> str:
     return "tool"
 
 
+def _approval_target_context(tool_name: str, args: dict[str, object]) -> dict[str, object]:
+    command = _approval_command_from_args(args)
+    if tool_name == "run_shell_command" and command:
+        return {
+            "approval_target_kind": "command",
+            "approval_target_preview": f"cmd {command}",
+        }
+
+    relative_path = str(args.get("relative_path", "") or "").strip()
+    if relative_path:
+        return {
+            "approval_target_kind": "path",
+            "approval_target_preview": f"path {relative_path}",
+        }
+
+    if command:
+        return {
+            "approval_target_kind": "command",
+            "approval_target_preview": f"cmd {command}",
+        }
+
+    return {}
+
+
 def _summarize_tool_value(value: object, limit: int = 120) -> str:
     text = repr(value)
     if len(text) > limit:
@@ -447,6 +471,7 @@ def _approval_event_context(
         "approval_queue_after_current": queue_after_current,
         "approval_queue_has_more": queue_after_current > 0,
         "requires_confirmation": True,
+        **_approval_target_context(request.tool_name, request.args),
         **request.args,
     }
     shell_command_family = _approval_shell_command_family(request.tool_name, request.args)

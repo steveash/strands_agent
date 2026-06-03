@@ -105,6 +105,8 @@ def test_fake_runtime_returns_pending_approval_for_risky_mutation_prompt() -> No
     assert result.events[4].data["approval_queue_after_current"] == 1
     assert result.events[4].data["approval_queue_has_more"] is True
     assert result.events[4].data["next_pending_tool"] == "replace_text"
+    assert result.events[4].data["approval_target_kind"] == "path"
+    assert result.events[4].data["approval_target_preview"] == "path notes.txt"
     assert result.events[4].data["approval_age_summary"]
     assert result.events[4].data["steering_stage"] == "requested"
     assert result.events[4].data["pending_count"] == 2
@@ -126,6 +128,8 @@ def test_fake_runtime_returns_pending_approval_for_shell_command_prompt() -> Non
     assert result.pending_approval.args["command"] == "pytest -q"
     assert result.events[2].data["approval_tool_family"] == "test"
     assert result.events[2].data["shell_command_family"] == "pytest"
+    assert result.events[2].data["approval_target_kind"] == "command"
+    assert result.events[2].data["approval_target_preview"] == "cmd pytest -q"
     assert result.events[2].data["approval_queue_total"] == 1
     assert result.events[2].data["approval_queue_after_current"] == 0
     assert result.events[2].data["approval_queue_has_more"] is False
@@ -183,6 +187,8 @@ def test_fake_runtime_approval_resolution_executes_current_request_and_surfaces_
     assert approved.events[3].data["follow_up_mode"] == "approved_tool_result"
     assert approved.events[3].data["agent_continuation"] is True
     assert approved.events[3].data["tool_result_preview"] == "Simulated overwrite of notes.txt."
+    assert approved.events[3].data["approval_target_kind"] == "path"
+    assert approved.events[3].data["approval_target_preview"] == "path notes.txt"
     assert approved.events[3].data["approval_queue_total"] == 2
     assert approved.events[3].data["approval_queue_after_current"] == 1
     assert approved.events[3].data["next_pending_tool"] == "replace_text"
@@ -217,6 +223,8 @@ def test_fake_runtime_denial_resolution_clears_last_pending_request() -> None:
     assert denied.events[1].data["follow_up_mode"] == "denied_tool_request"
     assert denied.events[1].data["agent_continuation"] is True
     assert denied.events[1].data["approval_tool_family"] == "edit"
+    assert denied.events[1].data["approval_target_kind"] == "path"
+    assert denied.events[1].data["approval_target_preview"] == "path notes.txt"
     assert denied.events[1].data["approval_queue_total"] == 1
     assert denied.events[1].data["approval_queue_after_current"] == 0
     assert denied.pending_approval is None
@@ -295,6 +303,8 @@ def test_live_runtime_can_restore_pending_approvals_without_requeuing(monkeypatc
     assert result.events[3].data["approval_restored"] is True
     assert result.events[3].data["approval_queue_total"] == 1
     assert result.events[3].data["approval_queue_after_current"] == 0
+    assert result.events[3].data["approval_target_kind"] == "path"
+    assert result.events[3].data["approval_target_preview"] == "path notes.txt"
     assert result.events[3].data["steering_stage"] == "continued"
     assert result.pending_approval is None
     assert "continued:" in result.text
@@ -347,6 +357,8 @@ def test_live_runtime_can_restore_shell_pending_approval(monkeypatch: pytest.Mon
     assert result.events[3].data["approval_tool_family"] == "shell"
     assert result.events[3].data["approval_queue_total"] == 1
     assert result.events[3].data["approval_queue_after_current"] == 0
+    assert result.events[3].data["approval_target_kind"] == "command"
+    assert result.events[3].data["approval_target_preview"] == "cmd pwd"
     assert result.events[3].data["follow_up_mode"] == "approved_tool_result"
 
 
@@ -398,6 +410,8 @@ def test_live_runtime_can_restore_pending_approvals_and_deny_without_execution(
     assert result.events[1].data["approval_restored"] is True
     assert result.events[1].data["approval_queue_total"] == 1
     assert result.events[1].data["approval_queue_after_current"] == 0
+    assert result.events[1].data["approval_target_kind"] == "path"
+    assert result.events[1].data["approval_target_preview"] == "path notes.txt"
     assert result.pending_approval is None
     assert "continued:" in result.text
 

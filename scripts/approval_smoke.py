@@ -35,6 +35,12 @@ def main() -> int:
             and pending_event.data.get("next_pending_tool") == "replace_text",
         ),
         (
+            "initial target schema",
+            pending_event is not None
+            and pending_event.data.get("approval_target_kind") == "path"
+            and pending_event.data.get("approval_target_preview") == "path notes.txt",
+        ),
+        (
             "timeline_pending_summary",
             any("approval pending edit via fake_runtime | queue 1/2 | path notes.txt | next replace_text" in line for line in initial_summaries),
         ),
@@ -68,12 +74,21 @@ def main() -> int:
                     approved_follow_up_event is not None
                     and approved_follow_up_event.data.get("approval_queue_total") == 2
                     and approved_follow_up_event.data.get("approval_queue_after_current") == 1
-                    and approved_follow_up_event.data.get("next_pending_tool") == "replace_text",
+                    and approved_follow_up_event.data.get("next_pending_tool") == "replace_text"
+                    and approved_follow_up_event.data.get("approval_target_preview") == "path notes.txt",
                 ),
                 (
                     "timeline_approved_summary",
                     any(
                         "approval approved edit via fake_runtime | queue 1/2 | path notes.txt" in line
+                        and "resumed" in line
+                        for line in approved_summaries
+                    )
+                    and any(
+                        "approval continued edit via fake_runtime | queue 1/2 | path notes.txt | result Simulated overwrite of notes.txt."
+                        in line
+                        and "next replace_text" in line
+                        and "continue approved result" in line
                         and "resumed" in line
                         for line in approved_summaries
                     )
@@ -117,11 +132,17 @@ def main() -> int:
                     "denied queue schema",
                     denied_follow_up_event is not None
                     and denied_follow_up_event.data.get("approval_queue_total") == 1
-                    and denied_follow_up_event.data.get("approval_queue_after_current") == 0,
+                    and denied_follow_up_event.data.get("approval_queue_after_current") == 0
+                    and denied_follow_up_event.data.get("approval_target_preview") == "path notes.txt",
                 ),
                 (
                     "timeline_denied_summary",
-                    any("approval denied edit via fake_runtime | queue 1/1 | path notes.txt" in line for line in denied_summaries),
+                    any("approval denied edit via fake_runtime | queue 1/1 | path notes.txt" in line for line in denied_summaries)
+                    and any(
+                        "approval continued edit via fake_runtime | queue 1/1 | path notes.txt | continue denied request"
+                        in line
+                        for line in denied_summaries
+                    ),
                 ),
             ]
         )

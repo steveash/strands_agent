@@ -94,7 +94,8 @@ What exists now:
 - persisted `session_state.json` plus legacy-compatible `pending_approvals.json` so queued confirmations, lightweight TUI view state, and partially typed prompt drafts can be restored after restart instead of disappearing with process memory,
 - approval-aware fake runtime flows that can demonstrate multiple queued approvals in sequence without needing live credentials,
 - live-runtime tool wiring that can queue confirm-needed mutations, wait for explicit approval, execute the approved tool, and then continue the Strands conversation with a follow-up prompt,
-- approval lifecycle events that now carry shared `steering_stage`, `approval_tool_family`, and synthetic continuation metadata so fake/live approval recovery can be inspected with the same mental model,
+- approval lifecycle events that now carry shared `steering_stage`, `approval_tool_family`, normalized approval target metadata, and synthetic continuation metadata so fake/live approval recovery can be inspected with the same mental model,
+- compact intervention timeline summaries that now distinguish direct approval outcomes from the synthetic post-approval `approval continued ...` follow-up prompt-preparation step, including target and tool-result cues,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, compact human-readable summary lines, and raw structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence/intervention views,
 - keyboard-driven `Ctrl+T` detail and `Ctrl+R` raw-data toggles so the event pane can switch between compact summary-only and fully expanded observability views,
@@ -130,31 +131,29 @@ What exists now:
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- extended `src/strands_agent_tui/sessions/picker.py` so focused `workspace-edit` and `shell-test` selected previews now enumerate multi-approval pending-only queues when more than one approval shares the lane,
-- kept that numbered queue-breakdown rendering shared across both the launch-time picker and the in-app `F11` session switcher, including fresh vs restored provenance plus target, age, UTC timestamp, and age-source labeling for each queue item,
-- extended `tests/test_sessions.py` and `tests/test_app.py` to lock in the new queue-breakdown output across both reopen surfaces,
-- updated `scripts/session_picker_smoke.py` plus `scripts/session_switcher_smoke.py` so the runnable walkthroughs assert both the queue-provenance lines and the numbered queue breakdowns end to end,
+- extended `src/strands_agent_tui/runtime.py` so steering/intervention events now emit normalized approval target metadata (`approval_target_kind` / `approval_target_preview`) for both fake and live approval flows,
+- refined `src/strands_agent_tui/timeline.py` so `approval_follow_up_prepared` now renders as a distinct `approval continued ...` summary instead of looking like a second generic approval event, including tool-result and continuation-mode cues,
+- extended `tests/test_runtime.py`, `tests/test_timeline.py`, and `tests/test_app.py` to lock in the new schema and the more legible continuation summaries,
+- updated `scripts/approval_smoke.py` plus `tests/test_smoke_scripts.py` so the approval walkthrough now asserts target normalization and continued-summary rendering end to end,
 - and safely self-unblocked repo inspection after discovering `rg` was unavailable in the shell by switching to `grep`, while keeping all validation non-destructive.
 
 Why this matters now:
-- the backlog rollups already explained that multiple pending approvals could exist in the same focused lane, but the highlighted-session preview still collapsed that detail into a single summary line,
-- surfacing the exact queued approvals directly in the selected preview makes approval-backed Strands work easier to audit while moving between saved sessions,
-- and it sharpens one of the core lessons of this prototype: pending tool work is part of the observable agent state, so restored vs fresh queue items should stay explicit instead of being hidden behind aggregate summary math.
+- the prototype already exposed approval queues, but the compact timeline still made the synthetic post-approval continuation step look too much like another approval event,
+- normalizing the approval target and explicitly labeling continuation preparation makes fake/live Strands intervention traces easier to compare and reason about,
+- and it sharpens one of the core lessons of this repo: approval handling is not just a modal pause, it is part of the observable agent loop with its own resumable state and follow-up prompts.
 
 How we know the prototype is working right now:
-- session-picker tests now cover numbered pending-only queue breakdowns for both `workspace-edit` and `shell-test`,
-- app-level switcher coverage proves the same breakdown lines survive through the in-app `F11` reopen surface,
-- both reopen smoke walkthroughs now assert the queue-breakdown output in real rendered text,
-- and the full pytest suite still passes after the preview refinement landed.
+- runtime tests now prove both fake and live approval flows emit normalized target metadata for path-backed edits and command-backed shell requests,
+- timeline tests now prove follow-up prompt preparation renders as a dedicated `approval continued ...` summary with result and continuation cues,
+- the TUI regression shows the improved continuation summary is visible in the real event pane after approving a pending mutation,
+- the approval smoke walkthrough now asserts the same schema and summary behavior end to end,
+- and the full pytest suite still passes after the intervention-schema refinement landed.
 
 Current evidence:
-- targeted session-picker queue-breakdown regressions: `.venv/bin/pytest -q tests/test_sessions.py -k 'enumerates_multi_approval_pending_only_lane_queues or queue_provenance or pending_only_age'` => `2 passed, 67 deselected in 0.94s`,
-- targeted switcher queue-breakdown regressions: `.venv/bin/pytest -q tests/test_app.py -k 'enumerates_multi_approval_pending_only_lane_queues or queue_provenance or pending_only_age_fallback_sources'` => `3 passed, 42 deselected in 3.32s`,
-- full picker regression suite: `.venv/bin/pytest -q tests/test_sessions.py` => `69 passed in 1.96s`,
-- full switcher/app regression suite: `.venv/bin/pytest -q tests/test_app.py` => `45 passed in 35.38s`,
-- picker walkthrough smoke: `.venv/bin/python scripts/session_picker_smoke.py` => includes `picker_pending_only_preview_queue_provenance= True` and `picker_pending_only_preview_queue_breakdown= True`,
-- switcher walkthrough smoke: `.venv/bin/python scripts/session_switcher_smoke.py` => includes `switcher_pending_only_preview_queue_provenance= True` and `switcher_pending_only_preview_queue_breakdown= True`,
-- full automated tests: `.venv/bin/pytest -q` => `432 passed in 66.15s (0:01:06)`.
+- targeted runtime/timeline approval regressions: `.venv/bin/pytest -q tests/test_timeline.py tests/test_runtime.py` => `41 passed in 0.72s`,
+- targeted TUI + approval-smoke regressions: `.venv/bin/pytest -q tests/test_app.py tests/test_smoke_scripts.py -k 'pending_approval_can_be_approved_from_tui_and_persisted or approval_smoke'` => `2 passed, 171 deselected in 2.65s`,
+- approval walkthrough smoke: `.venv/bin/python scripts/approval_smoke.py` => includes `initial target schema= True`, `timeline_approved_summary= True`, and `timeline_denied_summary= True`,
+- full automated tests: `.venv/bin/pytest -q` => `441 passed in 64.46s (0:01:04)`.
 
 ## First five phases
 
@@ -712,7 +711,7 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. keep the fake runtime path green while refining the event schema around steering/intervention events
+1. carry the normalized approval target / continuation schema into recent-session intervention previews and rollups so saved-session triage matches the live timeline mental model
 2. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 3. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 4. decide whether stale-focused backlog summaries should also surface the configured cutoff in page-level metric lines, not just legends/prompts/banners
@@ -744,10 +743,10 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
+- carry the normalized approval target / continuation schema into recent-session intervention previews and filter rollups so saved-session triage matches the live timeline language
 - decide whether the compact timeline view should eventually support per-event expansion instead of only global detail/raw toggles
 - decide whether smoke-doc artifact bundles should fold into `scripts/smoke_matrix.py` as an optional review lane
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
-- keep tightening the fake/live event schema around steering and intervention milestones so timeline summaries stay portable across runtimes
 - decide whether the `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public

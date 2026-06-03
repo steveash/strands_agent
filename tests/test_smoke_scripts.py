@@ -319,6 +319,7 @@ def test_approval_smoke_emits_timeline_summary_checks(monkeypatch) -> None:
         check_names=[
             "initial approval schema",
             "initial queue schema",
+            "initial target schema",
             "timeline_pending_summary",
             "approved execution schema",
             "approved queue schema",
@@ -333,6 +334,7 @@ def test_approval_smoke_emits_timeline_summary_checks(monkeypatch) -> None:
         for line in lines
         if line.startswith("initial intervention summaries:")
     )
+    assert "initial target schema= True" in lines
     assert "timeline_pending_summary= True" in lines
     assert "timeline_approved_summary= True" in lines
     assert "timeline_denied_summary= True" in lines

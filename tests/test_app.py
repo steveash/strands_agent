@@ -577,6 +577,8 @@ async def test_pending_approval_can_be_approved_from_tui_and_persisted(tmp_path:
         assert "Approval: none" in status
         assert "Approval: none pending" in approval
         assert "kind=steering_approved | write_file" in events
+        assert "summary: approval continued edit via fake_runtime | queue 1/1 | path notes.txt | result Simulated overwrite of notes.txt." in events
+        assert "continue approved result" in events
         assert "kind=tool_finished | write_file" in events
         assert app.pending_approval is None
         assert len(app.history) == 2

@@ -86,6 +86,7 @@ def _summarize_approval_event(event: RuntimeEvent) -> str:
             queue_total = max(pending_count, 1)
         elif remaining_pending_count is not None:
             queue_total = max(remaining_pending_count, 0) + 1
+    target_preview = _text(data.get("approval_target_preview"))
     command = _text(data.get("command"))
     relative_path = _text(data.get("relative_path"))
     next_pending_tool = _text(data.get("next_pending_tool"))
@@ -93,6 +94,27 @@ def _summarize_approval_event(event: RuntimeEvent) -> str:
     restored = bool(data.get("approval_restored", False))
     resumed = bool(data.get("resumed_from_approval", False))
     stage = _text(data.get("steering_stage"))
+
+    if not target_preview:
+        if command:
+            target_preview = f"cmd {command}"
+        elif relative_path:
+            target_preview = f"path {relative_path}"
+
+    if event.kind == "approval_follow_up_prepared":
+        return _summarize_approval_follow_up_event(
+            family=family,
+            source=source,
+            queue_total=queue_total,
+            queue_position=queue_position,
+            target_preview=target_preview,
+            next_pending_tool=next_pending_tool,
+            age_summary=age_summary,
+            restored=restored,
+            resumed=resumed,
+            follow_up_mode=_text(data.get("follow_up_mode")),
+            tool_result_preview=_text(data.get("tool_result_preview")),
+        )
 
     head = f"approval {status}"
     if family:
@@ -103,10 +125,8 @@ def _summarize_approval_event(event: RuntimeEvent) -> str:
     bits = [head]
     if queue_total is not None:
         bits.append(f"queue {queue_position}/{queue_total}")
-    if command:
-        bits.append(f"cmd {command}")
-    elif relative_path:
-        bits.append(f"path {relative_path}")
+    if target_preview:
+        bits.append(target_preview)
     if next_pending_tool:
         bits.append(f"next {next_pending_tool}")
     if age_summary:
@@ -117,6 +137,48 @@ def _summarize_approval_event(event: RuntimeEvent) -> str:
         bits.append("resumed")
     if stage and stage not in {"requested", status}:
         bits.append(f"stage {stage}")
+    return " | ".join(bits)
+
+
+def _summarize_approval_follow_up_event(
+    *,
+    family: str,
+    source: str,
+    queue_total: int | None,
+    queue_position: int,
+    target_preview: str,
+    next_pending_tool: str,
+    age_summary: str,
+    restored: bool,
+    resumed: bool,
+    follow_up_mode: str,
+    tool_result_preview: str,
+) -> str:
+    head = "approval continued"
+    if family:
+        head += f" {family}"
+    if source:
+        head += f" via {source}"
+
+    bits = [head]
+    if queue_total is not None:
+        bits.append(f"queue {queue_position}/{queue_total}")
+    if target_preview:
+        bits.append(target_preview)
+    if tool_result_preview:
+        bits.append(f"result {tool_result_preview}")
+    if next_pending_tool:
+        bits.append(f"next {next_pending_tool}")
+
+    follow_up_label = _follow_up_mode_label(follow_up_mode)
+    if follow_up_label:
+        bits.append(f"continue {follow_up_label}")
+    if age_summary:
+        bits.append(f"age {age_summary}")
+    if restored:
+        bits.append("restored")
+    if resumed:
+        bits.append("resumed")
     return " | ".join(bits)
 
 
@@ -258,6 +320,14 @@ def _approval_status_from_kind(kind: str) -> str:
     if kind == "steering_blocked":
         return "blocked"
     return ""
+
+
+def _follow_up_mode_label(mode: str) -> str:
+    if mode == "approved_tool_result":
+        return "approved result"
+    if mode == "denied_tool_request":
+        return "denied request"
+    return mode
 
 
 def _detail_preview(detail: str, limit: int = 80) -> str:

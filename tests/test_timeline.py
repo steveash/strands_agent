@@ -28,15 +28,40 @@ def test_summarize_event_compacts_intervention_queue_context() -> None:
             "approval_tool_family": "edit",
             "approval_queue_position": 1,
             "approval_queue_total": 2,
+            "approval_target_preview": "path notes.txt",
             "next_pending_tool": "replace_text",
             "approval_age_summary": "3m",
-            "relative_path": "notes.txt",
         },
     )
 
     assert (
         summarize_event(event)
         == "approval pending edit via fake_runtime | queue 1/2 | path notes.txt | next replace_text | age 3m"
+    )
+
+
+def test_summarize_event_distinguishes_follow_up_preparation() -> None:
+    event = runtime_event(
+        kind="approval_follow_up_prepared",
+        title="write_file",
+        detail="Prepared the synthetic continuation prompt for the agent after resolving the approval request.",
+        data={
+            "approval_status": "approved",
+            "approval_source": "fake_runtime",
+            "approval_tool_family": "edit",
+            "approval_queue_position": 1,
+            "approval_queue_total": 2,
+            "approval_target_preview": "path notes.txt",
+            "next_pending_tool": "replace_text",
+            "follow_up_mode": "approved_tool_result",
+            "tool_result_preview": "Simulated overwrite of notes.txt.",
+            "resumed_from_approval": True,
+        },
+    )
+
+    assert (
+        summarize_event(event)
+        == "approval continued edit via fake_runtime | queue 1/2 | path notes.txt | result Simulated overwrite of notes.txt. | next replace_text | continue approved result | resumed"
     )
 
 
