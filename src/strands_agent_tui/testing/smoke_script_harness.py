@@ -158,6 +158,41 @@ class ReviewArtifactOutputObservation:
         )
 
 
+SmokeWrapperFailureStep = Literal["failed", "hint", "failure_summary"]
+
+
+@dataclass(frozen=True)
+class SmokeWrapperFailureObservation:
+    failed_index: int | None
+    hint_index: int | None
+    failure_summary_index: int | None
+    failed_line: str
+    hint_line: str
+    failure_summary_line: str
+
+    def index(self, step: SmokeWrapperFailureStep) -> int | None:
+        if step == "failed":
+            return self.failed_index
+        if step == "hint":
+            return self.hint_index
+        return self.failure_summary_index
+
+    def line(self, step: SmokeWrapperFailureStep) -> str:
+        if step == "failed":
+            return self.failed_line
+        if step == "hint":
+            return self.hint_line
+        return self.failure_summary_line
+
+    def present(self, step: SmokeWrapperFailureStep) -> bool:
+        return bool(self.line(step))
+
+    def appears_before(self, left: SmokeWrapperFailureStep, right: SmokeWrapperFailureStep) -> bool:
+        left_index = self.index(left)
+        right_index = self.index(right)
+        return left_index is not None and right_index is not None and left_index < right_index
+
+
 SmokeMatrixDocsReviewFailureStep = Literal[
     "failed",
     "metadata",
@@ -377,6 +412,35 @@ def _line_at_index(lines: Sequence[str], index: int | None) -> str:
 
 def detail_safe_text(text: str) -> str:
     return text.replace("= False", "=False")
+
+
+def collect_smoke_wrapper_failure_output(
+    output_lines: Sequence[str],
+    *,
+    hint_prefix: str,
+    failure_summary_prefix: str,
+    failed_line_prefix: str | None = None,
+    failed_line_exact: str | None = None,
+) -> SmokeWrapperFailureObservation:
+    if (failed_line_prefix is None) == (failed_line_exact is None):
+        raise ValueError("provide exactly one failed-line matcher: failed_line_prefix or failed_line_exact")
+
+    failed_index = (
+        _find_exact_line_index(output_lines, failed_line_exact)
+        if failed_line_exact is not None
+        else find_prefixed_line_index(output_lines, failed_line_prefix)
+    )
+    hint_index = find_prefixed_line_index(output_lines, hint_prefix)
+    failure_summary_index = find_prefixed_line_index(output_lines, failure_summary_prefix)
+
+    return SmokeWrapperFailureObservation(
+        failed_index=failed_index,
+        hint_index=hint_index,
+        failure_summary_index=failure_summary_index,
+        failed_line=_line_at_index(output_lines, failed_index),
+        hint_line=_line_at_index(output_lines, hint_index),
+        failure_summary_line=_line_at_index(output_lines, failure_summary_index),
+    )
 
 
 def collect_smoke_matrix_docs_review_failure_output(

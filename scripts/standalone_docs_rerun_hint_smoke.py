@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    collect_smoke_wrapper_failure_output,
     detail_safe_text,
     emit_smoke_results,
-    find_prefixed_line_index,
     run_script_module_main_via_driver_in_temp_checkout,
 )
 
@@ -58,13 +58,12 @@ def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
     try:
         stdout_lines = smoke_run.stdout_lines
         stderr_lines = smoke_run.stderr_lines
-        failed_index = find_prefixed_line_index(stderr_lines, FAILED_LINE_PREFIX)
-        hint_index = find_prefixed_line_index(stderr_lines, HINT_PREFIX)
-        summary_index = find_prefixed_line_index(stderr_lines, SUMMARY_PREFIX)
-
-        failed_line = stderr_lines[failed_index] if failed_index is not None else ""
-        hint_line = stderr_lines[hint_index] if hint_index is not None else ""
-        summary_line = stderr_lines[summary_index] if summary_index is not None else ""
+        failure_output = collect_smoke_wrapper_failure_output(
+            stderr_lines,
+            failed_line_prefix=FAILED_LINE_PREFIX,
+            hint_prefix=HINT_PREFIX,
+            failure_summary_prefix=SUMMARY_PREFIX,
+        )
 
         return [
             ("checkout_root", str(smoke_run.checkout_root)),
@@ -73,23 +72,23 @@ def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
                 "stdout_false_line",
                 detail_safe_text(stdout_lines[1]) if len(stdout_lines) > 1 else "",
             ),
-            ("stderr_failed_line", detail_safe_text(failed_line)),
-            ("stderr_hint_line", hint_line),
-            ("stderr_summary_line", summary_line),
+            ("stderr_failed_line", detail_safe_text(failure_output.failed_line)),
+            ("stderr_hint_line", failure_output.hint_line),
+            ("stderr_summary_line", failure_output.failure_summary_line),
             ("exit_code", smoke_run.exit_code),
             ("exit_code_non_zero", smoke_run.exit_code != 0),
             ("fix_check_summary_present", EXPECTED_FIX_SUMMARY_LINE in stdout_lines),
             ("false_line_present", EXPECTED_FALSE_LINE in stdout_lines),
-            ("failed_line_present", bool(failed_line)),
-            ("hint_line_present", bool(hint_line)),
-            ("summary_line_present", bool(summary_line)),
+            ("failed_line_present", failure_output.present("failed")),
+            ("hint_line_present", failure_output.present("hint")),
+            ("summary_line_present", failure_output.present("failure_summary")),
             (
                 "hint_after_failed_line",
-                failed_index is not None and hint_index is not None and failed_index < hint_index,
+                failure_output.appears_before("failed", "hint"),
             ),
             (
                 "hint_before_failure_summary",
-                hint_index is not None and summary_index is not None and hint_index < summary_index,
+                failure_output.appears_before("hint", "failure_summary"),
             ),
         ]
     finally:

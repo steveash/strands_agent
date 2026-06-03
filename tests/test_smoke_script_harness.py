@@ -10,8 +10,10 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+    collect_smoke_wrapper_failure_output,
     collect_smoke_matrix_docs_review_failure_output,
     SmokeMatrixDocsReviewObserverSpec,
+    SmokeWrapperFailureObservation,
     build_script_driver_source,
     build_smoke_matrix_docs_review_observer_spec,
     collect_review_artifact_output,
@@ -236,6 +238,60 @@ def test_collect_smoke_matrix_docs_review_failure_output_tracks_shared_failure_o
     assert failure_output.appears_before("live_runtime_hint", "docs_review_only_hint") is True
     assert failure_output.appears_before("docs_review_only_hint", "failure_summary") is True
     assert failure_output.appears_before("failed", "failure_summary") is False
+
+
+def test_collect_smoke_wrapper_failure_output_tracks_shared_failure_ordering() -> None:
+    lines = [
+        "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+        "fix_post_check= False",
+        "docs-artifacts smoke failed fast: fix_post_check= False",
+        "[standalone-smoke] hint: rerun standalone_smoke.py docs-review-only",
+        "[standalone-smoke] summary: 5/6 targets passed before failure in 0.10s",
+    ]
+
+    failure_output = collect_smoke_wrapper_failure_output(
+        lines,
+        failed_line_prefix="docs-artifacts smoke failed fast: ",
+        hint_prefix="[standalone-smoke] hint: ",
+        failure_summary_prefix="[standalone-smoke] summary: 5/6 targets passed before failure in ",
+    )
+
+    assert isinstance(failure_output, SmokeWrapperFailureObservation)
+    assert failure_output.line("failed") == lines[2]
+    assert failure_output.line("hint") == lines[3]
+    assert failure_output.line("failure_summary") == lines[4]
+    assert failure_output.present("failed") is True
+    assert failure_output.present("hint") is True
+    assert failure_output.present("failure_summary") is True
+    assert failure_output.appears_before("failed", "hint") is True
+    assert failure_output.appears_before("hint", "failure_summary") is True
+    assert failure_output.appears_before("failed", "failure_summary") is True
+
+
+def test_collect_smoke_wrapper_failure_output_validates_failed_matcher_contract() -> None:
+    lines = ["docs-artifacts smoke failed fast: fix_post_check= False"]
+
+    with pytest.raises(
+        ValueError,
+        match="provide exactly one failed-line matcher: failed_line_prefix or failed_line_exact",
+    ):
+        collect_smoke_wrapper_failure_output(
+            lines,
+            hint_prefix="[standalone-smoke] hint: ",
+            failure_summary_prefix="[standalone-smoke] summary: ",
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="provide exactly one failed-line matcher: failed_line_prefix or failed_line_exact",
+    ):
+        collect_smoke_wrapper_failure_output(
+            lines,
+            failed_line_prefix="docs-artifacts smoke failed fast: ",
+            failed_line_exact="docs-artifacts smoke failed fast: fix_post_check= False",
+            hint_prefix="[standalone-smoke] hint: ",
+            failure_summary_prefix="[standalone-smoke] summary: ",
+        )
 
 
 def test_collect_smoke_matrix_docs_review_failure_output_validates_failed_matcher_contract(
