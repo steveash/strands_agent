@@ -158,6 +158,86 @@ class ReviewArtifactOutputObservation:
         )
 
 
+SmokeMatrixDocsReviewFailureStep = Literal[
+    "failed",
+    "metadata",
+    "artifacts",
+    "matrix_summary",
+    "bundle_rerun_hint",
+    "docs_review_only_hint",
+    "live_runtime_hint",
+    "missing_api_key_hint",
+    "failure_summary",
+]
+
+
+@dataclass(frozen=True)
+class SmokeMatrixDocsReviewFailureObservation:
+    review_output: ReviewArtifactOutputObservation
+    failed_index: int | None
+    bundle_rerun_hint_index: int | None
+    docs_review_only_hint_index: int | None
+    live_runtime_hint_index: int | None
+    missing_api_key_hint_index: int | None
+    failure_summary_index: int | None
+    failed_line: str
+    bundle_rerun_hint_line: str
+    docs_review_only_hint_line: str
+    live_runtime_hint_line: str
+    missing_api_key_hint_line: str
+    failure_summary_line: str
+
+    def index(self, step: SmokeMatrixDocsReviewFailureStep) -> int | None:
+        if step == "failed":
+            return self.failed_index
+        if step == "metadata":
+            return self.review_output.metadata_index
+        if step == "artifacts":
+            return self.review_output.artifacts_index
+        if step == "matrix_summary":
+            return self.review_output.matrix_summary_index
+        if step == "bundle_rerun_hint":
+            return self.bundle_rerun_hint_index
+        if step == "docs_review_only_hint":
+            return self.docs_review_only_hint_index
+        if step == "live_runtime_hint":
+            return self.live_runtime_hint_index
+        if step == "missing_api_key_hint":
+            return self.missing_api_key_hint_index
+        return self.failure_summary_index
+
+    def line(self, step: SmokeMatrixDocsReviewFailureStep) -> str:
+        if step == "failed":
+            return self.failed_line
+        if step == "metadata":
+            return self.review_output.metadata_line
+        if step == "artifacts":
+            return self.review_output.artifacts_line
+        if step == "matrix_summary":
+            return self.review_output.matrix_summary_line
+        if step == "bundle_rerun_hint":
+            return self.bundle_rerun_hint_line
+        if step == "docs_review_only_hint":
+            return self.docs_review_only_hint_line
+        if step == "live_runtime_hint":
+            return self.live_runtime_hint_line
+        if step == "missing_api_key_hint":
+            return self.missing_api_key_hint_line
+        return self.failure_summary_line
+
+    def present(self, step: SmokeMatrixDocsReviewFailureStep) -> bool:
+        return bool(self.line(step))
+
+    def appears_before(
+        self,
+        left: SmokeMatrixDocsReviewFailureStep,
+        right: SmokeMatrixDocsReviewFailureStep,
+    ) -> bool:
+        left_index = self.index(left)
+        right_index = self.index(right)
+        return left_index is not None and right_index is not None and left_index < right_index
+
+
 @dataclass(frozen=True)
 class SmokeMatrixDocsReviewObserverSpec:
     requested_target_name: str
@@ -284,8 +364,78 @@ def find_prefixed_line_index(lines: Sequence[str], prefix: str) -> int | None:
     return None
 
 
+def _find_exact_line_index(lines: Sequence[str], expected_line: str) -> int | None:
+    for index, line in enumerate(lines):
+        if line == expected_line:
+            return index
+    return None
+
+
+def _line_at_index(lines: Sequence[str], index: int | None) -> str:
+    return lines[index] if index is not None else ""
+
+
 def detail_safe_text(text: str) -> str:
     return text.replace("= False", "=False")
+
+
+def collect_smoke_matrix_docs_review_failure_output(
+    output_lines: Sequence[str],
+    *,
+    review_output: ReviewArtifactOutputObservation,
+    failure_summary_prefix: str,
+    failed_line_prefix: str | None = None,
+    failed_line_exact: str | None = None,
+    bundle_rerun_hint_prefix: str | None = None,
+    docs_review_only_hint_prefix: str | None = None,
+    live_runtime_hint_prefix: str | None = None,
+    missing_api_key_hint_prefix: str | None = None,
+) -> SmokeMatrixDocsReviewFailureObservation:
+    if (failed_line_prefix is None) == (failed_line_exact is None):
+        raise ValueError("provide exactly one failed-line matcher: failed_line_prefix or failed_line_exact")
+
+    failed_index = (
+        _find_exact_line_index(output_lines, failed_line_exact)
+        if failed_line_exact is not None
+        else find_prefixed_line_index(output_lines, failed_line_prefix)
+    )
+    bundle_rerun_hint_index = (
+        find_prefixed_line_index(output_lines, bundle_rerun_hint_prefix)
+        if bundle_rerun_hint_prefix is not None
+        else None
+    )
+    docs_review_only_hint_index = (
+        find_prefixed_line_index(output_lines, docs_review_only_hint_prefix)
+        if docs_review_only_hint_prefix is not None
+        else None
+    )
+    live_runtime_hint_index = (
+        find_prefixed_line_index(output_lines, live_runtime_hint_prefix)
+        if live_runtime_hint_prefix is not None
+        else None
+    )
+    missing_api_key_hint_index = (
+        find_prefixed_line_index(output_lines, missing_api_key_hint_prefix)
+        if missing_api_key_hint_prefix is not None
+        else None
+    )
+    failure_summary_index = find_prefixed_line_index(output_lines, failure_summary_prefix)
+
+    return SmokeMatrixDocsReviewFailureObservation(
+        review_output=review_output,
+        failed_index=failed_index,
+        bundle_rerun_hint_index=bundle_rerun_hint_index,
+        docs_review_only_hint_index=docs_review_only_hint_index,
+        live_runtime_hint_index=live_runtime_hint_index,
+        missing_api_key_hint_index=missing_api_key_hint_index,
+        failure_summary_index=failure_summary_index,
+        failed_line=_line_at_index(output_lines, failed_index),
+        bundle_rerun_hint_line=_line_at_index(output_lines, bundle_rerun_hint_index),
+        docs_review_only_hint_line=_line_at_index(output_lines, docs_review_only_hint_index),
+        live_runtime_hint_line=_line_at_index(output_lines, live_runtime_hint_index),
+        missing_api_key_hint_line=_line_at_index(output_lines, missing_api_key_hint_index),
+        failure_summary_line=_line_at_index(output_lines, failure_summary_index),
+    )
 
 
 def collect_review_artifact_output(

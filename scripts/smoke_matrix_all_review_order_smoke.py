@@ -6,9 +6,9 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     build_smoke_matrix_docs_review_observer_spec,
+    collect_smoke_matrix_docs_review_failure_output,
     detail_safe_text,
     emit_smoke_results,
-    find_prefixed_line_index,
     load_script_module,
     observe_review_artifact_output_in_temp_checkout,
     smoke_cli_docs_parity_rerun_hint,
@@ -44,36 +44,33 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
     )
     try:
         stderr_lines = smoke_run.stderr_lines
-        hint_index = find_prefixed_line_index(stderr_lines, LIVE_HINT_PREFIX)
-        docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_REVIEW_ONLY_HINT_PREFIX)
-        summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
-        failed_line = next(
-            (line for line in stderr_lines if line == "standalone smoke failed fast: live_runtime_requested= False"),
-            "",
+        failure_output = collect_smoke_matrix_docs_review_failure_output(
+            stderr_lines,
+            review_output=review_output,
+            failed_line_exact="standalone smoke failed fast: live_runtime_requested= False",
+            live_runtime_hint_prefix=LIVE_HINT_PREFIX,
+            docs_review_only_hint_prefix=DOCS_REVIEW_ONLY_HINT_PREFIX,
+            failure_summary_prefix=FAILURE_SUMMARY_PREFIX,
         )
-        display_failed_line = detail_safe_text(failed_line)
-        hint_line = stderr_lines[hint_index] if hint_index is not None else ""
-        docs_hint_line = stderr_lines[docs_hint_index] if docs_hint_index is not None else ""
-        summary_line = stderr_lines[summary_index] if summary_index is not None else ""
 
         return [
             ("checkout_root", str(smoke_run.checkout_root)),
-            ("stderr_failed_line", display_failed_line),
+            ("stderr_failed_line", detail_safe_text(failure_output.failed_line)),
             ("stderr_metadata_line", review_output.metadata_line),
             ("stderr_artifacts_line", review_output.artifacts_line),
             ("stderr_matrix_summary_line", review_output.matrix_summary_line),
-            ("stderr_hint_line", hint_line),
-            ("stderr_docs_hint_line", docs_hint_line),
-            ("stderr_summary_line", summary_line),
+            ("stderr_hint_line", failure_output.live_runtime_hint_line),
+            ("stderr_docs_hint_line", failure_output.docs_review_only_hint_line),
+            ("stderr_summary_line", failure_output.failure_summary_line),
             ("exit_code", smoke_run.exit_code),
             ("exit_code_non_zero", smoke_run.exit_code != 0),
-            ("failed_line_present", bool(failed_line)),
+            ("failed_line_present", failure_output.present("failed")),
             ("metadata_line_present", review_output.metadata_line_present),
             ("artifacts_line_present", review_output.artifacts_line_present),
             ("matrix_summary_line_present", review_output.matrix_summary_line_present),
-            ("hint_line_present", bool(hint_line)),
-            ("docs_hint_line_present", bool(docs_hint_line)),
-            ("summary_line_present", bool(summary_line)),
+            ("hint_line_present", failure_output.present("live_runtime_hint")),
+            ("docs_hint_line_present", failure_output.present("docs_review_only_hint")),
+            ("summary_line_present", failure_output.present("failure_summary")),
             (
                 "metadata_targets_docs_review_all",
                 review_output.metadata_targets(review_spec.expected_target_name),
@@ -134,47 +131,35 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
             ),
             (
                 "metadata_before_hint",
-                review_output.metadata_index is not None
-                and hint_index is not None
-                and review_output.metadata_index < hint_index,
+                failure_output.appears_before("metadata", "live_runtime_hint"),
             ),
             (
                 "artifacts_before_hint",
-                review_output.artifacts_index is not None
-                and hint_index is not None
-                and review_output.artifacts_index < hint_index,
+                failure_output.appears_before("artifacts", "live_runtime_hint"),
             ),
             (
                 "matrix_summary_before_hint",
-                review_output.matrix_summary_index is not None
-                and hint_index is not None
-                and review_output.matrix_summary_index < hint_index,
+                failure_output.appears_before("matrix_summary", "live_runtime_hint"),
             ),
             (
                 "live_hint_before_docs_hint",
-                hint_index is not None and docs_hint_index is not None and hint_index < docs_hint_index,
+                failure_output.appears_before("live_runtime_hint", "docs_review_only_hint"),
             ),
             (
                 "docs_hint_before_failure_summary",
-                docs_hint_index is not None and summary_index is not None and docs_hint_index < summary_index,
+                failure_output.appears_before("docs_review_only_hint", "failure_summary"),
             ),
             (
                 "metadata_before_failure_summary",
-                review_output.metadata_index is not None
-                and summary_index is not None
-                and review_output.metadata_index < summary_index,
+                failure_output.appears_before("metadata", "failure_summary"),
             ),
             (
                 "artifacts_before_failure_summary",
-                review_output.artifacts_index is not None
-                and summary_index is not None
-                and review_output.artifacts_index < summary_index,
+                failure_output.appears_before("artifacts", "failure_summary"),
             ),
             (
                 "matrix_summary_before_failure_summary",
-                review_output.matrix_summary_index is not None
-                and summary_index is not None
-                and review_output.matrix_summary_index < summary_index,
+                failure_output.appears_before("matrix_summary", "failure_summary"),
             ),
         ]
     finally:

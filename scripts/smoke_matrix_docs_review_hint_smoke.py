@@ -6,9 +6,9 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     build_smoke_matrix_docs_review_observer_spec,
+    collect_smoke_matrix_docs_review_failure_output,
     detail_safe_text,
     emit_smoke_results,
-    find_prefixed_line_index,
     load_script_module,
     observe_script_module_main_via_driver_review_artifact_output,
     smoke_cli_docs_parity_rerun_hint,
@@ -66,36 +66,34 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
         stdout_lines = smoke_run.stdout_lines
         stderr_lines = smoke_run.stderr_lines
         stdout_last_line = stdout_lines[-1] if stdout_lines else ""
-        failed_index = find_prefixed_line_index(stderr_lines, FAILED_LINE_PREFIX)
-        bundle_rerun_hint_index = find_prefixed_line_index(stderr_lines, BUNDLE_RERUN_HINT_PREFIX)
-        hint_index = find_prefixed_line_index(stderr_lines, DOCS_REVIEW_ONLY_HINT_PREFIX)
-        summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
-        failed_line = stderr_lines[failed_index] if failed_index is not None else ""
-        bundle_rerun_hint_line = (
-            stderr_lines[bundle_rerun_hint_index] if bundle_rerun_hint_index is not None else ""
+        failure_output = collect_smoke_matrix_docs_review_failure_output(
+            stderr_lines,
+            review_output=review_output,
+            failed_line_prefix=FAILED_LINE_PREFIX,
+            bundle_rerun_hint_prefix=BUNDLE_RERUN_HINT_PREFIX,
+            docs_review_only_hint_prefix=DOCS_REVIEW_ONLY_HINT_PREFIX,
+            failure_summary_prefix=FAILURE_SUMMARY_PREFIX,
         )
-        hint_line = stderr_lines[hint_index] if hint_index is not None else ""
-        summary_line = stderr_lines[summary_index] if summary_index is not None else ""
 
         return [
             ("checkout_root", str(smoke_run.checkout_root)),
             ("stdout_last_line", stdout_last_line),
-            ("stderr_failed_line", detail_safe_text(failed_line)),
+            ("stderr_failed_line", detail_safe_text(failure_output.failed_line)),
             ("stderr_metadata_line", review_output.metadata_line),
             ("stderr_artifacts_line", review_output.artifacts_line),
             ("stderr_matrix_summary_line", review_output.matrix_summary_line),
-            ("stderr_bundle_rerun_hint_line", bundle_rerun_hint_line),
-            ("stderr_hint_line", hint_line),
-            ("stderr_summary_line", summary_line),
+            ("stderr_bundle_rerun_hint_line", failure_output.bundle_rerun_hint_line),
+            ("stderr_hint_line", failure_output.docs_review_only_hint_line),
+            ("stderr_summary_line", failure_output.failure_summary_line),
             ("exit_code", smoke_run.exit_code),
             ("exit_code_non_zero", smoke_run.exit_code != 0),
-            ("failed_line_present", bool(failed_line)),
+            ("failed_line_present", failure_output.present("failed")),
             ("metadata_line_present", review_output.metadata_line_present),
             ("artifacts_line_present", review_output.artifacts_line_present),
             ("matrix_summary_line_present", review_output.matrix_summary_line_present),
-            ("bundle_rerun_hint_line_present", bool(bundle_rerun_hint_line)),
-            ("hint_line_present", bool(hint_line)),
-            ("summary_line_present", bool(summary_line)),
+            ("bundle_rerun_hint_line_present", failure_output.present("bundle_rerun_hint")),
+            ("hint_line_present", failure_output.present("docs_review_only_hint")),
+            ("summary_line_present", failure_output.present("failure_summary")),
             (
                 "metadata_targets_docs_review_all",
                 review_output.metadata_targets(review_spec.expected_target_name),
@@ -152,30 +150,24 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             ),
             (
                 "bundle_rerun_hint_line_matches_matrix_summary_hint",
-                bundle_rerun_hint_line
+                failure_output.bundle_rerun_hint_line
                 == f"{BUNDLE_RERUN_HINT_PREFIX}{review_spec.expected_bundle_index_rerun_hint}",
             ),
             (
                 "bundle_rerun_hint_after_matrix_summary",
-                review_output.matrix_summary_index is not None
-                and bundle_rerun_hint_index is not None
-                and review_output.matrix_summary_index < bundle_rerun_hint_index,
+                failure_output.appears_before("matrix_summary", "bundle_rerun_hint"),
             ),
             (
                 "hint_after_matrix_summary",
-                review_output.matrix_summary_index is not None
-                and hint_index is not None
-                and review_output.matrix_summary_index < hint_index,
+                failure_output.appears_before("matrix_summary", "docs_review_only_hint"),
             ),
             (
                 "bundle_rerun_hint_before_docs_hint",
-                bundle_rerun_hint_index is not None
-                and hint_index is not None
-                and bundle_rerun_hint_index < hint_index,
+                failure_output.appears_before("bundle_rerun_hint", "docs_review_only_hint"),
             ),
             (
                 "hint_before_failure_summary",
-                hint_index is not None and summary_index is not None and hint_index < summary_index,
+                failure_output.appears_before("docs_review_only_hint", "failure_summary"),
             ),
             (
                 "stdout_docs_review_started",

@@ -10,6 +10,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+    collect_smoke_matrix_docs_review_failure_output,
     SmokeMatrixDocsReviewObserverSpec,
     build_script_driver_source,
     build_smoke_matrix_docs_review_observer_spec,
@@ -177,6 +178,104 @@ def test_collect_review_artifact_output_supports_matrix_summary_without_metadata
     assert observed.matrix_summary_artifact_root_matches("artifacts/review") is True
     assert observed.matrix_summary_path_matches("artifacts/review/matrix-summary.json") is True
     assert observed.matrix_summary_bundle_index_rerun_hint_matches("rerun docs parity") is True
+
+
+def test_collect_smoke_matrix_docs_review_failure_output_tracks_shared_failure_ordering(
+    tmp_path: Path,
+) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_payload = {
+        "bundle_index_rerun_hint": "rerun docs parity",
+        "display_name": "docs-review-all",
+        "target_name": "docs-review-all",
+        "artifact_root": "artifacts/review",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+    }
+    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
+        "[smoke-matrix] review artifacts: artifacts/review",
+        "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
+        "[smoke-matrix] review bundle rerun hint: rerun docs parity",
+        "[smoke-matrix] hint: live runtime guidance",
+        "[smoke-matrix] hint: docs-review-only guidance",
+        "[smoke-matrix] summary: 0/4 bundles passed before failure in 0.10s",
+        "standalone smoke exited with status 1",
+    ]
+    review_output = collect_review_artifact_output(
+        lines,
+        checkout_root=checkout_root,
+        metadata_prefix="[smoke-matrix] review metadata: ",
+        artifacts_prefix="[smoke-matrix] review artifacts: ",
+        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
+    )
+
+    failure_output = collect_smoke_matrix_docs_review_failure_output(
+        lines,
+        review_output=review_output,
+        failed_line_exact="standalone smoke exited with status 1",
+        bundle_rerun_hint_prefix="[smoke-matrix] review bundle rerun hint: ",
+        live_runtime_hint_prefix="[smoke-matrix] hint: live runtime guidance",
+        docs_review_only_hint_prefix="[smoke-matrix] hint: docs-review-only guidance",
+        failure_summary_prefix="[smoke-matrix] summary: 0/4 bundles passed before failure in ",
+    )
+
+    assert failure_output.line("failed") == "standalone smoke exited with status 1"
+    assert failure_output.line("metadata") == lines[0]
+    assert failure_output.line("artifacts") == lines[1]
+    assert failure_output.line("matrix_summary") == lines[2]
+    assert failure_output.line("bundle_rerun_hint") == lines[3]
+    assert failure_output.line("live_runtime_hint") == lines[4]
+    assert failure_output.line("docs_review_only_hint") == lines[5]
+    assert failure_output.line("failure_summary") == lines[6]
+    assert failure_output.present("missing_api_key_hint") is False
+    assert failure_output.appears_before("metadata", "bundle_rerun_hint") is True
+    assert failure_output.appears_before("bundle_rerun_hint", "live_runtime_hint") is True
+    assert failure_output.appears_before("live_runtime_hint", "docs_review_only_hint") is True
+    assert failure_output.appears_before("docs_review_only_hint", "failure_summary") is True
+    assert failure_output.appears_before("failed", "failure_summary") is False
+
+
+def test_collect_smoke_matrix_docs_review_failure_output_validates_failed_matcher_contract(
+    tmp_path: Path,
+) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        json.dumps({"target_name": "docs-review", "matrix_summary_path": "artifacts/review/matrix-summary.json"})
+        + "\n",
+        encoding="utf-8",
+    )
+    review_output = collect_review_artifact_output(
+        ["[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json"],
+        checkout_root=checkout_root,
+        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="provide exactly one failed-line matcher: failed_line_prefix or failed_line_exact",
+    ):
+        collect_smoke_matrix_docs_review_failure_output(
+            [],
+            review_output=review_output,
+            failure_summary_prefix="[smoke-matrix] summary: ",
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="provide exactly one failed-line matcher: failed_line_prefix or failed_line_exact",
+    ):
+        collect_smoke_matrix_docs_review_failure_output(
+            [],
+            review_output=review_output,
+            failed_line_prefix="failed: ",
+            failed_line_exact="failed",
+            failure_summary_prefix="[smoke-matrix] summary: ",
+        )
 
 
 def test_run_script_module_main_in_temp_checkout_changes_cwd_and_unsets_env(tmp_path: Path, monkeypatch) -> None:
