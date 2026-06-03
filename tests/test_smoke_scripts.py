@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from importlib.util import module_from_spec, spec_from_file_location
 from io import StringIO
@@ -79,6 +80,135 @@ def _assert_mixed_smoke_result_contract(
     for name in check_names:
         assert f"{name}= True" in lines or f"{name}= False" in lines
         assert not any(line.startswith(f"{name}: ") for line in lines)
+
+
+@dataclass(frozen=True)
+class _SmokeMatrixDocsReviewScriptCase:
+    script_name: str
+    required_line_prefixes: tuple[str, ...]
+    true_check_names: tuple[str, ...]
+
+
+_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES = (
+    "checkout_root: ",
+    'stderr_metadata_line: [smoke-matrix] review metadata: {"artifact_root": ',
+    "stderr_artifacts_line: [smoke-matrix] review artifacts: ",
+    "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: ",
+)
+
+
+_DOCS_REVIEW_MATRIX_COMMON_TRUE_CHECKS = (
+    "exit_code_non_zero",
+    "failed_line_present",
+    "metadata_line_present",
+    "artifacts_line_present",
+    "matrix_summary_line_present",
+    "summary_line_present",
+    "metadata_targets_docs_review_all",
+    "metadata_artifact_root_matches_all_review",
+    "metadata_matrix_summary_matches_all_review",
+    "metadata_bundle_index_rerun_hint_matches",
+    "metadata_expected_artifact_paths_match",
+    "metadata_resolved_paths_match_expected",
+    "matrix_summary_artifact_exists",
+    "matrix_summary_targets_docs_review_all",
+    "matrix_summary_artifact_root_matches_all_review",
+    "matrix_summary_bundle_index_rerun_hint_matches",
+    "matrix_summary_expected_artifact_paths_match",
+    "matrix_summary_resolved_paths_match_expected",
+)
+
+
+_DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
+    _SmokeMatrixDocsReviewScriptCase(
+        script_name="smoke_matrix_all_review_order_smoke",
+        required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
+        + (
+            "stderr_failed_line: standalone smoke failed fast: live_runtime_requested=False",
+            "stderr_hint_line: [smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;",
+            "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`;",
+            "stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ",
+        ),
+        true_check_names=_DOCS_REVIEW_MATRIX_COMMON_TRUE_CHECKS
+        + (
+            "hint_line_present",
+            "docs_hint_line_present",
+            "matrix_summary_path_matches_metadata",
+            "matrix_summary_line_matches_metadata_path",
+            "metadata_before_hint",
+            "artifacts_before_hint",
+            "matrix_summary_before_hint",
+            "live_hint_before_docs_hint",
+            "docs_hint_before_failure_summary",
+            "metadata_before_failure_summary",
+            "artifacts_before_failure_summary",
+            "matrix_summary_before_failure_summary",
+        ),
+    ),
+    _SmokeMatrixDocsReviewScriptCase(
+        script_name="smoke_matrix_all_review_missing_api_key_smoke",
+        required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
+        + (
+            "stderr_failed_line: standalone smoke exited with status 1",
+            "stderr_missing_api_key_hint_line: [smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` was missing;",
+            "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
+            "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`;",
+            "stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ",
+        ),
+        true_check_names=_DOCS_REVIEW_MATRIX_COMMON_TRUE_CHECKS
+        + (
+            "missing_api_key_hint_line_present",
+            "bundle_rerun_hint_line_present",
+            "docs_hint_line_present",
+            "matrix_summary_path_matches_metadata",
+            "bundle_rerun_hint_line_matches_matrix_summary_hint",
+            "matrix_summary_line_matches_metadata_path",
+            "metadata_before_missing_api_key_hint",
+            "artifacts_before_missing_api_key_hint",
+            "matrix_summary_before_missing_api_key_hint",
+            "bundle_rerun_hint_before_missing_api_key_hint",
+            "bundle_rerun_hint_before_docs_hint",
+            "missing_api_key_hint_before_docs_hint",
+            "docs_hint_before_failure_summary",
+            "metadata_before_failure_summary",
+            "artifacts_before_failure_summary",
+            "matrix_summary_before_failure_summary",
+        ),
+    ),
+    _SmokeMatrixDocsReviewScriptCase(
+        script_name="smoke_matrix_docs_review_hint_smoke",
+        required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
+        + (
+            "stdout_last_line: [smoke-matrix] running docs-review",
+            "stderr_failed_line: docs-review smoke failed fast: render_manifest_payload=False",
+            "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
+            "stderr_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with ",
+            "stderr_summary_line: [smoke-matrix] summary: 3/4 bundles passed before failure in ",
+        ),
+        true_check_names=_DOCS_REVIEW_MATRIX_COMMON_TRUE_CHECKS
+        + (
+            "bundle_rerun_hint_line_present",
+            "hint_line_present",
+            "matrix_summary_path_matches_all_review",
+            "bundle_rerun_hint_line_matches_matrix_summary_hint",
+            "bundle_rerun_hint_after_matrix_summary",
+            "hint_after_matrix_summary",
+            "bundle_rerun_hint_before_docs_hint",
+            "hint_before_failure_summary",
+            "stdout_docs_review_started",
+        ),
+    ),
+)
+
+
+def _assert_required_line_prefixes(lines: list[str], prefixes: tuple[str, ...]) -> None:
+    for prefix in prefixes:
+        assert any(line.startswith(prefix) for line in lines), prefix
+
+
+def _assert_true_smoke_checks(lines: list[str], check_names: tuple[str, ...]) -> None:
+    for check_name in check_names:
+        assert f"{check_name}= True" in lines
 
 
 def _format_script_help(name: str) -> str:
@@ -3346,174 +3476,23 @@ def test_smoke_matrix_all_review_failure_persists_pending_review_metadata_artifa
     }
 
 
-def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_before_hint(capsys) -> None:
-    smoke_script = _load_script_module("smoke_matrix_all_review_order_smoke")
-
-    exit_code = smoke_script.main([])
-
-    assert exit_code == 0
-    lines = capsys.readouterr().out.splitlines()
-    assert any(line.startswith("checkout_root: ") for line in lines)
-    assert "stderr_failed_line: standalone smoke failed fast: live_runtime_requested=False" in lines
-    assert any(
-        line.startswith(
-            "stderr_metadata_line: [smoke-matrix] review metadata: {\"artifact_root\": "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_artifacts_line: [smoke-matrix] review artifacts: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_hint_line: [smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-review-only`;"
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith("stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ")
-        for line in lines
-    )
-    for check_name in (
-        "exit_code_non_zero",
-        "failed_line_present",
-        "metadata_line_present",
-        "artifacts_line_present",
-        "matrix_summary_line_present",
-        "hint_line_present",
-        "docs_hint_line_present",
-        "summary_line_present",
-        "metadata_targets_docs_review_all",
-        "metadata_artifact_root_matches_all_review",
-        "metadata_matrix_summary_matches_all_review",
-        "metadata_bundle_index_rerun_hint_matches",
-        "metadata_expected_artifact_paths_match",
-        "metadata_resolved_paths_match_expected",
-        "matrix_summary_artifact_exists",
-        "matrix_summary_targets_docs_review_all",
-        "matrix_summary_artifact_root_matches_all_review",
-        "matrix_summary_path_matches_metadata",
-        "matrix_summary_bundle_index_rerun_hint_matches",
-        "matrix_summary_expected_artifact_paths_match",
-        "matrix_summary_resolved_paths_match_expected",
-        "matrix_summary_line_matches_metadata_path",
-        "metadata_before_hint",
-        "artifacts_before_hint",
-        "matrix_summary_before_hint",
-        "live_hint_before_docs_hint",
-        "docs_hint_before_failure_summary",
-        "metadata_before_failure_summary",
-        "artifacts_before_failure_summary",
-        "matrix_summary_before_failure_summary",
-    ):
-        assert f"{check_name}= True" in lines
-
-
-def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_metadata_before_hints(
+@pytest.mark.parametrize(
+    "case",
+    _DOCS_REVIEW_MATRIX_SCRIPT_CASES,
+    ids=lambda case: case.script_name,
+)
+def test_smoke_matrix_docs_review_failure_scripts_emit_expected_contracts(
+    case: _SmokeMatrixDocsReviewScriptCase,
     capsys,
 ) -> None:
-    smoke_script = _load_script_module("smoke_matrix_all_review_missing_api_key_smoke")
+    smoke_script = _load_script_module(case.script_name)
 
     exit_code = smoke_script.main([])
 
     assert exit_code == 0
     lines = capsys.readouterr().out.splitlines()
-    assert any(line.startswith("checkout_root: ") for line in lines)
-    assert "stderr_failed_line: standalone smoke exited with status 1" in lines
-    assert any(
-        line.startswith(
-            "stderr_metadata_line: [smoke-matrix] review metadata: {\"artifact_root\": "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_artifacts_line: [smoke-matrix] review artifacts: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_missing_api_key_hint_line: [smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` was missing;"
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
-            "`standalone_smoke.py docs-review-only`;"
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith("stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ")
-        for line in lines
-    )
-    for check_name in (
-        "exit_code_non_zero",
-        "failed_line_present",
-        "metadata_line_present",
-        "artifacts_line_present",
-        "matrix_summary_line_present",
-        "missing_api_key_hint_line_present",
-        "bundle_rerun_hint_line_present",
-        "docs_hint_line_present",
-        "summary_line_present",
-        "metadata_targets_docs_review_all",
-        "metadata_artifact_root_matches_all_review",
-        "metadata_matrix_summary_matches_all_review",
-        "metadata_bundle_index_rerun_hint_matches",
-        "metadata_expected_artifact_paths_match",
-        "metadata_resolved_paths_match_expected",
-        "matrix_summary_artifact_exists",
-        "matrix_summary_targets_docs_review_all",
-        "matrix_summary_artifact_root_matches_all_review",
-        "matrix_summary_path_matches_metadata",
-        "matrix_summary_bundle_index_rerun_hint_matches",
-        "matrix_summary_expected_artifact_paths_match",
-        "matrix_summary_resolved_paths_match_expected",
-        "bundle_rerun_hint_line_matches_matrix_summary_hint",
-        "matrix_summary_line_matches_metadata_path",
-        "metadata_before_missing_api_key_hint",
-        "artifacts_before_missing_api_key_hint",
-        "matrix_summary_before_missing_api_key_hint",
-        "bundle_rerun_hint_before_missing_api_key_hint",
-        "bundle_rerun_hint_before_docs_hint",
-        "missing_api_key_hint_before_docs_hint",
-        "docs_hint_before_failure_summary",
-        "metadata_before_failure_summary",
-        "artifacts_before_failure_summary",
-        "matrix_summary_before_failure_summary",
-    ):
-        assert f"{check_name}= True" in lines
+    _assert_required_line_prefixes(lines, case.required_line_prefixes)
+    _assert_true_smoke_checks(lines, case.true_check_names)
 
 
 def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review_runs_afterward(capsys) -> None:
@@ -3612,87 +3591,6 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "all_review_summary_line_present",
         "review_rerun_hint_line_present",
         "all_review_rerun_hint_line_present",
-    ):
-        assert f"{check_name}= True" in lines
-
-
-def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering(capsys) -> None:
-    smoke_script = _load_script_module("smoke_matrix_docs_review_hint_smoke")
-
-    exit_code = smoke_script.main([])
-
-    assert exit_code == 0
-    lines = capsys.readouterr().out.splitlines()
-    assert any(line.startswith("checkout_root: ") for line in lines)
-    assert any(line.startswith("stdout_last_line: [smoke-matrix] running docs-review") for line in lines)
-    assert any(
-        line.startswith(
-            "stderr_failed_line: docs-review smoke failed fast: render_manifest_payload=False"
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_metadata_line: [smoke-matrix] review metadata: {\"artifact_root\": "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_artifacts_line: [smoke-matrix] review artifacts: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith(
-            "stderr_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
-        )
-        for line in lines
-    )
-    assert any(
-        line.startswith("stderr_summary_line: [smoke-matrix] summary: 3/4 bundles passed before failure in ")
-        for line in lines
-    )
-    for check_name in (
-        "exit_code_non_zero",
-        "failed_line_present",
-        "metadata_line_present",
-        "artifacts_line_present",
-        "matrix_summary_line_present",
-        "bundle_rerun_hint_line_present",
-        "hint_line_present",
-        "summary_line_present",
-        "metadata_targets_docs_review_all",
-        "metadata_artifact_root_matches_all_review",
-        "metadata_matrix_summary_matches_all_review",
-        "metadata_bundle_index_rerun_hint_matches",
-        "metadata_expected_artifact_paths_match",
-        "metadata_resolved_paths_match_expected",
-        "matrix_summary_artifact_exists",
-        "matrix_summary_targets_docs_review_all",
-        "matrix_summary_artifact_root_matches_all_review",
-        "matrix_summary_path_matches_all_review",
-        "matrix_summary_bundle_index_rerun_hint_matches",
-        "matrix_summary_expected_artifact_paths_match",
-        "matrix_summary_resolved_paths_match_expected",
-        "bundle_rerun_hint_line_matches_matrix_summary_hint",
-        "bundle_rerun_hint_after_matrix_summary",
-        "hint_after_matrix_summary",
-        "bundle_rerun_hint_before_docs_hint",
-        "hint_before_failure_summary",
-        "stdout_docs_review_started",
     ):
         assert f"{check_name}= True" in lines
 
