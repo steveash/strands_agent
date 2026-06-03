@@ -188,8 +188,8 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
         review_root = review_paths.get("artifact_root")
         all_review_root = all_review_paths.get("artifact_root")
         artifact_roots_distinct = review_root is not None and all_review_root is not None and review_root != all_review_root
-        review_files_exist = bool(review_paths) and all(path.exists() for path in review_paths.values())
-        all_review_files_exist = bool(all_review_paths) and all(path.exists() for path in all_review_paths.values())
+        review_files_exist = review_spec.resolved_artifact_paths_exist(review_output)
+        all_review_files_exist = all_review_spec.resolved_artifact_paths_exist(all_review_output)
         review_summary_line = _capture_success_summary_line(review_stdout)
         all_review_summary_line = _capture_success_summary_line(all_review_stdout)
         review_rerun_hint_line = _capture_prefixed_line(review_stdout, RERUN_HINT_PREFIX)
@@ -246,6 +246,14 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 ),
             ),
             (
+                "review_metadata_expected_artifact_paths_match",
+                review_spec.metadata_artifact_paths_match(review_output),
+            ),
+            (
+                "review_metadata_resolved_paths_match_expected",
+                review_spec.metadata_resolved_paths_match(review_output),
+            ),
+            (
                 "all_review_metadata_matrix_summary_matches_expected_path",
                 all_review_output.metadata_matrix_summary_matches(all_review_spec.expected_matrix_summary_path),
             ),
@@ -254,6 +262,14 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 all_review_output.metadata_bundle_index_rerun_hint_matches(
                     all_review_spec.expected_bundle_index_rerun_hint
                 ),
+            ),
+            (
+                "all_review_metadata_expected_artifact_paths_match",
+                all_review_spec.metadata_artifact_paths_match(all_review_output),
+            ),
+            (
+                "all_review_metadata_resolved_paths_match_expected",
+                all_review_spec.metadata_resolved_paths_match(all_review_output),
             ),
             (
                 "review_matrix_summary_line_matches_expected_path",
@@ -299,6 +315,14 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 ),
             ),
             (
+                "review_matrix_summary_expected_artifact_paths_match",
+                review_spec.matrix_summary_artifact_paths_match(review_output),
+            ),
+            (
+                "review_matrix_summary_resolved_paths_match_expected",
+                review_spec.matrix_summary_resolved_paths_match(review_output),
+            ),
+            (
                 "all_review_summary_path_keeps_all_review_root",
                 resolve_review_artifact_paths(all_review_summary_payload, checkout_root=checkout_root).get("artifact_root")
                 == all_review_root
@@ -310,6 +334,14 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 all_review_output.matrix_summary_bundle_index_rerun_hint_matches(
                     all_review_spec.expected_bundle_index_rerun_hint
                 ),
+            ),
+            (
+                "all_review_matrix_summary_expected_artifact_paths_match",
+                all_review_spec.matrix_summary_artifact_paths_match(all_review_output),
+            ),
+            (
+                "all_review_matrix_summary_resolved_paths_match_expected",
+                all_review_spec.matrix_summary_resolved_paths_match(all_review_output),
             ),
             (
                 "review_matrix_summary_path_matches_metadata",

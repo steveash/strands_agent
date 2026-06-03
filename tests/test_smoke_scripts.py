@@ -3403,11 +3403,15 @@ def test_smoke_matrix_all_review_order_smoke_emits_pending_review_metadata_befor
         "metadata_artifact_root_matches_all_review",
         "metadata_matrix_summary_matches_all_review",
         "metadata_bundle_index_rerun_hint_matches",
+        "metadata_expected_artifact_paths_match",
+        "metadata_resolved_paths_match_expected",
         "matrix_summary_artifact_exists",
         "matrix_summary_targets_docs_review_all",
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_metadata",
         "matrix_summary_bundle_index_rerun_hint_matches",
+        "matrix_summary_expected_artifact_paths_match",
+        "matrix_summary_resolved_paths_match_expected",
         "matrix_summary_line_matches_metadata_path",
         "metadata_before_hint",
         "artifacts_before_hint",
@@ -3487,11 +3491,15 @@ def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_meta
         "metadata_artifact_root_matches_all_review",
         "metadata_matrix_summary_matches_all_review",
         "metadata_bundle_index_rerun_hint_matches",
+        "metadata_expected_artifact_paths_match",
+        "metadata_resolved_paths_match_expected",
         "matrix_summary_artifact_exists",
         "matrix_summary_targets_docs_review_all",
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_metadata",
         "matrix_summary_bundle_index_rerun_hint_matches",
+        "matrix_summary_expected_artifact_paths_match",
+        "matrix_summary_resolved_paths_match_expected",
         "bundle_rerun_hint_line_matches_matrix_summary_hint",
         "matrix_summary_line_matches_metadata_path",
         "metadata_before_missing_api_key_hint",
@@ -3567,8 +3575,12 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "all_review_metadata_artifact_root_matches_all_review",
         "review_metadata_matrix_summary_matches_expected_path",
         "review_metadata_bundle_index_rerun_hint_matches",
+        "review_metadata_expected_artifact_paths_match",
+        "review_metadata_resolved_paths_match_expected",
         "all_review_metadata_matrix_summary_matches_expected_path",
         "all_review_metadata_bundle_index_rerun_hint_matches",
+        "all_review_metadata_expected_artifact_paths_match",
+        "all_review_metadata_resolved_paths_match_expected",
         "review_matrix_summary_line_matches_expected_path",
         "all_review_matrix_summary_line_matches_expected_path",
         "review_rerun_hint_line_matches_expected_hint",
@@ -3582,8 +3594,12 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "all_review_summary_targets_docs_review_all",
         "review_summary_path_keeps_review_root",
         "review_summary_bundle_index_rerun_hint_matches",
+        "review_matrix_summary_expected_artifact_paths_match",
+        "review_matrix_summary_resolved_paths_match_expected",
         "all_review_summary_path_keeps_all_review_root",
         "all_review_summary_bundle_index_rerun_hint_matches",
+        "all_review_matrix_summary_expected_artifact_paths_match",
+        "all_review_matrix_summary_resolved_paths_match_expected",
         "review_matrix_summary_path_matches_metadata",
         "all_review_matrix_summary_path_matches_metadata",
         "review_matrix_summary_line_matches_metadata_path",
@@ -3617,6 +3633,18 @@ def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering
     )
     assert any(
         line.startswith(
+            "stderr_metadata_line: [smoke-matrix] review metadata: {\"artifact_root\": "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
+            "stderr_artifacts_line: [smoke-matrix] review artifacts: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
             "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: "
         )
         for line in lines
@@ -3640,15 +3668,25 @@ def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering
     for check_name in (
         "exit_code_non_zero",
         "failed_line_present",
+        "metadata_line_present",
+        "artifacts_line_present",
         "matrix_summary_line_present",
         "bundle_rerun_hint_line_present",
         "hint_line_present",
         "summary_line_present",
+        "metadata_targets_docs_review_all",
+        "metadata_artifact_root_matches_all_review",
+        "metadata_matrix_summary_matches_all_review",
+        "metadata_bundle_index_rerun_hint_matches",
+        "metadata_expected_artifact_paths_match",
+        "metadata_resolved_paths_match_expected",
         "matrix_summary_artifact_exists",
         "matrix_summary_targets_docs_review_all",
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_all_review",
         "matrix_summary_bundle_index_rerun_hint_matches",
+        "matrix_summary_expected_artifact_paths_match",
+        "matrix_summary_resolved_paths_match_expected",
         "bundle_rerun_hint_line_matches_matrix_summary_hint",
         "bundle_rerun_hint_after_matrix_summary",
         "hint_after_matrix_summary",

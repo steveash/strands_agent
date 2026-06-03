@@ -124,6 +124,14 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
                 review_output.metadata_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
             ),
             (
+                "metadata_expected_artifact_paths_match",
+                review_spec.metadata_artifact_paths_match(review_output),
+            ),
+            (
+                "metadata_resolved_paths_match_expected",
+                review_spec.metadata_resolved_paths_match(review_output),
+            ),
+            (
                 "matrix_summary_artifact_exists",
                 review_output.matrix_summary_artifact_exists,
             ),
@@ -144,6 +152,14 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
                 review_output.matrix_summary_bundle_index_rerun_hint_matches(
                     smoke_cli_docs_parity_rerun_hint()
                 ),
+            ),
+            (
+                "matrix_summary_expected_artifact_paths_match",
+                review_spec.matrix_summary_artifact_paths_match(review_output),
+            ),
+            (
+                "matrix_summary_resolved_paths_match_expected",
+                review_spec.matrix_summary_resolved_paths_match(review_output),
             ),
             (
                 "bundle_rerun_hint_line_matches_matrix_summary_hint",

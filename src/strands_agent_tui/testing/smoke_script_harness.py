@@ -111,6 +111,52 @@ class ReviewArtifactOutputObservation:
     def matrix_summary_line_matches_metadata_path(self) -> bool:
         return self.matrix_summary_path == self.metadata_matrix_summary_path
 
+    def _payload_for_source(self, source: Literal["metadata", "matrix_summary"]) -> dict[str, object]:
+        if source == "metadata":
+            return self.metadata_payload
+        return self.matrix_summary_payload
+
+    def _paths_for_source(self, source: Literal["metadata", "matrix_summary"]) -> dict[str, Path]:
+        if source == "metadata":
+            return self.metadata_paths
+        return self.matrix_summary_paths
+
+    def payload_path_matches(
+        self,
+        source: Literal["metadata", "matrix_summary"],
+        key: str,
+        expected_path: str,
+    ) -> bool:
+        return self._payload_for_source(source).get(key) == expected_path
+
+    def payload_paths_match(
+        self,
+        source: Literal["metadata", "matrix_summary"],
+        expected_paths: Mapping[str, str],
+    ) -> bool:
+        return all(
+            self.payload_path_matches(source, key, expected_path)
+            for key, expected_path in expected_paths.items()
+        )
+
+    def resolved_path_matches(
+        self,
+        source: Literal["metadata", "matrix_summary"],
+        key: str,
+        expected_path: Path,
+    ) -> bool:
+        return self._paths_for_source(source).get(key) == expected_path
+
+    def resolved_paths_match(
+        self,
+        source: Literal["metadata", "matrix_summary"],
+        expected_paths: Mapping[str, Path],
+    ) -> bool:
+        return all(
+            self.resolved_path_matches(source, key, expected_path)
+            for key, expected_path in expected_paths.items()
+        )
+
 
 @dataclass(frozen=True)
 class SmokeMatrixDocsReviewObserverSpec:
@@ -140,6 +186,30 @@ class SmokeMatrixDocsReviewObserverSpec:
             key: resolve_checkout_path(value, checkout_root=checkout_root)
             for key, value in self.expected_artifact_paths.items()
         }
+
+    def metadata_artifact_paths_match(self, observation: ReviewArtifactOutputObservation) -> bool:
+        return observation.payload_paths_match("metadata", self.expected_artifact_paths)
+
+    def matrix_summary_artifact_paths_match(self, observation: ReviewArtifactOutputObservation) -> bool:
+        return observation.payload_paths_match("matrix_summary", self.expected_artifact_paths)
+
+    def metadata_resolved_paths_match(self, observation: ReviewArtifactOutputObservation) -> bool:
+        return observation.resolved_paths_match(
+            "metadata",
+            self.resolve_expected_paths(checkout_root=observation.checkout_root),
+        )
+
+    def matrix_summary_resolved_paths_match(self, observation: ReviewArtifactOutputObservation) -> bool:
+        return observation.resolved_paths_match(
+            "matrix_summary",
+            self.resolve_expected_paths(checkout_root=observation.checkout_root),
+        )
+
+    def resolved_artifact_paths_exist(self, observation: ReviewArtifactOutputObservation) -> bool:
+        return all(
+            path.exists()
+            for path in self.resolve_expected_paths(checkout_root=observation.checkout_root).values()
+        )
 
 
 def build_smoke_matrix_docs_review_observer_spec(

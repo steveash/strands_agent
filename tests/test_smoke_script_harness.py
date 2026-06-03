@@ -10,6 +10,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+    SmokeMatrixDocsReviewObserverSpec,
     build_script_driver_source,
     build_smoke_matrix_docs_review_observer_spec,
     collect_review_artifact_output,
@@ -52,17 +53,17 @@ def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_p
         "target_name": "docs-review",
         "artifact_root": "artifacts/review",
         "bundle_index_path": "artifacts/review/index.json",
+        "drifted_readme_path": "artifacts/review/README-drifted.md",
+        "render_output_dir": "artifacts/review/rendered",
+        "render_manifest_path": "artifacts/review/render-manifest.json",
+        "render_diff_path": "artifacts/review/render-review.patch",
+        "fix_check_json_path": "artifacts/review/fix-check.json",
+        "fix_repair_json_path": "artifacts/review/fix-repair.json",
+        "fix_post_check_json_path": "artifacts/review/fix-post-check.json",
         "matrix_summary_path": "artifacts/review/matrix-summary.json",
     }
     summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
-    metadata_payload = {
-        "bundle_index_rerun_hint": "rerun docs parity",
-        "display_name": "docs-review",
-        "target_name": "docs-review",
-        "artifact_root": "artifacts/review",
-        "bundle_index_path": "artifacts/review/index.json",
-        "matrix_summary_path": "artifacts/review/matrix-summary.json",
-    }
+    metadata_payload = dict(summary_payload)
 
     observed = collect_review_artifact_output(
         [
@@ -93,12 +94,51 @@ def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_p
     assert observed.matrix_summary_bundle_index_rerun_hint_matches("rerun docs parity") is True
     assert observed.matrix_summary_path_matches_metadata() is True
     assert observed.matrix_summary_line_matches_metadata_path() is True
-    assert observed.metadata_paths == {
+    expected_paths = {
         "artifact_root": checkout_root / "artifacts" / "review",
         "bundle_index_path": checkout_root / "artifacts" / "review" / "index.json",
+        "drifted_readme_path": checkout_root / "artifacts" / "review" / "README-drifted.md",
+        "render_output_dir": checkout_root / "artifacts" / "review" / "rendered",
+        "render_manifest_path": checkout_root / "artifacts" / "review" / "render-manifest.json",
+        "render_diff_path": checkout_root / "artifacts" / "review" / "render-review.patch",
+        "fix_check_json_path": checkout_root / "artifacts" / "review" / "fix-check.json",
+        "fix_repair_json_path": checkout_root / "artifacts" / "review" / "fix-repair.json",
+        "fix_post_check_json_path": checkout_root / "artifacts" / "review" / "fix-post-check.json",
         "matrix_summary_path": summary_path,
     }
+    expected_path_strings = {
+        "artifact_root": "artifacts/review",
+        "bundle_index_path": "artifacts/review/index.json",
+        "drifted_readme_path": "artifacts/review/README-drifted.md",
+        "render_output_dir": "artifacts/review/rendered",
+        "render_manifest_path": "artifacts/review/render-manifest.json",
+        "render_diff_path": "artifacts/review/render-review.patch",
+        "fix_check_json_path": "artifacts/review/fix-check.json",
+        "fix_repair_json_path": "artifacts/review/fix-repair.json",
+        "fix_post_check_json_path": "artifacts/review/fix-post-check.json",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+    }
+
+    assert observed.metadata_paths == expected_paths
     assert observed.matrix_summary_paths == observed.metadata_paths
+    assert observed.payload_paths_match("metadata", expected_path_strings) is True
+    assert observed.payload_paths_match("matrix_summary", expected_path_strings) is True
+    assert observed.resolved_paths_match("metadata", expected_paths) is True
+    assert observed.resolved_paths_match("matrix_summary", expected_paths) is True
+
+    observer_spec = SmokeMatrixDocsReviewObserverSpec(
+        requested_target_name="review",
+        expected_target_name="docs-review",
+        expected_artifact_root="artifacts/review",
+        expected_matrix_summary_path="artifacts/review/matrix-summary.json",
+        expected_bundle_index_rerun_hint="rerun docs parity",
+        expected_artifact_paths=expected_path_strings,
+        driver_filename="run_review.py",
+    )
+    assert observer_spec.metadata_artifact_paths_match(observed) is True
+    assert observer_spec.matrix_summary_artifact_paths_match(observed) is True
+    assert observer_spec.metadata_resolved_paths_match(observed) is True
+    assert observer_spec.matrix_summary_resolved_paths_match(observed) is True
 
 
 def test_collect_review_artifact_output_supports_matrix_summary_without_metadata(tmp_path: Path) -> None:

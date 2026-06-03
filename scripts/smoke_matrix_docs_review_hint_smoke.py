@@ -81,6 +81,8 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             ("checkout_root", str(smoke_run.checkout_root)),
             ("stdout_last_line", stdout_last_line),
             ("stderr_failed_line", detail_safe_text(failed_line)),
+            ("stderr_metadata_line", review_output.metadata_line),
+            ("stderr_artifacts_line", review_output.artifacts_line),
             ("stderr_matrix_summary_line", review_output.matrix_summary_line),
             ("stderr_bundle_rerun_hint_line", bundle_rerun_hint_line),
             ("stderr_hint_line", hint_line),
@@ -88,10 +90,36 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             ("exit_code", smoke_run.exit_code),
             ("exit_code_non_zero", smoke_run.exit_code != 0),
             ("failed_line_present", bool(failed_line)),
+            ("metadata_line_present", review_output.metadata_line_present),
+            ("artifacts_line_present", review_output.artifacts_line_present),
             ("matrix_summary_line_present", review_output.matrix_summary_line_present),
             ("bundle_rerun_hint_line_present", bool(bundle_rerun_hint_line)),
             ("hint_line_present", bool(hint_line)),
             ("summary_line_present", bool(summary_line)),
+            (
+                "metadata_targets_docs_review_all",
+                review_output.metadata_targets(review_spec.expected_target_name),
+            ),
+            (
+                "metadata_artifact_root_matches_all_review",
+                review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
+            ),
+            (
+                "metadata_matrix_summary_matches_all_review",
+                review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
+            ),
+            (
+                "metadata_bundle_index_rerun_hint_matches",
+                review_output.metadata_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
+            ),
+            (
+                "metadata_expected_artifact_paths_match",
+                review_spec.metadata_artifact_paths_match(review_output),
+            ),
+            (
+                "metadata_resolved_paths_match_expected",
+                review_spec.metadata_resolved_paths_match(review_output),
+            ),
             (
                 "matrix_summary_artifact_exists",
                 review_output.matrix_summary_artifact_exists,
@@ -113,6 +141,14 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
                 review_output.matrix_summary_bundle_index_rerun_hint_matches(
                     smoke_cli_docs_parity_rerun_hint()
                 ),
+            ),
+            (
+                "matrix_summary_expected_artifact_paths_match",
+                review_spec.matrix_summary_artifact_paths_match(review_output),
+            ),
+            (
+                "matrix_summary_resolved_paths_match_expected",
+                review_spec.matrix_summary_resolved_paths_match(review_output),
             ),
             (
                 "bundle_rerun_hint_line_matches_matrix_summary_hint",
