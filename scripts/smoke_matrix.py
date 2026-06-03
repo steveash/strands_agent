@@ -56,6 +56,7 @@ DOCS_REVIEW_ARTIFACT_METADATA_KEYS = (
     "matrix_summary_path",
 )
 DOCS_REVIEW_BUNDLE_INDEX_RERUN_HINT_KEY = "bundle_index_rerun_hint"
+DOCS_REVIEW_BUNDLE_RERUN_HINT_LABEL = "review bundle rerun hint"
 
 
 def _emit_matrix_line(message: str, *, stream) -> None:
@@ -228,6 +229,7 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
     fix_repair_json_path = paths.get("fix_repair_json_path")
     fix_post_check_json_path = paths.get("fix_post_check_json_path")
     matrix_summary_path = paths.get("matrix_summary_path")
+    bundle_index_rerun_hint = _docs_review_bundle_index_rerun_hint(target, paths=paths)
 
     messages: list[str] = []
     if output_dir and bundle_index_path:
@@ -239,6 +241,8 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
 
     if matrix_summary_path:
         messages.append(f"review matrix summary: {matrix_summary_path}")
+    if bundle_index_rerun_hint:
+        messages.append(f"{DOCS_REVIEW_BUNDLE_RERUN_HINT_LABEL}: {bundle_index_rerun_hint}")
     if drifted_readme_path:
         messages.append(f"review drifted README: {drifted_readme_path}")
     if render_output_dir:

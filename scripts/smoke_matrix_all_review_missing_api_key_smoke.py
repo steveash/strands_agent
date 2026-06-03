@@ -24,6 +24,7 @@ DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
     "`standalone_smoke.py docs-review-only`;"
 )
+BUNDLE_RERUN_HINT_PREFIX = "[smoke-matrix] review bundle rerun hint: "
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
 
 
@@ -69,6 +70,7 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
     try:
         stderr_lines = smoke_run.stderr_lines
         missing_api_key_hint_index = find_prefixed_line_index(stderr_lines, MISSING_API_KEY_HINT_PREFIX)
+        bundle_rerun_hint_index = find_prefixed_line_index(stderr_lines, BUNDLE_RERUN_HINT_PREFIX)
         docs_hint_index = find_prefixed_line_index(stderr_lines, DOCS_REVIEW_ONLY_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
 
@@ -78,6 +80,9 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
         )
         missing_api_key_hint_line = (
             stderr_lines[missing_api_key_hint_index] if missing_api_key_hint_index is not None else ""
+        )
+        bundle_rerun_hint_line = (
+            stderr_lines[bundle_rerun_hint_index] if bundle_rerun_hint_index is not None else ""
         )
         docs_hint_line = stderr_lines[docs_hint_index] if docs_hint_index is not None else ""
         summary_line = stderr_lines[summary_index] if summary_index is not None else ""
@@ -89,6 +94,7 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             ("stderr_artifacts_line", review_output.artifacts_line),
             ("stderr_matrix_summary_line", review_output.matrix_summary_line),
             ("stderr_missing_api_key_hint_line", missing_api_key_hint_line),
+            ("stderr_bundle_rerun_hint_line", bundle_rerun_hint_line),
             ("stderr_docs_hint_line", docs_hint_line),
             ("stderr_summary_line", summary_line),
             ("exit_code", smoke_run.exit_code),
@@ -98,6 +104,7 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             ("artifacts_line_present", review_output.artifacts_line_present),
             ("matrix_summary_line_present", review_output.matrix_summary_line_present),
             ("missing_api_key_hint_line_present", bool(missing_api_key_hint_line)),
+            ("bundle_rerun_hint_line_present", bool(bundle_rerun_hint_line)),
             ("docs_hint_line_present", bool(docs_hint_line)),
             ("summary_line_present", bool(summary_line)),
             (
@@ -139,6 +146,11 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
                 ),
             ),
             (
+                "bundle_rerun_hint_line_matches_matrix_summary_hint",
+                bundle_rerun_hint_line
+                == f"{BUNDLE_RERUN_HINT_PREFIX}{review_spec.expected_bundle_index_rerun_hint}",
+            ),
+            (
                 "matrix_summary_line_matches_metadata_path",
                 review_output.matrix_summary_line_matches_metadata_path(),
             ),
@@ -159,6 +171,18 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
                 review_output.matrix_summary_index is not None
                 and missing_api_key_hint_index is not None
                 and review_output.matrix_summary_index < missing_api_key_hint_index,
+            ),
+            (
+                "bundle_rerun_hint_before_missing_api_key_hint",
+                bundle_rerun_hint_index is not None
+                and missing_api_key_hint_index is not None
+                and bundle_rerun_hint_index < missing_api_key_hint_index,
+            ),
+            (
+                "bundle_rerun_hint_before_docs_hint",
+                bundle_rerun_hint_index is not None
+                and docs_hint_index is not None
+                and bundle_rerun_hint_index < docs_hint_index,
             ),
             (
                 "missing_api_key_hint_before_docs_hint",

@@ -2167,6 +2167,10 @@ def _expected_smoke_matrix_review_artifact_location_lines(*, artifact_root: str)
             f"{artifact_root} (index: {artifact_root}/index.json)"
         ),
         f"[smoke-matrix] review matrix summary: {artifact_root}/matrix-summary.json",
+        (
+            "[smoke-matrix] review bundle rerun hint: "
+            f"{smoke_cli_docs_parity_rerun_hint()}"
+        ),
         f"[smoke-matrix] review drifted README: {artifact_root}/README-drifted.md",
         f"[smoke-matrix] review rendered sections: {artifact_root}/rendered",
         f"[smoke-matrix] review render manifest: {artifact_root}/render-manifest.json",
@@ -2443,6 +2447,10 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
         ),
         (
+            "[smoke-matrix] review bundle rerun hint: "
+            f"{smoke_cli_docs_parity_rerun_hint()}"
+        ),
+        (
             "[smoke-matrix] review drifted README: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
         ),
@@ -2508,6 +2516,10 @@ def test_smoke_matrix_all_review_emits_distinct_artifact_location_after_docs_rev
         (
             "[smoke-matrix] review matrix summary: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
+        ),
+        (
+            "[smoke-matrix] review bundle rerun hint: "
+            f"{smoke_cli_docs_parity_rerun_hint()}"
         ),
         (
             "[smoke-matrix] review drifted README: "
@@ -2670,6 +2682,7 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
     assert smoke_matrix._docs_review_artifact_location_messages(target) == (
         "review artifacts: artifacts/review (index: artifacts/review/index.json)",
         "review matrix summary: artifacts/review/matrix-summary.json",
+        f"review bundle rerun hint: {smoke_cli_docs_parity_rerun_hint()}",
         "review drifted README: artifacts/custom/README-review.md",
         "review rendered sections: artifacts/custom/rendered-sections",
         "review render manifest: artifacts/custom/render.json",
@@ -2677,6 +2690,39 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
         "review fix-check JSON: artifacts/custom/fix-check.json",
         "review fix-repair JSON: artifacts/custom/fix-repair.json",
         "review fix-post-check JSON: artifacts/custom/fix-post-check.json",
+    )
+
+
+
+def test_smoke_matrix_docs_review_artifact_messages_prefer_bundle_index_rerun_hint(
+    tmp_path: Path,
+) -> None:
+    smoke_matrix = _load_script_module("smoke_matrix")
+    artifact_root = tmp_path / "review"
+    artifact_root.mkdir(parents=True)
+    bundle_index_path = artifact_root / "index.json"
+    bundle_index_path.write_text(
+        json.dumps({"rerun_hint": "hint: rerun the focused docs bundle"}) + "\n",
+        encoding="utf-8",
+    )
+    target = smoke_matrix.SmokeScriptTarget(
+        name="docs-review",
+        script_path=SCRIPT_DIR / "smoke_cli_docs_artifacts_smoke.py",
+        display_name="docs-review",
+        metadata={
+            "artifact_root": str(artifact_root),
+            "bundle_index_path": str(bundle_index_path),
+            "matrix_summary_path": str(artifact_root / "matrix-summary.json"),
+        },
+    )
+
+    assert smoke_matrix._docs_review_artifact_metadata(target)["bundle_index_rerun_hint"] == (
+        "hint: rerun the focused docs bundle"
+    )
+    assert smoke_matrix._docs_review_artifact_location_messages(target) == (
+        f"review artifacts: {artifact_root} (index: {bundle_index_path})",
+        f"review matrix summary: {artifact_root / 'matrix-summary.json'}",
+        "review bundle rerun hint: hint: rerun the focused docs bundle",
     )
 
 
@@ -2725,6 +2771,10 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_success(monkeyp
         "target_name": "docs-review",
     }
     assert f"[smoke-matrix] review matrix summary: {summary_path}" in stdout.getvalue().splitlines()
+    assert (
+        f"[smoke-matrix] review bundle rerun hint: {smoke_cli_docs_parity_rerun_hint()}"
+        in stdout.getvalue().splitlines()
+    )
 
 
 
@@ -2760,6 +2810,10 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_failure(monkeyp
     assert summary_payload["target_name"] == "docs-review"
     assert summary_payload["bundle_index_rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
     assert f"[smoke-matrix] review matrix summary: {summary_path}" in stderr.getvalue().splitlines()
+    assert (
+        f"[smoke-matrix] review bundle rerun hint: {smoke_cli_docs_parity_rerun_hint()}"
+        in stderr.getvalue().splitlines()
+    )
 
 
 
@@ -2924,6 +2978,10 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
         ),
         (
+            "[smoke-matrix] review bundle rerun hint: "
+            f"{smoke_cli_docs_parity_rerun_hint()}"
+        ),
+        (
             "[smoke-matrix] review drifted README: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
         ),
@@ -3001,6 +3059,10 @@ def test_smoke_matrix_all_review_docs_review_failure_emits_docs_focused_hint(mon
         (
             "[smoke-matrix] review matrix summary: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
+        ),
+        (
+            "[smoke-matrix] review bundle rerun hint: "
+            f"{smoke_cli_docs_parity_rerun_hint()}"
         ),
         (
             "[smoke-matrix] review drifted README: "
@@ -3396,6 +3458,12 @@ def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_meta
     )
     assert any(
         line.startswith(
+            "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
             "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
             "`standalone_smoke.py docs-review-only`;"
         )
@@ -3412,6 +3480,7 @@ def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_meta
         "artifacts_line_present",
         "matrix_summary_line_present",
         "missing_api_key_hint_line_present",
+        "bundle_rerun_hint_line_present",
         "docs_hint_line_present",
         "summary_line_present",
         "metadata_targets_docs_review_all",
@@ -3423,10 +3492,13 @@ def test_smoke_matrix_all_review_missing_api_key_smoke_emits_pending_review_meta
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_metadata",
         "matrix_summary_bundle_index_rerun_hint_matches",
+        "bundle_rerun_hint_line_matches_matrix_summary_hint",
         "matrix_summary_line_matches_metadata_path",
         "metadata_before_missing_api_key_hint",
         "artifacts_before_missing_api_key_hint",
         "matrix_summary_before_missing_api_key_hint",
+        "bundle_rerun_hint_before_missing_api_key_hint",
+        "bundle_rerun_hint_before_docs_hint",
         "missing_api_key_hint_before_docs_hint",
         "docs_hint_before_failure_summary",
         "metadata_before_failure_summary",
@@ -3470,6 +3542,14 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         line.startswith("all_review_summary_line: [smoke-matrix] summary: 4/4 bundles passed in ")
         for line in lines
     )
+    assert any(
+        line.startswith("review_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ")
+        for line in lines
+    )
+    assert any(
+        line.startswith("all_review_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ")
+        for line in lines
+    )
     for check_name in (
         "review_exit_code_zero",
         "all_review_exit_code_zero",
@@ -3491,6 +3571,8 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "all_review_metadata_bundle_index_rerun_hint_matches",
         "review_matrix_summary_line_matches_expected_path",
         "all_review_matrix_summary_line_matches_expected_path",
+        "review_rerun_hint_line_matches_expected_hint",
+        "all_review_rerun_hint_line_matches_expected_hint",
         "review_paths_loaded_from_matrix_summary",
         "all_review_paths_loaded_from_matrix_summary",
         "artifact_roots_distinct",
@@ -3512,6 +3594,8 @@ def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review
         "review_summary_preserved_after_all_review",
         "review_summary_line_present",
         "all_review_summary_line_present",
+        "review_rerun_hint_line_present",
+        "all_review_rerun_hint_line_present",
     ):
         assert f"{check_name}= True" in lines
 
@@ -3539,6 +3623,12 @@ def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering
     )
     assert any(
         line.startswith(
+            "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: "
+        )
+        for line in lines
+    )
+    assert any(
+        line.startswith(
             "stderr_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with "
         )
         for line in lines
@@ -3551,6 +3641,7 @@ def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering
         "exit_code_non_zero",
         "failed_line_present",
         "matrix_summary_line_present",
+        "bundle_rerun_hint_line_present",
         "hint_line_present",
         "summary_line_present",
         "matrix_summary_artifact_exists",
@@ -3558,7 +3649,10 @@ def test_smoke_matrix_docs_review_hint_smoke_emits_real_subprocess_hint_ordering
         "matrix_summary_artifact_root_matches_all_review",
         "matrix_summary_path_matches_all_review",
         "matrix_summary_bundle_index_rerun_hint_matches",
+        "bundle_rerun_hint_line_matches_matrix_summary_hint",
+        "bundle_rerun_hint_after_matrix_summary",
         "hint_after_matrix_summary",
+        "bundle_rerun_hint_before_docs_hint",
         "hint_before_failure_summary",
         "stdout_docs_review_started",
     ):

@@ -23,6 +23,7 @@ DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
     "`standalone_smoke.py docs-review-only`;"
 )
+BUNDLE_RERUN_HINT_PREFIX = "[smoke-matrix] review bundle rerun hint: "
 FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 3/4 bundles passed before failure in "
 
 
@@ -66,9 +67,13 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
         stderr_lines = smoke_run.stderr_lines
         stdout_last_line = stdout_lines[-1] if stdout_lines else ""
         failed_index = find_prefixed_line_index(stderr_lines, FAILED_LINE_PREFIX)
+        bundle_rerun_hint_index = find_prefixed_line_index(stderr_lines, BUNDLE_RERUN_HINT_PREFIX)
         hint_index = find_prefixed_line_index(stderr_lines, DOCS_REVIEW_ONLY_HINT_PREFIX)
         summary_index = find_prefixed_line_index(stderr_lines, FAILURE_SUMMARY_PREFIX)
         failed_line = stderr_lines[failed_index] if failed_index is not None else ""
+        bundle_rerun_hint_line = (
+            stderr_lines[bundle_rerun_hint_index] if bundle_rerun_hint_index is not None else ""
+        )
         hint_line = stderr_lines[hint_index] if hint_index is not None else ""
         summary_line = stderr_lines[summary_index] if summary_index is not None else ""
 
@@ -77,12 +82,14 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             ("stdout_last_line", stdout_last_line),
             ("stderr_failed_line", detail_safe_text(failed_line)),
             ("stderr_matrix_summary_line", review_output.matrix_summary_line),
+            ("stderr_bundle_rerun_hint_line", bundle_rerun_hint_line),
             ("stderr_hint_line", hint_line),
             ("stderr_summary_line", summary_line),
             ("exit_code", smoke_run.exit_code),
             ("exit_code_non_zero", smoke_run.exit_code != 0),
             ("failed_line_present", bool(failed_line)),
             ("matrix_summary_line_present", review_output.matrix_summary_line_present),
+            ("bundle_rerun_hint_line_present", bool(bundle_rerun_hint_line)),
             ("hint_line_present", bool(hint_line)),
             ("summary_line_present", bool(summary_line)),
             (
@@ -108,10 +115,27 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
                 ),
             ),
             (
+                "bundle_rerun_hint_line_matches_matrix_summary_hint",
+                bundle_rerun_hint_line
+                == f"{BUNDLE_RERUN_HINT_PREFIX}{review_spec.expected_bundle_index_rerun_hint}",
+            ),
+            (
+                "bundle_rerun_hint_after_matrix_summary",
+                review_output.matrix_summary_index is not None
+                and bundle_rerun_hint_index is not None
+                and review_output.matrix_summary_index < bundle_rerun_hint_index,
+            ),
+            (
                 "hint_after_matrix_summary",
                 review_output.matrix_summary_index is not None
                 and hint_index is not None
                 and review_output.matrix_summary_index < hint_index,
+            ),
+            (
+                "bundle_rerun_hint_before_docs_hint",
+                bundle_rerun_hint_index is not None
+                and hint_index is not None
+                and bundle_rerun_hint_index < hint_index,
             ),
             (
                 "hint_before_failure_summary",

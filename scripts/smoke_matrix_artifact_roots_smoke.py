@@ -23,6 +23,7 @@ from strands_agent_tui.testing import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
 SUCCESS_SUMMARY_PREFIX = "[smoke-matrix] summary: 4/4 bundles passed in "
+RERUN_HINT_PREFIX = "[smoke-matrix] review bundle rerun hint: "
 
 
 @contextmanager
@@ -109,6 +110,14 @@ def _capture_success_summary_line(stdout_text: str) -> str:
             return line
     return ""
 
+
+def _capture_prefixed_line(stdout_text: str, prefix: str) -> str:
+    for line in stdout_text.splitlines():
+        if line.startswith(prefix):
+            return line
+    return ""
+
+
 def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
     smoke_matrix_module = _load_smoke_matrix_module()
     with tempfile.TemporaryDirectory(prefix="smoke-matrix-artifact-roots-") as temp_dir:
@@ -183,6 +192,8 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
         all_review_files_exist = bool(all_review_paths) and all(path.exists() for path in all_review_paths.values())
         review_summary_line = _capture_success_summary_line(review_stdout)
         all_review_summary_line = _capture_success_summary_line(all_review_stdout)
+        review_rerun_hint_line = _capture_prefixed_line(review_stdout, RERUN_HINT_PREFIX)
+        all_review_rerun_hint_line = _capture_prefixed_line(all_review_stdout, RERUN_HINT_PREFIX)
 
         return [
             ("checkout_root", str(checkout_root)),
@@ -196,6 +207,8 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             ("all_review_matrix_summary_line", all_review_output.matrix_summary_line),
             ("review_summary_line", review_summary_line),
             ("all_review_summary_line", all_review_summary_line),
+            ("review_rerun_hint_line", review_rerun_hint_line),
+            ("all_review_rerun_hint_line", all_review_rerun_hint_line),
             ("review_exit_code_zero", review_exit_code == 0),
             ("all_review_exit_code_zero", all_review_exit_code == 0),
             ("review_stderr_empty", review_stderr == ""),
@@ -249,6 +262,15 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             (
                 "all_review_matrix_summary_line_matches_expected_path",
                 all_review_summary_path_from_line == expected_all_review_paths["matrix_summary_path"],
+            ),
+            (
+                "review_rerun_hint_line_matches_expected_hint",
+                review_rerun_hint_line == f"{RERUN_HINT_PREFIX}{review_spec.expected_bundle_index_rerun_hint}",
+            ),
+            (
+                "all_review_rerun_hint_line_matches_expected_hint",
+                all_review_rerun_hint_line
+                == f"{RERUN_HINT_PREFIX}{all_review_spec.expected_bundle_index_rerun_hint}",
             ),
             ("review_paths_loaded_from_matrix_summary", bool(review_paths)),
             ("all_review_paths_loaded_from_matrix_summary", bool(all_review_paths)),
@@ -319,6 +341,11 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             (
                 "all_review_summary_line_present",
                 all_review_summary_line.startswith(SUCCESS_SUMMARY_PREFIX),
+            ),
+            ("review_rerun_hint_line_present", review_rerun_hint_line.startswith(RERUN_HINT_PREFIX)),
+            (
+                "all_review_rerun_hint_line_present",
+                all_review_rerun_hint_line.startswith(RERUN_HINT_PREFIX),
             ),
         ]
 
