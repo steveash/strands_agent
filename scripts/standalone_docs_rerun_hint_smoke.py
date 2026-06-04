@@ -5,8 +5,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX,
+    STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX,
+    STANDALONE_DOCS_RERUN_HINT_SUMMARY_PREFIX,
+    build_standalone_docs_rerun_hint_results,
     collect_smoke_wrapper_failure_output,
-    detail_safe_text,
     emit_smoke_results,
     run_script_module_main_via_driver_in_temp_checkout,
 )
@@ -14,13 +17,6 @@ from strands_agent_tui.testing import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 STANDALONE_SMOKE_SCRIPT_PATH = SCRIPT_DIR / "standalone_smoke.py"
-FAILED_LINE_PREFIX = "docs-artifacts smoke failed fast: "
-HINT_PREFIX = "[standalone-smoke] hint: standalone wrapper docs drift is easiest to isolate with "
-SUMMARY_PREFIX = "[standalone-smoke] summary: 5/6 targets passed before failure in "
-EXPECTED_FIX_SUMMARY_LINE = (
-    "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke"
-)
-EXPECTED_FALSE_LINE = "fix_post_check= False"
 
 
 def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
@@ -56,41 +52,14 @@ def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
         """,
     )
     try:
-        stdout_lines = smoke_run.stdout_lines
-        stderr_lines = smoke_run.stderr_lines
         failure_output = collect_smoke_wrapper_failure_output(
-            stderr_lines,
-            failed_line_prefix=FAILED_LINE_PREFIX,
-            hint_prefix=HINT_PREFIX,
-            failure_summary_prefix=SUMMARY_PREFIX,
+            smoke_run.stderr_lines,
+            failed_line_prefix=STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX,
+            hint_prefix=STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX,
+            failure_summary_prefix=STANDALONE_DOCS_RERUN_HINT_SUMMARY_PREFIX,
         )
 
-        return [
-            ("checkout_root", str(smoke_run.checkout_root)),
-            ("stdout_fix_check_summary", stdout_lines[0] if stdout_lines else ""),
-            (
-                "stdout_false_line",
-                detail_safe_text(stdout_lines[1]) if len(stdout_lines) > 1 else "",
-            ),
-            ("stderr_failed_line", detail_safe_text(failure_output.failed_line)),
-            ("stderr_hint_line", failure_output.hint_line),
-            ("stderr_summary_line", failure_output.failure_summary_line),
-            ("exit_code", smoke_run.exit_code),
-            ("exit_code_non_zero", smoke_run.exit_code != 0),
-            ("fix_check_summary_present", EXPECTED_FIX_SUMMARY_LINE in stdout_lines),
-            ("false_line_present", EXPECTED_FALSE_LINE in stdout_lines),
-            ("failed_line_present", failure_output.present("failed")),
-            ("hint_line_present", failure_output.present("hint")),
-            ("summary_line_present", failure_output.present("failure_summary")),
-            (
-                "hint_after_failed_line",
-                failure_output.appears_before("failed", "hint"),
-            ),
-            (
-                "hint_before_failure_summary",
-                failure_output.appears_before("hint", "failure_summary"),
-            ),
-        ]
+        return build_standalone_docs_rerun_hint_results(smoke_run, failure_output)
     finally:
         smoke_run.cleanup()
 

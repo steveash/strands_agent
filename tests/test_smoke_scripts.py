@@ -23,6 +23,7 @@ from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_SPECS,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
+    STANDALONE_DOCS_RERUN_HINT_CONTRACT,
     STANDALONE_SMOKE_WRAPPER,
     build_smoke_cli_doc_drift_report_payload,
     build_smoke_cli_doc_render_manifest_payload,
@@ -91,28 +92,6 @@ class _SmokeScriptContractCase:
 
 def _prefix_smoke_contract_names(prefix: str, suffixes: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(f"{prefix}{suffix}" for suffix in suffixes)
-
-
-_STANDALONE_DOCS_RERUN_HINT_LINE_PREFIXES = (
-    "checkout_root: ",
-    "stdout_fix_check_summary: fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
-    "stdout_false_line: fix_post_check=False",
-    "stderr_failed_line: docs-artifacts smoke failed fast: fix_post_check=False",
-    "stderr_hint_line: [standalone-smoke] hint: standalone wrapper docs drift is easiest to isolate with ",
-    "stderr_summary_line: [standalone-smoke] summary: 5/6 targets passed before failure in ",
-)
-
-
-_STANDALONE_DOCS_RERUN_HINT_TRUE_CHECKS = (
-    "exit_code_non_zero",
-    "fix_check_summary_present",
-    "false_line_present",
-    "failed_line_present",
-    "hint_line_present",
-    "summary_line_present",
-    "hint_after_failed_line",
-    "hint_before_failure_summary",
-)
 
 
 _DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES = (
@@ -281,8 +260,8 @@ _ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES = (
 _SMOKE_SCRIPT_CONTRACT_CASES = (
     _SmokeScriptContractCase(
         script_name="standalone_docs_rerun_hint_smoke",
-        required_line_prefixes=_STANDALONE_DOCS_RERUN_HINT_LINE_PREFIXES,
-        true_check_names=_STANDALONE_DOCS_RERUN_HINT_TRUE_CHECKS,
+        required_line_prefixes=STANDALONE_DOCS_RERUN_HINT_CONTRACT.required_line_prefixes,
+        true_check_names=STANDALONE_DOCS_RERUN_HINT_CONTRACT.true_check_names,
     ),
     *_DOCS_REVIEW_MATRIX_SCRIPT_CASES,
     _SmokeScriptContractCase(

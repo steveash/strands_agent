@@ -48,6 +48,12 @@ class SmokeScriptRunResult:
 
 
 @dataclass(frozen=True)
+class SmokeScriptContractMetadata:
+    required_line_prefixes: tuple[str, ...]
+    true_check_names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ReviewArtifactOutputObservation:
     checkout_root: Path
     metadata_index: int | None
@@ -412,6 +418,75 @@ def _line_at_index(lines: Sequence[str], index: int | None) -> str:
 
 def detail_safe_text(text: str) -> str:
     return text.replace("= False", "=False")
+
+
+STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX = "docs-artifacts smoke failed fast: "
+STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX = (
+    "[standalone-smoke] hint: standalone wrapper docs drift is easiest to isolate with "
+)
+STANDALONE_DOCS_RERUN_HINT_SUMMARY_PREFIX = (
+    "[standalone-smoke] summary: 5/6 targets passed before failure in "
+)
+STANDALONE_DOCS_RERUN_HINT_FIX_CHECK_SUMMARY_LINE = (
+    "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke"
+)
+STANDALONE_DOCS_RERUN_HINT_FALSE_LINE = "fix_post_check= False"
+STANDALONE_DOCS_RERUN_HINT_CONTRACT = SmokeScriptContractMetadata(
+    required_line_prefixes=(
+        "checkout_root: ",
+        f"stdout_fix_check_summary: {STANDALONE_DOCS_RERUN_HINT_FIX_CHECK_SUMMARY_LINE}",
+        f"stdout_false_line: {detail_safe_text(STANDALONE_DOCS_RERUN_HINT_FALSE_LINE)}",
+        f"stderr_failed_line: {detail_safe_text(STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX + STANDALONE_DOCS_RERUN_HINT_FALSE_LINE)}",
+        f"stderr_hint_line: {STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX}",
+        f"stderr_summary_line: {STANDALONE_DOCS_RERUN_HINT_SUMMARY_PREFIX}",
+    ),
+    true_check_names=(
+        "exit_code_non_zero",
+        "fix_check_summary_present",
+        "false_line_present",
+        "failed_line_present",
+        "hint_line_present",
+        "summary_line_present",
+        "hint_after_failed_line",
+        "hint_before_failure_summary",
+    ),
+)
+
+
+def build_standalone_docs_rerun_hint_results(
+    smoke_run: SmokeScriptRunResult,
+    failure_output: SmokeWrapperFailureObservation,
+) -> list[tuple[str, object]]:
+    stdout_lines = smoke_run.stdout_lines
+    return [
+        ("checkout_root", str(smoke_run.checkout_root)),
+        ("stdout_fix_check_summary", stdout_lines[0] if stdout_lines else ""),
+        (
+            "stdout_false_line",
+            detail_safe_text(stdout_lines[1]) if len(stdout_lines) > 1 else "",
+        ),
+        ("stderr_failed_line", detail_safe_text(failure_output.failed_line)),
+        ("stderr_hint_line", failure_output.hint_line),
+        ("stderr_summary_line", failure_output.failure_summary_line),
+        ("exit_code", smoke_run.exit_code),
+        ("exit_code_non_zero", smoke_run.exit_code != 0),
+        (
+            "fix_check_summary_present",
+            STANDALONE_DOCS_RERUN_HINT_FIX_CHECK_SUMMARY_LINE in stdout_lines,
+        ),
+        ("false_line_present", STANDALONE_DOCS_RERUN_HINT_FALSE_LINE in stdout_lines),
+        ("failed_line_present", failure_output.present("failed")),
+        ("hint_line_present", failure_output.present("hint")),
+        ("summary_line_present", failure_output.present("failure_summary")),
+        (
+            "hint_after_failed_line",
+            failure_output.appears_before("failed", "hint"),
+        ),
+        (
+            "hint_before_failure_summary",
+            failure_output.appears_before("hint", "failure_summary"),
+        ),
+    ]
 
 
 def collect_smoke_wrapper_failure_output(

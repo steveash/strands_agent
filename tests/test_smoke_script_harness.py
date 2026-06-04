@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -10,16 +11,20 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+    STANDALONE_DOCS_RERUN_HINT_CONTRACT,
+    SmokeMatrixDocsReviewObserverSpec,
+    SmokeScriptRunResult,
+    SmokeWrapperFailureObservation,
     build_review_artifact_failure_results,
     build_review_artifact_success_results,
-    collect_smoke_wrapper_failure_output,
-    collect_smoke_matrix_docs_review_failure_output,
-    SmokeMatrixDocsReviewObserverSpec,
-    SmokeWrapperFailureObservation,
     build_script_driver_source,
     build_smoke_matrix_docs_review_observer_spec,
+    build_standalone_docs_rerun_hint_results,
+    collect_smoke_wrapper_failure_output,
+    collect_smoke_matrix_docs_review_failure_output,
     collect_review_artifact_output,
     detail_safe_text,
+    emit_smoke_results,
     find_prefixed_line_index,
     load_script_module,
     observe_loaded_review_artifact_output,
@@ -294,6 +299,43 @@ def test_collect_smoke_wrapper_failure_output_validates_failed_matcher_contract(
             hint_prefix="[standalone-smoke] hint: ",
             failure_summary_prefix="[standalone-smoke] summary: ",
         )
+
+
+def test_build_standalone_docs_rerun_hint_results_reuses_shared_contract_metadata() -> None:
+    smoke_run = SmokeScriptRunResult(
+        checkout_root=Path("/tmp/checkout"),
+        exit_code=1,
+        stdout=(
+            "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke\n"
+            "fix_post_check= False\n"
+        ),
+        stderr="",
+        cleanup_callback=lambda: None,
+    )
+    failure_output = SmokeWrapperFailureObservation(
+        failed_index=2,
+        hint_index=3,
+        failure_summary_index=4,
+        failed_line="docs-artifacts smoke failed fast: fix_post_check= False",
+        hint_line=(
+            "[standalone-smoke] hint: standalone wrapper docs drift is easiest to isolate with "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only`"
+        ),
+        failure_summary_line="[standalone-smoke] summary: 5/6 targets passed before failure in 0.10s",
+    )
+
+    output = StringIO()
+    exit_code = emit_smoke_results(
+        build_standalone_docs_rerun_hint_results(smoke_run, failure_output),
+        stdout=output,
+    )
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    for prefix in STANDALONE_DOCS_RERUN_HINT_CONTRACT.required_line_prefixes:
+        assert any(line.startswith(prefix) for line in lines), prefix
+    for check_name in STANDALONE_DOCS_RERUN_HINT_CONTRACT.true_check_names:
+        assert f"{check_name}= True" in lines
 
 
 def test_collect_smoke_matrix_docs_review_failure_output_validates_failed_matcher_contract(
