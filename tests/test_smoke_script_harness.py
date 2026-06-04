@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 
 from strands_agent_tui.testing import (
+    DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
     STANDALONE_DOCS_RERUN_HINT_CONTRACT,
+    STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     SmokeMatrixDocsReviewObserverSpec,
     SmokeScriptRunResult,
     SmokeWrapperFailureObservation,
@@ -336,6 +338,33 @@ def test_build_standalone_docs_rerun_hint_results_reuses_shared_contract_metadat
         assert any(line.startswith(prefix) for line in lines), prefix
     for check_name in STANDALONE_DOCS_RERUN_HINT_CONTRACT.true_check_names:
         assert f"{check_name}= True" in lines
+
+
+def test_exported_smoke_script_contract_cases_cover_shared_docs_review_wrappers() -> None:
+    assert STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT.script_name == "standalone_docs_rerun_hint_smoke"
+    assert STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT.runner_name == "run_standalone_docs_rerun_hint_smoke"
+    assert (
+        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT.required_line_prefixes
+        == STANDALONE_DOCS_RERUN_HINT_CONTRACT.required_line_prefixes
+    )
+    assert (
+        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT.true_check_names
+        == STANDALONE_DOCS_RERUN_HINT_CONTRACT.true_check_names
+    )
+
+    assert [(case.script_name, case.runner_name) for case in DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS] == [
+        ("smoke_matrix_all_review_order_smoke", "run_smoke_matrix_all_review_order_smoke"),
+        (
+            "smoke_matrix_all_review_missing_api_key_smoke",
+            "run_smoke_matrix_all_review_missing_api_key_smoke",
+        ),
+        ("smoke_matrix_docs_review_hint_smoke", "run_smoke_matrix_docs_review_hint_smoke"),
+    ]
+    for case in DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS:
+        assert case.required_line_prefixes[0] == "checkout_root: "
+        assert "exit_code_non_zero" in case.true_check_names
+        assert "metadata_line_present" in case.true_check_names
+        assert "matrix_summary_artifact_exists" in case.true_check_names
 
 
 def test_collect_smoke_matrix_docs_review_failure_output_validates_failed_matcher_contract(

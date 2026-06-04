@@ -54,6 +54,21 @@ class SmokeScriptContractMetadata:
 
 
 @dataclass(frozen=True)
+class SmokeScriptContractCase:
+    script_name: str
+    runner_name: str
+    contract: SmokeScriptContractMetadata
+
+    @property
+    def required_line_prefixes(self) -> tuple[str, ...]:
+        return self.contract.required_line_prefixes
+
+    @property
+    def true_check_names(self) -> tuple[str, ...]:
+        return self.contract.true_check_names
+
+
+@dataclass(frozen=True)
 class ReviewArtifactOutputObservation:
     checkout_root: Path
     metadata_index: int | None
@@ -420,6 +435,26 @@ def detail_safe_text(text: str) -> str:
     return text.replace("= False", "=False")
 
 
+def merge_smoke_script_contract_metadata(
+    *contracts: SmokeScriptContractMetadata,
+    required_line_prefixes: Sequence[str] = (),
+    true_check_names: Sequence[str] = (),
+) -> SmokeScriptContractMetadata:
+    merged_line_prefixes: list[str] = []
+    merged_true_check_names: list[str] = []
+
+    for contract in contracts:
+        merged_line_prefixes.extend(contract.required_line_prefixes)
+        merged_true_check_names.extend(contract.true_check_names)
+
+    merged_line_prefixes.extend(required_line_prefixes)
+    merged_true_check_names.extend(true_check_names)
+    return SmokeScriptContractMetadata(
+        required_line_prefixes=tuple(merged_line_prefixes),
+        true_check_names=tuple(merged_true_check_names),
+    )
+
+
 STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX = "docs-artifacts smoke failed fast: "
 STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX = (
     "[standalone-smoke] hint: standalone wrapper docs drift is easiest to isolate with "
@@ -450,6 +485,136 @@ STANDALONE_DOCS_RERUN_HINT_CONTRACT = SmokeScriptContractMetadata(
         "hint_after_failed_line",
         "hint_before_failure_summary",
     ),
+)
+STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="standalone_docs_rerun_hint_smoke",
+    runner_name="run_standalone_docs_rerun_hint_smoke",
+    contract=STANDALONE_DOCS_RERUN_HINT_CONTRACT,
+)
+
+_DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT = SmokeScriptContractMetadata(
+    required_line_prefixes=(
+        "checkout_root: ",
+        'stderr_metadata_line: [smoke-matrix] review metadata: {"artifact_root": ',
+        "stderr_artifacts_line: [smoke-matrix] review artifacts: ",
+        "stderr_matrix_summary_line: [smoke-matrix] review matrix summary: ",
+    ),
+    true_check_names=(
+        "exit_code_non_zero",
+        "failed_line_present",
+        "metadata_line_present",
+        "artifacts_line_present",
+        "matrix_summary_line_present",
+        "summary_line_present",
+        "metadata_targets_docs_review_all",
+        "metadata_artifact_root_matches_all_review",
+        "metadata_matrix_summary_matches_all_review",
+        "metadata_bundle_index_rerun_hint_matches",
+        "metadata_expected_artifact_paths_match",
+        "metadata_resolved_paths_match_expected",
+        "matrix_summary_artifact_exists",
+        "matrix_summary_targets_docs_review_all",
+        "matrix_summary_artifact_root_matches_all_review",
+        "matrix_summary_bundle_index_rerun_hint_matches",
+        "matrix_summary_expected_artifact_paths_match",
+        "matrix_summary_resolved_paths_match_expected",
+    ),
+)
+
+SMOKE_MATRIX_ALL_REVIEW_ORDER_CONTRACT = merge_smoke_script_contract_metadata(
+    _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT,
+    required_line_prefixes=(
+        "stderr_failed_line: standalone smoke failed fast: live_runtime_requested=False",
+        "stderr_hint_line: [smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;",
+        "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`;",
+        "stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ",
+    ),
+    true_check_names=(
+        "hint_line_present",
+        "docs_hint_line_present",
+        "matrix_summary_path_matches_metadata",
+        "matrix_summary_line_matches_metadata_path",
+        "metadata_before_hint",
+        "artifacts_before_hint",
+        "matrix_summary_before_hint",
+        "live_hint_before_docs_hint",
+        "docs_hint_before_failure_summary",
+        "metadata_before_failure_summary",
+        "artifacts_before_failure_summary",
+        "matrix_summary_before_failure_summary",
+    ),
+)
+SMOKE_MATRIX_ALL_REVIEW_ORDER_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="smoke_matrix_all_review_order_smoke",
+    runner_name="run_smoke_matrix_all_review_order_smoke",
+    contract=SMOKE_MATRIX_ALL_REVIEW_ORDER_CONTRACT,
+)
+
+SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT = merge_smoke_script_contract_metadata(
+    _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT,
+    required_line_prefixes=(
+        "stderr_failed_line: standalone smoke exited with status 1",
+        "stderr_missing_api_key_hint_line: [smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` was missing;",
+        "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
+        "stderr_docs_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`;",
+        "stderr_summary_line: [smoke-matrix] summary: 0/4 bundles passed before failure in ",
+    ),
+    true_check_names=(
+        "missing_api_key_hint_line_present",
+        "bundle_rerun_hint_line_present",
+        "docs_hint_line_present",
+        "matrix_summary_path_matches_metadata",
+        "bundle_rerun_hint_line_matches_matrix_summary_hint",
+        "matrix_summary_line_matches_metadata_path",
+        "metadata_before_missing_api_key_hint",
+        "artifacts_before_missing_api_key_hint",
+        "matrix_summary_before_missing_api_key_hint",
+        "bundle_rerun_hint_before_missing_api_key_hint",
+        "bundle_rerun_hint_before_docs_hint",
+        "missing_api_key_hint_before_docs_hint",
+        "docs_hint_before_failure_summary",
+        "metadata_before_failure_summary",
+        "artifacts_before_failure_summary",
+        "matrix_summary_before_failure_summary",
+    ),
+)
+SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="smoke_matrix_all_review_missing_api_key_smoke",
+    runner_name="run_smoke_matrix_all_review_missing_api_key_smoke",
+    contract=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT,
+)
+
+SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT = merge_smoke_script_contract_metadata(
+    _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT,
+    required_line_prefixes=(
+        "stdout_last_line: [smoke-matrix] running docs-review",
+        "stderr_failed_line: docs-review smoke failed fast: render_manifest_payload=False",
+        "stderr_bundle_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
+        "stderr_hint_line: [smoke-matrix] hint: docs-review drift is easiest to isolate with ",
+        "stderr_summary_line: [smoke-matrix] summary: 3/4 bundles passed before failure in ",
+    ),
+    true_check_names=(
+        "bundle_rerun_hint_line_present",
+        "hint_line_present",
+        "matrix_summary_path_matches_all_review",
+        "bundle_rerun_hint_line_matches_matrix_summary_hint",
+        "bundle_rerun_hint_after_matrix_summary",
+        "hint_after_matrix_summary",
+        "bundle_rerun_hint_before_docs_hint",
+        "hint_before_failure_summary",
+        "stdout_docs_review_started",
+    ),
+)
+SMOKE_MATRIX_DOCS_REVIEW_HINT_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="smoke_matrix_docs_review_hint_smoke",
+    runner_name="run_smoke_matrix_docs_review_hint_smoke",
+    contract=SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT,
+)
+
+DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS = (
+    SMOKE_MATRIX_ALL_REVIEW_ORDER_SCRIPT_CONTRACT,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_SCRIPT_CONTRACT,
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_SCRIPT_CONTRACT,
 )
 
 
