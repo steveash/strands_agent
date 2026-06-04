@@ -502,6 +502,163 @@ def collect_smoke_matrix_docs_review_failure_output(
     )
 
 
+def _result_name_prefix(prefix: str) -> str:
+    if not prefix:
+        return ""
+    return prefix if prefix.endswith("_") else f"{prefix}_"
+
+
+def build_review_artifact_failure_results(
+    review_output: ReviewArtifactOutputObservation,
+    review_spec: SmokeMatrixDocsReviewObserverSpec,
+    *,
+    target_suffix: str,
+    artifact_suffix: str,
+    detail_prefix: str = "stderr_",
+    result_prefix: str = "",
+) -> list[tuple[str, object]]:
+    prefix = _result_name_prefix(result_prefix)
+    return [
+        (f"{prefix}{detail_prefix}metadata_line", review_output.metadata_line),
+        (f"{prefix}{detail_prefix}artifacts_line", review_output.artifacts_line),
+        (f"{prefix}{detail_prefix}matrix_summary_line", review_output.matrix_summary_line),
+        (f"{prefix}metadata_line_present", review_output.metadata_line_present),
+        (f"{prefix}artifacts_line_present", review_output.artifacts_line_present),
+        (f"{prefix}matrix_summary_line_present", review_output.matrix_summary_line_present),
+        (
+            f"{prefix}metadata_targets_{target_suffix}",
+            review_output.metadata_targets(review_spec.expected_target_name),
+        ),
+        (
+            f"{prefix}metadata_artifact_root_matches_{artifact_suffix}",
+            review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
+        ),
+        (
+            f"{prefix}metadata_bundle_index_rerun_hint_matches",
+            review_output.metadata_bundle_index_rerun_hint_matches(
+                review_spec.expected_bundle_index_rerun_hint
+            ),
+        ),
+        (
+            f"{prefix}metadata_expected_artifact_paths_match",
+            review_spec.metadata_artifact_paths_match(review_output),
+        ),
+        (
+            f"{prefix}metadata_resolved_paths_match_expected",
+            review_spec.metadata_resolved_paths_match(review_output),
+        ),
+        (f"{prefix}matrix_summary_artifact_exists", review_output.matrix_summary_artifact_exists),
+        (
+            f"{prefix}matrix_summary_targets_{target_suffix}",
+            review_output.matrix_summary_targets(review_spec.expected_target_name),
+        ),
+        (
+            f"{prefix}matrix_summary_artifact_root_matches_{artifact_suffix}",
+            review_output.matrix_summary_artifact_root_matches(review_spec.expected_artifact_root),
+        ),
+        (
+            f"{prefix}matrix_summary_bundle_index_rerun_hint_matches",
+            review_output.matrix_summary_bundle_index_rerun_hint_matches(
+                review_spec.expected_bundle_index_rerun_hint
+            ),
+        ),
+        (
+            f"{prefix}matrix_summary_expected_artifact_paths_match",
+            review_spec.matrix_summary_artifact_paths_match(review_output),
+        ),
+        (
+            f"{prefix}matrix_summary_resolved_paths_match_expected",
+            review_spec.matrix_summary_resolved_paths_match(review_output),
+        ),
+    ]
+
+
+def build_review_artifact_success_results(
+    review_output: ReviewArtifactOutputObservation,
+    review_spec: SmokeMatrixDocsReviewObserverSpec,
+    *,
+    result_prefix: str,
+    target_suffix: str,
+    artifact_suffix: str,
+    success_summary_line: str,
+    success_summary_prefix: str,
+    rerun_hint_line: str,
+    rerun_hint_prefix: str,
+    exit_code: int,
+    stderr_text: str,
+    artifacts_exist: bool,
+) -> list[tuple[str, object]]:
+    prefix = _result_name_prefix(result_prefix)
+    expected_paths = review_spec.resolve_expected_paths(checkout_root=review_output.checkout_root)
+    artifact_root = review_output.matrix_summary_paths.get("artifact_root")
+    return [
+        (f"{prefix}artifact_root", str(artifact_root) if artifact_root is not None else ""),
+        (f"{prefix}metadata_line", review_output.metadata_line),
+        (f"{prefix}artifacts_line", review_output.artifacts_line),
+        (f"{prefix}matrix_summary_line", review_output.matrix_summary_line),
+        (f"{prefix}summary_line", success_summary_line),
+        (f"{prefix}rerun_hint_line", rerun_hint_line),
+        (f"{prefix}exit_code_zero", exit_code == 0),
+        (f"{prefix}stderr_empty", stderr_text == ""),
+        (f"{prefix}metadata_line_present", review_output.metadata_line_present),
+        (f"{prefix}artifacts_line_present", review_output.artifacts_line_present),
+        (f"{prefix}matrix_summary_line_present", review_output.matrix_summary_line_present),
+        (
+            f"{prefix}metadata_targets_{target_suffix}",
+            review_output.metadata_targets(review_spec.expected_target_name),
+        ),
+        (
+            f"{prefix}metadata_artifact_root_matches_{artifact_suffix}",
+            review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
+        ),
+        (
+            f"{prefix}metadata_matrix_summary_matches_expected_path",
+            review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
+        ),
+        (
+            f"{prefix}metadata_bundle_index_rerun_hint_matches",
+            review_output.metadata_bundle_index_rerun_hint_matches(
+                review_spec.expected_bundle_index_rerun_hint
+            ),
+        ),
+        (
+            f"{prefix}metadata_expected_artifact_paths_match",
+            review_spec.metadata_artifact_paths_match(review_output),
+        ),
+        (
+            f"{prefix}metadata_resolved_paths_match_expected",
+            review_spec.metadata_resolved_paths_match(review_output),
+        ),
+        (
+            f"{prefix}matrix_summary_line_matches_expected_path",
+            review_output.matrix_summary_path == expected_paths["matrix_summary_path"],
+        ),
+        (f"{prefix}rerun_hint_line_matches_expected_hint", rerun_hint_line == f"{rerun_hint_prefix}{review_spec.expected_bundle_index_rerun_hint}"),
+        (f"{prefix}paths_loaded_from_matrix_summary", bool(review_output.matrix_summary_paths)),
+        (f"{prefix}artifacts_exist", artifacts_exist),
+        (
+            f"{prefix}summary_targets_{target_suffix}",
+            review_output.matrix_summary_targets(review_spec.expected_target_name),
+        ),
+        (
+            f"{prefix}summary_bundle_index_rerun_hint_matches",
+            review_output.matrix_summary_bundle_index_rerun_hint_matches(
+                review_spec.expected_bundle_index_rerun_hint
+            ),
+        ),
+        (
+            f"{prefix}matrix_summary_expected_artifact_paths_match",
+            review_spec.matrix_summary_artifact_paths_match(review_output),
+        ),
+        (
+            f"{prefix}matrix_summary_resolved_paths_match_expected",
+            review_spec.matrix_summary_resolved_paths_match(review_output),
+        ),
+        (f"{prefix}summary_line_present", success_summary_line.startswith(success_summary_prefix)),
+        (f"{prefix}rerun_hint_line_present", rerun_hint_line.startswith(rerun_hint_prefix)),
+    ]
+
+
 def collect_review_artifact_output(
     output_lines: str | Sequence[str],
     *,

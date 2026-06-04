@@ -5,12 +5,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    build_review_artifact_failure_results,
     build_smoke_matrix_docs_review_observer_spec,
     collect_smoke_matrix_docs_review_failure_output,
     emit_smoke_results,
     load_script_module,
     observe_script_module_main_via_driver_review_artifact_output,
-    smoke_cli_docs_parity_rerun_hint,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -82,9 +82,12 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
         return [
             ("checkout_root", str(smoke_run.checkout_root)),
             ("stderr_failed_line", failure_output.failed_line),
-            ("stderr_metadata_line", review_output.metadata_line),
-            ("stderr_artifacts_line", review_output.artifacts_line),
-            ("stderr_matrix_summary_line", review_output.matrix_summary_line),
+            *build_review_artifact_failure_results(
+                review_output,
+                review_spec,
+                target_suffix="docs_review_all",
+                artifact_suffix="all_review",
+            ),
             ("stderr_missing_api_key_hint_line", failure_output.missing_api_key_hint_line),
             ("stderr_bundle_rerun_hint_line", failure_output.bundle_rerun_hint_line),
             ("stderr_docs_hint_line", failure_output.docs_review_only_hint_line),
@@ -92,66 +95,17 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             ("exit_code", smoke_run.exit_code),
             ("exit_code_non_zero", smoke_run.exit_code != 0),
             ("failed_line_present", failure_output.present("failed")),
-            ("metadata_line_present", review_output.metadata_line_present),
-            ("artifacts_line_present", review_output.artifacts_line_present),
-            ("matrix_summary_line_present", review_output.matrix_summary_line_present),
             ("missing_api_key_hint_line_present", failure_output.present("missing_api_key_hint")),
             ("bundle_rerun_hint_line_present", failure_output.present("bundle_rerun_hint")),
             ("docs_hint_line_present", failure_output.present("docs_review_only_hint")),
             ("summary_line_present", failure_output.present("failure_summary")),
             (
-                "metadata_targets_docs_review_all",
-                review_output.metadata_targets(review_spec.expected_target_name),
-            ),
-            (
-                "metadata_artifact_root_matches_all_review",
-                review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
-            ),
-            (
                 "metadata_matrix_summary_matches_all_review",
                 review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
             ),
             (
-                "metadata_bundle_index_rerun_hint_matches",
-                review_output.metadata_bundle_index_rerun_hint_matches(smoke_cli_docs_parity_rerun_hint()),
-            ),
-            (
-                "metadata_expected_artifact_paths_match",
-                review_spec.metadata_artifact_paths_match(review_output),
-            ),
-            (
-                "metadata_resolved_paths_match_expected",
-                review_spec.metadata_resolved_paths_match(review_output),
-            ),
-            (
-                "matrix_summary_artifact_exists",
-                review_output.matrix_summary_artifact_exists,
-            ),
-            (
-                "matrix_summary_targets_docs_review_all",
-                review_output.matrix_summary_targets(review_spec.expected_target_name),
-            ),
-            (
-                "matrix_summary_artifact_root_matches_all_review",
-                review_output.matrix_summary_artifact_root_matches(review_spec.expected_artifact_root),
-            ),
-            (
                 "matrix_summary_path_matches_metadata",
                 review_output.matrix_summary_path_matches_metadata(),
-            ),
-            (
-                "matrix_summary_bundle_index_rerun_hint_matches",
-                review_output.matrix_summary_bundle_index_rerun_hint_matches(
-                    smoke_cli_docs_parity_rerun_hint()
-                ),
-            ),
-            (
-                "matrix_summary_expected_artifact_paths_match",
-                review_spec.matrix_summary_artifact_paths_match(review_output),
-            ),
-            (
-                "matrix_summary_resolved_paths_match_expected",
-                review_spec.matrix_summary_resolved_paths_match(review_output),
             ),
             (
                 "bundle_rerun_hint_line_matches_matrix_summary_hint",

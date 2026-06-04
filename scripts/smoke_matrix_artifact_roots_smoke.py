@@ -12,6 +12,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+    build_review_artifact_success_results,
     build_smoke_matrix_docs_review_observer_spec,
     emit_smoke_results,
     load_script_module,
@@ -132,9 +133,6 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             requested_target_name="all-review",
             driver_stem="smoke_matrix_artifact_roots_all_review",
         )
-        expected_review_paths = review_spec.resolve_expected_paths(checkout_root=checkout_root)
-        expected_all_review_paths = all_review_spec.resolve_expected_paths(checkout_root=checkout_root)
-
         with _patched_run_smoke_target(smoke_matrix_module, checkout_root):
             review_run, review_output = observe_loaded_review_artifact_output(
                 smoke_matrix_module,
@@ -197,110 +195,35 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
 
         return [
             ("checkout_root", str(checkout_root)),
-            ("review_artifact_root", str(review_root) if review_root is not None else ""),
-            ("all_review_artifact_root", str(all_review_root) if all_review_root is not None else ""),
-            ("review_metadata_line", review_output.metadata_line),
-            ("review_artifacts_line", review_output.artifacts_line),
-            ("review_matrix_summary_line", review_output.matrix_summary_line),
-            ("all_review_metadata_line", all_review_output.metadata_line),
-            ("all_review_artifacts_line", all_review_output.artifacts_line),
-            ("all_review_matrix_summary_line", all_review_output.matrix_summary_line),
-            ("review_summary_line", review_summary_line),
-            ("all_review_summary_line", all_review_summary_line),
-            ("review_rerun_hint_line", review_rerun_hint_line),
-            ("all_review_rerun_hint_line", all_review_rerun_hint_line),
-            ("review_exit_code_zero", review_exit_code == 0),
-            ("all_review_exit_code_zero", all_review_exit_code == 0),
-            ("review_stderr_empty", review_stderr == ""),
-            ("all_review_stderr_empty", all_review_stderr == ""),
-            ("review_metadata_line_present", review_output.metadata_line_present),
-            ("review_artifacts_line_present", review_output.artifacts_line_present),
-            ("review_matrix_summary_line_present", review_output.matrix_summary_line_present),
-            ("all_review_metadata_line_present", all_review_output.metadata_line_present),
-            ("all_review_artifacts_line_present", all_review_output.artifacts_line_present),
-            ("all_review_matrix_summary_line_present", all_review_output.matrix_summary_line_present),
-            (
-                "review_metadata_targets_docs_review",
-                review_output.metadata_targets(review_spec.expected_target_name),
+            *build_review_artifact_success_results(
+                review_output,
+                review_spec,
+                result_prefix="review",
+                target_suffix="docs_review",
+                artifact_suffix="review",
+                success_summary_line=review_summary_line,
+                success_summary_prefix=SUCCESS_SUMMARY_PREFIX,
+                rerun_hint_line=review_rerun_hint_line,
+                rerun_hint_prefix=RERUN_HINT_PREFIX,
+                exit_code=review_exit_code,
+                stderr_text=review_stderr,
+                artifacts_exist=review_files_exist,
             ),
-            (
-                "all_review_metadata_targets_docs_review_all",
-                all_review_output.metadata_targets(all_review_spec.expected_target_name),
+            *build_review_artifact_success_results(
+                all_review_output,
+                all_review_spec,
+                result_prefix="all_review",
+                target_suffix="docs_review_all",
+                artifact_suffix="all_review",
+                success_summary_line=all_review_summary_line,
+                success_summary_prefix=SUCCESS_SUMMARY_PREFIX,
+                rerun_hint_line=all_review_rerun_hint_line,
+                rerun_hint_prefix=RERUN_HINT_PREFIX,
+                exit_code=all_review_exit_code,
+                stderr_text=all_review_stderr,
+                artifacts_exist=all_review_files_exist,
             ),
-            (
-                "review_metadata_artifact_root_matches_review",
-                review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
-            ),
-            (
-                "all_review_metadata_artifact_root_matches_all_review",
-                all_review_output.metadata_artifact_root_matches(all_review_spec.expected_artifact_root),
-            ),
-            (
-                "review_metadata_matrix_summary_matches_expected_path",
-                review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
-            ),
-            (
-                "review_metadata_bundle_index_rerun_hint_matches",
-                review_output.metadata_bundle_index_rerun_hint_matches(
-                    review_spec.expected_bundle_index_rerun_hint
-                ),
-            ),
-            (
-                "review_metadata_expected_artifact_paths_match",
-                review_spec.metadata_artifact_paths_match(review_output),
-            ),
-            (
-                "review_metadata_resolved_paths_match_expected",
-                review_spec.metadata_resolved_paths_match(review_output),
-            ),
-            (
-                "all_review_metadata_matrix_summary_matches_expected_path",
-                all_review_output.metadata_matrix_summary_matches(all_review_spec.expected_matrix_summary_path),
-            ),
-            (
-                "all_review_metadata_bundle_index_rerun_hint_matches",
-                all_review_output.metadata_bundle_index_rerun_hint_matches(
-                    all_review_spec.expected_bundle_index_rerun_hint
-                ),
-            ),
-            (
-                "all_review_metadata_expected_artifact_paths_match",
-                all_review_spec.metadata_artifact_paths_match(all_review_output),
-            ),
-            (
-                "all_review_metadata_resolved_paths_match_expected",
-                all_review_spec.metadata_resolved_paths_match(all_review_output),
-            ),
-            (
-                "review_matrix_summary_line_matches_expected_path",
-                review_summary_path_from_line == expected_review_paths["matrix_summary_path"],
-            ),
-            (
-                "all_review_matrix_summary_line_matches_expected_path",
-                all_review_summary_path_from_line == expected_all_review_paths["matrix_summary_path"],
-            ),
-            (
-                "review_rerun_hint_line_matches_expected_hint",
-                review_rerun_hint_line == f"{RERUN_HINT_PREFIX}{review_spec.expected_bundle_index_rerun_hint}",
-            ),
-            (
-                "all_review_rerun_hint_line_matches_expected_hint",
-                all_review_rerun_hint_line
-                == f"{RERUN_HINT_PREFIX}{all_review_spec.expected_bundle_index_rerun_hint}",
-            ),
-            ("review_paths_loaded_from_matrix_summary", bool(review_paths)),
-            ("all_review_paths_loaded_from_matrix_summary", bool(all_review_paths)),
             ("artifact_roots_distinct", artifact_roots_distinct),
-            ("review_artifacts_exist", review_files_exist),
-            ("all_review_artifacts_exist", all_review_files_exist),
-            (
-                "review_summary_targets_docs_review",
-                review_summary_payload.get("target_name") == review_spec.expected_target_name,
-            ),
-            (
-                "all_review_summary_targets_docs_review_all",
-                all_review_summary_payload.get("target_name") == all_review_spec.expected_target_name,
-            ),
             (
                 "review_summary_path_keeps_review_root",
                 resolve_review_artifact_paths(review_summary_payload, checkout_root=checkout_root).get("artifact_root")
@@ -309,39 +232,11 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 else False,
             ),
             (
-                "review_summary_bundle_index_rerun_hint_matches",
-                review_output.matrix_summary_bundle_index_rerun_hint_matches(
-                    review_spec.expected_bundle_index_rerun_hint
-                ),
-            ),
-            (
-                "review_matrix_summary_expected_artifact_paths_match",
-                review_spec.matrix_summary_artifact_paths_match(review_output),
-            ),
-            (
-                "review_matrix_summary_resolved_paths_match_expected",
-                review_spec.matrix_summary_resolved_paths_match(review_output),
-            ),
-            (
                 "all_review_summary_path_keeps_all_review_root",
                 resolve_review_artifact_paths(all_review_summary_payload, checkout_root=checkout_root).get("artifact_root")
                 == all_review_root
                 if all_review_root is not None
                 else False,
-            ),
-            (
-                "all_review_summary_bundle_index_rerun_hint_matches",
-                all_review_output.matrix_summary_bundle_index_rerun_hint_matches(
-                    all_review_spec.expected_bundle_index_rerun_hint
-                ),
-            ),
-            (
-                "all_review_matrix_summary_expected_artifact_paths_match",
-                all_review_spec.matrix_summary_artifact_paths_match(all_review_output),
-            ),
-            (
-                "all_review_matrix_summary_resolved_paths_match_expected",
-                all_review_spec.matrix_summary_resolved_paths_match(all_review_output),
             ),
             (
                 "review_matrix_summary_path_matches_metadata",
@@ -369,16 +264,6 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             ),
             ("review_index_preserved_after_all_review", review_index_preserved),
             ("review_summary_preserved_after_all_review", review_summary_preserved),
-            ("review_summary_line_present", review_summary_line.startswith(SUCCESS_SUMMARY_PREFIX)),
-            (
-                "all_review_summary_line_present",
-                all_review_summary_line.startswith(SUCCESS_SUMMARY_PREFIX),
-            ),
-            ("review_rerun_hint_line_present", review_rerun_hint_line.startswith(RERUN_HINT_PREFIX)),
-            (
-                "all_review_rerun_hint_line_present",
-                all_review_rerun_hint_line.startswith(RERUN_HINT_PREFIX),
-            ),
         ]
 
 
