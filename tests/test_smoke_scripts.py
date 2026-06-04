@@ -86,12 +86,19 @@ def _assert_mixed_smoke_result_contract(
 @dataclass(frozen=True)
 class _SmokeScriptContractCase:
     script_name: str
+    runner_name: str
     required_line_prefixes: tuple[str, ...]
     true_check_names: tuple[str, ...]
 
 
 def _prefix_smoke_contract_names(prefix: str, suffixes: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(f"{prefix}{suffix}" for suffix in suffixes)
+
+
+def _smoke_contract_detail_expectation(required_line_prefix: str) -> tuple[str, str]:
+    detail_name, separator, detail_value_prefix = required_line_prefix.partition(": ")
+    assert separator, required_line_prefix
+    return detail_name, detail_value_prefix
 
 
 _DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES = (
@@ -127,6 +134,7 @@ _DOCS_REVIEW_MATRIX_COMMON_TRUE_CHECKS = (
 _DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
     _SmokeScriptContractCase(
         script_name="smoke_matrix_all_review_order_smoke",
+        runner_name="run_smoke_matrix_all_review_order_smoke",
         required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
         + (
             "stderr_failed_line: standalone smoke failed fast: live_runtime_requested=False",
@@ -152,6 +160,7 @@ _DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
     ),
     _SmokeScriptContractCase(
         script_name="smoke_matrix_all_review_missing_api_key_smoke",
+        runner_name="run_smoke_matrix_all_review_missing_api_key_smoke",
         required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
         + (
             "stderr_failed_line: standalone smoke exited with status 1",
@@ -182,6 +191,7 @@ _DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
     ),
     _SmokeScriptContractCase(
         script_name="smoke_matrix_docs_review_hint_smoke",
+        runner_name="run_smoke_matrix_docs_review_hint_smoke",
         required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
         + (
             "stdout_last_line: [smoke-matrix] running docs-review",
@@ -260,12 +270,14 @@ _ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES = (
 _SMOKE_SCRIPT_CONTRACT_CASES = (
     _SmokeScriptContractCase(
         script_name="standalone_docs_rerun_hint_smoke",
+        runner_name="run_standalone_docs_rerun_hint_smoke",
         required_line_prefixes=STANDALONE_DOCS_RERUN_HINT_CONTRACT.required_line_prefixes,
         true_check_names=STANDALONE_DOCS_RERUN_HINT_CONTRACT.true_check_names,
     ),
     *_DOCS_REVIEW_MATRIX_SCRIPT_CASES,
     _SmokeScriptContractCase(
         script_name="smoke_matrix_artifact_roots_smoke",
+        runner_name="run_smoke_matrix_artifact_roots_smoke",
         required_line_prefixes=("checkout_root: ",)
         + _prefix_smoke_contract_names(
             "review_",
@@ -308,6 +320,22 @@ def _assert_required_line_prefixes(lines: list[str], prefixes: tuple[str, ...]) 
 def _assert_true_smoke_checks(lines: list[str], check_names: tuple[str, ...]) -> None:
     for check_name in check_names:
         assert f"{check_name}= True" in lines
+
+
+def _assert_smoke_result_payload_matches_contract(
+    results: list[tuple[str, object]],
+    case: _SmokeScriptContractCase,
+) -> None:
+    result_map = dict(results)
+
+    for required_line_prefix in case.required_line_prefixes:
+        detail_name, detail_value_prefix = _smoke_contract_detail_expectation(required_line_prefix)
+        assert detail_name in result_map, detail_name
+        assert not isinstance(result_map[detail_name], bool), detail_name
+        assert str(result_map[detail_name]).startswith(detail_value_prefix), required_line_prefix
+
+    for check_name in case.true_check_names:
+        assert result_map.get(check_name) is True, check_name
 
 
 def _format_script_help(name: str) -> str:
@@ -832,6 +860,21 @@ def test_smoke_scripts_emit_expected_contracts(
     lines = capsys.readouterr().out.splitlines()
     _assert_required_line_prefixes(lines, case.required_line_prefixes)
     _assert_true_smoke_checks(lines, case.true_check_names)
+
+
+@pytest.mark.parametrize(
+    "case",
+    _SMOKE_SCRIPT_CONTRACT_CASES,
+    ids=lambda case: case.script_name,
+)
+def test_smoke_script_runner_functions_return_expected_contract_results(
+    case: _SmokeScriptContractCase,
+) -> None:
+    smoke_script = _load_script_module(case.script_name)
+
+    results = getattr(smoke_script, case.runner_name)()
+
+    _assert_smoke_result_payload_matches_contract(results, case)
 
 
 @pytest.mark.parametrize(
