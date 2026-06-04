@@ -83,14 +83,7 @@ def _assert_mixed_smoke_result_contract(
 
 
 @dataclass(frozen=True)
-class _SmokeMatrixDocsReviewScriptCase:
-    script_name: str
-    required_line_prefixes: tuple[str, ...]
-    true_check_names: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class _SmokeMatrixArtifactRootsScriptCase:
+class _SmokeScriptContractCase:
     script_name: str
     required_line_prefixes: tuple[str, ...]
     true_check_names: tuple[str, ...]
@@ -98,6 +91,28 @@ class _SmokeMatrixArtifactRootsScriptCase:
 
 def _prefix_smoke_contract_names(prefix: str, suffixes: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(f"{prefix}{suffix}" for suffix in suffixes)
+
+
+_STANDALONE_DOCS_RERUN_HINT_LINE_PREFIXES = (
+    "checkout_root: ",
+    "stdout_fix_check_summary: fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+    "stdout_false_line: fix_post_check=False",
+    "stderr_failed_line: docs-artifacts smoke failed fast: fix_post_check=False",
+    "stderr_hint_line: [standalone-smoke] hint: standalone wrapper docs drift is easiest to isolate with ",
+    "stderr_summary_line: [standalone-smoke] summary: 5/6 targets passed before failure in ",
+)
+
+
+_STANDALONE_DOCS_RERUN_HINT_TRUE_CHECKS = (
+    "exit_code_non_zero",
+    "fix_check_summary_present",
+    "false_line_present",
+    "failed_line_present",
+    "hint_line_present",
+    "summary_line_present",
+    "hint_after_failed_line",
+    "hint_before_failure_summary",
+)
 
 
 _DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES = (
@@ -131,7 +146,7 @@ _DOCS_REVIEW_MATRIX_COMMON_TRUE_CHECKS = (
 
 
 _DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
-    _SmokeMatrixDocsReviewScriptCase(
+    _SmokeScriptContractCase(
         script_name="smoke_matrix_all_review_order_smoke",
         required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
         + (
@@ -156,7 +171,7 @@ _DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
             "matrix_summary_before_failure_summary",
         ),
     ),
-    _SmokeMatrixDocsReviewScriptCase(
+    _SmokeScriptContractCase(
         script_name="smoke_matrix_all_review_missing_api_key_smoke",
         required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
         + (
@@ -186,7 +201,7 @@ _DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
             "matrix_summary_before_failure_summary",
         ),
     ),
-    _SmokeMatrixDocsReviewScriptCase(
+    _SmokeScriptContractCase(
         script_name="smoke_matrix_docs_review_hint_smoke",
         required_line_prefixes=_DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES
         + (
@@ -263,8 +278,14 @@ _ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES = (
 )
 
 
-_SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CASES = (
-    _SmokeMatrixArtifactRootsScriptCase(
+_SMOKE_SCRIPT_CONTRACT_CASES = (
+    _SmokeScriptContractCase(
+        script_name="standalone_docs_rerun_hint_smoke",
+        required_line_prefixes=_STANDALONE_DOCS_RERUN_HINT_LINE_PREFIXES,
+        true_check_names=_STANDALONE_DOCS_RERUN_HINT_TRUE_CHECKS,
+    ),
+    *_DOCS_REVIEW_MATRIX_SCRIPT_CASES,
+    _SmokeScriptContractCase(
         script_name="smoke_matrix_artifact_roots_smoke",
         required_line_prefixes=("checkout_root: ",)
         + _prefix_smoke_contract_names(
@@ -815,34 +836,23 @@ def test_docs_review_matrix_smokes_reject_invalid_output_stream(script_name: str
         getattr(module, runner_name)(output_stream="invalid")
 
 
-def test_standalone_docs_rerun_hint_smoke_exercises_end_to_end_hint_contract() -> None:
-    standalone_docs_rerun_hint_smoke = _load_script_module("standalone_docs_rerun_hint_smoke")
+@pytest.mark.parametrize(
+    "case",
+    _SMOKE_SCRIPT_CONTRACT_CASES,
+    ids=lambda case: case.script_name,
+)
+def test_smoke_scripts_emit_expected_contracts(
+    case: _SmokeScriptContractCase,
+    capsys,
+) -> None:
+    smoke_script = _load_script_module(case.script_name)
 
-    results = dict(standalone_docs_rerun_hint_smoke.run_standalone_docs_rerun_hint_smoke())
+    exit_code = smoke_script.main([])
 
-    assert results["exit_code"] == 1
-    assert results["stdout_fix_check_summary"] == (
-        "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke"
-    )
-    assert results["stdout_false_line"] == "fix_post_check=False"
-    assert results["stderr_failed_line"] == "docs-artifacts smoke failed fast: fix_post_check=False"
-    assert results["stderr_hint_line"] == STANDALONE_SMOKE_WRAPPER.format_line(
-        smoke_cli_docs_parity_rerun_hint()
-    )
-    assert results["stderr_summary_line"].startswith(
-        "[standalone-smoke] summary: 5/6 targets passed before failure in "
-    )
-    for key in (
-        "exit_code_non_zero",
-        "fix_check_summary_present",
-        "false_line_present",
-        "failed_line_present",
-        "hint_line_present",
-        "summary_line_present",
-        "hint_after_failed_line",
-        "hint_before_failure_summary",
-    ):
-        assert results[key] is True
+    assert exit_code == 0
+    lines = capsys.readouterr().out.splitlines()
+    _assert_required_line_prefixes(lines, case.required_line_prefixes)
+    _assert_true_smoke_checks(lines, case.true_check_names)
 
 
 @pytest.mark.parametrize(
@@ -3573,44 +3583,6 @@ def test_smoke_matrix_all_review_failure_persists_pending_review_metadata_artifa
         "render_output_dir": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/rendered",
         "target_name": "docs-review-all",
     }
-
-
-@pytest.mark.parametrize(
-    "case",
-    _DOCS_REVIEW_MATRIX_SCRIPT_CASES,
-    ids=lambda case: case.script_name,
-)
-def test_smoke_matrix_docs_review_failure_scripts_emit_expected_contracts(
-    case: _SmokeMatrixDocsReviewScriptCase,
-    capsys,
-) -> None:
-    smoke_script = _load_script_module(case.script_name)
-
-    exit_code = smoke_script.main([])
-
-    assert exit_code == 0
-    lines = capsys.readouterr().out.splitlines()
-    _assert_required_line_prefixes(lines, case.required_line_prefixes)
-    _assert_true_smoke_checks(lines, case.true_check_names)
-
-
-@pytest.mark.parametrize(
-    "case",
-    _SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CASES,
-    ids=lambda case: case.script_name,
-)
-def test_smoke_matrix_artifact_roots_smoke_emits_expected_contracts(
-    case: _SmokeMatrixArtifactRootsScriptCase,
-    capsys,
-) -> None:
-    smoke_script = _load_script_module(case.script_name)
-
-    exit_code = smoke_script.main([])
-
-    assert exit_code == 0
-    lines = capsys.readouterr().out.splitlines()
-    _assert_required_line_prefixes(lines, case.required_line_prefixes)
-    _assert_true_smoke_checks(lines, case.true_check_names)
 
 
 def _render_picker_attention_workspace_shell_outputs(tmp_path: Path) -> dict[str, str]:
