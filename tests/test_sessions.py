@@ -1119,6 +1119,9 @@ def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Pat
                     data={
                         "tool_name": "write_file",
                         "approval_tool_family": "edit",
+                        "relative_path": ".env",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path .env",
                     },
                 )
             ],
@@ -1144,6 +1147,9 @@ def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Pat
                         "approval_status": "approved",
                         "approval_source": "fake_runtime",
                         "approval_tool_family": "edit",
+                        "relative_path": "notes.txt",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path notes.txt",
                     },
                 ),
                 runtime_event(
@@ -1156,6 +1162,11 @@ def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Pat
                         "approval_status": "approved",
                         "approval_source": "fake_runtime",
                         "approval_tool_family": "edit",
+                        "relative_path": "notes.txt",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path notes.txt",
+                        "follow_up_mode": "approved_tool_result",
+                        "resumed_from_approval": True,
                         "tool_result_preview": "Simulated overwrite of notes.txt.",
                     },
                 ),
@@ -1171,7 +1182,10 @@ def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Pat
     assert set(intervention_by_id) == {"session-blocked", "session-approved"}
     assert intervention_by_id["session-blocked"].intervention_badges == ["blocked 1"]
     assert intervention_by_id["session-approved"].intervention_badges == ["approved 1"]
-    assert intervention_by_id["session-approved"].last_intervention_preview == "continued edit write_file: Simulated overwrite of notes.txt."
+    assert intervention_by_id["session-approved"].last_intervention_preview == (
+        "approval continued edit via fake_runtime | path notes.txt | result Simulated overwrite of notes.txt. "
+        "| continue approved result | resumed"
+    )
     assert "Filter: intervention | Sort: recent" in rendered
     assert "intervention: blocked 1" in rendered
     assert "intervention: approved 1" in rendered
@@ -1332,7 +1346,13 @@ def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: P
                     "steering_blocked",
                     "write_file",
                     "Protected file mutations are blocked.",
-                    data={"tool_name": "write_file", "approval_tool_family": "edit"},
+                    data={
+                        "tool_name": "write_file",
+                        "approval_tool_family": "edit",
+                        "relative_path": ".env",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path .env",
+                    },
                 )
             ],
             response_metadata={"mode": "fake"},
@@ -1357,6 +1377,9 @@ def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: P
                         "approval_status": "approved",
                         "approval_source": "fake_runtime",
                         "approval_tool_family": "edit",
+                        "relative_path": "notes.txt",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path notes.txt",
                     },
                 ),
                 runtime_event(
@@ -1369,6 +1392,11 @@ def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: P
                         "approval_status": "approved",
                         "approval_source": "fake_runtime",
                         "approval_tool_family": "edit",
+                        "relative_path": "notes.txt",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path notes.txt",
+                        "follow_up_mode": "approved_tool_result",
+                        "resumed_from_approval": True,
                         "tool_result_preview": "Simulated overwrite of notes.txt.",
                     },
                 ),
@@ -1389,6 +1417,9 @@ def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: P
             "approval_source": "fake_runtime",
             "approval_restored": True,
             "approval_tool_family": "edit",
+            "relative_path": "notes.txt",
+            "approval_target_kind": "path",
+            "approval_target_preview": "path notes.txt",
             "remaining_pending_count": 0,
         },
     )
@@ -1426,7 +1457,10 @@ def test_render_session_picker_surfaces_intervention_backlog_rollups(tmp_path: P
     )
     assert "overlap: mixed 2 sessions" in rendered
     assert "Intervention focus: pending, blocked, approved, denied, restored" in rendered
-    assert "Intervention mix: requests: 4 | families: test 1, edit 3" in rendered
+    assert (
+        "Intervention mix: requests: 4 | families: test 1, edit 3 | targets: path 3, command 1 "
+        "| continuations: approved result 1"
+    ) in rendered
     assert "session-intervention-pending" in rendered
     assert "session-intervention-blocked" in rendered
     assert "session-intervention-approved" in rendered

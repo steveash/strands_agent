@@ -47,6 +47,7 @@ from .summary_utils import (
     render_selected_session_preview_header_lines,
     render_selected_session_preview_lines,
 )
+from ..timeline import summarize_event
 from ..runtime import ApprovalRequest
 from ..tools.workspace import resolve_shell_command
 
@@ -54,6 +55,7 @@ MAX_RECENT_SESSIONS = 8
 MAX_PROMPT_PREVIEW = 60
 MAX_EVENT_PREVIEW = 50
 MAX_TOOL_PREVIEW = 72
+MAX_INTERVENTION_PREVIEW = 160
 MAX_TOOL_STREAK_PREVIEWS = 3
 MAX_INTERVENTION_PREVIEWS = 3
 MAX_INTERVENTION_ROLLUP_EVENTS = 6
@@ -67,9 +69,11 @@ STALE_SESSION_DANGER_SECONDS = 30 * 24 * 60 * 60
 STALE_APPROVAL_WARNING_SECONDS = STALE_SESSION_WARNING_SECONDS
 APPROVAL_STATUS_DISPLAY_ORDER = ("pending", "approved", "denied", "blocked")
 APPROVAL_TOOL_FAMILY_DISPLAY_ORDER = ("test", "edit", "shell", "tool")
+INTERVENTION_TARGET_KIND_DISPLAY_ORDER = ("path", "command")
 APPROVAL_RESTORE_LANE_DISPLAY_ORDER = ("restore queue", "restored")
 TOOL_LANE_DISPLAY_ORDER = ("workspace", "shell", "other")
 INTERVENTION_LANE_DISPLAY_ORDER = ("pending", "blocked", "approved", "denied", "restored")
+INTERVENTION_FOLLOW_UP_DISPLAY_ORDER = ("approved result", "denied request")
 WORKSPACE_LANE_DISPLAY_ORDER = ("inspect", "edit")
 SHELL_LANE_DISPLAY_ORDER = ("inspect", "test")
 STALE_APPROVAL_LANE_DISPLAY_ORDER = ("pending", "denied", "restore queue", "restored")
@@ -153,6 +157,8 @@ class SessionSummary:
     stale_approval_badges: list[str] = field(default_factory=list)
     intervention_badges: list[str] = field(default_factory=list)
     intervention_family_counts: dict[str, int] = field(default_factory=dict)
+    intervention_target_kind_counts: dict[str, int] = field(default_factory=dict)
+    intervention_follow_up_counts: dict[str, int] = field(default_factory=dict)
     intervention_unique_count: int = 0
     last_intervention_preview: str = ""
     recent_intervention_previews: list[str] = field(default_factory=list)
@@ -733,6 +739,8 @@ class PendingOnlyLaneMetrics:
 @dataclass(slots=True)
 class InterventionActivitySummary:
     family_counts: dict[str, int]
+    target_kind_counts: dict[str, int]
+    follow_up_counts: dict[str, int]
     unique_count: int
 
 
@@ -740,6 +748,8 @@ class InterventionActivitySummary:
 class InterventionFilterMetrics:
     total_requests: int
     family_counts: dict[str, int]
+    target_kind_counts: dict[str, int]
+    follow_up_counts: dict[str, int]
 
 
 @dataclass(slots=True)
@@ -941,6 +951,8 @@ def _ordered_recent_sessions(
             stale_approval_badges=approval_activity.stale_approval_badges,
             intervention_badges=_intervention_activity_badges(turns, pending_approvals),
             intervention_family_counts=intervention_activity.family_counts,
+            intervention_target_kind_counts=intervention_activity.target_kind_counts,
+            intervention_follow_up_counts=intervention_activity.follow_up_counts,
             intervention_unique_count=intervention_activity.unique_count,
             last_intervention_preview=_latest_intervention_preview(turns, pending_approvals),
             recent_intervention_previews=_recent_intervention_previews(turns, pending_approvals),
@@ -1636,11 +1648,11 @@ def _recent_intervention_previews(
             previews.append(rendered)
         if len(previews) >= limit:
             break
-    if previews:
-        return previews
-    for approval in pending_approvals[:limit]:
+    for approval in pending_approvals:
+        if len(previews) >= limit:
+            break
         preview = _queued_intervention_preview([approval])
-        if preview:
+        if preview and preview not in previews:
             previews.append(preview)
     return previews
 
@@ -1727,6 +1739,8 @@ def _summarize_intervention_activity(
     count_window: int = MAX_INTERVENTION_ROLLUP_EVENTS,
 ) -> InterventionActivitySummary:
     family_counts: dict[str, int] = {}
+    target_kind_counts: dict[str, int] = {}
+    follow_up_counts: dict[str, int] = {}
     counted_keys: set[str] = set()
     unique_count = 0
 
@@ -1738,6 +1752,12 @@ def _summarize_intervention_activity(
         family = _intervention_event_family(event)
         if family:
             family_counts[family] = family_counts.get(family, 0) + 1
+        target_kind = _intervention_event_target_kind(event)
+        if target_kind:
+            target_kind_counts[target_kind] = target_kind_counts.get(target_kind, 0) + 1
+        follow_up_label = _intervention_follow_up_label(str(event.data.get("follow_up_mode", "") or "").strip())
+        if follow_up_label:
+            follow_up_counts[follow_up_label] = follow_up_counts.get(follow_up_label, 0) + 1
         unique_count += 1
 
     for approval in pending_approvals:
@@ -1752,9 +1772,17 @@ def _summarize_intervention_activity(
         )
         if family:
             family_counts[family] = family_counts.get(family, 0) + 1
+        target_kind = _approval_target_kind(approval)
+        if target_kind:
+            target_kind_counts[target_kind] = target_kind_counts.get(target_kind, 0) + 1
         unique_count += 1
 
-    return InterventionActivitySummary(family_counts=family_counts, unique_count=unique_count)
+    return InterventionActivitySummary(
+        family_counts=family_counts,
+        target_kind_counts=target_kind_counts,
+        follow_up_counts=follow_up_counts,
+        unique_count=unique_count,
+    )
 
 
 def _has_intervention_activity(turns: list[TurnArtifact], pending_approvals: list[ApprovalRequest]) -> bool:
@@ -1788,21 +1816,8 @@ def _intervention_event_label(event) -> str:
 
 
 def _render_intervention_event_summary(event) -> str:
-    label = _intervention_event_label(event)
-    family = str(event.data.get("approval_tool_family", "") or "").strip()
-    tool_name = str(event.data.get("tool_name", "") or event.title or "").strip()
-    bits = [label]
-    if bool(event.data.get("approval_restored", False)):
-        bits.append("restored")
-    if family:
-        bits.append(family)
-    if tool_name:
-        bits.append(tool_name)
-    preview = " ".join(bits).strip()
-    tool_result = str(event.data.get("tool_result_preview", "") or "").strip()
-    if tool_result:
-        preview = f"{preview}: {tool_result}" if preview else tool_result
-    return _truncate(preview or (event.title or event.kind), MAX_TOOL_PREVIEW)
+    preview = summarize_event(event) or event.title or event.kind
+    return _truncate(preview, MAX_INTERVENTION_PREVIEW)
 
 
 def _queued_intervention_preview(pending_approvals: list[ApprovalRequest]) -> str:
@@ -1814,14 +1829,23 @@ def _queued_intervention_preview(pending_approvals: list[ApprovalRequest]) -> st
         command=_approval_command_from_args(approval.args),
         shell_command_family="",
     )
-    bits = ["pending"]
+    bits = ["approval pending"]
+    if family:
+        bits[0] += f" {family}"
+    if approval.source:
+        bits[0] += f" via {approval.source}"
+    bits.append(f"queue 1/{len(pending_approvals)}")
+    target_preview = _approval_target_preview(approval)
+    if target_preview:
+        bits.append(target_preview)
+    if len(pending_approvals) > 1:
+        bits.append(f"next {pending_approvals[1].tool_name}")
+    age_summary = _approval_preview_age_and_timestamp(approval)[0]
+    if age_summary:
+        bits.append(f"age {age_summary}")
     if approval.restored_from_session:
         bits.append("restored")
-    if family:
-        bits.append(family)
-    if approval.tool_name:
-        bits.append(approval.tool_name)
-    return _truncate(" ".join(bits), MAX_TOOL_PREVIEW)
+    return _truncate(" | ".join(bit for bit in bits if bit), MAX_INTERVENTION_PREVIEW)
 
 
 def _iter_recent_shell_tool_events(turns: list[TurnArtifact], *, lane: str | None = None):
@@ -2682,6 +2706,38 @@ def _approval_target_preview(approval: ApprovalRequest) -> str:
     return ""
 
 
+def _approval_target_kind(approval: ApprovalRequest) -> str:
+    command = _approval_command_from_args(approval.args)
+    if command:
+        return "command"
+
+    if isinstance(approval.args, dict):
+        relative_path = str(approval.args.get("relative_path", "") or "").strip()
+        if relative_path:
+            return "path"
+
+    return ""
+
+
+def _intervention_event_target_kind(event) -> str:
+    target_kind = str(event.data.get("approval_target_kind", "") or "").strip()
+    if target_kind:
+        return target_kind
+    if str(event.data.get("command", "") or "").strip():
+        return "command"
+    if str(event.data.get("relative_path", "") or "").strip():
+        return "path"
+    return ""
+
+
+def _intervention_follow_up_label(mode: str) -> str:
+    if mode == "approved_tool_result":
+        return "approved result"
+    if mode == "denied_tool_request":
+        return "denied request"
+    return mode
+
+
 def _approval_preview_age_and_timestamp(
     approval: ApprovalRequest,
     *,
@@ -3156,6 +3212,40 @@ def _render_approval_family_metric(family_counts: dict[str, int]) -> str:
     return f"families: {', '.join(badges)}"
 
 
+def _render_intervention_target_metric(target_kind_counts: dict[str, int]) -> str:
+    badges: list[str] = []
+    for target_kind in INTERVENTION_TARGET_KIND_DISPLAY_ORDER:
+        count = target_kind_counts.get(target_kind, 0)
+        if count:
+            badges.append(f"{target_kind} {count}")
+    for target_kind in sorted(target_kind_counts):
+        if target_kind in INTERVENTION_TARGET_KIND_DISPLAY_ORDER:
+            continue
+        count = target_kind_counts[target_kind]
+        if count:
+            badges.append(f"{target_kind} {count}")
+    if not badges:
+        return ""
+    return f"targets: {', '.join(badges)}"
+
+
+def _render_intervention_follow_up_metric(follow_up_counts: dict[str, int]) -> str:
+    badges: list[str] = []
+    for label in INTERVENTION_FOLLOW_UP_DISPLAY_ORDER:
+        count = follow_up_counts.get(label, 0)
+        if count:
+            badges.append(f"{label} {count}")
+    for label in sorted(follow_up_counts):
+        if label in INTERVENTION_FOLLOW_UP_DISPLAY_ORDER:
+            continue
+        count = follow_up_counts[label]
+        if count:
+            badges.append(f"{label} {count}")
+    if not badges:
+        return ""
+    return f"continuations: {', '.join(badges)}"
+
+
 def _render_tool_failure_metric(test_failure_count: int, tool_failure_count: int) -> str:
     parts: list[str] = []
     if test_failure_count > 0:
@@ -3566,22 +3656,39 @@ def _summarize_intervention_filter_metrics(
 ) -> InterventionFilterMetrics:
     total_requests = 0
     family_counts: dict[str, int] = {}
+    target_kind_counts: dict[str, int] = {}
+    follow_up_counts: dict[str, int] = {}
 
     for summary in summaries:
         total_requests += summary.intervention_unique_count
         for family, count in summary.intervention_family_counts.items():
             if count > 0:
                 family_counts[family] = family_counts.get(family, 0) + count
+        for target_kind, count in summary.intervention_target_kind_counts.items():
+            if count > 0:
+                target_kind_counts[target_kind] = target_kind_counts.get(target_kind, 0) + count
+        for follow_up_label, count in summary.intervention_follow_up_counts.items():
+            if count > 0:
+                follow_up_counts[follow_up_label] = follow_up_counts.get(follow_up_label, 0) + count
 
-    return InterventionFilterMetrics(total_requests=total_requests, family_counts=family_counts)
+    return InterventionFilterMetrics(
+        total_requests=total_requests,
+        family_counts=family_counts,
+        target_kind_counts=target_kind_counts,
+        follow_up_counts=follow_up_counts,
+    )
 
 
 
 def _format_intervention_filter_metrics(metrics: InterventionFilterMetrics) -> list[str]:
     family_metric = _render_approval_family_metric(metrics.family_counts) or "families: none"
+    target_metric = _render_intervention_target_metric(metrics.target_kind_counts) or "targets: none"
+    follow_up_metric = _render_intervention_follow_up_metric(metrics.follow_up_counts)
     return [
         _render_intervention_request_metric(metrics.total_requests),
         family_metric,
+        target_metric,
+        follow_up_metric,
     ]
 
 
@@ -3757,8 +3864,15 @@ def _format_recent_lane_rollup(
 
 def _intervention_preview_matches(summary: SessionSummary, label: str) -> bool:
     label_prefix = f"{label} "
+    approval_prefix = f"approval {label}"
+    approval_label_prefix = f"{approval_prefix} "
     for preview in [summary.last_intervention_preview, *summary.recent_intervention_previews]:
-        if preview == label or preview.startswith(label_prefix):
+        if (
+            preview == label
+            or preview.startswith(label_prefix)
+            or preview == approval_prefix
+            or preview.startswith(approval_label_prefix)
+        ):
             return True
     return False
 

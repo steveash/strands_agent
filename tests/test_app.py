@@ -1622,7 +1622,9 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         assert "pending 5 (oldest 45d @" in intervention_output
         assert "overlap: mixed 3 sessions" in intervention_output
         assert "Intervention focus: pending, blocked, approved, denied, restored" in intervention_output
-        assert "Intervention mix: requests: 6 | families: test 3, edit 3" in intervention_output
+        assert (
+            "Intervention mix: requests: 6 | families: test 3, edit 3 | targets: path 2, command 3"
+        ) in intervention_output
         assert "session-pending | 1 turn(s)" in intervention_output
         assert "session-denied | 1 turn(s)" in intervention_output
         assert "intervention: pending 1" in intervention_output

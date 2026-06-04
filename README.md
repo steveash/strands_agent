@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views with oldest pending age/timestamp cues that now fall back to session activity when approval timestamps are missing and explicitly label when that fallback was used, selected-session preview provenance lines that now show pending-only age/timestamp/source plus fresh-vs-restored queue provenance and short numbered multi-approval queue breakdowns inside both reopen surfaces, explicit stale-cutoff hints in picker/switcher legends and prompts, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts, and operator-controlled timeline detail/raw toggles whose compact-vs-expanded state now survives a TUI restart.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views with oldest pending age/timestamp cues that now fall back to session activity when approval timestamps are missing and explicitly label when that fallback was used, selected-session preview provenance lines that now show pending-only age/timestamp/source plus fresh-vs-restored queue provenance and short numbered multi-approval queue breakdowns inside both reopen surfaces, explicit stale-cutoff hints in picker/switcher legends and prompts, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts, recent-session intervention previews/rollups that now reuse the same timeline wording plus target-kind and continuation mix metrics, and operator-controlled timeline detail/raw toggles whose compact-vs-expanded state now survives a TUI restart.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -96,6 +96,7 @@ What exists now:
 - live-runtime tool wiring that can queue confirm-needed mutations, wait for explicit approval, execute the approved tool, and then continue the Strands conversation with a follow-up prompt,
 - approval lifecycle events that now carry shared `steering_stage`, `approval_tool_family`, normalized approval target metadata, and synthetic continuation metadata so fake/live approval recovery can be inspected with the same mental model,
 - compact intervention timeline summaries that now distinguish direct approval outcomes from the synthetic post-approval `approval continued ...` follow-up prompt-preparation step, including target and tool-result cues,
+- recent-session intervention previews now reuse the same timeline wording, pending approvals render as normalized `approval pending ...` queue summaries, and intervention triage headers now expose family, target-kind, and continuation mix metrics across both reopen surfaces,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, compact human-readable summary lines, and raw structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence/intervention views,
 - keyboard-driven `Ctrl+T` detail and `Ctrl+R` raw-data toggles so the event pane can switch between compact summary-only and fully expanded observability views,
@@ -131,29 +132,28 @@ What exists now:
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- extended `src/strands_agent_tui/runtime.py` so steering/intervention events now emit normalized approval target metadata (`approval_target_kind` / `approval_target_preview`) for both fake and live approval flows,
-- refined `src/strands_agent_tui/timeline.py` so `approval_follow_up_prepared` now renders as a distinct `approval continued ...` summary instead of looking like a second generic approval event, including tool-result and continuation-mode cues,
-- extended `tests/test_runtime.py`, `tests/test_timeline.py`, and `tests/test_app.py` to lock in the new schema and the more legible continuation summaries,
-- updated `scripts/approval_smoke.py` plus `tests/test_smoke_scripts.py` so the approval walkthrough now asserts target normalization and continued-summary rendering end to end,
-- and safely self-unblocked repo inspection after discovering `rg` was unavailable in the shell by switching to `grep`, while keeping all validation non-destructive.
+- extended `src/strands_agent_tui/sessions/picker.py` so intervention previews now reuse `timeline.summarize_event(...)`, queued approvals render as normalized `approval pending ...` summaries with queue/target/age provenance, and intervention filters now aggregate target-kind plus continuation-mode metrics,
+- extended `src/strands_agent_tui/testing/session_scenarios.py` and the intervention-heavy fixtures in `tests/test_sessions.py` so saved-session seeds carry normalized approval target metadata closer to the live runtime schema,
+- updated `tests/test_sessions.py` and `tests/test_app.py` exact picker/switcher expectations to lock in the richer intervention mix strings and preview wording,
+- validated the change through focused picker regressions, the broader session/app/session-scenario suite, the session-triage smoke target, and the full pytest suite,
+- and safely self-unblocked one assertion-drift failure by updating fixture metadata plus exact expected strings instead of weakening the coverage.
 
 Why this matters now:
-- the prototype already exposed approval queues, but the compact timeline still made the synthetic post-approval continuation step look too much like another approval event,
-- normalizing the approval target and explicitly labeling continuation preparation makes fake/live Strands intervention traces easier to compare and reason about,
-- and it sharpens one of the core lessons of this repo: approval handling is not just a modal pause, it is part of the observable agent loop with its own resumable state and follow-up prompts.
+- the live timeline already spoke in normalized approval language, but saved-session triage still used older fragmented wording,
+- recent-session reopen flows are the operator control plane for resumed Strands work, so mismatched intervention summaries make approval-heavy sessions harder to reason about,
+- and exposing target-kind plus continuation mix at the backlog level makes it easier to see whether a queue is dominated by path edits, shell/test commands, approved-result continuations, or denied-request resumptions.
 
 How we know the prototype is working right now:
-- runtime tests now prove both fake and live approval flows emit normalized target metadata for path-backed edits and command-backed shell requests,
-- timeline tests now prove follow-up prompt preparation renders as a dedicated `approval continued ...` summary with result and continuation cues,
-- the TUI regression shows the improved continuation summary is visible in the real event pane after approving a pending mutation,
-- the approval smoke walkthrough now asserts the same schema and summary behavior end to end,
-- and the full pytest suite still passes after the intervention-schema refinement landed.
+- focused picker/switcher regressions now prove the exact intervention mix strings and preview wording shown to the operator,
+- broader session/app/session-scenario regressions prove the richer schema survives realistic saved-session seeds,
+- the session-triage smoke script still passes end to end for the picker surface,
+- and the full pytest suite still passes after the recent-session intervention-summary rewrite.
 
 Current evidence:
-- targeted runtime/timeline approval regressions: `.venv/bin/pytest -q tests/test_timeline.py tests/test_runtime.py` => `41 passed in 0.72s`,
-- targeted TUI + approval-smoke regressions: `.venv/bin/pytest -q tests/test_app.py tests/test_smoke_scripts.py -k 'pending_approval_can_be_approved_from_tui_and_persisted or approval_smoke'` => `2 passed, 171 deselected in 2.65s`,
-- approval walkthrough smoke: `.venv/bin/python scripts/approval_smoke.py` => includes `initial target schema= True`, `timeline_approved_summary= True`, and `timeline_denied_summary= True`,
-- full automated tests: `.venv/bin/pytest -q` => `441 passed in 64.46s (0:01:04)`.
+- focused intervention regressions: `.venv/bin/pytest -q tests/test_sessions.py::test_render_session_picker_surfaces_intervention_backlog_rollups tests/test_app.py::test_session_switcher_supports_filter_and_sort_shortcuts` => `2 passed in 3.67s`,
+- broader session triage regressions: `.venv/bin/pytest -q tests/test_sessions.py tests/test_app.py tests/test_session_scenarios.py` => `135 passed in 40.06s`,
+- session-triage smoke: `.venv/bin/python scripts/session_triage_smoke.py picker` => `[session-triage-smoke] summary: 1/1 targets passed in 3.12s`,
+- full automated tests: `.venv/bin/pytest -q` => `446 passed in 67.09s (0:01:07)`.
 
 ## First five phases
 
@@ -711,11 +711,11 @@ Why this stack:
 
 ## Next highest-value implementation order
 
-1. carry the normalized approval target / continuation schema into recent-session intervention previews and rollups so saved-session triage matches the live timeline mental model
-2. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-3. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
-4. decide whether stale-focused backlog summaries should also surface the configured cutoff in page-level metric lines, not just legends/prompts/banners
-5. decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
+1. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
+2. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
+3. decide whether stale-focused backlog summaries should also surface the configured cutoff in page-level metric lines, not just legends/prompts/banners
+4. decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
+5. decide whether the session-triage smoke target should start asserting the new intervention target/continuation mix strings explicitly instead of relying on suite-level picker regressions
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -743,10 +743,11 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- carry the normalized approval target / continuation schema into recent-session intervention previews and filter rollups so saved-session triage matches the live timeline language
 - decide whether the compact timeline view should eventually support per-event expansion instead of only global detail/raw toggles
 - decide whether smoke-doc artifact bundles should fold into `scripts/smoke_matrix.py` as an optional review lane
 - decide whether the tool-level `workspace` / `shell` rollups should fold in pending-approval timestamps even when no matching tool event has run yet
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
+- decide whether stale-focused backlog summaries should also surface the configured cutoff directly in page-level metric lines
+- decide whether the session-triage smoke target should assert intervention target/continuation mix strings explicitly
 - decide whether the `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public

@@ -426,6 +426,57 @@ def seed_pending_approval_session(
     if pending_args is None:
         pending_args = {"command": "pytest -q"} if pending_tool_name == "run_shell_command" else {}
 
+    approved_event_data: dict[str, Any] = {
+        "tool_name": approved_tool_name,
+        "approval_id": approved_request_id,
+        "approval_status": "approved",
+        "approval_source": approved_source,
+        "remaining_pending_count": approved_remaining_pending_count,
+        "resumed_from_approval": True,
+    }
+    if approved_tool_name in {"write_file", "replace_text"}:
+        approved_event_data.update(
+            {
+                "relative_path": "notes.txt",
+                "approval_target_kind": "path",
+                "approval_target_preview": "path notes.txt",
+            }
+        )
+    elif approved_tool_name == "run_shell_command" and shell_command is not None:
+        approved_event_data.update(
+            {
+                "command": shell_command,
+                "approval_target_kind": "command",
+                "approval_target_preview": f"cmd {shell_command}",
+            }
+        )
+
+    pending_event_data: dict[str, Any] = {
+        "tool_name": pending_tool_name,
+        "approval_id": pending_request_id,
+        "approval_status": "pending",
+        "approval_source": pending_source,
+        "pending_count": 1,
+    }
+    pending_command = pending_args.get("command") if isinstance(pending_args, dict) else None
+    pending_relative_path = pending_args.get("relative_path") if isinstance(pending_args, dict) else None
+    if isinstance(pending_command, str) and pending_command.strip():
+        pending_event_data.update(
+            {
+                "command": pending_command,
+                "approval_target_kind": "command",
+                "approval_target_preview": f"cmd {pending_command.strip()}",
+            }
+        )
+    elif isinstance(pending_relative_path, str) and pending_relative_path.strip():
+        pending_event_data.update(
+            {
+                "relative_path": pending_relative_path.strip(),
+                "approval_target_kind": "path",
+                "approval_target_preview": f"path {pending_relative_path.strip()}",
+            }
+        )
+
     events: list[dict[str, Any]] = []
     if approved_request_id is not None:
         events.append(
@@ -433,14 +484,7 @@ def seed_pending_approval_session(
                 "steering_approved",
                 approved_tool_name,
                 approved_message,
-                data={
-                    "tool_name": approved_tool_name,
-                    "approval_id": approved_request_id,
-                    "approval_status": "approved",
-                    "approval_source": approved_source,
-                    "remaining_pending_count": approved_remaining_pending_count,
-                    "resumed_from_approval": True,
-                },
+                data=approved_event_data,
             )
         )
     if extra_events:
@@ -466,13 +510,7 @@ def seed_pending_approval_session(
                 "steering_confirmation_required",
                 pending_tool_name,
                 pending_reason,
-                data={
-                    "tool_name": pending_tool_name,
-                    "approval_id": pending_request_id,
-                    "approval_status": "pending",
-                    "approval_source": pending_source,
-                    "pending_count": 1,
-                },
+                data=pending_event_data,
             )
         )
 
@@ -521,6 +559,8 @@ def seed_denied_approval_session(
     }
     if command is not None:
         data["command"] = command
+        data["approval_target_kind"] = "command"
+        data["approval_target_preview"] = f"cmd {command}"
     if restored_from_session:
         data["approval_restored"] = True
 
