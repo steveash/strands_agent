@@ -89,6 +89,17 @@ class _SmokeMatrixDocsReviewScriptCase:
     true_check_names: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class _SmokeMatrixArtifactRootsScriptCase:
+    script_name: str
+    required_line_prefixes: tuple[str, ...]
+    true_check_names: tuple[str, ...]
+
+
+def _prefix_smoke_contract_names(prefix: str, suffixes: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(f"{prefix}{suffix}" for suffix in suffixes)
+
+
 _DOCS_REVIEW_MATRIX_COMMON_LINE_PREFIXES = (
     "checkout_root: ",
     'stderr_metadata_line: [smoke-matrix] review metadata: {"artifact_root": ',
@@ -196,6 +207,94 @@ _DOCS_REVIEW_MATRIX_SCRIPT_CASES = (
             "bundle_rerun_hint_before_docs_hint",
             "hint_before_failure_summary",
             "stdout_docs_review_started",
+        ),
+    ),
+)
+
+
+_ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES = (
+    "artifact_root: ",
+    "metadata_line: [smoke-matrix] review metadata: ",
+    "artifacts_line: [smoke-matrix] review artifacts: ",
+    "matrix_summary_line: [smoke-matrix] review matrix summary: ",
+    "summary_line: [smoke-matrix] summary: 4/4 bundles passed in ",
+    "rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
+)
+
+
+_ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES = (
+    "exit_code_zero",
+    "stderr_empty",
+    "metadata_line_present",
+    "artifacts_line_present",
+    "matrix_summary_line_present",
+    "metadata_matrix_summary_matches_expected_path",
+    "metadata_bundle_index_rerun_hint_matches",
+    "metadata_expected_artifact_paths_match",
+    "metadata_resolved_paths_match_expected",
+    "matrix_summary_line_matches_expected_path",
+    "rerun_hint_line_matches_expected_hint",
+    "paths_loaded_from_matrix_summary",
+    "artifacts_exist",
+    "summary_bundle_index_rerun_hint_matches",
+    "matrix_summary_expected_artifact_paths_match",
+    "matrix_summary_resolved_paths_match_expected",
+    "matrix_summary_path_matches_metadata",
+    "matrix_summary_line_matches_metadata_path",
+    "loaded_summary_path_matches_line",
+    "summary_line_present",
+    "rerun_hint_line_present",
+)
+
+
+_ARTIFACT_ROOTS_REVIEW_TRUE_CHECK_SUFFIXES = (
+    "metadata_targets_docs_review",
+    "metadata_artifact_root_matches_review",
+    "summary_targets_docs_review",
+    "summary_path_keeps_review_root",
+)
+
+
+_ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES = (
+    "metadata_targets_docs_review_all",
+    "metadata_artifact_root_matches_all_review",
+    "summary_targets_docs_review_all",
+    "summary_path_keeps_all_review_root",
+)
+
+
+_SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CASES = (
+    _SmokeMatrixArtifactRootsScriptCase(
+        script_name="smoke_matrix_artifact_roots_smoke",
+        required_line_prefixes=("checkout_root: ",)
+        + _prefix_smoke_contract_names(
+            "review_",
+            _ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES,
+        )
+        + _prefix_smoke_contract_names(
+            "all_review_",
+            _ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES,
+        ),
+        true_check_names=_prefix_smoke_contract_names(
+            "review_",
+            _ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES,
+        )
+        + _prefix_smoke_contract_names(
+            "review_",
+            _ARTIFACT_ROOTS_REVIEW_TRUE_CHECK_SUFFIXES,
+        )
+        + _prefix_smoke_contract_names(
+            "all_review_",
+            _ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES,
+        )
+        + _prefix_smoke_contract_names(
+            "all_review_",
+            _ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES,
+        )
+        + (
+            "artifact_roots_distinct",
+            "review_index_preserved_after_all_review",
+            "review_summary_preserved_after_all_review",
         ),
     ),
 )
@@ -3495,104 +3594,23 @@ def test_smoke_matrix_docs_review_failure_scripts_emit_expected_contracts(
     _assert_true_smoke_checks(lines, case.true_check_names)
 
 
-def test_smoke_matrix_artifact_roots_smoke_preserves_review_root_when_all_review_runs_afterward(capsys) -> None:
-    smoke_script = _load_script_module("smoke_matrix_artifact_roots_smoke")
+@pytest.mark.parametrize(
+    "case",
+    _SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CASES,
+    ids=lambda case: case.script_name,
+)
+def test_smoke_matrix_artifact_roots_smoke_emits_expected_contracts(
+    case: _SmokeMatrixArtifactRootsScriptCase,
+    capsys,
+) -> None:
+    smoke_script = _load_script_module(case.script_name)
 
     exit_code = smoke_script.main([])
 
     assert exit_code == 0
     lines = capsys.readouterr().out.splitlines()
-    assert any(line.startswith("checkout_root: ") for line in lines)
-    assert any(line.startswith("review_artifact_root: ") for line in lines)
-    assert any(line.startswith("all_review_artifact_root: ") for line in lines)
-    assert any(line.startswith("review_metadata_line: [smoke-matrix] review metadata: ") for line in lines)
-    assert any(line.startswith("review_artifacts_line: [smoke-matrix] review artifacts: ") for line in lines)
-    assert any(
-        line.startswith("review_matrix_summary_line: [smoke-matrix] review matrix summary: ")
-        for line in lines
-    )
-    assert any(
-        line.startswith("all_review_metadata_line: [smoke-matrix] review metadata: ") for line in lines
-    )
-    assert any(
-        line.startswith("all_review_artifacts_line: [smoke-matrix] review artifacts: ") for line in lines
-    )
-    assert any(
-        line.startswith("all_review_matrix_summary_line: [smoke-matrix] review matrix summary: ")
-        for line in lines
-    )
-    assert any(
-        line.startswith("review_summary_line: [smoke-matrix] summary: 4/4 bundles passed in ")
-        for line in lines
-    )
-    assert any(
-        line.startswith("all_review_summary_line: [smoke-matrix] summary: 4/4 bundles passed in ")
-        for line in lines
-    )
-    assert any(
-        line.startswith("review_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ")
-        for line in lines
-    )
-    assert any(
-        line.startswith("all_review_rerun_hint_line: [smoke-matrix] review bundle rerun hint: ")
-        for line in lines
-    )
-    for check_name in (
-        "review_exit_code_zero",
-        "all_review_exit_code_zero",
-        "review_stderr_empty",
-        "all_review_stderr_empty",
-        "review_metadata_line_present",
-        "review_artifacts_line_present",
-        "review_matrix_summary_line_present",
-        "all_review_metadata_line_present",
-        "all_review_artifacts_line_present",
-        "all_review_matrix_summary_line_present",
-        "review_metadata_targets_docs_review",
-        "all_review_metadata_targets_docs_review_all",
-        "review_metadata_artifact_root_matches_review",
-        "all_review_metadata_artifact_root_matches_all_review",
-        "review_metadata_matrix_summary_matches_expected_path",
-        "review_metadata_bundle_index_rerun_hint_matches",
-        "review_metadata_expected_artifact_paths_match",
-        "review_metadata_resolved_paths_match_expected",
-        "all_review_metadata_matrix_summary_matches_expected_path",
-        "all_review_metadata_bundle_index_rerun_hint_matches",
-        "all_review_metadata_expected_artifact_paths_match",
-        "all_review_metadata_resolved_paths_match_expected",
-        "review_matrix_summary_line_matches_expected_path",
-        "all_review_matrix_summary_line_matches_expected_path",
-        "review_rerun_hint_line_matches_expected_hint",
-        "all_review_rerun_hint_line_matches_expected_hint",
-        "review_paths_loaded_from_matrix_summary",
-        "all_review_paths_loaded_from_matrix_summary",
-        "artifact_roots_distinct",
-        "review_artifacts_exist",
-        "all_review_artifacts_exist",
-        "review_summary_targets_docs_review",
-        "all_review_summary_targets_docs_review_all",
-        "review_summary_path_keeps_review_root",
-        "review_summary_bundle_index_rerun_hint_matches",
-        "review_matrix_summary_expected_artifact_paths_match",
-        "review_matrix_summary_resolved_paths_match_expected",
-        "all_review_summary_path_keeps_all_review_root",
-        "all_review_summary_bundle_index_rerun_hint_matches",
-        "all_review_matrix_summary_expected_artifact_paths_match",
-        "all_review_matrix_summary_resolved_paths_match_expected",
-        "review_matrix_summary_path_matches_metadata",
-        "all_review_matrix_summary_path_matches_metadata",
-        "review_matrix_summary_line_matches_metadata_path",
-        "all_review_matrix_summary_line_matches_metadata_path",
-        "review_loaded_summary_path_matches_line",
-        "all_review_loaded_summary_path_matches_line",
-        "review_index_preserved_after_all_review",
-        "review_summary_preserved_after_all_review",
-        "review_summary_line_present",
-        "all_review_summary_line_present",
-        "review_rerun_hint_line_present",
-        "all_review_rerun_hint_line_present",
-    ):
-        assert f"{check_name}= True" in lines
+    _assert_required_line_prefixes(lines, case.required_line_prefixes)
+    _assert_true_smoke_checks(lines, case.true_check_names)
 
 
 def _render_picker_attention_workspace_shell_outputs(tmp_path: Path) -> dict[str, str]:
