@@ -581,6 +581,10 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
     assert result_map["review_summary_bundle_index_rerun_hint_matches"] is True
     assert result_map["review_matrix_summary_expected_artifact_paths_match"] is True
     assert result_map["review_matrix_summary_resolved_paths_match_expected"] is True
+    assert result_map["review_matrix_summary_path_matches_metadata"] is True
+    assert result_map["review_matrix_summary_line_matches_metadata_path"] is True
+    assert result_map["review_loaded_summary_path_matches_line"] is True
+    assert result_map["review_summary_path_keeps_review_root"] is True
     assert result_map["review_summary_line_present"] is True
     assert result_map["review_rerun_hint_line_present"] is True
 

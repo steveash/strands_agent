@@ -997,7 +997,10 @@ def build_review_artifact_success_results(
             f"{prefix}matrix_summary_line_matches_expected_path",
             review_output.matrix_summary_path == expected_paths["matrix_summary_path"],
         ),
-        (f"{prefix}rerun_hint_line_matches_expected_hint", rerun_hint_line == f"{rerun_hint_prefix}{review_spec.expected_bundle_index_rerun_hint}"),
+        (
+            f"{prefix}rerun_hint_line_matches_expected_hint",
+            rerun_hint_line == f"{rerun_hint_prefix}{review_spec.expected_bundle_index_rerun_hint}",
+        ),
         (f"{prefix}paths_loaded_from_matrix_summary", bool(review_output.matrix_summary_paths)),
         (f"{prefix}artifacts_exist", artifacts_exist),
         (
@@ -1017,6 +1020,23 @@ def build_review_artifact_success_results(
         (
             f"{prefix}matrix_summary_resolved_paths_match_expected",
             review_spec.matrix_summary_resolved_paths_match(review_output),
+        ),
+        (
+            f"{prefix}matrix_summary_path_matches_metadata",
+            review_output.matrix_summary_path_matches_metadata(),
+        ),
+        (
+            f"{prefix}matrix_summary_line_matches_metadata_path",
+            review_output.matrix_summary_line_matches_metadata_path(),
+        ),
+        (
+            f"{prefix}loaded_summary_path_matches_line",
+            review_output.matrix_summary_paths.get("matrix_summary_path")
+            == review_output.matrix_summary_path,
+        ),
+        (
+            f"{prefix}summary_path_keeps_{artifact_suffix}_root",
+            artifact_root == expected_paths.get("artifact_root"),
         ),
         (f"{prefix}summary_line_present", success_summary_line.startswith(success_summary_prefix)),
         (f"{prefix}rerun_hint_line_present", rerun_hint_line.startswith(rerun_hint_prefix)),

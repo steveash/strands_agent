@@ -18,7 +18,6 @@ from strands_agent_tui.testing import (
     load_script_module,
     observe_loaded_review_artifact_output,
     resolve_checkout_path,
-    resolve_review_artifact_paths,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -143,7 +142,6 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             review_exit_code = review_run.exit_code
             review_stdout = review_run.stdout
             review_stderr = review_run.stderr
-            review_summary_payload = review_output.matrix_summary_payload
             review_paths = review_output.matrix_summary_paths
             review_index_path = review_paths.get("bundle_index_path")
             review_summary_artifact_path = review_output.matrix_summary_path
@@ -166,11 +164,8 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             all_review_exit_code = all_review_run.exit_code
             all_review_stdout = all_review_run.stdout
             all_review_stderr = all_review_run.stderr
-            all_review_summary_payload = all_review_output.matrix_summary_payload
             all_review_paths = all_review_output.matrix_summary_paths
 
-        review_summary_path_from_line = review_output.matrix_summary_path
-        all_review_summary_path_from_line = all_review_output.matrix_summary_path
         review_index_preserved = (
             review_index_before is not None
             and review_index_path is not None
@@ -224,44 +219,6 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
                 artifacts_exist=all_review_files_exist,
             ),
             ("artifact_roots_distinct", artifact_roots_distinct),
-            (
-                "review_summary_path_keeps_review_root",
-                resolve_review_artifact_paths(review_summary_payload, checkout_root=checkout_root).get("artifact_root")
-                == review_root
-                if review_root is not None
-                else False,
-            ),
-            (
-                "all_review_summary_path_keeps_all_review_root",
-                resolve_review_artifact_paths(all_review_summary_payload, checkout_root=checkout_root).get("artifact_root")
-                == all_review_root
-                if all_review_root is not None
-                else False,
-            ),
-            (
-                "review_matrix_summary_path_matches_metadata",
-                review_output.matrix_summary_path_matches_metadata(),
-            ),
-            (
-                "all_review_matrix_summary_path_matches_metadata",
-                all_review_output.matrix_summary_path_matches_metadata(),
-            ),
-            (
-                "review_matrix_summary_line_matches_metadata_path",
-                review_output.matrix_summary_line_matches_metadata_path(),
-            ),
-            (
-                "all_review_matrix_summary_line_matches_metadata_path",
-                all_review_output.matrix_summary_line_matches_metadata_path(),
-            ),
-            (
-                "review_loaded_summary_path_matches_line",
-                review_paths.get("matrix_summary_path") == review_summary_path_from_line,
-            ),
-            (
-                "all_review_loaded_summary_path_matches_line",
-                all_review_paths.get("matrix_summary_path") == all_review_summary_path_from_line,
-            ),
             ("review_index_preserved_after_all_review", review_index_preserved),
             ("review_summary_preserved_after_all_review", review_summary_preserved),
         ]
