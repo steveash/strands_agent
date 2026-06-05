@@ -132,28 +132,26 @@ What exists now:
 - and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
 
 What changed this run:
-- extended `src/strands_agent_tui/sessions/picker.py` so intervention previews now reuse `timeline.summarize_event(...)`, queued approvals render as normalized `approval pending ...` summaries with queue/target/age provenance, and intervention filters now aggregate target-kind plus continuation-mode metrics,
-- extended `src/strands_agent_tui/testing/session_scenarios.py` and the intervention-heavy fixtures in `tests/test_sessions.py` so saved-session seeds carry normalized approval target metadata closer to the live runtime schema,
-- updated `tests/test_sessions.py` and `tests/test_app.py` exact picker/switcher expectations to lock in the richer intervention mix strings and preview wording,
-- validated the change through focused picker regressions, the broader session/app/session-scenario suite, the session-triage smoke target, and the full pytest suite,
-- and safely self-unblocked one assertion-drift failure by updating fixture metadata plus exact expected strings instead of weakening the coverage.
+- promoted the smoke-script contract registry into `src/strands_agent_tui/testing/smoke_script_harness.py`, including exported `SMOKE_SCRIPT_CONTRACT_CASES`, the new `SMOKE_MATRIX_ARTIFACT_ROOTS_*` contract metadata, and shared assertion helpers for output-line and runner-result validation,
+- rewired `src/strands_agent_tui/testing/__init__.py`, `tests/test_smoke_script_harness.py`, and `tests/test_smoke_scripts.py` to consume those shared helpers instead of keeping a second copy of the contract logic in the test module,
+- added focused harness coverage that proves the exported artifact-root smoke contract is wired into the public registry and that both helper paths accept the shared contract payloads,
+- validated the change with the focused smoke-harness/smoke-script pytest slice, the public `matrix-artifact-roots` standalone smoke target, and the full pytest suite,
+- and safely self-unblocked by treating the already-dirty smoke-harness worktree as the intended increment instead of trampling it with an unrelated backlog item.
 
 Why this matters now:
-- the live timeline already spoke in normalized approval language, but saved-session triage still used older fragmented wording,
-- recent-session reopen flows are the operator control plane for resumed Strands work, so mismatched intervention summaries make approval-heavy sessions harder to reason about,
-- and exposing target-kind plus continuation mix at the backlog level makes it easier to see whether a queue is dominated by path edits, shell/test commands, approved-result continuations, or denied-request resumptions.
+- the docs-review smoke lane had grown a second contract definition inside `tests/test_smoke_scripts.py`, which is exactly how subtle smoke drift sneaks in while everyone swears the tests are “totally shared now”,
+- exporting one canonical smoke-contract registry makes it easier to add new public smoke wrappers without re-copying assertion logic or forgetting to expose the contract to downstream tests,
+- and this gives the repo a reusable seam for the README backlog item about tightening smoke assertions around richer triage/intervention surfaces.
 
 How we know the prototype is working right now:
-- focused picker/switcher regressions now prove the exact intervention mix strings and preview wording shown to the operator,
-- broader session/app/session-scenario regressions prove the richer schema survives realistic saved-session seeds,
-- the session-triage smoke script still passes end to end for the picker surface,
-- and the full pytest suite still passes after the recent-session intervention-summary rewrite.
+- the focused harness/script pytest slice proves the shared registry, exported helpers, and artifact-root contract all agree on the same line/check expectations,
+- the public `standalone_smoke.py matrix-artifact-roots` target still passes end-to-end with real emitted output, so the shared contract matches the operator-facing smoke surface instead of only a unit-test fixture,
+- and the full pytest suite still passes after the smoke-contract deduplication.
 
 Current evidence:
-- focused intervention regressions: `.venv/bin/pytest -q tests/test_sessions.py::test_render_session_picker_surfaces_intervention_backlog_rollups tests/test_app.py::test_session_switcher_supports_filter_and_sort_shortcuts` => `2 passed in 3.67s`,
-- broader session triage regressions: `.venv/bin/pytest -q tests/test_sessions.py tests/test_app.py tests/test_session_scenarios.py` => `135 passed in 40.06s`,
-- session-triage smoke: `.venv/bin/python scripts/session_triage_smoke.py picker` => `[session-triage-smoke] summary: 1/1 targets passed in 3.12s`,
-- full automated tests: `.venv/bin/pytest -q` => `446 passed in 67.09s (0:01:07)`.
+- focused smoke harness regressions: `.venv/bin/pytest -q tests/test_smoke_script_harness.py tests/test_smoke_scripts.py` => `167 passed in 42.98s`,
+- public artifact-root smoke: `.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` => `[standalone-smoke] summary: 1/1 targets passed in 0.94s`,
+- full automated tests: `.venv/bin/pytest -q` => `457 passed in 87.73s (0:01:27)`.
 
 ## First five phases
 
@@ -715,7 +713,7 @@ Why this stack:
 2. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 3. decide whether stale-focused backlog summaries should also surface the configured cutoff in page-level metric lines, not just legends/prompts/banners
 4. decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
-5. decide whether the session-triage smoke target should start asserting the new intervention target/continuation mix strings explicitly instead of relying on suite-level picker regressions
+5. use the new shared smoke-script contract helpers to decide whether the session-triage smoke target should start asserting intervention target/continuation mix strings explicitly instead of relying on suite-level picker regressions
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -749,5 +747,5 @@ Future daily iterations should:
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
 - decide whether stale-focused backlog summaries should also surface the configured cutoff directly in page-level metric lines
-- decide whether the session-triage smoke target should assert intervention target/continuation mix strings explicitly
+- use the shared smoke-script contract helpers to decide whether the session-triage smoke target should assert intervention target/continuation mix strings explicitly
 - decide whether the `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public

@@ -617,6 +617,130 @@ DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS = (
     SMOKE_MATRIX_DOCS_REVIEW_HINT_SCRIPT_CONTRACT,
 )
 
+_SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES = (
+    "artifact_root: ",
+    "metadata_line: [smoke-matrix] review metadata: ",
+    "artifacts_line: [smoke-matrix] review artifacts: ",
+    "matrix_summary_line: [smoke-matrix] review matrix summary: ",
+    "summary_line: [smoke-matrix] summary: 4/4 bundles passed in ",
+    "rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
+)
+
+_SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES = (
+    "exit_code_zero",
+    "stderr_empty",
+    "metadata_line_present",
+    "artifacts_line_present",
+    "matrix_summary_line_present",
+    "metadata_matrix_summary_matches_expected_path",
+    "metadata_bundle_index_rerun_hint_matches",
+    "metadata_expected_artifact_paths_match",
+    "metadata_resolved_paths_match_expected",
+    "matrix_summary_line_matches_expected_path",
+    "rerun_hint_line_matches_expected_hint",
+    "paths_loaded_from_matrix_summary",
+    "artifacts_exist",
+    "summary_bundle_index_rerun_hint_matches",
+    "matrix_summary_expected_artifact_paths_match",
+    "matrix_summary_resolved_paths_match_expected",
+    "matrix_summary_path_matches_metadata",
+    "matrix_summary_line_matches_metadata_path",
+    "loaded_summary_path_matches_line",
+    "summary_line_present",
+    "rerun_hint_line_present",
+)
+
+_SMOKE_MATRIX_ARTIFACT_ROOTS_REVIEW_TRUE_CHECK_SUFFIXES = (
+    "metadata_targets_docs_review",
+    "metadata_artifact_root_matches_review",
+    "summary_targets_docs_review",
+    "summary_path_keeps_review_root",
+)
+
+_SMOKE_MATRIX_ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES = (
+    "metadata_targets_docs_review_all",
+    "metadata_artifact_root_matches_all_review",
+    "summary_targets_docs_review_all",
+    "summary_path_keeps_all_review_root",
+)
+
+SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT = SmokeScriptContractMetadata(
+    required_line_prefixes=("checkout_root: ",)
+    + tuple(
+        f"review_{suffix}"
+        for suffix in _SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES
+    )
+    + tuple(
+        f"all_review_{suffix}"
+        for suffix in _SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES
+    ),
+    true_check_names=tuple(
+        f"review_{suffix}"
+        for suffix in _SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES
+    )
+    + tuple(
+        f"review_{suffix}"
+        for suffix in _SMOKE_MATRIX_ARTIFACT_ROOTS_REVIEW_TRUE_CHECK_SUFFIXES
+    )
+    + tuple(
+        f"all_review_{suffix}"
+        for suffix in _SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES
+    )
+    + tuple(
+        f"all_review_{suffix}"
+        for suffix in _SMOKE_MATRIX_ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES
+    )
+    + (
+        "artifact_roots_distinct",
+        "review_index_preserved_after_all_review",
+        "review_summary_preserved_after_all_review",
+    ),
+)
+SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="smoke_matrix_artifact_roots_smoke",
+    runner_name="run_smoke_matrix_artifact_roots_smoke",
+    contract=SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
+)
+
+SMOKE_SCRIPT_CONTRACT_CASES = (
+    STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+    *DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
+    SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+)
+
+
+def smoke_contract_detail_expectation(required_line_prefix: str) -> tuple[str, str]:
+    detail_name, separator, detail_value_prefix = required_line_prefix.partition(": ")
+    assert separator, required_line_prefix
+    return detail_name, detail_value_prefix
+
+
+def assert_smoke_script_output_matches_contract(
+    output_lines: Sequence[str],
+    case: SmokeScriptContractCase,
+) -> None:
+    for required_line_prefix in case.required_line_prefixes:
+        assert any(line.startswith(required_line_prefix) for line in output_lines), required_line_prefix
+
+    for check_name in case.true_check_names:
+        assert f"{check_name}= True" in output_lines, check_name
+
+
+def assert_smoke_script_results_match_contract(
+    results: Mapping[str, object] | Iterable[tuple[str, object]],
+    case: SmokeScriptContractCase,
+) -> None:
+    result_map = dict(results)
+
+    for required_line_prefix in case.required_line_prefixes:
+        detail_name, detail_value_prefix = smoke_contract_detail_expectation(required_line_prefix)
+        assert detail_name in result_map, detail_name
+        assert not isinstance(result_map[detail_name], bool), detail_name
+        assert str(result_map[detail_name]).startswith(detail_value_prefix), required_line_prefix
+
+    for check_name in case.true_check_names:
+        assert result_map.get(check_name) is True, check_name
+
 
 def build_standalone_docs_rerun_hint_results(
     smoke_run: SmokeScriptRunResult,

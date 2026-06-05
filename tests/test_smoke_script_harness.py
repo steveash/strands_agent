@@ -9,14 +9,19 @@ import pytest
 
 from strands_agent_tui.testing import (
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
+    SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
+    SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+    SMOKE_SCRIPT_CONTRACT_CASES,
     STANDALONE_DOCS_RERUN_HINT_CONTRACT,
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     SmokeMatrixDocsReviewObserverSpec,
     SmokeScriptRunResult,
     SmokeWrapperFailureObservation,
+    assert_smoke_script_output_matches_contract,
+    assert_smoke_script_results_match_contract,
     build_review_artifact_failure_results,
     build_review_artifact_success_results,
     build_script_driver_source,
@@ -40,6 +45,7 @@ from strands_agent_tui.testing import (
     run_script_module_main_in_temp_checkout,
     run_script_module_main_via_driver_in_temp_checkout,
     smoke_cli_docs_parity_rerun_hint,
+    smoke_contract_detail_expectation,
 )
 
 
@@ -1317,3 +1323,55 @@ def test_build_smoke_matrix_docs_review_observer_spec_rejects_non_docs_review_ta
             requested_target_name="all",
             driver_stem="smoke_matrix_docs_review_hint",
         )
+
+
+def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() -> None:
+    assert STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT.script_name == "standalone_docs_rerun_hint_smoke"
+    assert STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT.runner_name == "run_standalone_docs_rerun_hint_smoke"
+    assert [case.script_name for case in DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS] == [
+        "smoke_matrix_all_review_order_smoke",
+        "smoke_matrix_all_review_missing_api_key_smoke",
+        "smoke_matrix_docs_review_hint_smoke",
+    ]
+    assert [case.runner_name for case in DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS] == [
+        "run_smoke_matrix_all_review_order_smoke",
+        "run_smoke_matrix_all_review_missing_api_key_smoke",
+        "run_smoke_matrix_docs_review_hint_smoke",
+    ]
+    assert [case.script_name for case in SMOKE_SCRIPT_CONTRACT_CASES] == [
+        "standalone_docs_rerun_hint_smoke",
+        "smoke_matrix_all_review_order_smoke",
+        "smoke_matrix_all_review_missing_api_key_smoke",
+        "smoke_matrix_docs_review_hint_smoke",
+        "smoke_matrix_artifact_roots_smoke",
+    ]
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-1] == SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.script_name == "smoke_matrix_artifact_roots_smoke"
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.runner_name == "run_smoke_matrix_artifact_roots_smoke"
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.contract == SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT
+    assert "checkout_root: " in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
+    assert "review_artifact_root: " in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
+    assert "all_review_artifact_root: " in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
+    assert "artifact_roots_distinct" in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
+    assert "review_summary_preserved_after_all_review" in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
+
+
+def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact_roots_contract() -> None:
+    output_lines = list(SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes) + [
+        f"{check_name}= True" for check_name in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
+    ]
+    assert_smoke_script_output_matches_contract(
+        output_lines,
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    )
+
+    results = [
+        (detail_name, f"{detail_value_prefix}fixture")
+        for detail_name, detail_value_prefix in (
+            smoke_contract_detail_expectation(prefix)
+            for prefix in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
+        )
+    ] + [
+        (check_name, True) for check_name in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
+    ]
+    assert_smoke_script_results_match_contract(results, SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT)

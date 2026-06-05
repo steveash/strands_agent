@@ -22,11 +22,12 @@ from strands_agent_tui.testing import (
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_MATRIX_WRAPPER,
+    SMOKE_SCRIPT_CONTRACT_CASES,
     SMOKE_WRAPPER_CLI_SPECS,
-    STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     STANDALONE_SMOKE_WRAPPER,
     SmokeScriptContractCase,
-    SmokeScriptContractMetadata,
+    assert_smoke_script_output_matches_contract,
+    assert_smoke_script_results_match_contract,
     build_smoke_cli_doc_drift_report_payload,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
@@ -83,134 +84,6 @@ def _assert_mixed_smoke_result_contract(
     for name in check_names:
         assert f"{name}= True" in lines or f"{name}= False" in lines
         assert not any(line.startswith(f"{name}: ") for line in lines)
-
-def _prefix_smoke_contract_names(prefix: str, suffixes: tuple[str, ...]) -> tuple[str, ...]:
-    return tuple(f"{prefix}{suffix}" for suffix in suffixes)
-
-
-def _smoke_contract_detail_expectation(required_line_prefix: str) -> tuple[str, str]:
-    detail_name, separator, detail_value_prefix = required_line_prefix.partition(": ")
-    assert separator, required_line_prefix
-    return detail_name, detail_value_prefix
-
-
-_ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES = (
-    "artifact_root: ",
-    "metadata_line: [smoke-matrix] review metadata: ",
-    "artifacts_line: [smoke-matrix] review artifacts: ",
-    "matrix_summary_line: [smoke-matrix] review matrix summary: ",
-    "summary_line: [smoke-matrix] summary: 4/4 bundles passed in ",
-    "rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
-)
-
-
-_ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES = (
-    "exit_code_zero",
-    "stderr_empty",
-    "metadata_line_present",
-    "artifacts_line_present",
-    "matrix_summary_line_present",
-    "metadata_matrix_summary_matches_expected_path",
-    "metadata_bundle_index_rerun_hint_matches",
-    "metadata_expected_artifact_paths_match",
-    "metadata_resolved_paths_match_expected",
-    "matrix_summary_line_matches_expected_path",
-    "rerun_hint_line_matches_expected_hint",
-    "paths_loaded_from_matrix_summary",
-    "artifacts_exist",
-    "summary_bundle_index_rerun_hint_matches",
-    "matrix_summary_expected_artifact_paths_match",
-    "matrix_summary_resolved_paths_match_expected",
-    "matrix_summary_path_matches_metadata",
-    "matrix_summary_line_matches_metadata_path",
-    "loaded_summary_path_matches_line",
-    "summary_line_present",
-    "rerun_hint_line_present",
-)
-
-
-_ARTIFACT_ROOTS_REVIEW_TRUE_CHECK_SUFFIXES = (
-    "metadata_targets_docs_review",
-    "metadata_artifact_root_matches_review",
-    "summary_targets_docs_review",
-    "summary_path_keeps_review_root",
-)
-
-
-_ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES = (
-    "metadata_targets_docs_review_all",
-    "metadata_artifact_root_matches_all_review",
-    "summary_targets_docs_review_all",
-    "summary_path_keeps_all_review_root",
-)
-
-
-_SMOKE_SCRIPT_CONTRACT_CASES = (
-    STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
-    *DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
-    SmokeScriptContractCase(
-        script_name="smoke_matrix_artifact_roots_smoke",
-        runner_name="run_smoke_matrix_artifact_roots_smoke",
-        contract=SmokeScriptContractMetadata(
-            required_line_prefixes=("checkout_root: ",)
-            + _prefix_smoke_contract_names(
-                "review_",
-                _ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES,
-            )
-            + _prefix_smoke_contract_names(
-                "all_review_",
-                _ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES,
-            ),
-            true_check_names=_prefix_smoke_contract_names(
-                "review_",
-                _ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES,
-            )
-            + _prefix_smoke_contract_names(
-                "review_",
-                _ARTIFACT_ROOTS_REVIEW_TRUE_CHECK_SUFFIXES,
-            )
-            + _prefix_smoke_contract_names(
-                "all_review_",
-                _ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES,
-            )
-            + _prefix_smoke_contract_names(
-                "all_review_",
-                _ARTIFACT_ROOTS_ALL_REVIEW_TRUE_CHECK_SUFFIXES,
-            )
-            + (
-                "artifact_roots_distinct",
-                "review_index_preserved_after_all_review",
-                "review_summary_preserved_after_all_review",
-            ),
-        ),
-    ),
-)
-
-
-def _assert_required_line_prefixes(lines: list[str], prefixes: tuple[str, ...]) -> None:
-    for prefix in prefixes:
-        assert any(line.startswith(prefix) for line in lines), prefix
-
-
-def _assert_true_smoke_checks(lines: list[str], check_names: tuple[str, ...]) -> None:
-    for check_name in check_names:
-        assert f"{check_name}= True" in lines
-
-
-def _assert_smoke_result_payload_matches_contract(
-    results: list[tuple[str, object]],
-    case: SmokeScriptContractCase,
-) -> None:
-    result_map = dict(results)
-
-    for required_line_prefix in case.required_line_prefixes:
-        detail_name, detail_value_prefix = _smoke_contract_detail_expectation(required_line_prefix)
-        assert detail_name in result_map, detail_name
-        assert not isinstance(result_map[detail_name], bool), detail_name
-        assert str(result_map[detail_name]).startswith(detail_value_prefix), required_line_prefix
-
-    for check_name in case.true_check_names:
-        assert result_map.get(check_name) is True, check_name
 
 
 def _format_script_help(name: str) -> str:
@@ -716,7 +589,7 @@ def test_docs_review_matrix_smokes_reject_invalid_output_stream(script_name: str
 
 @pytest.mark.parametrize(
     "case",
-    _SMOKE_SCRIPT_CONTRACT_CASES,
+    SMOKE_SCRIPT_CONTRACT_CASES,
     ids=lambda case: case.script_name,
 )
 def test_smoke_scripts_emit_expected_contracts(
@@ -729,13 +602,12 @@ def test_smoke_scripts_emit_expected_contracts(
 
     assert exit_code == 0
     lines = capsys.readouterr().out.splitlines()
-    _assert_required_line_prefixes(lines, case.required_line_prefixes)
-    _assert_true_smoke_checks(lines, case.true_check_names)
+    assert_smoke_script_output_matches_contract(lines, case)
 
 
 @pytest.mark.parametrize(
     "case",
-    _SMOKE_SCRIPT_CONTRACT_CASES,
+    SMOKE_SCRIPT_CONTRACT_CASES,
     ids=lambda case: case.script_name,
 )
 def test_smoke_script_runner_functions_return_expected_contract_results(
@@ -745,7 +617,7 @@ def test_smoke_script_runner_functions_return_expected_contract_results(
 
     results = getattr(smoke_script, case.runner_name)()
 
-    _assert_smoke_result_payload_matches_contract(results, case)
+    assert_smoke_script_results_match_contract(results, case)
 
 
 @pytest.mark.parametrize(
