@@ -18,6 +18,7 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_RERUN_HINT_CONTRACT,
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     SmokeMatrixDocsReviewObserverSpec,
+    SmokeScriptContractCase,
     SmokeScriptRunResult,
     SmokeWrapperFailureObservation,
     assert_smoke_script_output_matches_contract,
@@ -51,6 +52,33 @@ from strands_agent_tui.testing import (
 
 def _write_target_script(path: Path, body: str) -> None:
     path.write_text(body, encoding="utf-8")
+
+
+def _matching_contract_output_lines(case: SmokeScriptContractCase) -> list[str]:
+    return list(case.required_line_prefixes) + [
+        f"{check_name}= True" for check_name in case.true_check_names
+    ]
+
+
+def _matching_contract_results(case: SmokeScriptContractCase) -> list[tuple[str, object]]:
+    return [
+        (detail_name, f"{detail_value_prefix}fixture")
+        for detail_name, detail_value_prefix in (
+            smoke_contract_detail_expectation(prefix) for prefix in case.required_line_prefixes
+        )
+    ] + [
+        (check_name, True) for check_name in case.true_check_names
+    ]
+
+
+def _required_contract_detail_with_value_prefix(case: SmokeScriptContractCase) -> tuple[str, str]:
+    return next(
+        (detail_name, detail_value_prefix)
+        for detail_name, detail_value_prefix in (
+            smoke_contract_detail_expectation(prefix) for prefix in case.required_line_prefixes
+        )
+        if detail_value_prefix
+    )
 
 
 def test_find_prefixed_line_index_and_detail_safe_text() -> None:
@@ -1357,21 +1385,98 @@ def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() 
 
 
 def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact_roots_contract() -> None:
-    output_lines = list(SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes) + [
-        f"{check_name}= True" for check_name in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
-    ]
     assert_smoke_script_output_matches_contract(
-        output_lines,
+        _matching_contract_output_lines(SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT),
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     )
 
-    results = [
-        (detail_name, f"{detail_value_prefix}fixture")
-        for detail_name, detail_value_prefix in (
-            smoke_contract_detail_expectation(prefix)
-            for prefix in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
-        )
-    ] + [
-        (check_name, True) for check_name in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
+    assert_smoke_script_results_match_contract(
+        _matching_contract_results(SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT),
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    ),
+    ids=lambda case: case.script_name,
+)
+def test_assert_smoke_script_output_matches_contract_reports_offending_prefix_and_check(
+    case: SmokeScriptContractCase,
+) -> None:
+    output_lines = _matching_contract_output_lines(case)
+    missing_prefix = case.required_line_prefixes[0]
+    output_without_prefix = [
+        line for line in output_lines if not line.startswith(missing_prefix)
     ]
-    assert_smoke_script_results_match_contract(results, SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT)
+
+    with pytest.raises(AssertionError) as missing_prefix_error:
+        assert_smoke_script_output_matches_contract(output_without_prefix, case)
+    assert missing_prefix_error.value.args == (missing_prefix,)
+
+    missing_check_name = case.true_check_names[0]
+    output_without_check = [
+        line for line in output_lines if line != f"{missing_check_name}= True"
+    ]
+
+    with pytest.raises(AssertionError) as missing_check_error:
+        assert_smoke_script_output_matches_contract(output_without_check, case)
+    assert missing_check_error.value.args == (missing_check_name,)
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    ),
+    ids=lambda case: case.script_name,
+)
+def test_assert_smoke_script_results_match_contract_reports_offending_prefix_and_check(
+    case: SmokeScriptContractCase,
+) -> None:
+    results = _matching_contract_results(case)
+    missing_detail_name, expected_detail_prefix = _required_contract_detail_with_value_prefix(case)
+    results_without_detail = [
+        (name, value) for name, value in results if name != missing_detail_name
+    ]
+
+    with pytest.raises(AssertionError) as missing_detail_error:
+        assert_smoke_script_results_match_contract(results_without_detail, case)
+    assert missing_detail_error.value.args == (missing_detail_name,)
+
+    results_with_mismatched_detail_prefix = [
+        (
+            name,
+            f"unexpected-{expected_detail_prefix}fixture"
+            if name == missing_detail_name
+            else value,
+        )
+        for name, value in results
+    ]
+
+    with pytest.raises(AssertionError) as mismatched_detail_prefix_error:
+        assert_smoke_script_results_match_contract(results_with_mismatched_detail_prefix, case)
+    assert mismatched_detail_prefix_error.value.args == (missing_detail_name,)
+
+    results_with_boolean_detail = [
+        (name, True if name == missing_detail_name else value)
+        for name, value in results
+    ]
+
+    with pytest.raises(AssertionError) as boolean_detail_error:
+        assert_smoke_script_results_match_contract(results_with_boolean_detail, case)
+    assert boolean_detail_error.value.args == (missing_detail_name,)
+
+    missing_check_name = case.true_check_names[0]
+    results_with_false_check = [
+        (name, False if name == missing_check_name else value)
+        for name, value in results
+    ]
+
+    with pytest.raises(AssertionError) as missing_check_error:
+        assert_smoke_script_results_match_contract(results_with_false_check, case)
+    assert missing_check_error.value.args == (missing_check_name,)

@@ -736,7 +736,7 @@ def assert_smoke_script_results_match_contract(
         detail_name, detail_value_prefix = smoke_contract_detail_expectation(required_line_prefix)
         assert detail_name in result_map, detail_name
         assert not isinstance(result_map[detail_name], bool), detail_name
-        assert str(result_map[detail_name]).startswith(detail_value_prefix), required_line_prefix
+        assert str(result_map[detail_name]).startswith(detail_value_prefix), detail_name
 
     for check_name in case.true_check_names:
         assert result_map.get(check_name) is True, check_name
