@@ -1484,3 +1484,67 @@ def test_assert_smoke_script_results_match_contract_reports_offending_prefix_and
     with pytest.raises(AssertionError) as missing_check_error:
         assert_smoke_script_results_match_contract(results_with_false_check, case)
     assert missing_check_error.value.args == (missing_check_name,)
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    ),
+    ids=lambda case: case.script_name,
+)
+def test_assert_smoke_script_results_match_contract_accepts_reordered_results_and_last_duplicate_repairs(
+    case: SmokeScriptContractCase,
+) -> None:
+    results = _matching_contract_results(case)
+    detail_name, expected_detail_prefix = _required_contract_detail_with_value_prefix(case)
+    check_name = case.true_check_names[0]
+
+    reordered_results = list(reversed(results))
+    assert_smoke_script_results_match_contract(reordered_results, case)
+
+    repaired_duplicate_results = [
+        (
+            name,
+            f"unexpected-{expected_detail_prefix}fixture"
+            if name == detail_name
+            else (False if name == check_name else value)
+        )
+        for name, value in reordered_results
+    ] + [
+        (detail_name, f"{expected_detail_prefix}repaired"),
+        (check_name, True),
+    ]
+
+    assert_smoke_script_results_match_contract(repaired_duplicate_results, case)
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    ),
+    ids=lambda case: case.script_name,
+)
+def test_assert_smoke_script_results_match_contract_reports_final_duplicate_detail_and_check(
+    case: SmokeScriptContractCase,
+) -> None:
+    results = _matching_contract_results(case)
+    detail_name, expected_detail_prefix = _required_contract_detail_with_value_prefix(case)
+    check_name = case.true_check_names[0]
+
+    with pytest.raises(AssertionError) as final_detail_error:
+        assert_smoke_script_results_match_contract(
+            results + [(detail_name, f"unexpected-{expected_detail_prefix}fixture")],
+            case,
+        )
+    assert final_detail_error.value.args == (detail_name,)
+
+    with pytest.raises(AssertionError) as final_check_error:
+        assert_smoke_script_results_match_contract(
+            results + [(check_name, False)],
+            case,
+        )
+    assert final_check_error.value.args == (check_name,)

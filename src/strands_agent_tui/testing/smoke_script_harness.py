@@ -726,20 +726,38 @@ def assert_smoke_script_output_matches_contract(
         assert f"{check_name}= True" in output_lines, check_name
 
 
+_MISSING_SMOKE_RESULT = object()
+
+
+def _final_smoke_script_result_value(
+    results: Mapping[str, object] | Iterable[tuple[str, object]],
+    name: str,
+) -> object:
+    if isinstance(results, Mapping):
+        return results.get(name, _MISSING_SMOKE_RESULT)
+
+    value = _MISSING_SMOKE_RESULT
+    for current_name, current_value in results:
+        if current_name == name:
+            value = current_value
+    return value
+
+
 def assert_smoke_script_results_match_contract(
     results: Mapping[str, object] | Iterable[tuple[str, object]],
     case: SmokeScriptContractCase,
 ) -> None:
-    result_map = dict(results)
+    result_items = results if isinstance(results, Mapping) else tuple(results)
 
     for required_line_prefix in case.required_line_prefixes:
         detail_name, detail_value_prefix = smoke_contract_detail_expectation(required_line_prefix)
-        assert detail_name in result_map, detail_name
-        assert not isinstance(result_map[detail_name], bool), detail_name
-        assert str(result_map[detail_name]).startswith(detail_value_prefix), detail_name
+        detail_value = _final_smoke_script_result_value(result_items, detail_name)
+        assert detail_value is not _MISSING_SMOKE_RESULT, detail_name
+        assert not isinstance(detail_value, bool), detail_name
+        assert str(detail_value).startswith(detail_value_prefix), detail_name
 
     for check_name in case.true_check_names:
-        assert result_map.get(check_name) is True, check_name
+        assert _final_smoke_script_result_value(result_items, check_name) is True, check_name
 
 
 def build_standalone_docs_rerun_hint_results(
