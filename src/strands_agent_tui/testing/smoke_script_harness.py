@@ -729,6 +729,24 @@ def assert_smoke_script_output_matches_contract(
 _MISSING_SMOKE_RESULT = object()
 
 
+def _malformed_smoke_script_result_entry_name(index: int, entry: object) -> str:
+    return f"result[{index}]: {entry!r}"
+
+
+def _normalize_smoke_script_result_items(
+    results: Mapping[str, object] | Iterable[tuple[str, object]],
+) -> Mapping[str, object] | tuple[tuple[str, object], ...]:
+    if isinstance(results, Mapping):
+        return results
+
+    normalized: list[tuple[str, object]] = []
+    for index, entry in enumerate(results):
+        if not isinstance(entry, Sequence) or isinstance(entry, str | bytes) or len(entry) != 2:
+            raise AssertionError(_malformed_smoke_script_result_entry_name(index, entry))
+        normalized.append((entry[0], entry[1]))
+    return tuple(normalized)
+
+
 def _final_smoke_script_result_value(
     results: Mapping[str, object] | Iterable[tuple[str, object]],
     name: str,
@@ -747,7 +765,7 @@ def assert_smoke_script_results_match_contract(
     results: Mapping[str, object] | Iterable[tuple[str, object]],
     case: SmokeScriptContractCase,
 ) -> None:
-    result_items = results if isinstance(results, Mapping) else tuple(results)
+    result_items = _normalize_smoke_script_result_items(results)
 
     for required_line_prefix in case.required_line_prefixes:
         detail_name, detail_value_prefix = smoke_contract_detail_expectation(required_line_prefix)

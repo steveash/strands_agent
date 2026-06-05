@@ -1548,3 +1548,34 @@ def test_assert_smoke_script_results_match_contract_reports_final_duplicate_deta
             case,
         )
     assert final_check_error.value.args == (check_name,)
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    ),
+    ids=lambda case: case.script_name,
+)
+def test_assert_smoke_script_results_match_contract_rejects_malformed_non_pair_entries(
+    case: SmokeScriptContractCase,
+) -> None:
+    results = _matching_contract_results(case)
+    malformed_index = len(results)
+
+    with pytest.raises(AssertionError) as triple_entry_error:
+        assert_smoke_script_results_match_contract(
+            results + [("malformed", "value", "extra")],
+            case,
+        )
+    assert triple_entry_error.value.args == (
+        f"result[{malformed_index}]: ('malformed', 'value', 'extra')",
+    )
+
+    with pytest.raises(AssertionError) as scalar_entry_error:
+        assert_smoke_script_results_match_contract(
+            results + [True],
+            case,
+        )
+    assert scalar_entry_error.value.args == (f"result[{malformed_index}]: True",)
