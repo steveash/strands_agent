@@ -822,12 +822,41 @@ SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT = SmokeScriptContractCase(
     contract=SMOKE_SCRIPT_MALFORMED_RESULT_CONTRACT,
 )
 
+SMOKE_SCRIPT_MALFORMED_DETAIL_CONTRACT = SmokeScriptContractMetadata(
+    required_line_prefixes=(
+        "source_contract_script_name: standalone_docs_rerun_hint_smoke",
+        "source_result_count: ",
+        "malformed_detail_name: stdout_fix_check_summary",
+        "expected_detail_prefix: fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+        "mismatched_detail_value: unexpected-fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+        "missing_detail_assertion: stdout_fix_check_summary",
+        "mismatched_detail_assertion: stdout_fix_check_summary",
+        "boolean_detail_assertion: stdout_fix_check_summary",
+    ),
+    true_check_names=(
+        "source_contract_valid",
+        "source_result_count_positive",
+        "malformed_detail_name_present",
+        "expected_detail_prefix_present",
+        "missing_detail_reported",
+        "mismatched_detail_prefix_reported",
+        "boolean_detail_reported",
+        "mismatched_detail_mentions_expected_prefix",
+    ),
+)
+SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="smoke_script_malformed_detail_smoke",
+    runner_name="run_smoke_script_malformed_detail_smoke",
+    contract=SMOKE_SCRIPT_MALFORMED_DETAIL_CONTRACT,
+)
+
 SMOKE_SCRIPT_CONTRACT_CASES = (
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     *DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT,
+    SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT,
 )
 
 
@@ -949,6 +978,96 @@ def build_malformed_smoke_script_result_results(
         (
             "malformed_result_mentions_entry",
             malformed_entry_text in assertion_message,
+        ),
+    ]
+
+
+def _required_smoke_script_detail_with_value_prefix(
+    case: SmokeScriptContractCase,
+) -> tuple[str, str]:
+    for required_line_prefix in case.required_line_prefixes:
+        detail_name, detail_value_prefix = smoke_contract_detail_expectation(required_line_prefix)
+        if detail_value_prefix:
+            return detail_name, detail_value_prefix
+    raise AssertionError(f"no detail prefix found for {case.script_name}")
+
+
+def build_malformed_smoke_script_detail_results(
+    source_results: Mapping[str, object] | Iterable[tuple[str, object]],
+    *,
+    source_case: SmokeScriptContractCase,
+) -> list[tuple[str, object]]:
+    source_result_pairs = _smoke_script_result_pairs(source_results)
+    assert_smoke_script_results_match_contract(source_result_pairs, source_case)
+
+    detail_name, expected_detail_prefix = _required_smoke_script_detail_with_value_prefix(source_case)
+    mismatched_detail_value = f"unexpected-{expected_detail_prefix}fixture"
+
+    try:
+        assert_smoke_script_results_match_contract(
+            [
+                (name, value)
+                for name, value in source_result_pairs
+                if name != detail_name
+            ],
+            source_case,
+        )
+    except AssertionError as error:
+        missing_detail_assertion = str(error.args[0]) if error.args else ""
+    else:
+        missing_detail_assertion = ""
+
+    try:
+        assert_smoke_script_results_match_contract(
+            [
+                (
+                    name,
+                    mismatched_detail_value if name == detail_name else value,
+                )
+                for name, value in source_result_pairs
+            ],
+            source_case,
+        )
+    except AssertionError as error:
+        mismatched_detail_assertion = str(error.args[0]) if error.args else ""
+    else:
+        mismatched_detail_assertion = ""
+
+    try:
+        assert_smoke_script_results_match_contract(
+            [
+                (name, True if name == detail_name else value)
+                for name, value in source_result_pairs
+            ],
+            source_case,
+        )
+    except AssertionError as error:
+        boolean_detail_assertion = str(error.args[0]) if error.args else ""
+    else:
+        boolean_detail_assertion = ""
+
+    return [
+        ("source_contract_script_name", source_case.script_name),
+        ("source_result_count", len(source_result_pairs)),
+        ("malformed_detail_name", detail_name),
+        ("expected_detail_prefix", expected_detail_prefix),
+        ("mismatched_detail_value", mismatched_detail_value),
+        ("missing_detail_assertion", missing_detail_assertion),
+        ("mismatched_detail_assertion", mismatched_detail_assertion),
+        ("boolean_detail_assertion", boolean_detail_assertion),
+        ("source_contract_valid", True),
+        ("source_result_count_positive", len(source_result_pairs) > 0),
+        ("malformed_detail_name_present", bool(detail_name)),
+        ("expected_detail_prefix_present", bool(expected_detail_prefix)),
+        ("missing_detail_reported", missing_detail_assertion == detail_name),
+        (
+            "mismatched_detail_prefix_reported",
+            mismatched_detail_assertion == detail_name,
+        ),
+        ("boolean_detail_reported", boolean_detail_assertion == detail_name),
+        (
+            "mismatched_detail_mentions_expected_prefix",
+            expected_detail_prefix in mismatched_detail_value,
         ),
     ]
 

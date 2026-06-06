@@ -12,6 +12,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+    SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT,
     SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
@@ -26,6 +27,7 @@ from strands_agent_tui.testing import (
     SmokeWrapperFailureObservation,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
+    build_malformed_smoke_script_detail_results,
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
     build_review_artifact_success_results,
@@ -1396,10 +1398,12 @@ def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() 
         "smoke_matrix_artifact_roots_smoke",
         "session_triage_intervention_mix_smoke",
         "smoke_script_malformed_result_smoke",
+        "smoke_script_malformed_detail_smoke",
     ]
-    assert SMOKE_SCRIPT_CONTRACT_CASES[-3] == SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT
-    assert SMOKE_SCRIPT_CONTRACT_CASES[-2] == SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT
-    assert SMOKE_SCRIPT_CONTRACT_CASES[-1] == SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-4] == SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-3] == SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-2] == SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-1] == SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.script_name == "smoke_matrix_artifact_roots_smoke"
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.runner_name == "run_smoke_matrix_artifact_roots_smoke"
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.contract == SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT
@@ -1418,6 +1422,10 @@ def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() 
     assert SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.runner_name == "run_smoke_script_malformed_result_smoke"
     assert "assertion_message: result[" in SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.required_line_prefixes
     assert "malformed_result_reported" in SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.true_check_names
+    assert SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT.script_name == "smoke_script_malformed_detail_smoke"
+    assert SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT.runner_name == "run_smoke_script_malformed_detail_smoke"
+    assert "missing_detail_assertion: stdout_fix_check_summary" in SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT.required_line_prefixes
+    assert "boolean_detail_reported" in SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT.true_check_names
 
 
 def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact_roots_contract() -> None:
@@ -1642,3 +1650,21 @@ def test_build_malformed_smoke_script_result_results_replays_result_index_contra
     assert dict(malformed_results)["assertion_message"] == (
         f"result[{len(source_results)}]: ('malformed', 'value', 'extra')"
     )
+
+
+def test_build_malformed_smoke_script_detail_results_replays_detail_contract() -> None:
+    source_results = _matching_contract_results(STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT)
+
+    malformed_results = build_malformed_smoke_script_detail_results(
+        source_results,
+        source_case=STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+    )
+
+    assert_smoke_script_results_match_contract(
+        malformed_results,
+        SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT,
+    )
+    malformed_result_map = dict(malformed_results)
+    assert malformed_result_map["missing_detail_assertion"] == "stdout_fix_check_summary"
+    assert malformed_result_map["mismatched_detail_assertion"] == "stdout_fix_check_summary"
+    assert malformed_result_map["boolean_detail_assertion"] == "stdout_fix_check_summary"
