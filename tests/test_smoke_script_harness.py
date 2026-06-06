@@ -17,6 +17,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
     SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
@@ -34,6 +35,7 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     SmokeMatrixDocsReviewFailureDefaults,
     SmokeMatrixDocsReviewObserverSpec,
+    SmokeMatrixDocsReviewSuccessDefaults,
     SmokeScriptContractCase,
     SmokeScriptRunResult,
     SmokeWrapperFailureObservation,
@@ -66,6 +68,7 @@ from strands_agent_tui.testing import (
     smoke_cli_docs_parity_rerun_hint,
     smoke_contract_detail_expectation,
     smoke_matrix_docs_review_failure_summary_prefix,
+    smoke_matrix_docs_review_success_summary_prefix,
 )
 
 
@@ -453,6 +456,21 @@ def test_exported_docs_review_failure_defaults_share_expected_prefixes() -> None
     )
 
 
+def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None:
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS == SmokeMatrixDocsReviewSuccessDefaults(
+        success_summary_prefix=smoke_matrix_docs_review_success_summary_prefix(),
+        rerun_hint_prefix=SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+    )
+    assert (
+        f"review_summary_line: {SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix}"
+        in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
+    )
+    assert (
+        f"all_review_rerun_hint_line: {SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix}"
+        in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
+    )
+
+
 def test_smoke_matrix_docs_review_failure_defaults_require_exactly_one_failed_matcher() -> None:
     with pytest.raises(ValueError, match="provide exactly one failed-line matcher"):
         SmokeMatrixDocsReviewFailureDefaults(
@@ -605,15 +623,21 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
         driver_filename="unused.py",
     )
 
+    success_summary_line = (
+        f"{SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix}0.10s"
+    )
+    rerun_hint_line = (
+        f"{SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix}rerun docs parity"
+    )
     result_map = dict(
         build_review_artifact_success_results(
             review_output,
             review_spec,
             **review_spec.success_result_kwargs(),
-            success_summary_line="[smoke-matrix] summary: 4/4 bundles passed in 0.10s",
-            success_summary_prefix="[smoke-matrix] summary: 4/4 bundles passed in ",
-            rerun_hint_line="[smoke-matrix] review bundle rerun hint: rerun docs parity",
-            rerun_hint_prefix="[smoke-matrix] review bundle rerun hint: ",
+            success_summary_line=success_summary_line,
+            success_summary_prefix=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix,
+            rerun_hint_line=rerun_hint_line,
+            rerun_hint_prefix=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix,
             exit_code=0,
             stderr_text="",
             artifacts_exist=True,
@@ -624,8 +648,8 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
     assert result_map["review_metadata_line"] == review_output.metadata_line
     assert result_map["review_artifacts_line"] == review_output.artifacts_line
     assert result_map["review_matrix_summary_line"] == review_output.matrix_summary_line
-    assert result_map["review_summary_line"] == "[smoke-matrix] summary: 4/4 bundles passed in 0.10s"
-    assert result_map["review_rerun_hint_line"] == "[smoke-matrix] review bundle rerun hint: rerun docs parity"
+    assert result_map["review_summary_line"] == success_summary_line
+    assert result_map["review_rerun_hint_line"] == rerun_hint_line
     assert result_map["review_exit_code_zero"] is True
     assert result_map["review_stderr_empty"] is True
     assert result_map["review_metadata_targets_docs_review"] is True

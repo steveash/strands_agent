@@ -499,6 +499,12 @@ def detail_safe_text(text: str) -> str:
 
 
 @dataclass(frozen=True)
+class SmokeMatrixDocsReviewSuccessDefaults:
+    success_summary_prefix: str
+    rerun_hint_prefix: str
+
+
+@dataclass(frozen=True)
 class SmokeMatrixDocsReviewFailureDefaults:
     failure_summary_prefix: str
     failed_line_prefix: str | None = None
@@ -530,6 +536,12 @@ class SmokeMatrixDocsReviewFailureDefaults:
             if value is not None:
                 kwargs[field_name] = value
         return kwargs
+
+
+def smoke_matrix_docs_review_success_summary_prefix(
+    *, passed_count: int = 4, total_count: int = 4
+) -> str:
+    return f"[smoke-matrix] summary: {passed_count}/{total_count} bundles passed in "
 
 
 def smoke_matrix_docs_review_failure_summary_prefix(*, passed_count: int, total_count: int = 4) -> str:
@@ -598,6 +610,10 @@ SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX = (
     "`standalone_smoke.py docs-review-only`;"
 )
 SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX = "[smoke-matrix] review bundle rerun hint: "
+SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS = SmokeMatrixDocsReviewSuccessDefaults(
+    success_summary_prefix=smoke_matrix_docs_review_success_summary_prefix(),
+    rerun_hint_prefix=SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+)
 SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX = "[smoke-matrix] running docs-review"
 SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX = "docs-review smoke failed fast: "
 SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE = (
@@ -761,11 +777,11 @@ DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS = (
 
 _SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_LINE_PREFIX_SUFFIXES = (
     "artifact_root: ",
-    "metadata_line: [smoke-matrix] review metadata: ",
-    "artifacts_line: [smoke-matrix] review artifacts: ",
-    "matrix_summary_line: [smoke-matrix] review matrix summary: ",
-    "summary_line: [smoke-matrix] summary: 4/4 bundles passed in ",
-    "rerun_hint_line: [smoke-matrix] review bundle rerun hint: ",
+    f"metadata_line: {SMOKE_MATRIX_REVIEW_METADATA_PREFIX}",
+    f"artifacts_line: {SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX}",
+    f"matrix_summary_line: {SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX}",
+    f"summary_line: {SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix}",
+    f"rerun_hint_line: {SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix}",
 )
 
 _SMOKE_MATRIX_ARTIFACT_ROOTS_COMMON_TRUE_CHECK_SUFFIXES = (

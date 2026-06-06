@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterator
 
 from strands_agent_tui.testing import (
+    SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
@@ -22,8 +23,8 @@ from strands_agent_tui.testing import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
-SUCCESS_SUMMARY_PREFIX = "[smoke-matrix] summary: 4/4 bundles passed in "
-RERUN_HINT_PREFIX = "[smoke-matrix] review bundle rerun hint: "
+SUCCESS_SUMMARY_PREFIX = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix
+RERUN_HINT_PREFIX = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix
 
 
 @contextmanager
