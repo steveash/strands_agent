@@ -515,6 +515,7 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         ([], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
         (["local"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
         (["all"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"]),
+        (["contract-negative"], ["malformed-result", "malformed-detail"]),
         (
             ["docs-parity-only"],
             [
@@ -549,6 +550,8 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
         (["docs"], ["docs"]),
         (["docs-artifacts"], ["docs-artifacts"]),
         (["docs-rerun-hint"], ["docs-rerun-hint"]),
+        (["malformed-result"], ["malformed-result"]),
+        (["malformed-detail"], ["malformed-detail"]),
         (["matrix-artifact-roots"], ["matrix-artifact-roots"]),
         (["matrix-all-review-order"], ["matrix-all-review-order"]),
         (["matrix-all-review-missing-api-key"], ["matrix-all-review-missing-api-key"]),
@@ -2259,7 +2262,7 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
         (
             "standalone_smoke",
             "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,docs-rerun-hint,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,docs-parity-only,docs-focused,docs-review-only,all}",
+            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,docs-rerun-hint,malformed-result,malformed-detail,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,contract-negative,docs-parity-only,docs-focused,docs-review-only,all}",
         ),
         ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
         (
