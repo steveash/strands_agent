@@ -12,6 +12,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+    SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
@@ -25,6 +26,7 @@ from strands_agent_tui.testing import (
     SmokeWrapperFailureObservation,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
+    build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
     build_review_artifact_success_results,
     build_script_driver_source,
@@ -1393,9 +1395,11 @@ def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() 
         "smoke_matrix_docs_review_hint_smoke",
         "smoke_matrix_artifact_roots_smoke",
         "session_triage_intervention_mix_smoke",
+        "smoke_script_malformed_result_smoke",
     ]
-    assert SMOKE_SCRIPT_CONTRACT_CASES[-2] == SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT
-    assert SMOKE_SCRIPT_CONTRACT_CASES[-1] == SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-3] == SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-2] == SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-1] == SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.script_name == "smoke_matrix_artifact_roots_smoke"
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.runner_name == "run_smoke_matrix_artifact_roots_smoke"
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.contract == SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT
@@ -1410,6 +1414,10 @@ def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() 
     assert "stdout_picker_target_mix_line: picker_intervention_target_mix= True" in SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT.required_line_prefixes
     assert "stdout_switcher_continuation_mix_line: switcher_intervention_continuation_mix= True" in SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT.required_line_prefixes
     assert "summary_after_switcher_continuation_mix" in SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT.true_check_names
+    assert SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.script_name == "smoke_script_malformed_result_smoke"
+    assert SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.runner_name == "run_smoke_script_malformed_result_smoke"
+    assert "assertion_message: result[" in SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.required_line_prefixes
+    assert "malformed_result_reported" in SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.true_check_names
 
 
 def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact_roots_contract() -> None:
@@ -1616,3 +1624,21 @@ def test_assert_smoke_script_results_match_contract_rejects_malformed_non_pair_e
             case,
         )
     assert scalar_entry_error.value.args == (f"result[{malformed_index}]: True",)
+
+
+def test_build_malformed_smoke_script_result_results_replays_result_index_contract() -> None:
+    source_results = _matching_contract_results(STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT)
+
+    malformed_results = build_malformed_smoke_script_result_results(
+        source_results,
+        source_case=STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+        malformed_entry=("malformed", "value", "extra"),
+    )
+
+    assert_smoke_script_results_match_contract(
+        malformed_results,
+        SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT,
+    )
+    assert dict(malformed_results)["assertion_message"] == (
+        f"result[{len(source_results)}]: ('malformed', 'value', 'extra')"
+    )

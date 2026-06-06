@@ -801,11 +801,33 @@ SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT = SmokeScriptContractCase(
     contract=SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
 )
 
+SMOKE_SCRIPT_MALFORMED_RESULT_CONTRACT = SmokeScriptContractMetadata(
+    required_line_prefixes=(
+        "source_contract_script_name: standalone_docs_rerun_hint_smoke",
+        "source_result_count: ",
+        "malformed_entry: ('malformed', 'value', 'extra')",
+        "assertion_message: result[",
+    ),
+    true_check_names=(
+        "source_contract_valid",
+        "source_result_count_positive",
+        "malformed_result_reported",
+        "malformed_result_index_matches_source_length",
+        "malformed_result_mentions_entry",
+    ),
+)
+SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="smoke_script_malformed_result_smoke",
+    runner_name="run_smoke_script_malformed_result_smoke",
+    contract=SMOKE_SCRIPT_MALFORMED_RESULT_CONTRACT,
+)
+
 SMOKE_SCRIPT_CONTRACT_CASES = (
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     *DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
+    SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT,
 )
 
 
@@ -876,6 +898,59 @@ def assert_smoke_script_results_match_contract(
 
     for check_name in case.true_check_names:
         assert _final_smoke_script_result_value(result_items, check_name) is True, check_name
+
+
+def _smoke_script_result_pairs(
+    results: Mapping[str, object] | Iterable[tuple[str, object]],
+) -> tuple[tuple[str, object], ...]:
+    normalized_results = _normalize_smoke_script_result_items(results)
+    if isinstance(normalized_results, Mapping):
+        return tuple(normalized_results.items())
+    return tuple(normalized_results)
+
+
+def build_malformed_smoke_script_result_results(
+    source_results: Mapping[str, object] | Iterable[tuple[str, object]],
+    *,
+    source_case: SmokeScriptContractCase,
+    malformed_entry: object = ("malformed", "value", "extra"),
+) -> list[tuple[str, object]]:
+    source_result_pairs = _smoke_script_result_pairs(source_results)
+    assert_smoke_script_results_match_contract(source_result_pairs, source_case)
+
+    malformed_index = len(source_result_pairs)
+    expected_assertion_message = _malformed_smoke_script_result_entry_name(
+        malformed_index,
+        malformed_entry,
+    )
+    try:
+        assert_smoke_script_results_match_contract(
+            source_result_pairs + (malformed_entry,),
+            source_case,
+        )
+    except AssertionError as error:
+        assertion_message = str(error.args[0]) if error.args else ""
+    else:
+        assertion_message = ""
+
+    malformed_entry_text = repr(malformed_entry)
+    return [
+        ("source_contract_script_name", source_case.script_name),
+        ("source_result_count", len(source_result_pairs)),
+        ("malformed_entry", malformed_entry_text),
+        ("assertion_message", assertion_message),
+        ("source_contract_valid", True),
+        ("source_result_count_positive", len(source_result_pairs) > 0),
+        ("malformed_result_reported", assertion_message == expected_assertion_message),
+        (
+            "malformed_result_index_matches_source_length",
+            assertion_message.startswith(f"result[{malformed_index}]: "),
+        ),
+        (
+            "malformed_result_mentions_entry",
+            malformed_entry_text in assertion_message,
+        ),
+    ]
 
 
 def build_standalone_docs_rerun_hint_results(
