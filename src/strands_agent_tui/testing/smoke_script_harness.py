@@ -295,6 +295,51 @@ class SmokeMatrixDocsReviewFailureObservation:
 
 
 @dataclass(frozen=True)
+class SmokeMatrixDocsReviewResultNaming:
+    result_prefix: str
+    target_suffix: str
+    artifact_suffix: str
+
+    def success_result_kwargs(self) -> dict[str, str]:
+        return {
+            "result_prefix": self.result_prefix,
+            "target_suffix": self.target_suffix,
+            "artifact_suffix": self.artifact_suffix,
+        }
+
+    def failure_result_kwargs(
+        self,
+        *,
+        detail_prefix: str = "stderr_",
+        result_prefix: str = "",
+    ) -> dict[str, str]:
+        return {
+            "detail_prefix": detail_prefix,
+            "result_prefix": result_prefix,
+            "target_suffix": self.target_suffix,
+            "artifact_suffix": self.artifact_suffix,
+        }
+
+
+def _smoke_matrix_docs_review_result_naming(
+    requested_target_name: str,
+) -> SmokeMatrixDocsReviewResultNaming:
+    if requested_target_name == "review":
+        return SmokeMatrixDocsReviewResultNaming(
+            result_prefix="review",
+            target_suffix="docs_review",
+            artifact_suffix="review",
+        )
+    if requested_target_name == "all-review":
+        return SmokeMatrixDocsReviewResultNaming(
+            result_prefix="all_review",
+            target_suffix="docs_review_all",
+            artifact_suffix="all_review",
+        )
+    raise ValueError(f"unsupported docs-review smoke-matrix target: {requested_target_name!r}")
+
+
+@dataclass(frozen=True)
 class SmokeMatrixDocsReviewObserverSpec:
     requested_target_name: str
     expected_target_name: str
@@ -307,12 +352,30 @@ class SmokeMatrixDocsReviewObserverSpec:
     artifacts_prefix: str = SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX
     matrix_summary_prefix: str = SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX
 
+    @property
+    def result_naming(self) -> SmokeMatrixDocsReviewResultNaming:
+        return _smoke_matrix_docs_review_result_naming(self.requested_target_name)
+
     def observer_kwargs(self) -> dict[str, str]:
         return {
             "metadata_prefix": self.metadata_prefix,
             "artifacts_prefix": self.artifacts_prefix,
             "matrix_summary_prefix": self.matrix_summary_prefix,
         }
+
+    def success_result_kwargs(self) -> dict[str, str]:
+        return self.result_naming.success_result_kwargs()
+
+    def failure_result_kwargs(
+        self,
+        *,
+        detail_prefix: str = "stderr_",
+        result_prefix: str = "",
+    ) -> dict[str, str]:
+        return self.result_naming.failure_result_kwargs(
+            detail_prefix=detail_prefix,
+            result_prefix=result_prefix,
+        )
 
     def expected_path(self, key: str) -> str | None:
         return self.expected_artifact_paths.get(key)

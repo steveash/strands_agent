@@ -82,8 +82,7 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             *build_review_artifact_failure_results(
                 review_output,
                 review_spec,
-                target_suffix="docs_review_all",
-                artifact_suffix="all_review",
+                **review_spec.failure_result_kwargs(),
             ),
             ("stderr_bundle_rerun_hint_line", failure_output.bundle_rerun_hint_line),
             ("stderr_hint_line", failure_output.docs_review_only_hint_line),

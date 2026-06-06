@@ -481,8 +481,7 @@ def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_p
         build_review_artifact_failure_results(
             review_output,
             review_spec,
-            target_suffix="docs_review_all",
-            artifact_suffix="all_review",
+            **review_spec.failure_result_kwargs(),
         )
     )
 
@@ -546,9 +545,7 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
         build_review_artifact_success_results(
             review_output,
             review_spec,
-            result_prefix="review",
-            target_suffix="docs_review",
-            artifact_suffix="review",
+            **review_spec.success_result_kwargs(),
             success_summary_line="[smoke-matrix] summary: 4/4 bundles passed in 0.10s",
             success_summary_prefix="[smoke-matrix] summary: 4/4 bundles passed in ",
             rerun_hint_line="[smoke-matrix] review bundle rerun hint: rerun docs parity",
@@ -1297,6 +1294,14 @@ def test_build_smoke_matrix_docs_review_observer_spec_uses_smoke_matrix_target_m
         "artifacts_prefix": SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
         "matrix_summary_prefix": SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     }
+    assert review_spec.result_naming.result_prefix == "review"
+    assert review_spec.result_naming.target_suffix == "docs_review"
+    assert review_spec.result_naming.artifact_suffix == "review"
+    assert review_spec.success_result_kwargs() == {
+        "result_prefix": "review",
+        "target_suffix": "docs_review",
+        "artifact_suffix": "review",
+    }
 
     assert all_review_spec.requested_target_name == "all-review"
     assert all_review_spec.expected_target_name == smoke_matrix_module.DOCS_REVIEW_ALL_TARGET_NAME
@@ -1310,6 +1315,15 @@ def test_build_smoke_matrix_docs_review_observer_spec_uses_smoke_matrix_target_m
     assert all_review_spec.expected_path("artifact_root") == all_review_spec.expected_artifact_root
     assert all_review_spec.expected_path("matrix_summary_path") == all_review_spec.expected_matrix_summary_path
     assert all_review_spec.driver_filename == "run_smoke_matrix_all_review_missing_api_key.py"
+    assert all_review_spec.result_naming.result_prefix == "all_review"
+    assert all_review_spec.result_naming.target_suffix == "docs_review_all"
+    assert all_review_spec.result_naming.artifact_suffix == "all_review"
+    assert all_review_spec.failure_result_kwargs() == {
+        "detail_prefix": "stderr_",
+        "result_prefix": "",
+        "target_suffix": "docs_review_all",
+        "artifact_suffix": "all_review",
+    }
 
 
 def test_smoke_matrix_docs_review_observer_spec_resolves_expected_paths_from_checkout_root(

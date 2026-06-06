@@ -193,9 +193,7 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             *build_review_artifact_success_results(
                 review_output,
                 review_spec,
-                result_prefix="review",
-                target_suffix="docs_review",
-                artifact_suffix="review",
+                **review_spec.success_result_kwargs(),
                 success_summary_line=review_summary_line,
                 success_summary_prefix=SUCCESS_SUMMARY_PREFIX,
                 rerun_hint_line=review_rerun_hint_line,
@@ -207,9 +205,7 @@ def run_smoke_matrix_artifact_roots_smoke() -> list[tuple[str, object]]:
             *build_review_artifact_success_results(
                 all_review_output,
                 all_review_spec,
-                result_prefix="all_review",
-                target_suffix="docs_review_all",
-                artifact_suffix="all_review",
+                **all_review_spec.success_result_kwargs(),
                 success_summary_line=all_review_summary_line,
                 success_summary_prefix=SUCCESS_SUMMARY_PREFIX,
                 rerun_hint_line=all_review_rerun_hint_line,
