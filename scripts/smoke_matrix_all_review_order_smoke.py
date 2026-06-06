@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
     build_review_artifact_failure_results,
     build_smoke_matrix_docs_review_observer_spec,
     collect_smoke_matrix_docs_review_failure_output,
@@ -16,12 +17,6 @@ from strands_agent_tui.testing import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
-LIVE_HINT_PREFIX = "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`;"
-DOCS_REVIEW_ONLY_HINT_PREFIX = (
-    "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-    "`standalone_smoke.py docs-review-only`;"
-)
-FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
 
 
 def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
@@ -47,10 +42,7 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
         failure_output = collect_smoke_matrix_docs_review_failure_output(
             stderr_lines,
             review_output=review_output,
-            failed_line_exact="standalone smoke failed fast: live_runtime_requested= False",
-            live_runtime_hint_prefix=LIVE_HINT_PREFIX,
-            docs_review_only_hint_prefix=DOCS_REVIEW_ONLY_HINT_PREFIX,
-            failure_summary_prefix=FAILURE_SUMMARY_PREFIX,
+            **SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS.collect_kwargs(),
         )
 
         return [

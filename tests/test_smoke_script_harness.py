@@ -9,9 +9,20 @@ import pytest
 
 from strands_agent_tui.testing import (
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
+    SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE,
+    SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX,
+    SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
+    SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+    SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
     SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT,
     SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
@@ -21,6 +32,7 @@ from strands_agent_tui.testing import (
     SMOKE_SCRIPT_CONTRACT_CASES,
     STANDALONE_DOCS_RERUN_HINT_CONTRACT,
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+    SmokeMatrixDocsReviewFailureDefaults,
     SmokeMatrixDocsReviewObserverSpec,
     SmokeScriptContractCase,
     SmokeScriptRunResult,
@@ -53,6 +65,7 @@ from strands_agent_tui.testing import (
     run_script_module_main_via_driver_in_temp_checkout,
     smoke_cli_docs_parity_rerun_hint,
     smoke_contract_detail_expectation,
+    smoke_matrix_docs_review_failure_summary_prefix,
 )
 
 
@@ -405,6 +418,51 @@ def test_exported_smoke_script_contract_cases_cover_shared_docs_review_wrappers(
         assert "exit_code_non_zero" in case.true_check_names
         assert "metadata_line_present" in case.true_check_names
         assert "matrix_summary_artifact_exists" in case.true_check_names
+
+
+def test_exported_docs_review_failure_defaults_share_expected_prefixes() -> None:
+    assert SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS == SmokeMatrixDocsReviewFailureDefaults(
+        failed_line_exact=SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE,
+        live_runtime_hint_prefix=SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
+        docs_review_only_hint_prefix=SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
+        failure_summary_prefix=smoke_matrix_docs_review_failure_summary_prefix(passed_count=0),
+    )
+    assert SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS.collect_kwargs() == {
+        "failed_line_exact": SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE,
+        "live_runtime_hint_prefix": SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
+        "docs_review_only_hint_prefix": SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
+        "failure_summary_prefix": smoke_matrix_docs_review_failure_summary_prefix(passed_count=0),
+    }
+
+    assert SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.collect_kwargs() == {
+        "failed_line_exact": SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
+        "bundle_rerun_hint_prefix": SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+        "docs_review_only_hint_prefix": SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
+        "missing_api_key_hint_prefix": SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX,
+        "failure_summary_prefix": smoke_matrix_docs_review_failure_summary_prefix(passed_count=0),
+    }
+
+    assert SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.collect_kwargs() == {
+        "failed_line_prefix": SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
+        "bundle_rerun_hint_prefix": SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+        "docs_review_only_hint_prefix": SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
+        "failure_summary_prefix": smoke_matrix_docs_review_failure_summary_prefix(passed_count=3),
+    }
+    assert SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.stdout_running_prefix == (
+        SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX
+    )
+
+
+def test_smoke_matrix_docs_review_failure_defaults_require_exactly_one_failed_matcher() -> None:
+    with pytest.raises(ValueError, match="provide exactly one failed-line matcher"):
+        SmokeMatrixDocsReviewFailureDefaults(
+            failed_line_prefix="prefix",
+            failed_line_exact="exact",
+            failure_summary_prefix="summary: ",
+        )
+
+    with pytest.raises(ValueError, match="provide exactly one failed-line matcher"):
+        SmokeMatrixDocsReviewFailureDefaults(failure_summary_prefix="summary: ")
 
 
 def test_collect_smoke_matrix_docs_review_failure_output_validates_failed_matcher_contract(

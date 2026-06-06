@@ -21,6 +21,9 @@ from strands_agent_tui.testing import (
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_SCRIPT_CONTRACT_CASES,
     SMOKE_WRAPPER_CLI_SPECS,
@@ -585,6 +588,25 @@ def test_docs_review_matrix_smokes_reject_invalid_output_stream(script_name: str
 
     with pytest.raises(ValueError, match="output_stream must be 'stdout' or 'stderr', got 'invalid'"):
         getattr(module, runner_name)(output_stream="invalid")
+
+
+def test_docs_review_matrix_smokes_import_shared_failure_defaults() -> None:
+    order_smoke = _load_script_module("smoke_matrix_all_review_order_smoke")
+    missing_api_key_smoke = _load_script_module("smoke_matrix_all_review_missing_api_key_smoke")
+    docs_review_hint_smoke = _load_script_module("smoke_matrix_docs_review_hint_smoke")
+
+    assert (
+        order_smoke.SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS
+        is SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS
+    )
+    assert (
+        missing_api_key_smoke.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS
+        is SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS
+    )
+    assert (
+        docs_review_hint_smoke.SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS
+        is SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS
+    )
 
 
 @pytest.mark.parametrize(

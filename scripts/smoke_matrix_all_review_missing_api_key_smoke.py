@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
     build_review_artifact_failure_results,
     build_smoke_matrix_docs_review_observer_spec,
     collect_smoke_matrix_docs_review_failure_output,
@@ -16,16 +17,6 @@ from strands_agent_tui.testing import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 SMOKE_MATRIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_matrix.py"
-MISSING_API_KEY_HINT_PREFIX = (
-    "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but "
-    "`OPENAI_API_KEY` was missing;"
-)
-DOCS_REVIEW_ONLY_HINT_PREFIX = (
-    "[smoke-matrix] hint: docs-review drift is easiest to isolate with "
-    "`standalone_smoke.py docs-review-only`;"
-)
-BUNDLE_RERUN_HINT_PREFIX = "[smoke-matrix] review bundle rerun hint: "
-FAILURE_SUMMARY_PREFIX = "[smoke-matrix] summary: 0/4 bundles passed before failure in "
 
 
 def _docs_review_all_spec():
@@ -72,11 +63,7 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
         failure_output = collect_smoke_matrix_docs_review_failure_output(
             stderr_lines,
             review_output=review_output,
-            failed_line_exact="standalone smoke exited with status 1",
-            bundle_rerun_hint_prefix=BUNDLE_RERUN_HINT_PREFIX,
-            docs_review_only_hint_prefix=DOCS_REVIEW_ONLY_HINT_PREFIX,
-            missing_api_key_hint_prefix=MISSING_API_KEY_HINT_PREFIX,
-            failure_summary_prefix=FAILURE_SUMMARY_PREFIX,
+            **SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.collect_kwargs(),
         )
 
         return [
@@ -109,7 +96,10 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             (
                 "bundle_rerun_hint_line_matches_matrix_summary_hint",
                 failure_output.bundle_rerun_hint_line
-                == f"{BUNDLE_RERUN_HINT_PREFIX}{review_spec.expected_bundle_index_rerun_hint}",
+                == (
+                    f"{SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_prefix}"
+                    f"{review_spec.expected_bundle_index_rerun_hint}"
+                ),
             ),
             (
                 "matrix_summary_line_matches_metadata_path",
