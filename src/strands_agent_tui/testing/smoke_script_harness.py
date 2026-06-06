@@ -765,10 +765,47 @@ SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT = SmokeScriptContractCase(
     contract=SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
 )
 
+SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT = SmokeScriptContractMetadata(
+    required_line_prefixes=(
+        "checkout_root: ",
+        "stdout_picker_surface_line: picker_intervention_surface= True",
+        "stdout_picker_target_mix_line: picker_intervention_target_mix= True",
+        "stdout_picker_continuation_mix_line: picker_intervention_continuation_mix= True",
+        "stdout_switcher_filter_line: switcher_intervention_filter= True",
+        "stdout_switcher_target_mix_line: switcher_intervention_target_mix= True",
+        "stdout_switcher_continuation_mix_line: switcher_intervention_continuation_mix= True",
+        "stdout_summary_line: [session-triage-smoke] summary: 2/2 targets passed in ",
+        "stderr_summary: ",
+    ),
+    true_check_names=(
+        "exit_code_zero",
+        "stderr_empty",
+        "picker_surface_line_present",
+        "picker_target_mix_line_present",
+        "picker_continuation_mix_line_present",
+        "switcher_filter_line_present",
+        "switcher_target_mix_line_present",
+        "switcher_continuation_mix_line_present",
+        "summary_line_present",
+        "picker_target_mix_after_picker_surface",
+        "picker_continuation_mix_after_picker_target_mix",
+        "switcher_filter_after_picker_continuation_mix",
+        "switcher_target_mix_after_switcher_filter",
+        "switcher_continuation_mix_after_switcher_target_mix",
+        "summary_after_switcher_continuation_mix",
+    ),
+)
+SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT = SmokeScriptContractCase(
+    script_name="session_triage_intervention_mix_smoke",
+    runner_name="run_session_triage_intervention_mix_smoke",
+    contract=SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
+)
+
 SMOKE_SCRIPT_CONTRACT_CASES = (
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     *DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
 )
 
 

@@ -12,6 +12,8 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+    SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
+    SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
     SMOKE_SCRIPT_CONTRACT_CASES,
@@ -1390,8 +1392,10 @@ def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() 
         "smoke_matrix_all_review_missing_api_key_smoke",
         "smoke_matrix_docs_review_hint_smoke",
         "smoke_matrix_artifact_roots_smoke",
+        "session_triage_intervention_mix_smoke",
     ]
-    assert SMOKE_SCRIPT_CONTRACT_CASES[-1] == SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-2] == SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT
+    assert SMOKE_SCRIPT_CONTRACT_CASES[-1] == SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.script_name == "smoke_matrix_artifact_roots_smoke"
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.runner_name == "run_smoke_matrix_artifact_roots_smoke"
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT.contract == SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT
@@ -1400,6 +1404,12 @@ def test_exported_smoke_script_contract_cases_include_artifact_roots_contract() 
     assert "all_review_artifact_root: " in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
     assert "artifact_roots_distinct" in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
     assert "review_summary_preserved_after_all_review" in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.true_check_names
+    assert SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT.script_name == "session_triage_intervention_mix_smoke"
+    assert SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT.runner_name == "run_session_triage_intervention_mix_smoke"
+    assert SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT.contract == SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT
+    assert "stdout_picker_target_mix_line: picker_intervention_target_mix= True" in SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT.required_line_prefixes
+    assert "stdout_switcher_continuation_mix_line: switcher_intervention_continuation_mix= True" in SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT.required_line_prefixes
+    assert "summary_after_switcher_continuation_mix" in SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT.true_check_names
 
 
 def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact_roots_contract() -> None:
@@ -1407,10 +1417,18 @@ def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact
         _matching_contract_output_lines(SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT),
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     )
+    assert_smoke_script_output_matches_contract(
+        _matching_contract_output_lines(SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT),
+        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
+    )
 
     assert_smoke_script_results_match_contract(
         _matching_contract_results(SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT),
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    )
+    assert_smoke_script_results_match_contract(
+        _matching_contract_results(SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT),
+        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     )
 
 
@@ -1419,6 +1437,7 @@ def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact
     (
         STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     ),
     ids=lambda case: case.script_name,
 )
@@ -1450,6 +1469,7 @@ def test_assert_smoke_script_output_matches_contract_reports_offending_prefix_an
     (
         STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     ),
     ids=lambda case: case.script_name,
 )
@@ -1505,6 +1525,7 @@ def test_assert_smoke_script_results_match_contract_reports_offending_prefix_and
     (
         STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     ),
     ids=lambda case: case.script_name,
 )
@@ -1539,6 +1560,7 @@ def test_assert_smoke_script_results_match_contract_accepts_reordered_results_an
     (
         STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     ),
     ids=lambda case: case.script_name,
 )
@@ -1569,6 +1591,7 @@ def test_assert_smoke_script_results_match_contract_reports_final_duplicate_deta
     (
         STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
         SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
     ),
     ids=lambda case: case.script_name,
 )

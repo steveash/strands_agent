@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
-from strands_agent_tui.runtime import ApprovalRequest
+from strands_agent_tui.runtime import ApprovalRequest, runtime_event
 from strands_agent_tui.sessions import (
     SessionArtifactStore,
     latest_session,
@@ -73,7 +73,29 @@ def main() -> None:
     with TemporaryDirectory() as temp_dir:
         seed_plain_session(temp_dir)
 
-        seed_pending_approval_session(temp_dir)
+        seed_pending_approval_session(
+            temp_dir,
+            extra_events=[
+                runtime_event(
+                    "approval_follow_up_prepared",
+                    "write_file",
+                    "Prepared continuation prompt.",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0000",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "approval_tool_family": "edit",
+                        "relative_path": "notes.txt",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path notes.txt",
+                        "follow_up_mode": "approved_tool_result",
+                        "resumed_from_approval": True,
+                        "tool_result_preview": "Simulated overwrite of notes.txt.",
+                    },
+                )
+            ],
+        )
 
         pending_edit_store = seed_workspace_edit_session(
             temp_dir,
@@ -557,6 +579,20 @@ def main() -> None:
                 excluded_session_ids=["session-plain"],
                 required=["intervention: pending 1"],
                 require_preview=True,
+            ),
+        )
+        print(
+            "picker_intervention_target_mix=",
+            matches_intervention_filter_output(
+                intervention_picker,
+                required=["targets: path 3, command 4"],
+            ),
+        )
+        print(
+            "picker_intervention_continuation_mix=",
+            matches_intervention_filter_output(
+                intervention_picker,
+                required=["continuations: approved result 1"],
             ),
         )
         print(

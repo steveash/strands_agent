@@ -24,6 +24,7 @@ from strands_agent_tui.testing import (
     matches_denied_filter_output,
     matches_denied_page_rollup_output,
     matches_denied_preview_output,
+    matches_intervention_filter_output,
     matches_pending_age_output,
     matches_pending_filter_output,
     matches_pending_page_rollup_output,
@@ -85,6 +86,24 @@ async def run_smoke() -> None:
             approved_request_id="approval-0003",
             include_confirmation_event=False,
             extra_events=[
+                runtime_event(
+                    "approval_follow_up_prepared",
+                    "write_file",
+                    "Prepared continuation prompt.",
+                    data={
+                        "tool_name": "write_file",
+                        "approval_id": "approval-0003",
+                        "approval_status": "approved",
+                        "approval_source": "fake_runtime",
+                        "approval_tool_family": "edit",
+                        "relative_path": "notes.txt",
+                        "approval_target_kind": "path",
+                        "approval_target_preview": "path notes.txt",
+                        "follow_up_mode": "approved_tool_result",
+                        "resumed_from_approval": True,
+                        "tool_result_preview": "Simulated overwrite of notes.txt.",
+                    },
+                ),
                 runtime_event(
                     "tool_finished",
                     "list_files",
@@ -323,6 +342,43 @@ async def run_smoke() -> None:
                     or "attention: tool |" in line
                     or line.endswith("attention: tool")
                     for line in all_attention_output.splitlines()
+                ),
+            )
+            await pilot.press("g")
+            await pilot.pause()
+            intervention_output = str(first_app.query_one("#output").render())
+            print(
+                "switcher_intervention_filter=",
+                matches_intervention_filter_output(
+                    intervention_output,
+                    sort_mode="attention",
+                    required_session_ids=[
+                        "session-restored-pending",
+                        "session-restored-edit-pending",
+                        "session-aged",
+                        "session-newer",
+                        "session-pending-edit",
+                        "session-denied",
+                    ],
+                    excluded_session_ids=["session-older", "session-tool"],
+                    required=["intervention: pending 1"],
+                    require_preview=True,
+                ),
+            )
+            print(
+                "switcher_intervention_target_mix=",
+                matches_intervention_filter_output(
+                    intervention_output,
+                    sort_mode="attention",
+                    required=["targets: path 3, command 3"],
+                ),
+            )
+            print(
+                "switcher_intervention_continuation_mix=",
+                matches_intervention_filter_output(
+                    intervention_output,
+                    sort_mode="attention",
+                    required=["continuations: approved result 1"],
                 ),
             )
             await pilot.press("t")

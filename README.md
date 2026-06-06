@@ -129,29 +129,31 @@ What exists now:
 - drift-only smoke-doc rendering that can now emit review artifacts (`.md` sections, JSON manifest summaries/checksums, unified diff) for multi-wrapper README repairs,
 - repair/check smoke-doc tooling that can now persist machine-readable drift/repair reports to disk for CI or manual review,
 - a configurable `scripts/smoke_cli_docs_artifacts_smoke.py` contract runner that can now preserve synthetic drift/review bundles under explicit source/output paths for any public smoke wrapper and persist one machine-readable bundle index for CI or later review,
-- and a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials.
+- a dedicated `scripts/timeline_smoke.py` walkthrough that exercises runtime vs persistence timeline summaries without needing live credentials,
+- and a dedicated `scripts/session_triage_intervention_mix_smoke.py` contract runner that exercises the public session-triage wrapper and asserts intervention target/continuation mix lines end-to-end across both picker and switcher flows.
 
 What changed this run:
-- promoted the smoke-script contract registry into `src/strands_agent_tui/testing/smoke_script_harness.py`, including exported `SMOKE_SCRIPT_CONTRACT_CASES`, the new `SMOKE_MATRIX_ARTIFACT_ROOTS_*` contract metadata, and shared assertion helpers for output-line and runner-result validation,
-- rewired `src/strands_agent_tui/testing/__init__.py`, `tests/test_smoke_script_harness.py`, and `tests/test_smoke_scripts.py` to consume those shared helpers instead of keeping a second copy of the contract logic in the test module,
-- added focused harness coverage that proves the exported artifact-root smoke contract is wired into the public registry and that both helper paths accept the shared contract payloads,
-- validated the change with the focused smoke-harness/smoke-script pytest slice, the public `matrix-artifact-roots` standalone smoke target, and the full pytest suite,
-- and safely self-unblocked by treating the already-dirty smoke-harness worktree as the intended increment instead of trampling it with an unrelated backlog item.
+- strengthened `scripts/session_picker_smoke.py` so the intervention smoke path now seeds an approved follow-up continuation and explicitly asserts both target-kind mix and continuation-mix strings instead of only broad intervention surface presence,
+- strengthened `scripts/session_switcher_smoke.py` so the in-app `F11` smoke flow now opens the intervention triage view and explicitly checks the attention-sorted intervention target/continuation mix output before moving on to the tool filter,
+- added `scripts/session_triage_intervention_mix_smoke.py`, a focused contract runner that executes `scripts/session_triage_smoke.py both`, verifies the new picker/switcher intervention lines are present and ordered correctly, and exposes that contract through the shared smoke-harness registry,
+- extended `src/strands_agent_tui/testing/smoke_script_harness.py`, `src/strands_agent_tui/testing/__init__.py`, and `tests/test_smoke_script_harness.py` so the new intervention-mix contract is exported, reusable, and covered by the same generic smoke-script assertions as the other public smoke runners,
+- validated the change with targeted smoke-script pytest coverage, the new standalone intervention-mix smoke script, and the full pytest suite,
+- and safely self-unblocked by using `.venv/bin/python` because plain `python` was not available in the shell path.
 
 Why this matters now:
-- the docs-review smoke lane had grown a second contract definition inside `tests/test_smoke_scripts.py`, which is exactly how subtle smoke drift sneaks in while everyone swears the tests are “totally shared now”,
-- exporting one canonical smoke-contract registry makes it easier to add new public smoke wrappers without re-copying assertion logic or forgetting to expose the contract to downstream tests,
-- and this gives the repo a reusable seam for the README backlog item about tightening smoke assertions around richer triage/intervention surfaces.
+- the session-triage surface is where Steve inspects queued approvals, denied work, restored sessions, and resumed continuations, so vague smoke checks are the wrong place to be lazy,
+- asserting the exact intervention mix strings makes the Strands-oriented approval/continuation model more visible and less likely to regress quietly when session summaries evolve,
+- and packaging that expectation as a public smoke contract makes future triage work easier to extend without copying bespoke assertion glue again.
 
 How we know the prototype is working right now:
-- the focused harness/script pytest slice proves the shared registry, exported helpers, and artifact-root contract all agree on the same line/check expectations,
-- the public `standalone_smoke.py matrix-artifact-roots` target still passes end-to-end with real emitted output, so the shared contract matches the operator-facing smoke surface instead of only a unit-test fixture,
-- and the full pytest suite still passes after the smoke-contract deduplication.
+- the focused smoke pytest slice proves the shared registry and generic smoke-contract helpers accept the new intervention-mix runner alongside the older smoke contracts,
+- the new `session_triage_intervention_mix_smoke.py` script passes end-to-end against the public session-triage wrapper, so the picker/switcher checks match real emitted output instead of only unit-test fixtures,
+- and the full pytest suite still passes after tightening the intervention smoke expectations.
 
 Current evidence:
-- focused smoke harness regressions: `.venv/bin/pytest -q tests/test_smoke_script_harness.py tests/test_smoke_scripts.py` => `167 passed in 42.98s`,
-- public artifact-root smoke: `.venv/bin/python scripts/standalone_smoke.py matrix-artifact-roots` => `[standalone-smoke] summary: 1/1 targets passed in 0.94s`,
-- full automated tests: `.venv/bin/pytest -q` => `457 passed in 87.73s (0:01:27)`.
+- focused smoke harness regressions: `.venv/bin/pytest -q tests/test_smoke_script_harness.py tests/test_smoke_scripts.py` => `184 passed in 79.67s (0:01:19)`,
+- public intervention smoke: `.venv/bin/python scripts/session_triage_intervention_mix_smoke.py` => `exit_code_zero= True` with both picker/switcher intervention mix checks passing,
+- full automated tests: `.venv/bin/pytest -q` => `474 passed in 118.23s (0:01:58)`.
 
 ## First five phases
 
@@ -713,7 +715,7 @@ Why this stack:
 2. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 3. decide whether stale-focused backlog summaries should also surface the configured cutoff in page-level metric lines, not just legends/prompts/banners
 4. decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
-5. use the new shared smoke-script contract helpers to decide whether the session-triage smoke target should start asserting intervention target/continuation mix strings explicitly instead of relying on suite-level picker regressions
+5. decide whether the now-explicit picker/switcher intervention-mix expectations should be factored into a smaller shared smoke assertion/helper instead of repeating required snippets inline
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -747,5 +749,5 @@ Future daily iterations should:
 - decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether long selected-preview queue breakdowns should truncate, paginate, or collapse after a small per-lane item cap
 - decide whether stale-focused backlog summaries should also surface the configured cutoff directly in page-level metric lines
-- use the shared smoke-script contract helpers to decide whether the session-triage smoke target should assert intervention target/continuation mix strings explicitly
+- decide whether the repeated picker/switcher intervention-mix smoke requirements should collapse into a smaller shared assertion helper
 - decide whether the `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public
