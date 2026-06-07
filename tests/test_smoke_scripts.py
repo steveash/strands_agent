@@ -967,6 +967,146 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
     ]
 
 
+@pytest.mark.parametrize(
+    ("failed_target_name", "stdout_lines", "failed_line", "passed_count", "elapsed_seconds", "expected_hint"),
+    [
+        (
+            "docs-rerun-hint",
+            [
+                "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+                "fix_post_check= False",
+            ],
+            "fix_post_check= False",
+            0,
+            1.8,
+            smoke_cli_docs_parity_rerun_hint(),
+        ),
+        (
+            "malformed-result",
+            [
+                "assertion_message: result[15]: ('malformed', 'value', 'extra')",
+                "result_contract= False",
+            ],
+            "result_contract= False",
+            1,
+            2.1,
+            "hint: `standalone_smoke.py docs-contract` failed inside `malformed-result`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py malformed-result` to isolate the failing malformed smoke-script contract regression.",
+        ),
+        (
+            "malformed-detail",
+            [
+                "missing_detail: stdout_fix_check_summary",
+                "detail_contract= False",
+            ],
+            "detail_contract= False",
+            2,
+            2.4,
+            "hint: `standalone_smoke.py docs-contract` failed inside `malformed-detail`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py malformed-detail` to isolate the failing malformed smoke-script contract regression.",
+        ),
+        (
+            "matrix-artifact-roots",
+            [
+                "review_matrix_summary_line_matches_metadata= False",
+            ],
+            "review_matrix_summary_line_matches_metadata= False",
+            3,
+            2.8,
+            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+        ),
+        (
+            "matrix-all-review-order",
+            [
+                "docs_hint_before_failure_summary= False",
+            ],
+            "docs_hint_before_failure_summary= False",
+            4,
+            3.0,
+            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+        ),
+        (
+            "matrix-all-review-missing-api-key",
+            [
+                "docs_hint_before_failure_summary= False",
+            ],
+            "docs_hint_before_failure_summary= False",
+            5,
+            3.3,
+            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+        ),
+        (
+            "matrix-docs-review-hint",
+            [
+                "hint_before_failure_summary= False",
+            ],
+            "hint_before_failure_summary= False",
+            6,
+            3.6,
+            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
+            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
+            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+        ),
+    ],
+)
+def test_standalone_smoke_docs_contract_failure_emits_expected_follow_up_hint(
+    monkeypatch,
+    failed_target_name: str,
+    stdout_lines: list[str],
+    failed_line: str,
+    passed_count: int,
+    elapsed_seconds: float,
+    expected_hint: str,
+) -> None:
+    standalone_smoke = _load_script_module("standalone_smoke")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stdout = kwargs["stdout"]
+        stderr = kwargs["stderr"]
+        if target.name == failed_target_name:
+            for line in stdout_lines:
+                observer(f"{line}\n")
+                print(line, file=stdout)
+            stdout.flush()
+            print(f"{target.name} smoke failed fast: {failed_line}", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, elapsed_seconds])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    real_run_smoke_targets = standalone_smoke.run_smoke_targets
+    monkeypatch.setattr(
+        standalone_smoke,
+        "run_smoke_targets",
+        lambda targets, **kwargs: real_run_smoke_targets(targets, stdout=stdout, stderr=stderr, **kwargs),
+    )
+
+    exit_code = standalone_smoke.main(["docs-contract"])
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == stdout_lines
+    assert stderr.getvalue().splitlines() == [
+        f"{failed_target_name} smoke failed fast: {failed_line}",
+        f"[standalone-smoke] {expected_hint}",
+        STANDALONE_SMOKE_WRAPPER.failure_summary_line(
+            passed_count=passed_count,
+            total_count=7,
+            elapsed_seconds=elapsed_seconds,
+        ),
+    ]
+
+
 def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_output_dir() -> None:
     smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
 
