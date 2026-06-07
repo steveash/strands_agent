@@ -690,6 +690,15 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
     selector = standalone_spec._build_doc_selector()
 
     assert standalone_spec.readme_reference_command() == ".venv/bin/python scripts/standalone_smoke.py"
+    assert tuple(selector.resolve_target_names("docs-contract")) == (
+        "docs-rerun-hint",
+        "malformed-result",
+        "malformed-detail",
+        "matrix-artifact-roots",
+        "matrix-all-review-order",
+        "matrix-all-review-missing-api-key",
+        "matrix-docs-review-hint",
+    )
     assert standalone_spec.help_alias_lines() == tuple(
         f"{name} -> {', '.join(selector.resolve_display_names(name))}"
         for name in selector.alias_target_names
