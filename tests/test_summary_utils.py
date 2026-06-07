@@ -128,15 +128,17 @@ def test_render_filter_focus_line_supports_cutoff_and_empty_lanes() -> None:
 
 
 @pytest.mark.parametrize(
-    ("off_page_rollup", "visible_overlap_summary", "off_page_overlap_summary", "expected"),
+    ("cutoff", "off_page_rollup", "visible_overlap_summary", "off_page_overlap_summary", "expected"),
     [
         (
+            "approvals >= 7d old",
             "",
             "",
             "",
-            "This page stale lanes: pending 2 (oldest 14d)",
+            "This page stale lanes: pending 2 (oldest 14d) | cutoff: approvals >= 7d old",
         ),
         (
+            "",
             "restore queue 1 (oldest 3d), restored 2 (oldest 8h)",
             "none",
             "mixed 1 session",
@@ -146,6 +148,7 @@ def test_render_filter_focus_line_supports_cutoff_and_empty_lanes() -> None:
     ],
 )
 def test_render_page_lane_summary_line_handles_optional_rollups_and_overlap(
+    cutoff: str,
     off_page_rollup: str,
     visible_overlap_summary: str,
     off_page_overlap_summary: str,
@@ -154,6 +157,7 @@ def test_render_page_lane_summary_line_handles_optional_rollups_and_overlap(
     assert render_page_lane_summary_line(
         "stale lanes" if not off_page_rollup else "restore lanes",
         "pending 2 (oldest 14d)" if not off_page_rollup else "restore queue 8 (oldest 18d)",
+        cutoff=cutoff,
         off_page_rollup=off_page_rollup,
         visible_overlap_summary=visible_overlap_summary,
         off_page_overlap_summary=off_page_overlap_summary,
@@ -295,7 +299,7 @@ def test_render_selected_session_preview_header_lines_share_slot_and_artifact_co
             [
                 "Stale denied backlog: 4 sessions | lanes: denied 4 (oldest 12d)",
                 "Stale lane focus: denied | cutoff: approvals >= 7d old",
-                "This page stale lanes: denied 2 (oldest 12d) | more off-page: denied 2 (oldest 8d)",
+                "This page stale lanes: denied 2 (oldest 12d) | cutoff: approvals >= 7d old | more off-page: denied 2 (oldest 8d)",
             ],
         ),
     ],

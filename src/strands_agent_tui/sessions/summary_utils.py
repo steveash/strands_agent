@@ -124,11 +124,14 @@ def render_page_lane_summary_line(
     label: str,
     visible_rollup: str,
     *,
+    cutoff: str = "",
     off_page_rollup: str = "",
     visible_overlap_summary: str = "",
     off_page_overlap_summary: str = "",
 ) -> str:
     line = f"This page {label}: {visible_rollup}"
+    if cutoff:
+        line += f" | cutoff: {cutoff}"
     if off_page_rollup:
         line += f" | more off-page: {off_page_rollup}"
     if visible_overlap_summary or off_page_overlap_summary:
@@ -186,6 +189,7 @@ def render_recent_session_filter_summary_block_lines(
             render_page_lane_summary_line(
                 page_lane_label,
                 visible_rollup,
+                cutoff=cutoff,
                 off_page_rollup=off_page_rollup,
                 visible_overlap_summary=visible_overlap_summary,
                 off_page_overlap_summary=off_page_overlap_summary,

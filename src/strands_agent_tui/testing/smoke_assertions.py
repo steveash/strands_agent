@@ -609,6 +609,7 @@ def matches_stale_page_rollup_output(first_page_text: str, second_page_text: str
         first_page_text,
         required=[
             "This page stale lanes: pending 8 (oldest 52d @",
+            "| cutoff: approvals >= 7d old | more off-page: denied 1 (oldest 14d @",
             "more off-page: denied 1 (oldest 14d @",
             "restore queue 1 (oldest 11d @",
             "restored 1 (oldest 10d @",
@@ -617,6 +618,7 @@ def matches_stale_page_rollup_output(first_page_text: str, second_page_text: str
         second_page_text,
         required=[
             "This page stale lanes: denied 1 (oldest 14d @",
+            "| cutoff: approvals >= 7d old | more off-page: pending 8 (oldest 52d @",
             "restore queue 1 (oldest 11d @",
             "restored 1 (oldest 10d @",
             "more off-page: pending 8 (oldest 52d @",

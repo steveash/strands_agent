@@ -633,12 +633,12 @@ def test_broad_stale_helpers_share_filter_backlog_cutoff_and_focus_checks() -> N
 def test_stale_rollup_subfilter_and_custom_cutoff_helpers_share_smoke_copy() -> None:
     stale_first_page_text = dedent(
         """
-        This page stale lanes: pending 8 (oldest 52d @ 2026-03-26 00:00 UTC) | more off-page: denied 1 (oldest 14d @ 2026-05-03 00:00 UTC), restore queue 1 (oldest 11d @ 2026-05-06 00:00 UTC), restored 1 (oldest 10d @ 2026-05-07 00:00 UTC)
+        This page stale lanes: pending 8 (oldest 52d @ 2026-03-26 00:00 UTC) | cutoff: approvals >= 7d old | more off-page: denied 1 (oldest 14d @ 2026-05-03 00:00 UTC), restore queue 1 (oldest 11d @ 2026-05-06 00:00 UTC), restored 1 (oldest 10d @ 2026-05-07 00:00 UTC)
         """
     ).strip()
     stale_second_page_text = dedent(
         """
-        This page stale lanes: denied 1 (oldest 14d @ 2026-05-03 00:00 UTC), restore queue 1 (oldest 11d @ 2026-05-06 00:00 UTC), restored 1 (oldest 10d @ 2026-05-07 00:00 UTC) | more off-page: pending 8 (oldest 52d @ 2026-03-26 00:00 UTC)
+        This page stale lanes: denied 1 (oldest 14d @ 2026-05-03 00:00 UTC), restore queue 1 (oldest 11d @ 2026-05-06 00:00 UTC), restored 1 (oldest 10d @ 2026-05-07 00:00 UTC) | cutoff: approvals >= 7d old | more off-page: pending 8 (oldest 52d @ 2026-03-26 00:00 UTC)
         """
     ).strip()
     pending_text = dedent(

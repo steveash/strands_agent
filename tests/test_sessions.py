@@ -1656,10 +1656,12 @@ def test_stale_approval_filter_summarizes_current_page_and_off_page_lanes(tmp_pa
     assert "denied 1 (oldest 14d @" in first_page
     assert "restore queue 1 (oldest 11d @" in first_page
     assert "This page stale lanes: pending 8 (oldest 52d @" in first_page
+    assert "| cutoff: approvals >= 7d old | more off-page: denied 1 (oldest 14d @" in first_page
     assert "more off-page: denied 1 (oldest 14d @" in first_page
     assert "restore queue 1 (oldest 11d @" in first_page
     assert "Page: 2/2 | Showing: 9-10 of 10" in second_page
     assert "This page stale lanes: denied 1 (oldest 14d @" in second_page
+    assert "| cutoff: approvals >= 7d old | more off-page: pending 8 (oldest 52d @" in second_page
     assert "restore queue 1 (oldest 11d @" in second_page
     assert "more off-page: pending 8 (oldest 52d @" in second_page
     assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 7d old" in first_page
@@ -1796,6 +1798,7 @@ def test_stale_approval_filter_respects_custom_warning_threshold(tmp_path: Path)
     assert "Stale cutoff: approvals >= 1d old" in custom_rendered
     assert "Stale approval backlog: 1 session | lanes: pending 1 (oldest 2d @" in custom_rendered
     assert "Stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old" in custom_rendered
+    assert "This page stale lanes:" not in custom_rendered
     assert "- stale lane focus: pending, denied, restore queue, restored | cutoff: approvals >= 1d old" not in custom_rendered
 
 
