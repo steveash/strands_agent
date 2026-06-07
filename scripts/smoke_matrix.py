@@ -13,6 +13,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_WRAPPER,
     SmokeScriptTarget,
+    build_smoke_matrix_review_artifact_location_messages,
     run_smoke_target,
     smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
@@ -218,50 +219,12 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
     paths = _docs_review_artifact_paths(target)
     if not paths:
         return ()
-
-    output_dir = paths.get("artifact_root")
-    bundle_index_path = paths.get("bundle_index_path")
-    drifted_readme_path = paths.get("drifted_readme_path")
-    render_output_dir = paths.get("render_output_dir")
-    render_manifest_path = paths.get("render_manifest_path")
-    render_diff_path = paths.get("render_diff_path")
-    fix_check_json_path = paths.get("fix_check_json_path")
-    fix_repair_json_path = paths.get("fix_repair_json_path")
-    fix_post_check_json_path = paths.get("fix_post_check_json_path")
-    matrix_summary_path = paths.get("matrix_summary_path")
     bundle_index_rerun_hint = _docs_review_bundle_index_rerun_hint(target, paths=paths)
-
-    messages: list[str] = []
-    if output_dir and bundle_index_path:
-        messages.append(f"review artifacts: {output_dir} (index: {bundle_index_path})")
-    elif bundle_index_path:
-        messages.append(f"review artifact index: {bundle_index_path}")
-    elif output_dir:
-        messages.append(f"review artifacts: {output_dir}")
-
-    if matrix_summary_path:
-        messages.append(f"review matrix summary: {matrix_summary_path}")
-    if bundle_index_rerun_hint:
-        messages.append(
-            SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
-                bundle_index_rerun_hint
-            )
-        )
-    if drifted_readme_path:
-        messages.append(f"review drifted README: {drifted_readme_path}")
-    if render_output_dir:
-        messages.append(f"review rendered sections: {render_output_dir}")
-    if render_manifest_path:
-        messages.append(f"review render manifest: {render_manifest_path}")
-    if render_diff_path:
-        messages.append(f"review render diff: {render_diff_path}")
-    if fix_check_json_path:
-        messages.append(f"review fix-check JSON: {fix_check_json_path}")
-    if fix_repair_json_path:
-        messages.append(f"review fix-repair JSON: {fix_repair_json_path}")
-    if fix_post_check_json_path:
-        messages.append(f"review fix-post-check JSON: {fix_post_check_json_path}")
-    return tuple(messages)
+    return build_smoke_matrix_review_artifact_location_messages(
+        **paths,
+        rerun_hint=bundle_index_rerun_hint,
+        success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
+    )
 
 
 def _docs_review_rerun_hint(target: SmokeScriptTarget) -> str | None:

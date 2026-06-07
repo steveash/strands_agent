@@ -32,6 +32,8 @@ from strands_agent_tui.testing import (
     SmokeScriptContractCase,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
+    build_smoke_matrix_review_artifact_location_lines,
+    build_smoke_matrix_review_artifact_location_messages,
     build_smoke_cli_doc_drift_report_payload,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
@@ -2650,23 +2652,13 @@ def _expected_smoke_matrix_review_artifact_location_lines(
     artifact_root: str,
     rerun_hint: str | None = None,
 ) -> list[str]:
-    if rerun_hint is None:
-        rerun_hint = smoke_cli_docs_parity_rerun_hint()
-    return [
-        (
-            "[smoke-matrix] review artifacts: "
-            f"{artifact_root} (index: {artifact_root}/index.json)"
-        ),
-        f"[smoke-matrix] review matrix summary: {artifact_root}/matrix-summary.json",
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(rerun_hint),
-        f"[smoke-matrix] review drifted README: {artifact_root}/README-drifted.md",
-        f"[smoke-matrix] review rendered sections: {artifact_root}/rendered",
-        f"[smoke-matrix] review render manifest: {artifact_root}/render-manifest.json",
-        f"[smoke-matrix] review render diff: {artifact_root}/render-review.patch",
-        f"[smoke-matrix] review fix-check JSON: {artifact_root}/fix-check.json",
-        f"[smoke-matrix] review fix-repair JSON: {artifact_root}/fix-repair.json",
-        f"[smoke-matrix] review fix-post-check JSON: {artifact_root}/fix-post-check.json",
-    ]
+    return list(
+        build_smoke_matrix_review_artifact_location_lines(
+            artifact_root=artifact_root,
+            rerun_hint=rerun_hint or smoke_cli_docs_parity_rerun_hint(),
+            success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
+        )
+    )
 
 
 def test_smoke_matrix_uses_shared_wrapper_summary_prefixes() -> None:
@@ -3165,19 +3157,18 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
         "render_output_dir": "artifacts/custom/rendered-sections",
         "target_name": "docs-review",
     }
-    assert smoke_matrix._docs_review_artifact_location_messages(target) == (
-        "review artifacts: artifacts/review (index: artifacts/review/index.json)",
-        "review matrix summary: artifacts/review/matrix-summary.json",
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
-            smoke_cli_docs_parity_rerun_hint()
-        ),
-        "review drifted README: artifacts/custom/README-review.md",
-        "review rendered sections: artifacts/custom/rendered-sections",
-        "review render manifest: artifacts/custom/render.json",
-        "review render diff: artifacts/custom/review.patch",
-        "review fix-check JSON: artifacts/custom/fix-check.json",
-        "review fix-repair JSON: artifacts/custom/fix-repair.json",
-        "review fix-post-check JSON: artifacts/custom/fix-post-check.json",
+    assert smoke_matrix._docs_review_artifact_location_messages(target) == build_smoke_matrix_review_artifact_location_messages(
+        artifact_root="artifacts/review",
+        bundle_index_path="artifacts/review/index.json",
+        drifted_readme_path="artifacts/custom/README-review.md",
+        render_output_dir="artifacts/custom/rendered-sections",
+        render_manifest_path="artifacts/custom/render.json",
+        render_diff_path="artifacts/custom/review.patch",
+        fix_check_json_path="artifacts/custom/fix-check.json",
+        fix_repair_json_path="artifacts/custom/fix-repair.json",
+        fix_post_check_json_path="artifacts/custom/fix-post-check.json",
+        rerun_hint=smoke_cli_docs_parity_rerun_hint(),
+        success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     )
 
 
@@ -3207,12 +3198,12 @@ def test_smoke_matrix_docs_review_artifact_messages_prefer_bundle_index_rerun_hi
     assert smoke_matrix._docs_review_artifact_metadata(target)["bundle_index_rerun_hint"] == (
         "hint: rerun the focused docs bundle"
     )
-    assert smoke_matrix._docs_review_artifact_location_messages(target) == (
-        f"review artifacts: {artifact_root} (index: {bundle_index_path})",
-        f"review matrix summary: {artifact_root / 'matrix-summary.json'}",
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
-            "hint: rerun the focused docs bundle"
-        ),
+    assert smoke_matrix._docs_review_artifact_location_messages(target) == build_smoke_matrix_review_artifact_location_messages(
+        artifact_root=str(artifact_root),
+        bundle_index_path=str(bundle_index_path),
+        matrix_summary_path=str(artifact_root / "matrix-summary.json"),
+        rerun_hint="hint: rerun the focused docs bundle",
+        success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     )
 
 

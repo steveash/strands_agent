@@ -519,6 +519,84 @@ class SmokeMatrixDocsReviewSuccessDefaults:
         return self.format_rerun_hint_line(rerun_hint).removeprefix("[smoke-matrix] ")
 
 
+def build_smoke_matrix_review_artifact_location_messages(
+    *,
+    artifact_root: str | None = None,
+    bundle_index_path: str | None = None,
+    matrix_summary_path: str | None = None,
+    drifted_readme_path: str | None = None,
+    render_output_dir: str | None = None,
+    render_manifest_path: str | None = None,
+    render_diff_path: str | None = None,
+    fix_check_json_path: str | None = None,
+    fix_repair_json_path: str | None = None,
+    fix_post_check_json_path: str | None = None,
+    rerun_hint: str | None = None,
+    success_defaults: SmokeMatrixDocsReviewSuccessDefaults,
+) -> tuple[str, ...]:
+    if artifact_root is None and bundle_index_path is not None:
+        artifact_root = str(Path(bundle_index_path).parent)
+
+    if artifact_root is not None:
+        artifact_root_path = Path(artifact_root)
+        bundle_index_path = bundle_index_path or str(artifact_root_path / "index.json")
+        matrix_summary_path = matrix_summary_path or str(
+            artifact_root_path / "matrix-summary.json"
+        )
+        drifted_readme_path = drifted_readme_path or str(
+            artifact_root_path / "README-drifted.md"
+        )
+        render_output_dir = render_output_dir or str(artifact_root_path / "rendered")
+        render_manifest_path = render_manifest_path or str(
+            artifact_root_path / "render-manifest.json"
+        )
+        render_diff_path = render_diff_path or str(artifact_root_path / "render-review.patch")
+        fix_check_json_path = fix_check_json_path or str(artifact_root_path / "fix-check.json")
+        fix_repair_json_path = fix_repair_json_path or str(
+            artifact_root_path / "fix-repair.json"
+        )
+        fix_post_check_json_path = fix_post_check_json_path or str(
+            artifact_root_path / "fix-post-check.json"
+        )
+
+    messages: list[str] = []
+    if artifact_root and bundle_index_path:
+        messages.append(f"review artifacts: {artifact_root} (index: {bundle_index_path})")
+    elif bundle_index_path:
+        messages.append(f"review artifact index: {bundle_index_path}")
+    elif artifact_root:
+        messages.append(f"review artifacts: {artifact_root}")
+
+    if matrix_summary_path:
+        messages.append(f"review matrix summary: {matrix_summary_path}")
+    if rerun_hint:
+        messages.append(success_defaults.format_rerun_hint_message(rerun_hint))
+    if drifted_readme_path:
+        messages.append(f"review drifted README: {drifted_readme_path}")
+    if render_output_dir:
+        messages.append(f"review rendered sections: {render_output_dir}")
+    if render_manifest_path:
+        messages.append(f"review render manifest: {render_manifest_path}")
+    if render_diff_path:
+        messages.append(f"review render diff: {render_diff_path}")
+    if fix_check_json_path:
+        messages.append(f"review fix-check JSON: {fix_check_json_path}")
+    if fix_repair_json_path:
+        messages.append(f"review fix-repair JSON: {fix_repair_json_path}")
+    if fix_post_check_json_path:
+        messages.append(f"review fix-post-check JSON: {fix_post_check_json_path}")
+    return tuple(messages)
+
+
+def build_smoke_matrix_review_artifact_location_lines(
+    **kwargs: object,
+) -> tuple[str, ...]:
+    return tuple(
+        f"[smoke-matrix] {message}"
+        for message in build_smoke_matrix_review_artifact_location_messages(**kwargs)
+    )
+
+
 @dataclass(frozen=True)
 class SmokeMatrixDocsReviewFailureDefaults:
     failure_summary_prefix: str

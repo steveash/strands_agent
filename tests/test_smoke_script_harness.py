@@ -44,6 +44,8 @@ from strands_agent_tui.testing import (
     build_malformed_smoke_script_detail_results,
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
+    build_smoke_matrix_review_artifact_location_lines,
+    build_smoke_matrix_review_artifact_location_messages,
     build_review_artifact_success_results,
     build_script_driver_source,
     build_smoke_matrix_docs_review_observer_spec,
@@ -480,6 +482,61 @@ def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None
     assert (
         f"all_review_rerun_hint_line: {SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix}"
         in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
+    )
+
+
+def test_build_smoke_matrix_review_artifact_location_builders_share_default_docs_review_paths() -> None:
+    messages = build_smoke_matrix_review_artifact_location_messages(
+        artifact_root="artifacts/review",
+        rerun_hint="rerun docs parity",
+        success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
+    )
+
+    assert messages == (
+        "review artifacts: artifacts/review (index: artifacts/review/index.json)",
+        "review matrix summary: artifacts/review/matrix-summary.json",
+        "review bundle rerun hint: rerun docs parity",
+        "review drifted README: artifacts/review/README-drifted.md",
+        "review rendered sections: artifacts/review/rendered",
+        "review render manifest: artifacts/review/render-manifest.json",
+        "review render diff: artifacts/review/render-review.patch",
+        "review fix-check JSON: artifacts/review/fix-check.json",
+        "review fix-repair JSON: artifacts/review/fix-repair.json",
+        "review fix-post-check JSON: artifacts/review/fix-post-check.json",
+    )
+    assert build_smoke_matrix_review_artifact_location_lines(
+        artifact_root="artifacts/review",
+        rerun_hint="rerun docs parity",
+        success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
+    ) == tuple(f"[smoke-matrix] {message}" for message in messages)
+
+
+def test_build_smoke_matrix_review_artifact_location_builders_honor_explicit_override_paths() -> None:
+    messages = build_smoke_matrix_review_artifact_location_messages(
+        artifact_root="artifacts/review",
+        bundle_index_path="artifacts/review/index.json",
+        drifted_readme_path="artifacts/custom/README-review.md",
+        render_output_dir="artifacts/custom/rendered-sections",
+        render_manifest_path="artifacts/custom/render.json",
+        render_diff_path="artifacts/custom/review.patch",
+        fix_check_json_path="artifacts/custom/fix-check.json",
+        fix_repair_json_path="artifacts/custom/fix-repair.json",
+        fix_post_check_json_path="artifacts/custom/fix-post-check.json",
+        rerun_hint="hint: rerun the focused docs bundle",
+        success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
+    )
+
+    assert messages == (
+        "review artifacts: artifacts/review (index: artifacts/review/index.json)",
+        "review matrix summary: artifacts/review/matrix-summary.json",
+        "review bundle rerun hint: hint: rerun the focused docs bundle",
+        "review drifted README: artifacts/custom/README-review.md",
+        "review rendered sections: artifacts/custom/rendered-sections",
+        "review render manifest: artifacts/custom/render.json",
+        "review render diff: artifacts/custom/review.patch",
+        "review fix-check JSON: artifacts/custom/fix-check.json",
+        "review fix-repair JSON: artifacts/custom/fix-repair.json",
+        "review fix-post-check JSON: artifacts/custom/fix-post-check.json",
     )
 
 
