@@ -24,6 +24,7 @@ DOCS_REVIEW_TARGET_NAMES = {
     "matrix-all-review-missing-api-key",
     "matrix-docs-review-hint",
 }
+DOCS_REVIEW_RERUN_HINT_TARGET_NAMES = {"docs-contract", "docs-focused", "docs-review-only"}
 CONTRACT_NEGATIVE_TARGET_NAMES = {"malformed-result", "malformed-detail"}
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
@@ -99,7 +100,10 @@ def _build_failure_hint(requested_target_name: str):
                 return hint
         if target.name in DOCS_PARITY_TARGET_NAMES:
             return smoke_cli_docs_parity_rerun_hint()
-        if requested_target_name == "docs-contract" and target.name in DOCS_REVIEW_TARGET_NAMES:
+        if (
+            requested_target_name in DOCS_REVIEW_RERUN_HINT_TARGET_NAMES
+            and target.name in DOCS_REVIEW_TARGET_NAMES
+        ):
             return DOCS_REVIEW_ONLY_RERUN_HINT
         return None
 
