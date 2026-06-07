@@ -887,6 +887,98 @@ def test_standalone_smoke_docs_artifacts_failure_emits_docs_parity_rerun_hint(mo
 
 
 @pytest.mark.parametrize(
+    (
+        "failed_target_name",
+        "stdout_lines",
+        "failed_line",
+        "passed_count",
+        "elapsed_seconds",
+    ),
+    [
+        (
+            "docs",
+            [
+                "standalone_smoke_help_missing= none",
+                "standalone_smoke_doc_parity= False",
+            ],
+            "standalone_smoke_doc_parity= False",
+            0,
+            1.6,
+        ),
+        (
+            "docs-artifacts",
+            [
+                "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+                "fix_post_check= False",
+            ],
+            "fix_post_check= False",
+            1,
+            1.9,
+        ),
+        (
+            "docs-rerun-hint",
+            [
+                "checkout_root: /tmp/docs-rerun-hint",
+                "hint_before_failure_summary= False",
+            ],
+            "hint_before_failure_summary= False",
+            2,
+            2.2,
+        ),
+    ],
+)
+def test_standalone_smoke_docs_focused_docs_parity_failure_emits_docs_parity_only_hint(
+    monkeypatch,
+    failed_target_name: str,
+    stdout_lines: list[str],
+    failed_line: str,
+    passed_count: int,
+    elapsed_seconds: float,
+) -> None:
+    standalone_smoke = _load_script_module("standalone_smoke")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stdout = kwargs["stdout"]
+        stderr = kwargs["stderr"]
+        if target.name == failed_target_name:
+            for line in stdout_lines:
+                observer(f"{line}\n")
+                print(line, file=stdout)
+            stdout.flush()
+            print(f"{target.name} smoke failed fast: {failed_line}", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, elapsed_seconds])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    real_run_smoke_targets = standalone_smoke.run_smoke_targets
+    monkeypatch.setattr(
+        standalone_smoke,
+        "run_smoke_targets",
+        lambda targets, **kwargs: real_run_smoke_targets(targets, stdout=stdout, stderr=stderr, **kwargs),
+    )
+
+    exit_code = standalone_smoke.main(["docs-focused"])
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == stdout_lines
+    assert stderr.getvalue().splitlines() == [
+        f"{failed_target_name} smoke failed fast: {failed_line}",
+        f"[standalone-smoke] {smoke_cli_docs_parity_rerun_hint()}",
+        STANDALONE_SMOKE_WRAPPER.failure_summary_line(
+            passed_count=passed_count,
+            total_count=7,
+            elapsed_seconds=elapsed_seconds,
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
     ("failed_target_name", "stdout_lines", "failed_line", "passed_count", "elapsed_seconds"),
     [
         (
