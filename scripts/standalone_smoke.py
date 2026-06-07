@@ -18,8 +18,19 @@ DEFAULT_TARGET_NAMES = list(CLI_SPEC.default_target_names())
 ALL_TARGET_NAMES = list(CLI_SPEC.resolve_target_names("all"))
 LIVE_TARGET_NAME = "live"
 DOCS_PARITY_TARGET_NAMES = {"docs", "docs-artifacts"}
+CONTRACT_NEGATIVE_TARGET_NAMES = {"malformed-result", "malformed-detail"}
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
+
+
+def _contract_negative_failure_hint(target: SmokeScriptTarget) -> str | None:
+    if target.name not in CONTRACT_NEGATIVE_TARGET_NAMES:
+        return None
+    return (
+        "hint: `standalone_smoke.py contract-negative` failed inside "
+        f"`{target.name}`; rerun `.venv/bin/python scripts/standalone_smoke.py {target.name}` "
+        "to isolate the failing malformed smoke-script contract regression."
+    )
 
 
 def _build_live_failure_hint(requested_target_name: str):
@@ -62,6 +73,10 @@ def _build_failure_hint(requested_target_name: str):
     def _failure_hint(target: SmokeScriptTarget, observed_lines: Sequence[str]) -> str | None:
         if live_failure_hint is not None:
             hint = live_failure_hint(target, observed_lines)
+            if hint is not None:
+                return hint
+        if requested_target_name == "contract-negative":
+            hint = _contract_negative_failure_hint(target)
             if hint is not None:
                 return hint
         if target.name in DOCS_PARITY_TARGET_NAMES:
