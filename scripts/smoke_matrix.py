@@ -10,6 +10,7 @@ from typing import TextIO
 
 from strands_agent_tui.testing import (
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
+    SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_WRAPPER,
     SmokeScriptTarget,
     run_smoke_target,
@@ -56,7 +57,6 @@ DOCS_REVIEW_ARTIFACT_METADATA_KEYS = (
     "matrix_summary_path",
 )
 DOCS_REVIEW_BUNDLE_INDEX_RERUN_HINT_KEY = "bundle_index_rerun_hint"
-DOCS_REVIEW_BUNDLE_RERUN_HINT_LABEL = "review bundle rerun hint"
 
 
 def _emit_matrix_line(message: str, *, stream) -> None:
@@ -242,7 +242,11 @@ def _docs_review_artifact_location_messages(target: SmokeScriptTarget) -> tuple[
     if matrix_summary_path:
         messages.append(f"review matrix summary: {matrix_summary_path}")
     if bundle_index_rerun_hint:
-        messages.append(f"{DOCS_REVIEW_BUNDLE_RERUN_HINT_LABEL}: {bundle_index_rerun_hint}")
+        messages.append(
+            SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
+                bundle_index_rerun_hint
+            )
+        )
     if drifted_readme_path:
         messages.append(f"review drifted README: {drifted_readme_path}")
     if render_output_dir:

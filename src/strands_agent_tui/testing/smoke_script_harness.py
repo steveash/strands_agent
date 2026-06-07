@@ -503,6 +503,21 @@ class SmokeMatrixDocsReviewSuccessDefaults:
     success_summary_prefix: str
     rerun_hint_prefix: str
 
+    def format_success_summary_line(self, elapsed_seconds: float | str) -> str:
+        elapsed_suffix = (
+            elapsed_seconds if isinstance(elapsed_seconds, str) else f"{elapsed_seconds:.2f}s"
+        )
+        return f"{self.success_summary_prefix}{elapsed_suffix}"
+
+    def matches_success_summary_line(self, line: str) -> bool:
+        return line.startswith(self.success_summary_prefix)
+
+    def format_rerun_hint_line(self, rerun_hint: str) -> str:
+        return f"{self.rerun_hint_prefix}{rerun_hint}"
+
+    def format_rerun_hint_message(self, rerun_hint: str) -> str:
+        return self.format_rerun_hint_line(rerun_hint).removeprefix("[smoke-matrix] ")
+
 
 @dataclass(frozen=True)
 class SmokeMatrixDocsReviewFailureDefaults:
@@ -1370,9 +1385,8 @@ def build_review_artifact_success_results(
     target_suffix: str,
     artifact_suffix: str,
     success_summary_line: str,
-    success_summary_prefix: str,
     rerun_hint_line: str,
-    rerun_hint_prefix: str,
+    success_defaults: SmokeMatrixDocsReviewSuccessDefaults,
     exit_code: int,
     stderr_text: str,
     artifacts_exist: bool,
@@ -1424,7 +1438,8 @@ def build_review_artifact_success_results(
         ),
         (
             f"{prefix}rerun_hint_line_matches_expected_hint",
-            rerun_hint_line == f"{rerun_hint_prefix}{review_spec.expected_bundle_index_rerun_hint}",
+            rerun_hint_line
+            == success_defaults.format_rerun_hint_line(review_spec.expected_bundle_index_rerun_hint),
         ),
         (f"{prefix}paths_loaded_from_matrix_summary", bool(review_output.matrix_summary_paths)),
         (f"{prefix}artifacts_exist", artifacts_exist),
@@ -1463,8 +1478,14 @@ def build_review_artifact_success_results(
             f"{prefix}summary_path_keeps_{artifact_suffix}_root",
             artifact_root == expected_paths.get("artifact_root"),
         ),
-        (f"{prefix}summary_line_present", success_summary_line.startswith(success_summary_prefix)),
-        (f"{prefix}rerun_hint_line_present", rerun_hint_line.startswith(rerun_hint_prefix)),
+        (
+            f"{prefix}summary_line_present",
+            success_defaults.matches_success_summary_line(success_summary_line),
+        ),
+        (
+            f"{prefix}rerun_hint_line_present",
+            rerun_hint_line.startswith(success_defaults.rerun_hint_prefix),
+        ),
     ]
 
 

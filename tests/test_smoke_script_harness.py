@@ -265,7 +265,7 @@ def test_collect_smoke_matrix_docs_review_failure_output_tracks_shared_failure_o
         f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
         "[smoke-matrix] review artifacts: artifacts/review",
         "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
-        "[smoke-matrix] review bundle rerun hint: rerun docs parity",
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line("rerun docs parity"),
         "[smoke-matrix] hint: live runtime guidance",
         "[smoke-matrix] hint: docs-review-only guidance",
         "[smoke-matrix] summary: 0/4 bundles passed before failure in 0.10s",
@@ -283,7 +283,7 @@ def test_collect_smoke_matrix_docs_review_failure_output_tracks_shared_failure_o
         lines,
         review_output=review_output,
         failed_line_exact="standalone smoke exited with status 1",
-        bundle_rerun_hint_prefix="[smoke-matrix] review bundle rerun hint: ",
+        bundle_rerun_hint_prefix=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix,
         live_runtime_hint_prefix="[smoke-matrix] hint: live runtime guidance",
         docs_review_only_hint_prefix="[smoke-matrix] hint: docs-review-only guidance",
         failure_summary_prefix="[smoke-matrix] summary: 0/4 bundles passed before failure in ",
@@ -461,6 +461,18 @@ def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None
         success_summary_prefix=smoke_matrix_docs_review_success_summary_prefix(),
         rerun_hint_prefix=SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
     )
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_success_summary_line(0.1) == (
+        "[smoke-matrix] summary: 4/4 bundles passed in 0.10s"
+    )
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.matches_success_summary_line(
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_success_summary_line(0.1)
+    )
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line("rerun docs parity") == (
+        "[smoke-matrix] review bundle rerun hint: rerun docs parity"
+    )
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
+        "rerun docs parity"
+    ) == "review bundle rerun hint: rerun docs parity"
     assert (
         f"review_summary_line: {SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix}"
         in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
@@ -623,11 +635,11 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
         driver_filename="unused.py",
     )
 
-    success_summary_line = (
-        f"{SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix}0.10s"
+    success_summary_line = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_success_summary_line(
+        0.1
     )
-    rerun_hint_line = (
-        f"{SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix}rerun docs parity"
+    rerun_hint_line = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
+        "rerun docs parity"
     )
     result_map = dict(
         build_review_artifact_success_results(
@@ -635,9 +647,8 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
             review_spec,
             **review_spec.success_result_kwargs(),
             success_summary_line=success_summary_line,
-            success_summary_prefix=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix,
             rerun_hint_line=rerun_hint_line,
-            rerun_hint_prefix=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix,
+            success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
             exit_code=0,
             stderr_text="",
             artifacts_exist=True,

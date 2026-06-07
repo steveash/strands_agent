@@ -23,6 +23,7 @@ from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_SPECS,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_SCRIPT_CONTRACT_CASES,
@@ -2644,17 +2645,20 @@ def _expected_smoke_matrix_review_metadata_line(*, artifact_root: str, target_na
     return "[smoke-matrix] review metadata: " + json.dumps(payload, sort_keys=True)
 
 
-def _expected_smoke_matrix_review_artifact_location_lines(*, artifact_root: str) -> list[str]:
+def _expected_smoke_matrix_review_artifact_location_lines(
+    *,
+    artifact_root: str,
+    rerun_hint: str | None = None,
+) -> list[str]:
+    if rerun_hint is None:
+        rerun_hint = smoke_cli_docs_parity_rerun_hint()
     return [
         (
             "[smoke-matrix] review artifacts: "
             f"{artifact_root} (index: {artifact_root}/index.json)"
         ),
         f"[smoke-matrix] review matrix summary: {artifact_root}/matrix-summary.json",
-        (
-            "[smoke-matrix] review bundle rerun hint: "
-            f"{smoke_cli_docs_parity_rerun_hint()}"
-        ),
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(rerun_hint),
         f"[smoke-matrix] review drifted README: {artifact_root}/README-drifted.md",
         f"[smoke-matrix] review rendered sections: {artifact_root}/rendered",
         f"[smoke-matrix] review render manifest: {artifact_root}/render-manifest.json",
@@ -2930,9 +2934,8 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
             "[smoke-matrix] review matrix summary: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
         ),
-        (
-            "[smoke-matrix] review bundle rerun hint: "
-            f"{smoke_cli_docs_parity_rerun_hint()}"
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
+            smoke_cli_docs_parity_rerun_hint()
         ),
         (
             "[smoke-matrix] review drifted README: "
@@ -3001,9 +3004,8 @@ def test_smoke_matrix_all_review_emits_distinct_artifact_location_after_docs_rev
             "[smoke-matrix] review matrix summary: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
         ),
-        (
-            "[smoke-matrix] review bundle rerun hint: "
-            f"{smoke_cli_docs_parity_rerun_hint()}"
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
+            smoke_cli_docs_parity_rerun_hint()
         ),
         (
             "[smoke-matrix] review drifted README: "
@@ -3166,7 +3168,9 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
     assert smoke_matrix._docs_review_artifact_location_messages(target) == (
         "review artifacts: artifacts/review (index: artifacts/review/index.json)",
         "review matrix summary: artifacts/review/matrix-summary.json",
-        f"review bundle rerun hint: {smoke_cli_docs_parity_rerun_hint()}",
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
+            smoke_cli_docs_parity_rerun_hint()
+        ),
         "review drifted README: artifacts/custom/README-review.md",
         "review rendered sections: artifacts/custom/rendered-sections",
         "review render manifest: artifacts/custom/render.json",
@@ -3206,7 +3210,9 @@ def test_smoke_matrix_docs_review_artifact_messages_prefer_bundle_index_rerun_hi
     assert smoke_matrix._docs_review_artifact_location_messages(target) == (
         f"review artifacts: {artifact_root} (index: {bundle_index_path})",
         f"review matrix summary: {artifact_root / 'matrix-summary.json'}",
-        "review bundle rerun hint: hint: rerun the focused docs bundle",
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
+            "hint: rerun the focused docs bundle"
+        ),
     )
 
 
@@ -3256,7 +3262,9 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_success(monkeyp
     }
     assert f"[smoke-matrix] review matrix summary: {summary_path}" in stdout.getvalue().splitlines()
     assert (
-        f"[smoke-matrix] review bundle rerun hint: {smoke_cli_docs_parity_rerun_hint()}"
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
+            smoke_cli_docs_parity_rerun_hint()
+        )
         in stdout.getvalue().splitlines()
     )
 
@@ -3295,7 +3303,9 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_failure(monkeyp
     assert summary_payload["bundle_index_rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
     assert f"[smoke-matrix] review matrix summary: {summary_path}" in stderr.getvalue().splitlines()
     assert (
-        f"[smoke-matrix] review bundle rerun hint: {smoke_cli_docs_parity_rerun_hint()}"
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
+            smoke_cli_docs_parity_rerun_hint()
+        )
         in stderr.getvalue().splitlines()
     )
 
@@ -3461,9 +3471,8 @@ def test_smoke_matrix_docs_review_failure_emits_artifact_location_before_summary
             "[smoke-matrix] review matrix summary: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
         ),
-        (
-            "[smoke-matrix] review bundle rerun hint: "
-            f"{smoke_cli_docs_parity_rerun_hint()}"
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
+            smoke_cli_docs_parity_rerun_hint()
         ),
         (
             "[smoke-matrix] review drifted README: "
@@ -3544,9 +3553,8 @@ def test_smoke_matrix_all_review_docs_review_failure_emits_docs_focused_hint(mon
             "[smoke-matrix] review matrix summary: "
             "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
         ),
-        (
-            "[smoke-matrix] review bundle rerun hint: "
-            f"{smoke_cli_docs_parity_rerun_hint()}"
+        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
+            smoke_cli_docs_parity_rerun_hint()
         ),
         (
             "[smoke-matrix] review drifted README: "
