@@ -1635,11 +1635,16 @@ async def test_session_switcher_supports_filter_and_sort_shortcuts(tmp_path: Pat
         await pilot.pause()
         tool_output = str(app.query_one("#output").render())
         assert "Filter: tool | Sort: attention" in tool_output
-        assert "Tool backlog: 3 sessions | lanes: workspace 1, shell 2" in tool_output
+        assert "Tool backlog: 7 sessions | lanes: workspace 3, shell 4 (oldest 45d @" in tool_output
         assert "Tool focus: workspace, shell, other" in tool_output
         assert "Tool failure mix: failures: none" in tool_output
+        assert "session-restored-pending | 1 turn(s)" in tool_output
+        assert "session-restored-edit-pending | 1 turn(s)" in tool_output
         assert "session-tool | 1 turn(s)" in tool_output
         assert "session-shell | 1 turn(s)" in tool_output
+        assert "session-pending | 1 turn(s)" in tool_output
+        assert "session-pending-edit | 1 turn(s)" in tool_output
+        assert "session-aged | 1 turn(s)" in tool_output
         assert "session-restore | 1 turn(s)" not in tool_output
 
         await pilot.press("w")

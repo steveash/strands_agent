@@ -1193,6 +1193,10 @@ def test_intervention_filter_surfaces_policy_and_approval_activity(tmp_path: Pat
 
 
 def test_render_session_picker_surfaces_tool_backlog_rollups(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    pending_workspace_at = now - timedelta(hours=3)
+    pending_shell_at = now - timedelta(days=2)
+
     workspace_store = SessionArtifactStore(tmp_path, session_id="session-workspace-tool")
     workspace_store.append_turn(
         TurnArtifact(
@@ -1287,11 +1291,25 @@ def test_render_session_picker_surfaces_tool_backlog_rollups(tmp_path: Path) -> 
         )
     )
 
+    seed_workspace_edit_session(
+        tmp_path,
+        session_id="session-pending-workspace-tool",
+        created_at=pending_workspace_at.isoformat(),
+    )
+    seed_shell_test_session(
+        tmp_path,
+        session_id="session-pending-shell-tool",
+        created_at=pending_shell_at.isoformat(),
+    )
+
     rendered = render_session_picker(tmp_path, filter_mode="tool")
 
     assert "Filter: tool | Sort: recent" in rendered
     assert (
-        "Tool backlog: 4 sessions | lanes: workspace 2, shell 2, other 1 | overlap: mixed 1 session"
+        "Tool backlog: 6 sessions | lanes: "
+        f"workspace 3 (oldest 3h @ {_format_test_timestamp(pending_workspace_at)}), "
+        f"shell 3 (oldest 2d @ {_format_test_timestamp(pending_shell_at)}), "
+        "other 1 | overlap: mixed 1 session"
         in rendered
     )
     assert "Tool focus: workspace, shell, other" in rendered
@@ -1300,6 +1318,8 @@ def test_render_session_picker_surfaces_tool_backlog_rollups(tmp_path: Path) -> 
     assert "session-shell-tool" in rendered
     assert "session-mixed-tool" in rendered
     assert "session-other-tool" in rendered
+    assert "session-pending-workspace-tool" in rendered
+    assert "session-pending-shell-tool" in rendered
 
 
 def test_render_session_picker_surfaces_tool_failure_mix_metrics(tmp_path: Path) -> None:
@@ -2984,7 +3004,12 @@ def test_list_recent_sessions_can_filter_to_pending_denied_restore_approval_rest
     assert approval_stale_pending_sessions == []
     assert approval_stale_denied_sessions == []
     assert approval_stale_restored_sessions == []
-    assert [session.session_id for session in tool_sessions] == ["session-shell", "session-tool"]
+    assert [session.session_id for session in tool_sessions] == [
+        "session-shell",
+        "session-tool",
+        "session-pending-edit",
+        "session-pending",
+    ]
     assert [session.session_id for session in workspace_inspect_sessions] == ["session-tool"]
     assert [session.session_id for session in workspace_edit_sessions] == ["session-pending-edit", "session-denied"]
     assert "workspace lanes: inspect" in workspace_inspect_sessions[0].render_line(1)

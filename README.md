@@ -113,7 +113,7 @@ What exists now:
 - keyboard-driven session-switcher navigation with ↑/↓ (or J/K), Enter-to-switch, and a highlighted selection row rather than number-only switching,
 - in-app session-switcher triage controls for all/pending/denied/restore/restored-approval/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting so denser recent-session summaries stay skimmable as the list grows,
 - restart-safe session-switcher restoration so reopening a session can bring back the chooser with the prior target selection preserved where possible,
-- richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers, compact restore-state badges, explicit pending-approval age cues, stale-session badges, intervention rollups/previews, workspace-lane badges/previews for inspect vs edit activity, workspace/shell/tool/intervention backlog rollup headers with focus + overlap/page summaries, compact tool-failure and intervention-family/request mix details, pending/denied approval backlog headers with queue volume + family mix + restored-queue/age cues, last-event previews, bounded recent-tool streak summaries, explicit recent shell/test outcome rollups, and overlap badges when one session spans multiple triage lanes,
+- richer recent-session summaries in both the CLI picker and in-app switcher, including pending-approval markers, compact restore-state badges, explicit pending-approval age cues, stale-session badges, intervention rollups/previews, workspace-lane badges/previews for inspect vs edit activity, workspace/shell/tool/intervention backlog rollup headers with focus + overlap/page summaries, compact tool-failure and intervention-family/request mix details, pending/denied approval backlog headers with queue volume + family mix + restored-queue/age cues, broad tool triage that now keeps fresh/restored pending edit/test queues visible even before an execution event exists, last-event previews, bounded recent-tool streak summaries, explicit recent shell/test outcome rollups, and overlap badges when one session spans multiple triage lanes,
 - focused workspace/shell triage views that now collapse preview snippets to the active lane instead of echoing unrelated mixed-lane history from the same saved session,
 - focused `workspace-edit` and `shell-test` triage rows/previews that now explicitly say when a session only matches because a pending approval exists and no executed lane event has happened yet,
 - focused `workspace-edit` and `shell-test` backlog summaries that now add queue-mix metrics for `pending-only` vs `restored pending-only` matches plus oldest pending age/timestamp cues that can fall back to session activity when approval timestamps are missing, and those summary lines now explicitly label when the displayed oldest-age cue came from that fallback path, so approval-backed lane matches are visible and auditable at the page level too,
@@ -133,28 +133,26 @@ What exists now:
 - and a dedicated `scripts/session_triage_intervention_mix_smoke.py` contract runner that exercises the public session-triage wrapper and asserts intervention target/continuation mix lines end-to-end across both picker and switcher flows.
 
 What changed this run:
-- updated `src/strands_agent_tui/sessions/summary_utils.py` so stale-approval page rollup lines now echo the active cutoff alongside the visible/off-page lane breakdown instead of leaving that threshold only in banners and prompts,
-- extended `tests/test_summary_utils.py`, `tests/test_sessions.py`, and `tests/test_smoke_assertions.py` so the stale picker copy contract now checks the new cutoff wording in low-level helpers, rendered picker output, and shared smoke snippets,
-- updated `src/strands_agent_tui/testing/smoke_assertions.py` plus `scripts/summary_utils_smoke.py` so the public smoke helpers and standalone summary-utils smoke cover the new page-level stale-cutoff copy,
-- validated the change with focused session/summary pytest coverage, the public session-triage smoke bundle, the standalone summary-utils smoke, and the full pytest suite,
+- updated `src/strands_agent_tui/sessions/picker.py` so the broad `tool` triage filter now keeps active fresh/restored pending edit/test queues visible even when no executed tool event exists yet,
+- extended tool-lane age rollups so `Tool backlog:` now inherits pending queue timestamps for workspace-edit and shell-test work, letting the broad tool view surface stale queue age without forcing Steve into a narrower filter first,
+- added regression coverage in `tests/test_sessions.py` and `tests/test_app.py`, plus end-to-end smoke assertions in `scripts/session_picker_smoke.py` and `scripts/session_switcher_smoke.py`, to lock the new tool-filter queue behavior across picker and switcher surfaces,
+- validated the change with focused session/app pytest coverage, the public session-triage smoke bundle, and the full pytest suite,
 - and no destructive unblock step was needed this run.
 
 Why this matters now:
-- stale approval triage is only useful if the operator can see the threshold that made a session "stale" right where page-level backlog decisions happen,
-- echoing the cutoff inside the page rollup line removes one more hidden piece of triage state from Steve's mental join work,
-- and tightening that copy in shared helper + smoke coverage keeps the stale-session model legible as the picker/switcher surfaces keep evolving.
+- queued approvals are still tool work, so hiding them from the broad tool lane made the operator lose context unless they already guessed the narrower workspace-edit or shell-test filter,
+- bringing those pending queues into the tool backlog makes the Strands approval loop feel like part of one observable coding-agent surface instead of a side channel,
+- and carrying queue ages into the tool rollup makes stale blocked work visible earlier in the triage flow.
 
 How we know the prototype is working right now:
-- the focused summary/session/assertion pytest slice proves the stale cutoff wording changed coherently at the helper, renderer, and smoke-snippet layers,
-- the public `session_triage_smoke.py both` bundle still passes end-to-end, so both reopen surfaces render the new stale page-rollup wording consistently,
-- the standalone `summary_utils_smoke.py` contract passes with the new page-line copy,
-- and the full pytest suite still passes after the stale-triage copy change.
+- the focused session/app pytest slice proves both low-level filtering and the in-app `F11` switcher now include pending-only tool queues with the expected lane rollups,
+- the public `session_triage_smoke.py both` bundle still passes end-to-end, so both reopen surfaces render the broader tool triage behavior coherently,
+- and the full pytest suite still passes after the tool-filter expansion.
 
 Current evidence:
-- focused stale-summary/session/assertion coverage: `.venv/bin/pytest -q tests/test_summary_utils.py tests/test_sessions.py tests/test_smoke_assertions.py tests/test_app.py` => `176 passed in 38.35s`,
-- public triage smoke: `.venv/bin/python scripts/session_triage_smoke.py both` => `[session-triage-smoke] summary: 2/2 targets passed in 21.98s`,
-- standalone summary-utils smoke: `.venv/bin/python scripts/summary_utils_smoke.py` => all `summary_*` checks passed,
-- full automated tests: `.venv/bin/pytest -q` => `488 passed in 124.59s (0:02:04)`.
+- focused tool-triage coverage: `.venv/bin/pytest -q tests/test_sessions.py tests/test_app.py` => `114 passed in 38.06s`,
+- public triage smoke: `.venv/bin/python scripts/session_triage_smoke.py both` => `[session-triage-smoke] summary: 2/2 targets passed in 19.52s`,
+- full automated tests: `.venv/bin/pytest -q` => `510 passed in 128.30s (0:02:08)`.
 
 ## First five phases
 

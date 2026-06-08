@@ -876,7 +876,10 @@ def _ordered_recent_sessions(
         recent_failure_count = _recent_tool_failure_count(turns)
         recent_shell_failure_count = _recent_shell_failure_count(turns)
         recent_test_failure_count, recent_tool_failure_count = _recent_failure_activity_counts(turns)
-        tool_lane_age_sort_keys, tool_lane_timestamps = _tool_lane_activity_maps(turns)
+        tool_lane_age_sort_keys, tool_lane_timestamps = _tool_lane_activity_maps(
+            turns,
+            pending_approvals,
+        )
         workspace_lane_age_sort_keys, workspace_lane_timestamps = _workspace_lane_activity_maps(
             turns,
             pending_approvals,
@@ -1552,10 +1555,27 @@ def _lane_activity_maps(candidates: Sequence[tuple[str, str | None]]) -> tuple[d
     return lane_ages, lane_timestamps
 
 
-def _tool_lane_activity_maps(turns: list[TurnArtifact]) -> tuple[dict[str, int], dict[str, str]]:
-    return _lane_activity_maps(
-        [(_tool_lane_for_event(event), str(event.timestamp or "").strip()) for event in _iter_recent_tool_events(turns)]
+def _tool_lane_activity_maps(
+    turns: list[TurnArtifact],
+    pending_approvals: list[ApprovalRequest],
+) -> tuple[dict[str, int], dict[str, str]]:
+    candidates = [(_tool_lane_for_event(event), str(event.timestamp or "").strip()) for event in _iter_recent_tool_events(turns)]
+    candidates.extend(
+        ("workspace", approval.created_at)
+        for approval in pending_approvals
+        if str(approval.tool_name or "").strip() in WORKSPACE_EDIT_TOOL_NAMES
     )
+    candidates.extend(
+        ("shell", approval.created_at)
+        for approval in pending_approvals
+        if str(approval.tool_name or "").strip() == "run_shell_command"
+        and _is_test_shell_command_data(
+            shell_policy="",
+            shell_command_family="",
+            command=_approval_command_from_args(approval.args),
+        )
+    )
+    return _lane_activity_maps(candidates)
 
 
 def _workspace_tool_lane(tool_name: str) -> str:
@@ -4443,6 +4463,16 @@ def _picker_page_window_label(total_matches: int, limit: int, page_index: int, v
     return render_page_window_label(total_matches, limit, page_index, visible_count)
 
 
+def _has_tool_filter_match(summary: SessionSummary) -> bool:
+    return bool(
+        summary.last_tool_preview
+        or summary.last_tool_badges
+        or summary.has_pending_workspace_edit_approval
+        or summary.has_pending_shell_test_approval
+    )
+
+
+
 def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
     if filter_mode == "pending":
         return summary.pending_approval_count > 0
@@ -4456,7 +4486,7 @@ def _matches_filter(summary: SessionSummary, filter_mode: str) -> bool:
     if stale_filter_lanes is not None:
         return bool(_stale_approval_lanes(summary) & stale_filter_lanes)
     if filter_mode == "tool":
-        return bool(summary.last_tool_preview or summary.last_tool_badges)
+        return _has_tool_filter_match(summary)
     if filter_mode == "workspace-inspect":
         return summary.has_workspace_inspect_activity
     if filter_mode == "workspace-edit":

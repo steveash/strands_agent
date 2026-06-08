@@ -572,6 +572,19 @@ def main() -> None:
             ),
         )
         print(
+            "picker_tool_filter_pending_queues=",
+            matches_tool_filter_output(
+                tool_picker,
+                required_session_ids=[
+                    "session-pending",
+                    "session-pending-edit",
+                    "session-restored-pending",
+                    "session-restored-edit-pending",
+                ],
+                excluded_session_ids=["session-restore"],
+            ),
+        )
+        print(
             "picker_intervention_surface=",
             matches_intervention_filter_output(
                 intervention_picker,

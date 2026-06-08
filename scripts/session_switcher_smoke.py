@@ -393,6 +393,20 @@ async def run_smoke() -> None:
                     excluded_session_ids=["session-restore"],
                 ),
             )
+            print(
+                "switcher_tool_filter_pending_queues=",
+                matches_tool_filter_output(
+                    tool_output,
+                    sort_mode="attention",
+                    required_session_ids=[
+                        "session-aged",
+                        "session-pending-edit",
+                        "session-restored-pending",
+                        "session-restored-edit-pending",
+                    ],
+                    excluded_session_ids=["session-restore"],
+                ),
+            )
             await pilot.press("w")
             await pilot.pause()
             workspace_inspect_output = str(first_app.query_one("#output").render())
