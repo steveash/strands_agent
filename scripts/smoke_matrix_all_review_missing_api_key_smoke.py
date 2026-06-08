@@ -7,6 +7,7 @@ from pathlib import Path
 from strands_agent_tui.testing import (
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
     build_review_artifact_failure_results,
+    build_review_artifact_matrix_summary_assertion_results,
     build_smoke_matrix_docs_review_observer_spec,
     collect_smoke_matrix_docs_review_failure_output,
     emit_smoke_results,
@@ -85,25 +86,17 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             ("bundle_rerun_hint_line_present", failure_output.present("bundle_rerun_hint")),
             ("docs_hint_line_present", failure_output.present("docs_review_only_hint")),
             ("summary_line_present", failure_output.present("failure_summary")),
-            (
-                "metadata_matrix_summary_matches_all_review",
-                review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
-            ),
-            (
-                "matrix_summary_path_matches_metadata",
-                review_output.matrix_summary_path_matches_metadata(),
-            ),
-            (
-                "bundle_rerun_hint_line_matches_matrix_summary_hint",
-                failure_output.bundle_rerun_hint_line
-                == (
-                    f"{SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_prefix}"
-                    f"{review_spec.expected_bundle_index_rerun_hint}"
+            *build_review_artifact_matrix_summary_assertion_results(
+                review_output,
+                review_spec,
+                metadata_expected_path_result_name="metadata_matrix_summary_matches_all_review",
+                matrix_summary_matches_metadata_result_name="matrix_summary_path_matches_metadata",
+                matrix_summary_line_matches_metadata_result_name="matrix_summary_line_matches_metadata_path",
+                bundle_rerun_hint_line=failure_output.bundle_rerun_hint_line,
+                bundle_rerun_hint_prefix=(
+                    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_prefix
                 ),
-            ),
-            (
-                "matrix_summary_line_matches_metadata_path",
-                review_output.matrix_summary_line_matches_metadata_path(),
+                bundle_rerun_hint_result_name="bundle_rerun_hint_line_matches_matrix_summary_hint",
             ),
             (
                 "metadata_before_missing_api_key_hint",

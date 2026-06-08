@@ -44,6 +44,7 @@ from strands_agent_tui.testing import (
     build_malformed_smoke_script_detail_results,
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
+    build_review_artifact_matrix_summary_assertion_results,
     build_smoke_matrix_review_artifact_location_lines,
     build_smoke_matrix_review_artifact_location_messages,
     build_smoke_matrix_review_metadata_line,
@@ -676,6 +677,70 @@ def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_p
     assert result_map["matrix_summary_bundle_index_rerun_hint_matches"] is True
     assert result_map["matrix_summary_expected_artifact_paths_match"] is True
     assert result_map["matrix_summary_resolved_paths_match_expected"] is True
+
+
+def test_build_review_artifact_matrix_summary_assertion_results_support_expected_path_and_hint_checks(
+    tmp_path: Path,
+) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_payload = {
+        "bundle_index_rerun_hint": "rerun docs parity",
+        "display_name": "docs-review-all",
+        "target_name": "docs-review-all",
+        "artifact_root": "artifacts/review",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+    }
+    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
+    review_output = collect_review_artifact_output(
+        [
+            f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
+            "[smoke-matrix] review artifacts: artifacts/review",
+            "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
+        ],
+        checkout_root=checkout_root,
+        metadata_prefix="[smoke-matrix] review metadata: ",
+        artifacts_prefix="[smoke-matrix] review artifacts: ",
+        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
+    )
+    review_spec = SmokeMatrixDocsReviewObserverSpec(
+        requested_target_name="all-review",
+        expected_target_name="docs-review-all",
+        expected_artifact_root="artifacts/review",
+        expected_matrix_summary_path="artifacts/review/matrix-summary.json",
+        expected_bundle_index_rerun_hint="rerun docs parity",
+        expected_artifact_paths={
+            "artifact_root": "artifacts/review",
+            "matrix_summary_path": "artifacts/review/matrix-summary.json",
+        },
+        driver_filename="unused.py",
+    )
+
+    result_map = dict(
+        build_review_artifact_matrix_summary_assertion_results(
+            review_output,
+            review_spec,
+            metadata_expected_path_result_name="metadata_matrix_summary_matches_all_review",
+            matrix_summary_expected_path_result_name="matrix_summary_path_matches_all_review",
+            matrix_summary_matches_metadata_result_name="matrix_summary_path_matches_metadata",
+            matrix_summary_line_matches_metadata_result_name="matrix_summary_line_matches_metadata_path",
+            bundle_rerun_hint_line=(
+                f"{SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}rerun docs parity"
+            ),
+            bundle_rerun_hint_prefix=SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+            bundle_rerun_hint_result_name="bundle_rerun_hint_line_matches_matrix_summary_hint",
+        )
+    )
+
+    assert result_map == {
+        "metadata_matrix_summary_matches_all_review": True,
+        "matrix_summary_path_matches_all_review": True,
+        "matrix_summary_path_matches_metadata": True,
+        "matrix_summary_line_matches_metadata_path": True,
+        "bundle_rerun_hint_line_matches_matrix_summary_hint": True,
+    }
+
 
 
 def test_build_review_artifact_success_results_supports_prefixed_contract_output(tmp_path: Path) -> None:

@@ -1542,6 +1542,76 @@ def build_review_artifact_failure_results(
     ]
 
 
+def build_review_artifact_matrix_summary_assertion_results(
+    review_output: ReviewArtifactOutputObservation,
+    review_spec: SmokeMatrixDocsReviewObserverSpec,
+    *,
+    result_prefix: str = "",
+    metadata_expected_path_result_name: str | None = None,
+    matrix_summary_expected_path_result_name: str | None = None,
+    matrix_summary_matches_metadata_result_name: str | None = None,
+    matrix_summary_line_matches_metadata_result_name: str | None = None,
+    bundle_rerun_hint_line: str | None = None,
+    bundle_rerun_hint_prefix: str | None = None,
+    bundle_rerun_hint_result_name: str | None = None,
+) -> list[tuple[str, object]]:
+    if bundle_rerun_hint_result_name is not None and (
+        bundle_rerun_hint_line is None or bundle_rerun_hint_prefix is None
+    ):
+        raise ValueError(
+            "bundle_rerun_hint_line and bundle_rerun_hint_prefix are required when "
+            "bundle_rerun_hint_result_name is set"
+        )
+
+    prefix = _result_name_prefix(result_prefix)
+    results: list[tuple[str, object]] = []
+    expected_paths: dict[str, Path] | None = None
+
+    def _expected_matrix_summary_path() -> Path | None:
+        nonlocal expected_paths
+        if expected_paths is None:
+            expected_paths = review_spec.resolve_expected_paths(checkout_root=review_output.checkout_root)
+        return expected_paths.get("matrix_summary_path")
+
+    if metadata_expected_path_result_name is not None:
+        results.append(
+            (
+                f"{prefix}{metadata_expected_path_result_name}",
+                review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
+            )
+        )
+    if matrix_summary_expected_path_result_name is not None:
+        results.append(
+            (
+                f"{prefix}{matrix_summary_expected_path_result_name}",
+                review_output.matrix_summary_path == _expected_matrix_summary_path(),
+            )
+        )
+    if matrix_summary_matches_metadata_result_name is not None:
+        results.append(
+            (
+                f"{prefix}{matrix_summary_matches_metadata_result_name}",
+                review_output.matrix_summary_path_matches_metadata(),
+            )
+        )
+    if matrix_summary_line_matches_metadata_result_name is not None:
+        results.append(
+            (
+                f"{prefix}{matrix_summary_line_matches_metadata_result_name}",
+                review_output.matrix_summary_line_matches_metadata_path(),
+            )
+        )
+    if bundle_rerun_hint_result_name is not None:
+        results.append(
+            (
+                f"{prefix}{bundle_rerun_hint_result_name}",
+                bundle_rerun_hint_line
+                == f"{bundle_rerun_hint_prefix}{review_spec.expected_bundle_index_rerun_hint}",
+            )
+        )
+    return results
+
+
 def build_review_artifact_success_results(
     review_output: ReviewArtifactOutputObservation,
     review_spec: SmokeMatrixDocsReviewObserverSpec,
@@ -1579,9 +1649,14 @@ def build_review_artifact_success_results(
             f"{prefix}metadata_artifact_root_matches_{artifact_suffix}",
             review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
         ),
-        (
-            f"{prefix}metadata_matrix_summary_matches_expected_path",
-            review_output.metadata_matrix_summary_matches(review_spec.expected_matrix_summary_path),
+        *build_review_artifact_matrix_summary_assertion_results(
+            review_output,
+            review_spec,
+            result_prefix=result_prefix,
+            metadata_expected_path_result_name="metadata_matrix_summary_matches_expected_path",
+            matrix_summary_expected_path_result_name="matrix_summary_line_matches_expected_path",
+            matrix_summary_matches_metadata_result_name="matrix_summary_path_matches_metadata",
+            matrix_summary_line_matches_metadata_result_name="matrix_summary_line_matches_metadata_path",
         ),
         (
             f"{prefix}metadata_bundle_index_rerun_hint_matches",
@@ -1596,10 +1671,6 @@ def build_review_artifact_success_results(
         (
             f"{prefix}metadata_resolved_paths_match_expected",
             review_spec.metadata_resolved_paths_match(review_output),
-        ),
-        (
-            f"{prefix}matrix_summary_line_matches_expected_path",
-            review_output.matrix_summary_path == expected_paths["matrix_summary_path"],
         ),
         (
             f"{prefix}rerun_hint_line_matches_expected_hint",
@@ -1625,14 +1696,6 @@ def build_review_artifact_success_results(
         (
             f"{prefix}matrix_summary_resolved_paths_match_expected",
             review_spec.matrix_summary_resolved_paths_match(review_output),
-        ),
-        (
-            f"{prefix}matrix_summary_path_matches_metadata",
-            review_output.matrix_summary_path_matches_metadata(),
-        ),
-        (
-            f"{prefix}matrix_summary_line_matches_metadata_path",
-            review_output.matrix_summary_line_matches_metadata_path(),
         ),
         (
             f"{prefix}loaded_summary_path_matches_line",
