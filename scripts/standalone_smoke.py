@@ -5,10 +5,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
+    STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     SmokeScriptTarget,
     run_smoke_targets,
     smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
+    standalone_docs_review_follow_up_hint_for_failure,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -18,21 +20,10 @@ DEFAULT_TARGET_NAMES = list(CLI_SPEC.default_target_names())
 ALL_TARGET_NAMES = list(CLI_SPEC.resolve_target_names("all"))
 LIVE_TARGET_NAME = "live"
 DOCS_PARITY_TARGET_NAMES = {"docs", "docs-artifacts", "docs-rerun-hint"}
-DOCS_REVIEW_TARGET_NAMES = {
-    "matrix-artifact-roots",
-    "matrix-all-review-order",
-    "matrix-all-review-missing-api-key",
-    "matrix-docs-review-hint",
-}
-DOCS_REVIEW_RERUN_HINT_TARGET_NAMES = {"docs-contract", "docs-focused", "docs-review-only"}
 CONTRACT_NEGATIVE_TARGET_NAMES = {"malformed-result", "malformed-detail"}
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
-DOCS_REVIEW_ONLY_RERUN_HINT = (
-    "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
-    "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
-    "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle."
-)
+DOCS_REVIEW_ONLY_RERUN_HINT = STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint
 
 
 def _malformed_contract_failure_hint(
@@ -100,11 +91,12 @@ def _build_failure_hint(requested_target_name: str):
                 return hint
         if target.name in DOCS_PARITY_TARGET_NAMES:
             return smoke_cli_docs_parity_rerun_hint()
-        if (
-            requested_target_name in DOCS_REVIEW_RERUN_HINT_TARGET_NAMES
-            and target.name in DOCS_REVIEW_TARGET_NAMES
-        ):
-            return DOCS_REVIEW_ONLY_RERUN_HINT
+        docs_review_hint = standalone_docs_review_follow_up_hint_for_failure(
+            requested_target_name=requested_target_name,
+            target=target,
+        )
+        if docs_review_hint is not None:
+            return docs_review_hint
         return None
 
     return _failure_hint

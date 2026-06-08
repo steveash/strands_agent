@@ -507,6 +507,22 @@ class SmokeWrapperCliSpec:
         )
 
 
+@dataclass(frozen=True)
+class StandaloneDocsReviewFollowUpMetadata:
+    rerun_target_name: str
+    docs_review_target_names: tuple[str, ...]
+    requested_target_names: tuple[str, ...]
+    rerun_hint: str
+
+    def applies_to_failure(self, *, requested_target_name: str | None, target_name: str) -> bool:
+        if requested_target_name is None:
+            return False
+        return (
+            requested_target_name in self.requested_target_names
+            and target_name in self.docs_review_target_names
+        )
+
+
 STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     script_name="standalone_smoke",
     description=(
@@ -732,6 +748,50 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     ),
     readme_extra_shortcut_insert_at=6,
 )
+
+
+def build_standalone_docs_review_follow_up_metadata(
+    *,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+    rerun_target_name: str = "docs-review-only",
+) -> StandaloneDocsReviewFollowUpMetadata:
+    docs_review_target_names = cli_spec.resolve_target_names(rerun_target_name)
+    docs_review_target_name_set = set(docs_review_target_names)
+    requested_target_names = tuple(
+        alias_name
+        for alias_name in cli_spec.alias_target_names
+        if docs_review_target_name_set.issubset(cli_spec.resolve_target_names(alias_name))
+    )
+    rerun_hint = (
+        f"hint: docs-review drift is easiest to isolate with `standalone_smoke.py {rerun_target_name}`; rerun "
+        f"`.venv/bin/python scripts/standalone_smoke.py {rerun_target_name}` to recheck the docs-review lane "
+        "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle."
+    )
+    return StandaloneDocsReviewFollowUpMetadata(
+        rerun_target_name=rerun_target_name,
+        docs_review_target_names=docs_review_target_names,
+        requested_target_names=requested_target_names,
+        rerun_hint=rerun_hint,
+    )
+
+
+STANDALONE_DOCS_REVIEW_FOLLOW_UP = build_standalone_docs_review_follow_up_metadata()
+
+
+def standalone_docs_review_follow_up_hint_for_failure(
+    *,
+    requested_target_name: str | None,
+    target: SmokeScriptTarget | str,
+    metadata: StandaloneDocsReviewFollowUpMetadata = STANDALONE_DOCS_REVIEW_FOLLOW_UP,
+) -> str | None:
+    target_name = target.name if isinstance(target, SmokeScriptTarget) else target
+    if not metadata.applies_to_failure(
+        requested_target_name=requested_target_name,
+        target_name=target_name,
+    ):
+        return None
+    return metadata.rerun_hint
+
 
 SESSION_TRIAGE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     script_name="session_triage_smoke",

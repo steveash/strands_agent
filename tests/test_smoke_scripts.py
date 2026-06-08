@@ -28,6 +28,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_WRAPPER,
     SMOKE_SCRIPT_CONTRACT_CASES,
     SMOKE_WRAPPER_CLI_SPECS,
+    STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_SMOKE_WRAPPER,
     SmokeScriptContractCase,
     assert_smoke_script_output_matches_contract,
@@ -1110,9 +1111,7 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
             "review_matrix_summary_line_matches_metadata= False",
             3,
             2.8,
-            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
-            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "matrix-all-review-order",
@@ -1122,9 +1121,7 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
             "docs_hint_before_failure_summary= False",
             4,
             3.0,
-            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
-            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "matrix-all-review-missing-api-key",
@@ -1134,9 +1131,7 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
             "docs_hint_before_failure_summary= False",
             5,
             3.3,
-            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
-            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "matrix-docs-review-hint",
@@ -1146,9 +1141,7 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
             "hint_before_failure_summary= False",
             6,
             3.6,
-            "hint: docs-review drift is easiest to isolate with `standalone_smoke.py docs-review-only`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py docs-review-only` to recheck the docs-review lane "
-            "without the standalone docs-rerun-hint / malformed-contract regressions or the rest of the bundle.",
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
     ],
 )
@@ -1325,7 +1318,7 @@ def test_standalone_smoke_docs_review_alias_failure_emits_docs_review_only_hint(
     assert stdout.getvalue().splitlines() == stdout_lines
     assert stderr.getvalue().splitlines() == [
         f"{failed_target_name} smoke failed fast: {failed_line}",
-        f"[standalone-smoke] {standalone_smoke.DOCS_REVIEW_ONLY_RERUN_HINT}",
+        f"[standalone-smoke] {STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint}",
         STANDALONE_SMOKE_WRAPPER.failure_summary_line(
             passed_count=passed_count,
             total_count=total_count,

@@ -17,6 +17,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
+    STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
     SmokeCliExample,
@@ -28,6 +29,7 @@ from strands_agent_tui.testing.smoke_runner import (
     run_smoke_targets,
     smoke_wrapper_cli_spec,
     smoke_wrapper_metadata_from_specs,
+    standalone_docs_review_follow_up_hint_for_failure,
     summary_line_prefixes,
 )
 
@@ -716,6 +718,33 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
     assert standalone_spec.readme_operator_shortcut_lines() == tuple(
         f"- {snippet}" for snippet in standalone_spec.readme_all_shortcut_snippets()
     )
+
+
+def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selection() -> None:
+    assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_target_name == "docs-review-only"
+    assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.docs_review_target_names == (
+        "matrix-artifact-roots",
+        "matrix-all-review-order",
+        "matrix-all-review-missing-api-key",
+        "matrix-docs-review-hint",
+    )
+    assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.requested_target_names == (
+        "docs-contract",
+        "docs-focused",
+        "docs-review-only",
+    )
+    assert standalone_docs_review_follow_up_hint_for_failure(
+        requested_target_name="docs-focused",
+        target="matrix-docs-review-hint",
+    ) == STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint
+    assert standalone_docs_review_follow_up_hint_for_failure(
+        requested_target_name="docs-focused",
+        target="docs",
+    ) is None
+    assert standalone_docs_review_follow_up_hint_for_failure(
+        requested_target_name="matrix-docs-review-hint",
+        target="matrix-docs-review-hint",
+    ) is None
 
 
 def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> None:
