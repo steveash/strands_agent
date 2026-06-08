@@ -1477,20 +1477,20 @@ def _result_name_prefix(prefix: str) -> str:
     return prefix if prefix.endswith("_") else f"{prefix}_"
 
 
-def build_review_artifact_failure_results(
+def build_review_artifact_observation_results(
     review_output: ReviewArtifactOutputObservation,
     review_spec: SmokeMatrixDocsReviewObserverSpec,
     *,
     target_suffix: str,
     artifact_suffix: str,
-    detail_prefix: str = "stderr_",
     result_prefix: str = "",
+    line_detail_prefix: str = "",
 ) -> list[tuple[str, object]]:
     prefix = _result_name_prefix(result_prefix)
     return [
-        (f"{prefix}{detail_prefix}metadata_line", review_output.metadata_line),
-        (f"{prefix}{detail_prefix}artifacts_line", review_output.artifacts_line),
-        (f"{prefix}{detail_prefix}matrix_summary_line", review_output.matrix_summary_line),
+        (f"{prefix}{line_detail_prefix}metadata_line", review_output.metadata_line),
+        (f"{prefix}{line_detail_prefix}artifacts_line", review_output.artifacts_line),
+        (f"{prefix}{line_detail_prefix}matrix_summary_line", review_output.matrix_summary_line),
         (f"{prefix}metadata_line_present", review_output.metadata_line_present),
         (f"{prefix}artifacts_line_present", review_output.artifacts_line_present),
         (f"{prefix}matrix_summary_line_present", review_output.matrix_summary_line_present),
@@ -1540,6 +1540,25 @@ def build_review_artifact_failure_results(
             review_spec.matrix_summary_resolved_paths_match(review_output),
         ),
     ]
+
+
+def build_review_artifact_failure_results(
+    review_output: ReviewArtifactOutputObservation,
+    review_spec: SmokeMatrixDocsReviewObserverSpec,
+    *,
+    target_suffix: str,
+    artifact_suffix: str,
+    detail_prefix: str = "stderr_",
+    result_prefix: str = "",
+) -> list[tuple[str, object]]:
+    return build_review_artifact_observation_results(
+        review_output,
+        review_spec,
+        target_suffix=target_suffix,
+        artifact_suffix=artifact_suffix,
+        result_prefix=result_prefix,
+        line_detail_prefix=detail_prefix,
+    )
 
 
 def build_review_artifact_matrix_summary_assertion_results(
@@ -1631,24 +1650,17 @@ def build_review_artifact_success_results(
     artifact_root = review_output.matrix_summary_paths.get("artifact_root")
     return [
         (f"{prefix}artifact_root", str(artifact_root) if artifact_root is not None else ""),
-        (f"{prefix}metadata_line", review_output.metadata_line),
-        (f"{prefix}artifacts_line", review_output.artifacts_line),
-        (f"{prefix}matrix_summary_line", review_output.matrix_summary_line),
+        *build_review_artifact_observation_results(
+            review_output,
+            review_spec,
+            target_suffix=target_suffix,
+            artifact_suffix=artifact_suffix,
+            result_prefix=result_prefix,
+        ),
         (f"{prefix}summary_line", success_summary_line),
         (f"{prefix}rerun_hint_line", rerun_hint_line),
         (f"{prefix}exit_code_zero", exit_code == 0),
         (f"{prefix}stderr_empty", stderr_text == ""),
-        (f"{prefix}metadata_line_present", review_output.metadata_line_present),
-        (f"{prefix}artifacts_line_present", review_output.artifacts_line_present),
-        (f"{prefix}matrix_summary_line_present", review_output.matrix_summary_line_present),
-        (
-            f"{prefix}metadata_targets_{target_suffix}",
-            review_output.metadata_targets(review_spec.expected_target_name),
-        ),
-        (
-            f"{prefix}metadata_artifact_root_matches_{artifact_suffix}",
-            review_output.metadata_artifact_root_matches(review_spec.expected_artifact_root),
-        ),
         *build_review_artifact_matrix_summary_assertion_results(
             review_output,
             review_spec,
@@ -1657,20 +1669,6 @@ def build_review_artifact_success_results(
             matrix_summary_expected_path_result_name="matrix_summary_line_matches_expected_path",
             matrix_summary_matches_metadata_result_name="matrix_summary_path_matches_metadata",
             matrix_summary_line_matches_metadata_result_name="matrix_summary_line_matches_metadata_path",
-        ),
-        (
-            f"{prefix}metadata_bundle_index_rerun_hint_matches",
-            review_output.metadata_bundle_index_rerun_hint_matches(
-                review_spec.expected_bundle_index_rerun_hint
-            ),
-        ),
-        (
-            f"{prefix}metadata_expected_artifact_paths_match",
-            review_spec.metadata_artifact_paths_match(review_output),
-        ),
-        (
-            f"{prefix}metadata_resolved_paths_match_expected",
-            review_spec.metadata_resolved_paths_match(review_output),
         ),
         (
             f"{prefix}rerun_hint_line_matches_expected_hint",
@@ -1688,14 +1686,6 @@ def build_review_artifact_success_results(
             review_output.matrix_summary_bundle_index_rerun_hint_matches(
                 review_spec.expected_bundle_index_rerun_hint
             ),
-        ),
-        (
-            f"{prefix}matrix_summary_expected_artifact_paths_match",
-            review_spec.matrix_summary_artifact_paths_match(review_output),
-        ),
-        (
-            f"{prefix}matrix_summary_resolved_paths_match_expected",
-            review_spec.matrix_summary_resolved_paths_match(review_output),
         ),
         (
             f"{prefix}loaded_summary_path_matches_line",

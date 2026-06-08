@@ -45,6 +45,7 @@ from strands_agent_tui.testing import (
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
     build_review_artifact_matrix_summary_assertion_results,
+    build_review_artifact_observation_results,
     build_smoke_matrix_review_artifact_location_lines,
     build_smoke_matrix_review_artifact_location_messages,
     build_smoke_matrix_review_metadata_line,
@@ -616,6 +617,72 @@ def test_collect_smoke_matrix_docs_review_failure_output_validates_failed_matche
         )
 
 
+def test_build_review_artifact_observation_results_support_shared_review_checks(tmp_path: Path) -> None:
+    checkout_root = tmp_path / "checkout"
+    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_payload = {
+        "bundle_index_rerun_hint": "rerun docs parity",
+        "display_name": "docs-review-all",
+        "target_name": "docs-review-all",
+        "artifact_root": "artifacts/review",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+    }
+    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
+    review_output = collect_review_artifact_output(
+        [
+            f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
+            "[smoke-matrix] review artifacts: artifacts/review",
+            "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
+        ],
+        checkout_root=checkout_root,
+        metadata_prefix="[smoke-matrix] review metadata: ",
+        artifacts_prefix="[smoke-matrix] review artifacts: ",
+        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
+    )
+    review_spec = SmokeMatrixDocsReviewObserverSpec(
+        requested_target_name="all-review",
+        expected_target_name="docs-review-all",
+        expected_artifact_root="artifacts/review",
+        expected_matrix_summary_path="artifacts/review/matrix-summary.json",
+        expected_bundle_index_rerun_hint="rerun docs parity",
+        expected_artifact_paths={
+            "artifact_root": "artifacts/review",
+            "matrix_summary_path": "artifacts/review/matrix-summary.json",
+        },
+        driver_filename="unused.py",
+    )
+
+    result_map = dict(
+        build_review_artifact_observation_results(
+            review_output,
+            review_spec,
+            target_suffix="docs_review_all",
+            artifact_suffix="all_review",
+            line_detail_prefix="stderr_",
+        )
+    )
+
+    assert result_map["stderr_metadata_line"] == review_output.metadata_line
+    assert result_map["stderr_artifacts_line"] == review_output.artifacts_line
+    assert result_map["stderr_matrix_summary_line"] == review_output.matrix_summary_line
+    assert result_map["metadata_line_present"] is True
+    assert result_map["artifacts_line_present"] is True
+    assert result_map["matrix_summary_line_present"] is True
+    assert result_map["metadata_targets_docs_review_all"] is True
+    assert result_map["metadata_artifact_root_matches_all_review"] is True
+    assert result_map["metadata_bundle_index_rerun_hint_matches"] is True
+    assert result_map["metadata_expected_artifact_paths_match"] is True
+    assert result_map["metadata_resolved_paths_match_expected"] is True
+    assert result_map["matrix_summary_artifact_exists"] is True
+    assert result_map["matrix_summary_targets_docs_review_all"] is True
+    assert result_map["matrix_summary_artifact_root_matches_all_review"] is True
+    assert result_map["matrix_summary_bundle_index_rerun_hint_matches"] is True
+    assert result_map["matrix_summary_expected_artifact_paths_match"] is True
+    assert result_map["matrix_summary_resolved_paths_match_expected"] is True
+
+
+
 def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_path: Path) -> None:
     checkout_root = tmp_path / "checkout"
     summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
@@ -659,24 +726,18 @@ def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_p
             **review_spec.failure_result_kwargs(),
         )
     )
+    shared_result_map = dict(
+        build_review_artifact_observation_results(
+            review_output,
+            review_spec,
+            target_suffix="docs_review_all",
+            artifact_suffix="all_review",
+            line_detail_prefix="stderr_",
+        )
+    )
 
-    assert result_map["stderr_metadata_line"] == review_output.metadata_line
-    assert result_map["stderr_artifacts_line"] == review_output.artifacts_line
-    assert result_map["stderr_matrix_summary_line"] == review_output.matrix_summary_line
-    assert result_map["metadata_line_present"] is True
-    assert result_map["artifacts_line_present"] is True
-    assert result_map["matrix_summary_line_present"] is True
-    assert result_map["metadata_targets_docs_review_all"] is True
-    assert result_map["metadata_artifact_root_matches_all_review"] is True
-    assert result_map["metadata_bundle_index_rerun_hint_matches"] is True
-    assert result_map["metadata_expected_artifact_paths_match"] is True
-    assert result_map["metadata_resolved_paths_match_expected"] is True
-    assert result_map["matrix_summary_artifact_exists"] is True
-    assert result_map["matrix_summary_targets_docs_review_all"] is True
-    assert result_map["matrix_summary_artifact_root_matches_all_review"] is True
-    assert result_map["matrix_summary_bundle_index_rerun_hint_matches"] is True
-    assert result_map["matrix_summary_expected_artifact_paths_match"] is True
-    assert result_map["matrix_summary_resolved_paths_match_expected"] is True
+    assert result_map == shared_result_map
+
 
 
 def test_build_review_artifact_matrix_summary_assertion_results_support_expected_path_and_hint_checks(
@@ -799,7 +860,18 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
             artifacts_exist=True,
         )
     )
+    shared_result_map = dict(
+        build_review_artifact_observation_results(
+            review_output,
+            review_spec,
+            target_suffix="docs_review",
+            artifact_suffix="review",
+            result_prefix="review",
+        )
+    )
 
+    for name, value in shared_result_map.items():
+        assert result_map[name] == value
     assert result_map["review_artifact_root"] == str(artifact_root)
     assert result_map["review_metadata_line"] == review_output.metadata_line
     assert result_map["review_artifacts_line"] == review_output.artifacts_line
