@@ -40,6 +40,7 @@ from strands_agent_tui.testing import (
     build_smoke_cli_doc_drift_report_payload,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
+    build_standalone_docs_review_follow_up_failure_cases,
     collect_smoke_cli_readme_diffs,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
@@ -98,6 +99,83 @@ def _assert_mixed_smoke_result_contract(
 def _format_script_help(name: str) -> str:
     module = _load_script_module(name)
     return module.build_parser().format_help()
+
+
+
+def _observe_standalone_smoke_failure(
+    monkeypatch,
+    *,
+    argv: list[str],
+    failed_target_name: str,
+    stdout_lines: tuple[str, ...] | list[str],
+    failed_line: str,
+    elapsed_seconds: float,
+) -> tuple[int, list[str], list[str]]:
+    standalone_smoke = _load_script_module("standalone_smoke")
+
+    def _run_smoke_target(target, **kwargs):
+        observer = kwargs["output_line_observer"]
+        stdout = kwargs["stdout"]
+        stderr = kwargs["stderr"]
+        if target.name == failed_target_name:
+            for line in stdout_lines:
+                observer(f"{line}\n")
+                print(line, file=stdout)
+            stdout.flush()
+            print(f"{target.name} smoke failed fast: {failed_line}", file=stderr)
+            return 1
+        return 0
+
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
+    perf_values = iter([0.0, elapsed_seconds])
+    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
+
+    stdout = StringIO()
+    stderr = StringIO()
+    real_run_smoke_targets = standalone_smoke.run_smoke_targets
+    monkeypatch.setattr(
+        standalone_smoke,
+        "run_smoke_targets",
+        lambda targets, **kwargs: real_run_smoke_targets(targets, stdout=stdout, stderr=stderr, **kwargs),
+    )
+
+    exit_code = standalone_smoke.main(argv)
+    return exit_code, stdout.getvalue().splitlines(), stderr.getvalue().splitlines()
+
+
+
+def _assert_standalone_smoke_failure(
+    monkeypatch,
+    *,
+    argv: list[str],
+    failed_target_name: str,
+    stdout_lines: tuple[str, ...] | list[str],
+    failed_line: str,
+    expected_hint: str,
+    passed_count: int,
+    total_count: int,
+    elapsed_seconds: float,
+) -> None:
+    exit_code, observed_stdout_lines, observed_stderr_lines = _observe_standalone_smoke_failure(
+        monkeypatch,
+        argv=argv,
+        failed_target_name=failed_target_name,
+        stdout_lines=stdout_lines,
+        failed_line=failed_line,
+        elapsed_seconds=elapsed_seconds,
+    )
+
+    assert exit_code == 1
+    assert observed_stdout_lines == list(stdout_lines)
+    assert observed_stderr_lines == [
+        f"{failed_target_name} smoke failed fast: {failed_line}",
+        f"[standalone-smoke] {expected_hint}",
+        STANDALONE_SMOKE_WRAPPER.failure_summary_line(
+            passed_count=passed_count,
+            total_count=total_count,
+            elapsed_seconds=elapsed_seconds,
+        ),
+    ]
 
 
 
@@ -1154,177 +1232,45 @@ def test_standalone_smoke_docs_contract_failure_emits_expected_follow_up_hint(
     elapsed_seconds: float,
     expected_hint: str,
 ) -> None:
-    standalone_smoke = _load_script_module("standalone_smoke")
-
-    def _run_smoke_target(target, **kwargs):
-        observer = kwargs["output_line_observer"]
-        stdout = kwargs["stdout"]
-        stderr = kwargs["stderr"]
-        if target.name == failed_target_name:
-            for line in stdout_lines:
-                observer(f"{line}\n")
-                print(line, file=stdout)
-            stdout.flush()
-            print(f"{target.name} smoke failed fast: {failed_line}", file=stderr)
-            return 1
-        return 0
-
-    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
-    perf_values = iter([0.0, elapsed_seconds])
-    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
-
-    stdout = StringIO()
-    stderr = StringIO()
-    real_run_smoke_targets = standalone_smoke.run_smoke_targets
-    monkeypatch.setattr(
-        standalone_smoke,
-        "run_smoke_targets",
-        lambda targets, **kwargs: real_run_smoke_targets(targets, stdout=stdout, stderr=stderr, **kwargs),
+    _assert_standalone_smoke_failure(
+        monkeypatch,
+        argv=["docs-contract"],
+        failed_target_name=failed_target_name,
+        stdout_lines=stdout_lines,
+        failed_line=failed_line,
+        expected_hint=expected_hint,
+        passed_count=passed_count,
+        total_count=7,
+        elapsed_seconds=elapsed_seconds,
     )
-
-    exit_code = standalone_smoke.main(["docs-contract"])
-
-    assert exit_code == 1
-    assert stdout.getvalue().splitlines() == stdout_lines
-    assert stderr.getvalue().splitlines() == [
-        f"{failed_target_name} smoke failed fast: {failed_line}",
-        f"[standalone-smoke] {expected_hint}",
-        STANDALONE_SMOKE_WRAPPER.failure_summary_line(
-            passed_count=passed_count,
-            total_count=7,
-            elapsed_seconds=elapsed_seconds,
-        ),
-    ]
 
 
 @pytest.mark.parametrize(
-    ("requested_target_name", "failed_target_name", "stdout_lines", "failed_line", "passed_count", "elapsed_seconds", "total_count"),
+    "failure_case",
     [
-        (
-            "docs-focused",
-            "matrix-artifact-roots",
-            ["review_matrix_summary_line_matches_metadata= False"],
-            "review_matrix_summary_line_matches_metadata= False",
-            3,
-            2.8,
-            7,
-        ),
-        (
-            "docs-focused",
-            "matrix-all-review-order",
-            ["docs_hint_before_failure_summary= False"],
-            "docs_hint_before_failure_summary= False",
-            4,
-            3.0,
-            7,
-        ),
-        (
-            "docs-focused",
-            "matrix-all-review-missing-api-key",
-            ["docs_hint_before_failure_summary= False"],
-            "docs_hint_before_failure_summary= False",
-            5,
-            3.3,
-            7,
-        ),
-        (
-            "docs-focused",
-            "matrix-docs-review-hint",
-            ["hint_before_failure_summary= False"],
-            "hint_before_failure_summary= False",
-            6,
-            3.6,
-            7,
-        ),
-        (
-            "docs-review-only",
-            "matrix-artifact-roots",
-            ["review_matrix_summary_line_matches_metadata= False"],
-            "review_matrix_summary_line_matches_metadata= False",
-            0,
-            1.9,
-            4,
-        ),
-        (
-            "docs-review-only",
-            "matrix-all-review-order",
-            ["docs_hint_before_failure_summary= False"],
-            "docs_hint_before_failure_summary= False",
-            1,
-            2.2,
-            4,
-        ),
-        (
-            "docs-review-only",
-            "matrix-all-review-missing-api-key",
-            ["docs_hint_before_failure_summary= False"],
-            "docs_hint_before_failure_summary= False",
-            2,
-            2.5,
-            4,
-        ),
-        (
-            "docs-review-only",
-            "matrix-docs-review-hint",
-            ["hint_before_failure_summary= False"],
-            "hint_before_failure_summary= False",
-            3,
-            2.7,
-            4,
-        ),
+        pytest.param(case, id=f"{case.requested_target_name}-{case.failed_target_name}")
+        for case in build_standalone_docs_review_follow_up_failure_cases(
+            requested_target_names=("docs-focused", "docs-review-only")
+        )
     ],
 )
 def test_standalone_smoke_docs_review_alias_failure_emits_docs_review_only_hint(
     monkeypatch,
-    requested_target_name: str,
-    failed_target_name: str,
-    stdout_lines: list[str],
-    failed_line: str,
-    passed_count: int,
-    elapsed_seconds: float,
-    total_count: int,
+    failure_case,
 ) -> None:
-    standalone_smoke = _load_script_module("standalone_smoke")
+    elapsed_seconds = 2.5
 
-    def _run_smoke_target(target, **kwargs):
-        observer = kwargs["output_line_observer"]
-        stdout = kwargs["stdout"]
-        stderr = kwargs["stderr"]
-        if target.name == failed_target_name:
-            for line in stdout_lines:
-                observer(f"{line}\n")
-                print(line, file=stdout)
-            stdout.flush()
-            print(f"{target.name} smoke failed fast: {failed_line}", file=stderr)
-            return 1
-        return 0
-
-    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
-    perf_values = iter([0.0, elapsed_seconds])
-    monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.perf_counter", lambda: next(perf_values))
-
-    stdout = StringIO()
-    stderr = StringIO()
-    real_run_smoke_targets = standalone_smoke.run_smoke_targets
-    monkeypatch.setattr(
-        standalone_smoke,
-        "run_smoke_targets",
-        lambda targets, **kwargs: real_run_smoke_targets(targets, stdout=stdout, stderr=stderr, **kwargs),
+    _assert_standalone_smoke_failure(
+        monkeypatch,
+        argv=[failure_case.requested_target_name],
+        failed_target_name=failure_case.failed_target_name,
+        stdout_lines=failure_case.stdout_lines,
+        failed_line=failure_case.failed_line,
+        expected_hint=failure_case.expected_hint,
+        passed_count=failure_case.passed_count,
+        total_count=failure_case.total_count,
+        elapsed_seconds=elapsed_seconds,
     )
-
-    exit_code = standalone_smoke.main([requested_target_name])
-
-    assert exit_code == 1
-    assert stdout.getvalue().splitlines() == stdout_lines
-    assert stderr.getvalue().splitlines() == [
-        f"{failed_target_name} smoke failed fast: {failed_line}",
-        f"[standalone-smoke] {STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint}",
-        STANDALONE_SMOKE_WRAPPER.failure_summary_line(
-            passed_count=passed_count,
-            total_count=total_count,
-            elapsed_seconds=elapsed_seconds,
-        ),
-    ]
 
 
 def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_output_dir() -> None:

@@ -25,6 +25,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeTargetSelector,
     SmokeWrapperMetadata,
     build_smoke_cli_parser,
+    build_standalone_docs_review_follow_up_failure_cases,
     run_smoke_target,
     run_smoke_targets,
     smoke_wrapper_cli_spec,
@@ -745,6 +746,132 @@ def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selec
         requested_target_name="matrix-docs-review-hint",
         target="matrix-docs-review-hint",
     ) is None
+
+
+def test_build_standalone_docs_review_follow_up_failure_cases_tracks_alias_positions() -> None:
+    cases = build_standalone_docs_review_follow_up_failure_cases()
+
+    assert [
+        (
+            case.requested_target_name,
+            case.failed_target_name,
+            case.stdout_lines,
+            case.failed_line,
+            case.passed_count,
+            case.total_count,
+            case.expected_hint,
+        )
+        for case in cases
+    ] == [
+        (
+            "docs-contract",
+            "matrix-artifact-roots",
+            ("review_matrix_summary_line_matches_metadata= False",),
+            "review_matrix_summary_line_matches_metadata= False",
+            3,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-contract",
+            "matrix-all-review-order",
+            ("docs_hint_before_failure_summary= False",),
+            "docs_hint_before_failure_summary= False",
+            4,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-contract",
+            "matrix-all-review-missing-api-key",
+            ("docs_hint_before_failure_summary= False",),
+            "docs_hint_before_failure_summary= False",
+            5,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-contract",
+            "matrix-docs-review-hint",
+            ("hint_before_failure_summary= False",),
+            "hint_before_failure_summary= False",
+            6,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-focused",
+            "matrix-artifact-roots",
+            ("review_matrix_summary_line_matches_metadata= False",),
+            "review_matrix_summary_line_matches_metadata= False",
+            3,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-focused",
+            "matrix-all-review-order",
+            ("docs_hint_before_failure_summary= False",),
+            "docs_hint_before_failure_summary= False",
+            4,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-focused",
+            "matrix-all-review-missing-api-key",
+            ("docs_hint_before_failure_summary= False",),
+            "docs_hint_before_failure_summary= False",
+            5,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-focused",
+            "matrix-docs-review-hint",
+            ("hint_before_failure_summary= False",),
+            "hint_before_failure_summary= False",
+            6,
+            7,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-review-only",
+            "matrix-artifact-roots",
+            ("review_matrix_summary_line_matches_metadata= False",),
+            "review_matrix_summary_line_matches_metadata= False",
+            0,
+            4,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-review-only",
+            "matrix-all-review-order",
+            ("docs_hint_before_failure_summary= False",),
+            "docs_hint_before_failure_summary= False",
+            1,
+            4,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-review-only",
+            "matrix-all-review-missing-api-key",
+            ("docs_hint_before_failure_summary= False",),
+            "docs_hint_before_failure_summary= False",
+            2,
+            4,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+        (
+            "docs-review-only",
+            "matrix-docs-review-hint",
+            ("hint_before_failure_summary= False",),
+            "hint_before_failure_summary= False",
+            3,
+            4,
+            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+    ]
 
 
 def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> None:

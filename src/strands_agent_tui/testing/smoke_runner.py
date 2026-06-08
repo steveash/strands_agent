@@ -523,6 +523,17 @@ class StandaloneDocsReviewFollowUpMetadata:
         )
 
 
+@dataclass(frozen=True)
+class StandaloneSmokeFailureCase:
+    requested_target_name: str
+    failed_target_name: str
+    stdout_lines: tuple[str, ...]
+    failed_line: str
+    passed_count: int
+    total_count: int
+    expected_hint: str
+
+
 STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     script_name="standalone_smoke",
     description=(
@@ -776,6 +787,42 @@ def build_standalone_docs_review_follow_up_metadata(
 
 
 STANDALONE_DOCS_REVIEW_FOLLOW_UP = build_standalone_docs_review_follow_up_metadata()
+
+_STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET = {
+    "matrix-artifact-roots": ("review_matrix_summary_line_matches_metadata= False",),
+    "matrix-all-review-order": ("docs_hint_before_failure_summary= False",),
+    "matrix-all-review-missing-api-key": ("docs_hint_before_failure_summary= False",),
+    "matrix-docs-review-hint": ("hint_before_failure_summary= False",),
+}
+
+
+def build_standalone_docs_review_follow_up_failure_cases(
+    *,
+    requested_target_names: Sequence[str] | None = None,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+    metadata: StandaloneDocsReviewFollowUpMetadata = STANDALONE_DOCS_REVIEW_FOLLOW_UP,
+) -> tuple[StandaloneSmokeFailureCase, ...]:
+    selected_requested_target_names = tuple(requested_target_names or metadata.requested_target_names)
+    cases: list[StandaloneSmokeFailureCase] = []
+    for requested_target_name in selected_requested_target_names:
+        resolved_target_names = cli_spec.resolve_target_names(requested_target_name)
+        total_count = len(resolved_target_names)
+        for failed_target_name in metadata.docs_review_target_names:
+            if failed_target_name not in resolved_target_names:
+                continue
+            stdout_lines = _STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET[failed_target_name]
+            cases.append(
+                StandaloneSmokeFailureCase(
+                    requested_target_name=requested_target_name,
+                    failed_target_name=failed_target_name,
+                    stdout_lines=stdout_lines,
+                    failed_line=stdout_lines[-1],
+                    passed_count=resolved_target_names.index(failed_target_name),
+                    total_count=total_count,
+                    expected_hint=metadata.rerun_hint,
+                )
+            )
+    return tuple(cases)
 
 
 def standalone_docs_review_follow_up_hint_for_failure(
