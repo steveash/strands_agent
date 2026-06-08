@@ -788,12 +788,75 @@ def build_standalone_docs_review_follow_up_metadata(
 
 STANDALONE_DOCS_REVIEW_FOLLOW_UP = build_standalone_docs_review_follow_up_metadata()
 
+_STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET = {
+    "malformed-result": (
+        "assertion_message: result[15]: ('malformed', 'value', 'extra')",
+        "result_contract= False",
+    ),
+    "malformed-detail": (
+        "missing_detail: stdout_fix_check_summary",
+        "detail_contract= False",
+    ),
+}
+
+
 _STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET = {
     "matrix-artifact-roots": ("review_matrix_summary_line_matches_metadata= False",),
     "matrix-all-review-order": ("docs_hint_before_failure_summary= False",),
     "matrix-all-review-missing-api-key": ("docs_hint_before_failure_summary= False",),
     "matrix-docs-review-hint": ("hint_before_failure_summary= False",),
 }
+
+
+def standalone_malformed_contract_hint_for_failure(
+    *,
+    requested_target_name: str | None,
+    target: SmokeScriptTarget | str,
+) -> str | None:
+    if requested_target_name is None:
+        return None
+    target_name = target.name if isinstance(target, SmokeScriptTarget) else target
+    if target_name not in _STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET:
+        return None
+    return (
+        f"hint: `standalone_smoke.py {requested_target_name}` failed inside "
+        f"`{target_name}`; rerun `.venv/bin/python scripts/standalone_smoke.py {target_name}` "
+        "to isolate the failing malformed smoke-script contract regression."
+    )
+
+
+def build_standalone_malformed_contract_failure_cases(
+    *,
+    requested_target_name: str,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+) -> tuple[StandaloneSmokeFailureCase, ...]:
+    resolved_target_names = cli_spec.resolve_target_names(requested_target_name)
+    total_count = len(resolved_target_names)
+    cases: list[StandaloneSmokeFailureCase] = []
+    for failed_target_name in resolved_target_names:
+        stdout_lines = _STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET.get(
+            failed_target_name
+        )
+        if stdout_lines is None:
+            continue
+        expected_hint = standalone_malformed_contract_hint_for_failure(
+            requested_target_name=requested_target_name,
+            target=failed_target_name,
+        )
+        if expected_hint is None:
+            continue
+        cases.append(
+            StandaloneSmokeFailureCase(
+                requested_target_name=requested_target_name,
+                failed_target_name=failed_target_name,
+                stdout_lines=stdout_lines,
+                failed_line=stdout_lines[-1],
+                passed_count=resolved_target_names.index(failed_target_name),
+                total_count=total_count,
+                expected_hint=expected_hint,
+            )
+        )
+    return tuple(cases)
 
 
 def build_standalone_docs_review_follow_up_failure_cases(

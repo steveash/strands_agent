@@ -31,6 +31,7 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_SMOKE_WRAPPER,
     SmokeScriptContractCase,
+    StandaloneSmokeFailureCase,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
     build_smoke_matrix_review_artifact_location_lines,
@@ -41,6 +42,7 @@ from strands_agent_tui.testing import (
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
     build_standalone_docs_review_follow_up_failure_cases,
+    build_standalone_malformed_contract_failure_cases,
     collect_smoke_cli_readme_diffs,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
@@ -176,6 +178,32 @@ def _assert_standalone_smoke_failure(
             elapsed_seconds=elapsed_seconds,
         ),
     ]
+
+
+
+def _standalone_docs_contract_failure_cases() -> tuple[StandaloneSmokeFailureCase, ...]:
+    requested_target_name = "docs-contract"
+    total_count = 7
+    return (
+        StandaloneSmokeFailureCase(
+            requested_target_name=requested_target_name,
+            failed_target_name="docs-rerun-hint",
+            stdout_lines=(
+                "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+                "fix_post_check= False",
+            ),
+            failed_line="fix_post_check= False",
+            passed_count=0,
+            total_count=total_count,
+            expected_hint=smoke_cli_docs_parity_rerun_hint(),
+        ),
+        *build_standalone_malformed_contract_failure_cases(
+            requested_target_name=requested_target_name,
+        ),
+        *build_standalone_docs_review_follow_up_failure_cases(
+            requested_target_names=(requested_target_name,),
+        ),
+    )
 
 
 
@@ -1144,103 +1172,30 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
 
 
 @pytest.mark.parametrize(
-    ("failed_target_name", "stdout_lines", "failed_line", "passed_count", "elapsed_seconds", "expected_hint"),
+    ("failure_case", "elapsed_seconds"),
     [
-        (
-            "docs-rerun-hint",
-            [
-                "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
-                "fix_post_check= False",
-            ],
-            "fix_post_check= False",
-            0,
-            1.8,
-            smoke_cli_docs_parity_rerun_hint(),
-        ),
-        (
-            "malformed-result",
-            [
-                "assertion_message: result[15]: ('malformed', 'value', 'extra')",
-                "result_contract= False",
-            ],
-            "result_contract= False",
-            1,
-            2.1,
-            "hint: `standalone_smoke.py docs-contract` failed inside `malformed-result`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py malformed-result` to isolate the failing malformed smoke-script contract regression.",
-        ),
-        (
-            "malformed-detail",
-            [
-                "missing_detail: stdout_fix_check_summary",
-                "detail_contract= False",
-            ],
-            "detail_contract= False",
-            2,
-            2.4,
-            "hint: `standalone_smoke.py docs-contract` failed inside `malformed-detail`; rerun "
-            "`.venv/bin/python scripts/standalone_smoke.py malformed-detail` to isolate the failing malformed smoke-script contract regression.",
-        ),
-        (
-            "matrix-artifact-roots",
-            [
-                "review_matrix_summary_line_matches_metadata= False",
-            ],
-            "review_matrix_summary_line_matches_metadata= False",
-            3,
-            2.8,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
-        ),
-        (
-            "matrix-all-review-order",
-            [
-                "docs_hint_before_failure_summary= False",
-            ],
-            "docs_hint_before_failure_summary= False",
-            4,
-            3.0,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
-        ),
-        (
-            "matrix-all-review-missing-api-key",
-            [
-                "docs_hint_before_failure_summary= False",
-            ],
-            "docs_hint_before_failure_summary= False",
-            5,
-            3.3,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
-        ),
-        (
-            "matrix-docs-review-hint",
-            [
-                "hint_before_failure_summary= False",
-            ],
-            "hint_before_failure_summary= False",
-            6,
-            3.6,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
-        ),
+        pytest.param(case, elapsed_seconds, id=case.failed_target_name)
+        for case, elapsed_seconds in zip(
+            _standalone_docs_contract_failure_cases(),
+            (1.8, 2.1, 2.4, 2.8, 3.0, 3.3, 3.6),
+            strict=True,
+        )
     ],
 )
 def test_standalone_smoke_docs_contract_failure_emits_expected_follow_up_hint(
     monkeypatch,
-    failed_target_name: str,
-    stdout_lines: list[str],
-    failed_line: str,
-    passed_count: int,
+    failure_case: StandaloneSmokeFailureCase,
     elapsed_seconds: float,
-    expected_hint: str,
 ) -> None:
     _assert_standalone_smoke_failure(
         monkeypatch,
-        argv=["docs-contract"],
-        failed_target_name=failed_target_name,
-        stdout_lines=stdout_lines,
-        failed_line=failed_line,
-        expected_hint=expected_hint,
-        passed_count=passed_count,
-        total_count=7,
+        argv=[failure_case.requested_target_name],
+        failed_target_name=failure_case.failed_target_name,
+        stdout_lines=failure_case.stdout_lines,
+        failed_line=failure_case.failed_line,
+        expected_hint=failure_case.expected_hint,
+        passed_count=failure_case.passed_count,
+        total_count=failure_case.total_count,
         elapsed_seconds=elapsed_seconds,
     )
 

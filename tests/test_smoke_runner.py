@@ -26,11 +26,13 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeWrapperMetadata,
     build_smoke_cli_parser,
     build_standalone_docs_review_follow_up_failure_cases,
+    build_standalone_malformed_contract_failure_cases,
     run_smoke_target,
     run_smoke_targets,
     smoke_wrapper_cli_spec,
     smoke_wrapper_metadata_from_specs,
     standalone_docs_review_follow_up_hint_for_failure,
+    standalone_malformed_contract_hint_for_failure,
     summary_line_prefixes,
 )
 
@@ -870,6 +872,91 @@ def test_build_standalone_docs_review_follow_up_failure_cases_tracks_alias_posit
             3,
             4,
             STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
+        ),
+    ]
+
+
+
+def test_build_standalone_malformed_contract_failure_cases_tracks_alias_positions_and_hints() -> None:
+    docs_contract_cases = build_standalone_malformed_contract_failure_cases(
+        requested_target_name="docs-contract"
+    )
+    contract_negative_cases = build_standalone_malformed_contract_failure_cases(
+        requested_target_name="contract-negative"
+    )
+
+    assert [
+        (
+            case.requested_target_name,
+            case.failed_target_name,
+            case.stdout_lines,
+            case.failed_line,
+            case.passed_count,
+            case.total_count,
+            case.expected_hint,
+        )
+        for case in docs_contract_cases
+    ] == [
+        (
+            "docs-contract",
+            "malformed-result",
+            (
+                "assertion_message: result[15]: ('malformed', 'value', 'extra')",
+                "result_contract= False",
+            ),
+            "result_contract= False",
+            1,
+            7,
+            standalone_malformed_contract_hint_for_failure(
+                requested_target_name="docs-contract",
+                target="malformed-result",
+            ),
+        ),
+        (
+            "docs-contract",
+            "malformed-detail",
+            (
+                "missing_detail: stdout_fix_check_summary",
+                "detail_contract= False",
+            ),
+            "detail_contract= False",
+            2,
+            7,
+            standalone_malformed_contract_hint_for_failure(
+                requested_target_name="docs-contract",
+                target="malformed-detail",
+            ),
+        ),
+    ]
+    assert [
+        (
+            case.requested_target_name,
+            case.failed_target_name,
+            case.passed_count,
+            case.total_count,
+            case.expected_hint,
+        )
+        for case in contract_negative_cases
+    ] == [
+        (
+            "contract-negative",
+            "malformed-result",
+            0,
+            2,
+            standalone_malformed_contract_hint_for_failure(
+                requested_target_name="contract-negative",
+                target="malformed-result",
+            ),
+        ),
+        (
+            "contract-negative",
+            "malformed-detail",
+            1,
+            2,
+            standalone_malformed_contract_hint_for_failure(
+                requested_target_name="contract-negative",
+                target="malformed-detail",
+            ),
         ),
     ]
 

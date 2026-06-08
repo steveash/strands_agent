@@ -241,11 +241,13 @@ from .smoke_runner import (
     build_smoke_cli_parser,
     build_standalone_docs_review_follow_up_failure_cases,
     build_standalone_docs_review_follow_up_metadata,
+    build_standalone_malformed_contract_failure_cases,
     run_smoke_target,
     run_smoke_targets,
     smoke_wrapper_cli_spec,
     smoke_wrapper_metadata_from_specs,
     standalone_docs_review_follow_up_hint_for_failure,
+    standalone_malformed_contract_hint_for_failure,
     summary_line_prefixes,
 )
 
@@ -472,6 +474,7 @@ __all__ = [
     "build_smoke_cli_parser",
     "build_standalone_docs_review_follow_up_failure_cases",
     "build_standalone_docs_review_follow_up_metadata",
+    "build_standalone_malformed_contract_failure_cases",
     "emit_smoke_check",
     "emit_smoke_checks",
     "emit_smoke_results",
@@ -487,5 +490,6 @@ __all__ = [
     "smoke_wrapper_cli_spec",
     "smoke_wrapper_metadata_from_specs",
     "standalone_docs_review_follow_up_hint_for_failure",
+    "standalone_malformed_contract_hint_for_failure",
     "summary_line_prefixes",
 ]
