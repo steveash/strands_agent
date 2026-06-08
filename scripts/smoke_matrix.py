@@ -14,6 +14,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_WRAPPER,
     SmokeScriptTarget,
     build_smoke_matrix_review_artifact_location_messages,
+    build_smoke_matrix_review_metadata_payload,
     run_smoke_target,
     smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
@@ -149,16 +150,12 @@ def _docs_review_artifact_metadata(target: SmokeScriptTarget) -> dict[str, str] 
     if not paths:
         return None
     rerun_hint = _docs_review_bundle_index_rerun_hint(target, paths=paths)
-    return {
-        "display_name": target.display_label,
-        "target_name": target.name,
-        **(
-            {DOCS_REVIEW_BUNDLE_INDEX_RERUN_HINT_KEY: rerun_hint}
-            if rerun_hint is not None
-            else {}
-        ),
+    return build_smoke_matrix_review_metadata_payload(
+        display_name=target.display_label,
+        target_name=target.name,
+        bundle_index_rerun_hint=rerun_hint,
         **paths,
-    }
+    )
 
 
 def _docs_review_bundle_index_rerun_hint(

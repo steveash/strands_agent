@@ -46,6 +46,8 @@ from strands_agent_tui.testing import (
     build_review_artifact_failure_results,
     build_smoke_matrix_review_artifact_location_lines,
     build_smoke_matrix_review_artifact_location_messages,
+    build_smoke_matrix_review_metadata_line,
+    build_smoke_matrix_review_metadata_payload,
     build_review_artifact_success_results,
     build_script_driver_source,
     build_smoke_matrix_docs_review_observer_spec,
@@ -486,6 +488,27 @@ def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None
 
 
 def test_build_smoke_matrix_review_artifact_location_builders_share_default_docs_review_paths() -> None:
+    metadata = build_smoke_matrix_review_metadata_payload(artifact_root="artifacts/review")
+
+    assert metadata == {
+        "artifact_root": "artifacts/review",
+        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
+        "bundle_index_path": "artifacts/review/index.json",
+        "display_name": "docs-review",
+        "drifted_readme_path": "artifacts/review/README-drifted.md",
+        "fix_check_json_path": "artifacts/review/fix-check.json",
+        "fix_post_check_json_path": "artifacts/review/fix-post-check.json",
+        "fix_repair_json_path": "artifacts/review/fix-repair.json",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+        "render_diff_path": "artifacts/review/render-review.patch",
+        "render_manifest_path": "artifacts/review/render-manifest.json",
+        "render_output_dir": "artifacts/review/rendered",
+        "target_name": "docs-review",
+    }
+    assert build_smoke_matrix_review_metadata_line(artifact_root="artifacts/review") == (
+        f"{SMOKE_MATRIX_REVIEW_METADATA_PREFIX}{json.dumps(metadata, sort_keys=True)}"
+    )
+
     messages = build_smoke_matrix_review_artifact_location_messages(
         artifact_root="artifacts/review",
         rerun_hint="rerun docs parity",

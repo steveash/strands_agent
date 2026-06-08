@@ -21,6 +21,7 @@ from .smoke_cli_doc_artifacts import (
     resolve_checkout_path,
     resolve_review_artifact_paths,
 )
+from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
 
 SMOKE_MATRIX_REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
 SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
@@ -498,6 +499,12 @@ def detail_safe_text(text: str) -> str:
     return text.replace("= False", "=False")
 
 
+def _normalize_review_artifact_path(path: str | Path | None) -> str | None:
+    if path is None:
+        return None
+    return str(path)
+
+
 @dataclass(frozen=True)
 class SmokeMatrixDocsReviewSuccessDefaults:
     success_summary_prefix: str
@@ -519,21 +526,33 @@ class SmokeMatrixDocsReviewSuccessDefaults:
         return self.format_rerun_hint_line(rerun_hint).removeprefix("[smoke-matrix] ")
 
 
-def build_smoke_matrix_review_artifact_location_messages(
+def build_smoke_matrix_review_metadata_payload(
     *,
-    artifact_root: str | None = None,
-    bundle_index_path: str | None = None,
-    matrix_summary_path: str | None = None,
-    drifted_readme_path: str | None = None,
-    render_output_dir: str | None = None,
-    render_manifest_path: str | None = None,
-    render_diff_path: str | None = None,
-    fix_check_json_path: str | None = None,
-    fix_repair_json_path: str | None = None,
-    fix_post_check_json_path: str | None = None,
-    rerun_hint: str | None = None,
-    success_defaults: SmokeMatrixDocsReviewSuccessDefaults,
-) -> tuple[str, ...]:
+    artifact_root: str | Path | None = None,
+    bundle_index_path: str | Path | None = None,
+    matrix_summary_path: str | Path | None = None,
+    drifted_readme_path: str | Path | None = None,
+    render_output_dir: str | Path | None = None,
+    render_manifest_path: str | Path | None = None,
+    render_diff_path: str | Path | None = None,
+    fix_check_json_path: str | Path | None = None,
+    fix_repair_json_path: str | Path | None = None,
+    fix_post_check_json_path: str | Path | None = None,
+    bundle_index_rerun_hint: str | None = None,
+    display_name: str = "docs-review",
+    target_name: str = "docs-review",
+) -> dict[str, str]:
+    artifact_root = _normalize_review_artifact_path(artifact_root)
+    bundle_index_path = _normalize_review_artifact_path(bundle_index_path)
+    matrix_summary_path = _normalize_review_artifact_path(matrix_summary_path)
+    drifted_readme_path = _normalize_review_artifact_path(drifted_readme_path)
+    render_output_dir = _normalize_review_artifact_path(render_output_dir)
+    render_manifest_path = _normalize_review_artifact_path(render_manifest_path)
+    render_diff_path = _normalize_review_artifact_path(render_diff_path)
+    fix_check_json_path = _normalize_review_artifact_path(fix_check_json_path)
+    fix_repair_json_path = _normalize_review_artifact_path(fix_repair_json_path)
+    fix_post_check_json_path = _normalize_review_artifact_path(fix_post_check_json_path)
+
     if artifact_root is None and bundle_index_path is not None:
         artifact_root = str(Path(bundle_index_path).parent)
 
@@ -552,12 +571,80 @@ def build_smoke_matrix_review_artifact_location_messages(
         )
         render_diff_path = render_diff_path or str(artifact_root_path / "render-review.patch")
         fix_check_json_path = fix_check_json_path or str(artifact_root_path / "fix-check.json")
-        fix_repair_json_path = fix_repair_json_path or str(
-            artifact_root_path / "fix-repair.json"
-        )
+        fix_repair_json_path = fix_repair_json_path or str(artifact_root_path / "fix-repair.json")
         fix_post_check_json_path = fix_post_check_json_path or str(
             artifact_root_path / "fix-post-check.json"
         )
+
+    payload = {
+        "display_name": display_name,
+        "target_name": target_name,
+        "bundle_index_rerun_hint": bundle_index_rerun_hint or smoke_cli_docs_parity_rerun_hint(),
+    }
+    optional_paths = (
+        ("artifact_root", artifact_root),
+        ("bundle_index_path", bundle_index_path),
+        ("drifted_readme_path", drifted_readme_path),
+        ("render_output_dir", render_output_dir),
+        ("render_manifest_path", render_manifest_path),
+        ("render_diff_path", render_diff_path),
+        ("fix_check_json_path", fix_check_json_path),
+        ("fix_repair_json_path", fix_repair_json_path),
+        ("fix_post_check_json_path", fix_post_check_json_path),
+        ("matrix_summary_path", matrix_summary_path),
+    )
+    for key, value in optional_paths:
+        if value is not None:
+            payload[key] = value
+    return payload
+
+
+def build_smoke_matrix_review_metadata_line(**kwargs: object) -> str:
+    return (
+        f"{SMOKE_MATRIX_REVIEW_METADATA_PREFIX}"
+        f"{json.dumps(build_smoke_matrix_review_metadata_payload(**kwargs), sort_keys=True)}"
+    )
+
+
+def build_smoke_matrix_review_artifact_location_messages(
+    *,
+    artifact_root: str | None = None,
+    bundle_index_path: str | None = None,
+    matrix_summary_path: str | None = None,
+    drifted_readme_path: str | None = None,
+    render_output_dir: str | None = None,
+    render_manifest_path: str | None = None,
+    render_diff_path: str | None = None,
+    fix_check_json_path: str | None = None,
+    fix_repair_json_path: str | None = None,
+    fix_post_check_json_path: str | None = None,
+    rerun_hint: str | None = None,
+    success_defaults: SmokeMatrixDocsReviewSuccessDefaults,
+) -> tuple[str, ...]:
+    metadata = build_smoke_matrix_review_metadata_payload(
+        artifact_root=artifact_root,
+        bundle_index_path=bundle_index_path,
+        matrix_summary_path=matrix_summary_path,
+        drifted_readme_path=drifted_readme_path,
+        render_output_dir=render_output_dir,
+        render_manifest_path=render_manifest_path,
+        render_diff_path=render_diff_path,
+        fix_check_json_path=fix_check_json_path,
+        fix_repair_json_path=fix_repair_json_path,
+        fix_post_check_json_path=fix_post_check_json_path,
+        bundle_index_rerun_hint=rerun_hint,
+    )
+    artifact_root = metadata.get("artifact_root")
+    bundle_index_path = metadata.get("bundle_index_path")
+    matrix_summary_path = metadata.get("matrix_summary_path")
+    drifted_readme_path = metadata.get("drifted_readme_path")
+    render_output_dir = metadata.get("render_output_dir")
+    render_manifest_path = metadata.get("render_manifest_path")
+    render_diff_path = metadata.get("render_diff_path")
+    fix_check_json_path = metadata.get("fix_check_json_path")
+    fix_repair_json_path = metadata.get("fix_repair_json_path")
+    fix_post_check_json_path = metadata.get("fix_post_check_json_path")
+    rerun_hint = metadata.get("bundle_index_rerun_hint")
 
     messages: list[str] = []
     if artifact_root and bundle_index_path:

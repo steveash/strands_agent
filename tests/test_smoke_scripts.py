@@ -34,6 +34,8 @@ from strands_agent_tui.testing import (
     assert_smoke_script_results_match_contract,
     build_smoke_matrix_review_artifact_location_lines,
     build_smoke_matrix_review_artifact_location_messages,
+    build_smoke_matrix_review_metadata_line,
+    build_smoke_matrix_review_metadata_payload,
     build_smoke_cli_doc_drift_report_payload,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
@@ -2629,22 +2631,10 @@ def test_smoke_cli_doc_specs_follow_shared_wrapper_registry_order() -> None:
 
 
 def _expected_smoke_matrix_review_metadata_line(*, artifact_root: str, target_name: str) -> str:
-    payload = {
-        "artifact_root": artifact_root,
-        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
-        "bundle_index_path": f"{artifact_root}/index.json",
-        "display_name": "docs-review",
-        "drifted_readme_path": f"{artifact_root}/README-drifted.md",
-        "fix_check_json_path": f"{artifact_root}/fix-check.json",
-        "fix_post_check_json_path": f"{artifact_root}/fix-post-check.json",
-        "fix_repair_json_path": f"{artifact_root}/fix-repair.json",
-        "matrix_summary_path": f"{artifact_root}/matrix-summary.json",
-        "render_diff_path": f"{artifact_root}/render-review.patch",
-        "render_manifest_path": f"{artifact_root}/render-manifest.json",
-        "render_output_dir": f"{artifact_root}/rendered",
-        "target_name": target_name,
-    }
-    return "[smoke-matrix] review metadata: " + json.dumps(payload, sort_keys=True)
+    return build_smoke_matrix_review_metadata_line(
+        artifact_root=artifact_root,
+        target_name=target_name,
+    )
 
 
 def _expected_smoke_matrix_review_artifact_location_lines(
@@ -2917,45 +2907,8 @@ def test_smoke_matrix_review_emits_artifact_location_after_docs_review_success(m
             artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
             target_name="docs-review",
         ),
-        (
-            "[smoke-matrix] review artifacts: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review "
-            "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json)"
-        ),
-        (
-            "[smoke-matrix] review matrix summary: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/matrix-summary.json"
-        ),
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
-            smoke_cli_docs_parity_rerun_hint()
-        ),
-        (
-            "[smoke-matrix] review drifted README: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md"
-        ),
-        (
-            "[smoke-matrix] review rendered sections: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered"
-        ),
-        (
-            "[smoke-matrix] review render manifest: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json"
-        ),
-        (
-            "[smoke-matrix] review render diff: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch"
-        ),
-        (
-            "[smoke-matrix] review fix-check JSON: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json"
-        ),
-        (
-            "[smoke-matrix] review fix-repair JSON: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json"
-        ),
-        (
-            "[smoke-matrix] review fix-post-check JSON: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json"
+        *_expected_smoke_matrix_review_artifact_location_lines(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-review"
         ),
         summary_metadata.success_summary_line(passed_count=4, total_count=4, elapsed_seconds=4.0),
     ]
@@ -2987,45 +2940,8 @@ def test_smoke_matrix_all_review_emits_distinct_artifact_location_after_docs_rev
             artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
             target_name="docs-review-all",
         ),
-        (
-            "[smoke-matrix] review artifacts: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review "
-            "(index: artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json)"
-        ),
-        (
-            "[smoke-matrix] review matrix summary: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
-        ),
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
-            smoke_cli_docs_parity_rerun_hint()
-        ),
-        (
-            "[smoke-matrix] review drifted README: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/README-drifted.md"
-        ),
-        (
-            "[smoke-matrix] review rendered sections: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/rendered"
-        ),
-        (
-            "[smoke-matrix] review render manifest: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-manifest.json"
-        ),
-        (
-            "[smoke-matrix] review render diff: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-review.patch"
-        ),
-        (
-            "[smoke-matrix] review fix-check JSON: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-check.json"
-        ),
-        (
-            "[smoke-matrix] review fix-repair JSON: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-repair.json"
-        ),
-        (
-            "[smoke-matrix] review fix-post-check JSON: "
-            "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json"
+        *_expected_smoke_matrix_review_artifact_location_lines(
+            artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review"
         ),
         summary_metadata.success_summary_line(passed_count=4, total_count=4, elapsed_seconds=4.0),
     ]
@@ -3142,21 +3058,17 @@ def test_smoke_matrix_docs_review_artifact_messages_honor_explicit_override_path
         display_name="docs-review",
     )
 
-    assert smoke_matrix._docs_review_artifact_metadata(target) == {
-        "artifact_root": "artifacts/review",
-        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
-        "bundle_index_path": "artifacts/review/index.json",
-        "display_name": "docs-review",
-        "drifted_readme_path": "artifacts/custom/README-review.md",
-        "fix_check_json_path": "artifacts/custom/fix-check.json",
-        "fix_post_check_json_path": "artifacts/custom/fix-post-check.json",
-        "fix_repair_json_path": "artifacts/custom/fix-repair.json",
-        "matrix_summary_path": "artifacts/review/matrix-summary.json",
-        "render_diff_path": "artifacts/custom/review.patch",
-        "render_manifest_path": "artifacts/custom/render.json",
-        "render_output_dir": "artifacts/custom/rendered-sections",
-        "target_name": "docs-review",
-    }
+    assert smoke_matrix._docs_review_artifact_metadata(target) == build_smoke_matrix_review_metadata_payload(
+        artifact_root="artifacts/review",
+        bundle_index_path="artifacts/review/index.json",
+        drifted_readme_path="artifacts/custom/README-review.md",
+        render_output_dir="artifacts/custom/rendered-sections",
+        render_manifest_path="artifacts/custom/render.json",
+        render_diff_path="artifacts/custom/review.patch",
+        fix_check_json_path="artifacts/custom/fix-check.json",
+        fix_repair_json_path="artifacts/custom/fix-repair.json",
+        fix_post_check_json_path="artifacts/custom/fix-post-check.json",
+    )
     assert smoke_matrix._docs_review_artifact_location_messages(target) == build_smoke_matrix_review_artifact_location_messages(
         artifact_root="artifacts/review",
         bundle_index_path="artifacts/review/index.json",
@@ -3236,21 +3148,18 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_success(monkeyp
     assert exit_code == 0
     summary_path = artifact_root / "matrix-summary.json"
     assert summary_path.exists()
-    assert json.loads(summary_path.read_text(encoding="utf-8")) == {
-        "artifact_root": str(artifact_root),
-        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
-        "bundle_index_path": str(artifact_root / "index.json"),
-        "display_name": "docs-review",
-        "drifted_readme_path": str(artifact_root / "README-drifted.md"),
-        "fix_check_json_path": str(artifact_root / "fix-check.json"),
-        "fix_post_check_json_path": str(artifact_root / "fix-post-check.json"),
-        "fix_repair_json_path": str(artifact_root / "fix-repair.json"),
-        "matrix_summary_path": str(summary_path),
-        "render_diff_path": str(artifact_root / "render-review.patch"),
-        "render_manifest_path": str(artifact_root / "render-manifest.json"),
-        "render_output_dir": str(artifact_root / "rendered"),
-        "target_name": "docs-review",
-    }
+    assert json.loads(summary_path.read_text(encoding="utf-8")) == build_smoke_matrix_review_metadata_payload(
+        artifact_root=artifact_root,
+        bundle_index_path=artifact_root / "index.json",
+        drifted_readme_path=artifact_root / "README-drifted.md",
+        render_output_dir=artifact_root / "rendered",
+        render_manifest_path=artifact_root / "render-manifest.json",
+        render_diff_path=artifact_root / "render-review.patch",
+        fix_check_json_path=artifact_root / "fix-check.json",
+        fix_repair_json_path=artifact_root / "fix-repair.json",
+        fix_post_check_json_path=artifact_root / "fix-post-check.json",
+        matrix_summary_path=summary_path,
+    )
     assert f"[smoke-matrix] review matrix summary: {summary_path}" in stdout.getvalue().splitlines()
     assert (
         SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
@@ -3290,8 +3199,18 @@ def test_smoke_matrix_writes_review_metadata_summary_artifact_on_failure(monkeyp
     summary_path = artifact_root / "matrix-summary.json"
     assert summary_path.exists()
     summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
-    assert summary_payload["target_name"] == "docs-review"
-    assert summary_payload["bundle_index_rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
+    assert summary_payload == build_smoke_matrix_review_metadata_payload(
+        artifact_root=artifact_root,
+        bundle_index_path=artifact_root / "index.json",
+        drifted_readme_path=artifact_root / "README-drifted.md",
+        render_output_dir=artifact_root / "rendered",
+        render_manifest_path=artifact_root / "render-manifest.json",
+        render_diff_path=artifact_root / "render-review.patch",
+        fix_check_json_path=artifact_root / "fix-check.json",
+        fix_repair_json_path=artifact_root / "fix-repair.json",
+        fix_post_check_json_path=artifact_root / "fix-post-check.json",
+        matrix_summary_path=summary_path,
+    )
     assert f"[smoke-matrix] review matrix summary: {summary_path}" in stderr.getvalue().splitlines()
     assert (
         SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
@@ -3812,21 +3731,10 @@ def test_smoke_matrix_all_review_failure_persists_pending_review_metadata_artifa
     assert exit_code == 1
     summary_path = tmp_path / "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json"
     assert summary_path.exists()
-    assert json.loads(summary_path.read_text(encoding="utf-8")) == {
-        "artifact_root": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
-        "bundle_index_rerun_hint": smoke_cli_docs_parity_rerun_hint(),
-        "bundle_index_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json",
-        "display_name": "docs-review",
-        "drifted_readme_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/README-drifted.md",
-        "fix_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-check.json",
-        "fix_post_check_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json",
-        "fix_repair_json_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-repair.json",
-        "matrix_summary_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/matrix-summary.json",
-        "render_diff_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-review.patch",
-        "render_manifest_path": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-manifest.json",
-        "render_output_dir": "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/rendered",
-        "target_name": "docs-review-all",
-    }
+    assert json.loads(summary_path.read_text(encoding="utf-8")) == build_smoke_matrix_review_metadata_payload(
+        artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
+        target_name="docs-review-all",
+    )
 
 
 def _render_picker_attention_workspace_shell_outputs(tmp_path: Path) -> dict[str, str]:

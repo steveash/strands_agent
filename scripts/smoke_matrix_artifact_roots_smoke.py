@@ -15,6 +15,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
     build_review_artifact_success_results,
     build_smoke_matrix_docs_review_observer_spec,
+    build_smoke_matrix_review_metadata_payload,
     emit_smoke_results,
     load_script_module,
     observe_loaded_review_artifact_output,
@@ -42,6 +43,7 @@ def _patched_run_smoke_target(smoke_matrix_module, checkout_root: Path) -> Itera
         metadata = smoke_matrix_module._docs_review_artifact_metadata(target)
         if metadata is None:
             return
+        metadata = build_smoke_matrix_review_metadata_payload(**metadata)
         for key, value in metadata.items():
             if key in {"display_name", "target_name", "bundle_index_rerun_hint"}:
                 continue
