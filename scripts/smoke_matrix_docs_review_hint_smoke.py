@@ -87,10 +87,8 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             *build_review_artifact_matrix_summary_assertion_results(
                 review_output,
                 review_spec,
-                **review_spec.result_naming.matrix_summary_assertion_result_name_kwargs(
-                    "metadata_expected_path",
-                    "matrix_summary_expected_path",
-                    "bundle_rerun_hint_matches_matrix_summary_hint",
+                **review_spec.result_naming.matrix_summary_assertion_result_name_bundle_kwargs(
+                    "docs_review_hint_failure",
                     result_prefix="",
                 ),
                 bundle_rerun_hint_line=failure_output.bundle_rerun_hint_line,

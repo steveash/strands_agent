@@ -683,6 +683,19 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         "metadata_expected_path_result_name": "metadata_matrix_summary_matches_all_review",
         "matrix_summary_matches_metadata_result_name": "matrix_summary_path_matches_metadata",
     }
+    assert failure_naming.matrix_summary_assertion_result_name_bundle_kwargs(
+        "all_review_missing_api_key_failure"
+    ) == {
+        "metadata_expected_path_result_name": "metadata_matrix_summary_matches_all_review",
+        "matrix_summary_matches_metadata_result_name": "matrix_summary_path_matches_metadata",
+        "matrix_summary_line_matches_metadata_result_name": "matrix_summary_line_matches_metadata_path",
+        "bundle_rerun_hint_result_name": "bundle_rerun_hint_line_matches_matrix_summary_hint",
+    }
+    assert failure_matrix_summary_names.bundle_true_check_names("docs_review_hint_failure") == (
+        "metadata_matrix_summary_matches_all_review",
+        "matrix_summary_path_matches_all_review",
+        "bundle_rerun_hint_line_matches_matrix_summary_hint",
+    )
     assert success_names.required_line_prefixes(
         success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     ) == (
@@ -786,14 +799,11 @@ def test_build_review_artifact_matrix_summary_assertion_results_support_expected
         build_review_artifact_matrix_summary_assertion_results(
             review_output,
             review_spec,
-            **review_spec.result_naming.matrix_summary_assertion_result_name_kwargs(
-                "metadata_expected_path",
-                "matrix_summary_expected_path",
-                "matrix_summary_matches_metadata",
-                "matrix_summary_line_matches_metadata_path",
-                "bundle_rerun_hint_matches_matrix_summary_hint",
+            **review_spec.result_naming.matrix_summary_assertion_result_name_bundle_kwargs(
+                "all_review_missing_api_key_failure",
                 result_prefix="",
             ),
+            matrix_summary_expected_path_result_name=result_names.matrix_summary_expected_path,
             bundle_rerun_hint_line=(
                 f"{SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}"
                 f"{review_spec.expected_bundle_index_rerun_hint}"

@@ -89,11 +89,8 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             *build_review_artifact_matrix_summary_assertion_results(
                 review_output,
                 review_spec,
-                **review_spec.result_naming.matrix_summary_assertion_result_name_kwargs(
-                    "metadata_expected_path",
-                    "matrix_summary_matches_metadata",
-                    "matrix_summary_line_matches_metadata_path",
-                    "bundle_rerun_hint_matches_matrix_summary_hint",
+                **review_spec.result_naming.matrix_summary_assertion_result_name_bundle_kwargs(
+                    "all_review_missing_api_key_failure",
                     result_prefix="",
                 ),
                 bundle_rerun_hint_line=failure_output.bundle_rerun_hint_line,
