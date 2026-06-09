@@ -646,6 +646,7 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         line_detail_prefix="stderr_",
     )
     failure_matrix_summary_names = failure_naming.matrix_summary_assertion_result_names()
+    success_names = failure_naming.success_result_names(result_prefix="all_review")
 
     assert failure_observation_names.detail_names() == (
         "stderr_metadata_line",
@@ -674,6 +675,29 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         "matrix_summary_path_matches_metadata",
         "matrix_summary_line_matches_metadata_path",
         "bundle_rerun_hint_line_matches_matrix_summary_hint",
+    )
+    assert success_names.required_line_prefixes(
+        success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
+    ) == (
+        "all_review_artifact_root: ",
+        f"all_review_metadata_line: {SMOKE_MATRIX_REVIEW_METADATA_PREFIX}",
+        f"all_review_artifacts_line: {SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX}",
+        f"all_review_matrix_summary_line: {SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX}",
+        (
+            "all_review_summary_line: "
+            f"{SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.success_summary_prefix}"
+        ),
+        (
+            "all_review_rerun_hint_line: "
+            f"{SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix}"
+        ),
+    )
+    assert success_names.summary_targets == "all_review_summary_targets_docs_review_all"
+    assert success_names.summary_path_keeps_artifact_root == "all_review_summary_path_keeps_all_review_root"
+    assert success_names.true_check_names()[-3:] == (
+        "all_review_summary_path_keeps_all_review_root",
+        "all_review_summary_line_present",
+        "all_review_rerun_hint_line_present",
     )
 
 
@@ -789,10 +813,7 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
     review_output = fixture.review_output
     review_spec = fixture.review_spec
     artifact_root = fixture.summary_path.parent
-    result_names = review_spec.result_naming.observation_result_names(result_prefix="review")
-    matrix_summary_result_names = review_spec.result_naming.matrix_summary_assertion_result_names(
-        result_prefix="review",
-    )
+    result_names = review_spec.result_naming.success_result_names(result_prefix="review")
 
     success_summary_line = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_success_summary_line(
         0.1
@@ -825,27 +846,27 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
 
     for name, value in shared_result_map.items():
         assert result_map[name] == value
-    assert result_map["review_artifact_root"] == str(artifact_root)
+    assert result_map[result_names.artifact_root] == str(artifact_root)
     assert result_map[result_names.metadata_line] == review_output.metadata_line
     assert result_map[result_names.artifacts_line] == review_output.artifacts_line
     assert result_map[result_names.matrix_summary_line] == review_output.matrix_summary_line
-    assert result_map["review_summary_line"] == success_summary_line
-    assert result_map["review_rerun_hint_line"] == rerun_hint_line
-    assert result_map["review_exit_code_zero"] is True
-    assert result_map["review_stderr_empty"] is True
+    assert result_map[result_names.summary_line] == success_summary_line
+    assert result_map[result_names.rerun_hint_line] == rerun_hint_line
+    assert result_map[result_names.exit_code_zero] is True
+    assert result_map[result_names.stderr_empty] is True
     for check_name in result_names.true_check_names():
         assert result_map[check_name] is True
-    assert result_map["review_metadata_matrix_summary_matches_expected_path"] is True
-    assert result_map["review_matrix_summary_line_matches_expected_path"] is True
-    assert result_map["review_rerun_hint_line_matches_expected_hint"] is True
-    assert result_map["review_paths_loaded_from_matrix_summary"] is True
-    assert result_map["review_artifacts_exist"] is True
-    assert result_map[matrix_summary_result_names.matrix_summary_matches_metadata] is True
-    assert result_map[matrix_summary_result_names.matrix_summary_line_matches_metadata_path] is True
-    assert result_map["review_loaded_summary_path_matches_line"] is True
-    assert result_map["review_summary_path_keeps_review_root"] is True
-    assert result_map["review_summary_line_present"] is True
-    assert result_map["review_rerun_hint_line_present"] is True
+    assert result_map[result_names.metadata_matrix_summary_matches_expected_path] is True
+    assert result_map[result_names.matrix_summary_line_matches_expected_path] is True
+    assert result_map[result_names.rerun_hint_line_matches_expected_hint] is True
+    assert result_map[result_names.paths_loaded_from_matrix_summary] is True
+    assert result_map[result_names.artifacts_exist] is True
+    assert result_map[result_names.matrix_summary_path_matches_metadata] is True
+    assert result_map[result_names.matrix_summary_line_matches_metadata_path] is True
+    assert result_map[result_names.loaded_summary_path_matches_line] is True
+    assert result_map[result_names.summary_path_keeps_artifact_root] is True
+    assert result_map[result_names.summary_line_present] is True
+    assert result_map[result_names.rerun_hint_line_present] is True
 
 
 def test_run_script_module_main_in_temp_checkout_changes_cwd_and_unsets_env(tmp_path: Path, monkeypatch) -> None:
