@@ -59,6 +59,7 @@ MAX_INTERVENTION_PREVIEW = 160
 MAX_TOOL_STREAK_PREVIEWS = 3
 MAX_INTERVENTION_PREVIEWS = 3
 MAX_INTERVENTION_ROLLUP_EVENTS = 6
+MAX_FOCUSED_LANE_QUEUE_PREVIEW_ITEMS = 3
 MAX_SHELL_STREAK_PREVIEWS = 3
 MAX_SHELL_ROLLUP_EVENTS = 6
 MAX_FAILURE_ROLLUP_EVENTS = 6
@@ -636,6 +637,8 @@ class SessionSummary:
         focused_lane_queue_preview_lines = render_numbered_preview_section_lines(
             f"{focused_lane_label} queue",
             self._focused_lane_pending_only_queue_previews(filter_mode),
+            max_items=MAX_FOCUSED_LANE_QUEUE_PREVIEW_ITEMS,
+            overflow_noun="approval",
         )
 
         tool_lines = []

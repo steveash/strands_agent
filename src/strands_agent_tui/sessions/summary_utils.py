@@ -363,13 +363,27 @@ def render_selected_session_preview_lines(
     )
 
 
-def render_numbered_preview_section_lines(label: str, items: Sequence[str]) -> list[str]:
+def render_numbered_preview_section_lines(
+    label: str,
+    items: Sequence[str],
+    *,
+    max_items: int | None = None,
+    overflow_noun: str = "item",
+) -> list[str]:
     if not items:
         return []
-    return [
+    visible_items = list(items)
+    if max_items is not None and max_items > 0:
+        visible_items = visible_items[:max_items]
+    lines = [
         f"- {label} ({len(items)}):",
-        *(f"  {index}. {item}" for index, item in enumerate(items, start=1)),
+        *(f"  {index}. {item}" for index, item in enumerate(visible_items, start=1)),
     ]
+    hidden_count = len(items) - len(visible_items)
+    if hidden_count > 0:
+        noun = overflow_noun if hidden_count == 1 else f"{overflow_noun}s"
+        lines.append(f"  ... {hidden_count} more {noun} hidden")
+    return lines
 
 
 def render_preview_detail_line(label: str, value: str) -> list[str]:

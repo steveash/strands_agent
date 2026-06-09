@@ -2069,6 +2069,98 @@ async def test_session_switcher_enumerates_multi_approval_pending_only_lane_queu
 
 
 @pytest.mark.asyncio
+async def test_session_switcher_caps_long_pending_only_lane_queue_breakdowns(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    queue_store = SessionArtifactStore(tmp_path, session_id="session-shell-test-multi-capped")
+    queue_store.append_turn(
+        TurnArtifact(
+            prompt="queue many tests",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    queue_store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-shell-cap-1",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -q"},
+                source="fake_runtime",
+                prompt="queue pytest",
+            ),
+            ApprovalRequest(
+                request_id="approval-shell-cap-2",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "python -m pytest -q"},
+                source="fake_runtime",
+                prompt="queue python -m pytest",
+            ),
+            ApprovalRequest(
+                request_id="approval-shell-cap-3",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "pytest -x"},
+                source="fake_runtime",
+                prompt="queue fail-fast pytest",
+                restored_from_session=True,
+            ),
+            ApprovalRequest(
+                request_id="approval-shell-cap-4",
+                tool_name="run_shell_command",
+                reason="Needs confirmation",
+                args={"command": "python -m pytest -vv"},
+                source="fake_runtime",
+                prompt="queue verbose app tests",
+                restored_from_session=True,
+            ),
+        ]
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11")
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        output = str(app.query_one("#output").render())
+
+        assert "- shell focus queue (4):" in output
+        assert "1. fresh run_shell_command | cmd pytest -q" in output
+        assert "2. fresh run_shell_command | cmd python -m pytest -q" in output
+        assert "3. restored run_shell_command | cmd pytest -x" in output
+        assert "  ... 1 more approval hidden" in output
+        assert "4. restored run_shell_command | cmd python -m pytest -vv" not in output
+
+
+@pytest.mark.asyncio
 async def test_session_switcher_supports_stale_pending_denied_and_restored_subfilters(tmp_path: Path) -> None:
     current_store = SessionArtifactStore(tmp_path, session_id="session-current")
     current_store.append_turn(

@@ -678,6 +678,67 @@ def test_render_session_picker_enumerates_multi_approval_pending_only_lane_queue
     )
 
 
+def test_render_session_picker_caps_long_pending_only_lane_queue_breakdowns(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-workspace-edit-multi-capped")
+    store.append_turn(
+        TurnArtifact(
+            prompt="queue many edits",
+            response="queued",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    store.save_pending_approvals(
+        [
+            ApprovalRequest(
+                request_id="approval-workspace-cap-1",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes-1.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue write 1",
+            ),
+            ApprovalRequest(
+                request_id="approval-workspace-cap-2",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "notes-2.txt", "expected_occurrences": 2},
+                source="fake_runtime",
+                prompt="queue replace 2",
+            ),
+            ApprovalRequest(
+                request_id="approval-workspace-cap-3",
+                tool_name="write_file",
+                reason="Needs confirmation",
+                args={"relative_path": "notes-3.txt", "overwrite": True},
+                source="fake_runtime",
+                prompt="queue write 3",
+                restored_from_session=True,
+            ),
+            ApprovalRequest(
+                request_id="approval-workspace-cap-4",
+                tool_name="replace_text",
+                reason="Needs confirmation",
+                args={"relative_path": "notes-4.txt", "expected_occurrences": 3},
+                source="fake_runtime",
+                prompt="queue replace 4",
+                restored_from_session=True,
+            ),
+        ]
+    )
+
+    rendered = render_session_picker(tmp_path, filter_mode="workspace-edit")
+
+    assert "- workspace focus queue (4):" in rendered
+    assert "1. fresh write_file | path notes-1.txt" in rendered
+    assert "2. fresh replace_text | path notes-2.txt" in rendered
+    assert "3. restored write_file | path notes-3.txt" in rendered
+    assert "  ... 1 more approval hidden" in rendered
+    assert "4. restored replace_text | path notes-4.txt" not in rendered
+
+
 def test_render_session_picker_falls_back_to_session_activity_for_missing_pending_only_timestamps(
     tmp_path: Path,
 ) -> None:

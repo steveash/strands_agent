@@ -268,6 +268,24 @@ def main() -> int:
             "- recent shell outcomes (1):",
             "  1. confirm/e1 pytest -q -> exit 1",
         ]
+        and render_numbered_preview_section_lines(
+            "workspace focus queue",
+            [
+                "fresh write_file | path notes-1.txt",
+                "fresh replace_text | path notes-2.txt",
+                "restored write_file | path notes-3.txt",
+                "restored replace_text | path notes-4.txt",
+            ],
+            max_items=3,
+            overflow_noun="approval",
+        )
+        == [
+            "- workspace focus queue (4):",
+            "  1. fresh write_file | path notes-1.txt",
+            "  2. fresh replace_text | path notes-2.txt",
+            "  3. restored write_file | path notes-3.txt",
+            "  ... 1 more approval hidden",
+        ]
         and render_numbered_preview_section_lines("recent tools", []) == [],
     )
     all_ok &= emit_smoke_check(
