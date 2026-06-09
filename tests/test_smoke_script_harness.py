@@ -718,8 +718,6 @@ def test_build_review_artifact_observation_results_support_shared_review_checks(
         build_review_artifact_observation_results(
             review_output,
             review_spec,
-            target_suffix="docs_review_all",
-            artifact_suffix="all_review",
             line_detail_prefix="stderr_",
         )
     )
@@ -751,8 +749,6 @@ def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_p
         build_review_artifact_observation_results(
             review_output,
             review_spec,
-            target_suffix="docs_review_all",
-            artifact_suffix="all_review",
             line_detail_prefix="stderr_",
         )
     )
@@ -838,8 +834,6 @@ def test_build_review_artifact_success_results_supports_prefixed_contract_output
         build_review_artifact_observation_results(
             review_output,
             review_spec,
-            target_suffix="docs_review",
-            artifact_suffix="review",
             result_prefix="review",
         )
     )
@@ -1582,8 +1576,6 @@ def test_build_smoke_matrix_docs_review_observer_spec_uses_smoke_matrix_target_m
     assert review_spec.result_naming.artifact_suffix == "review"
     assert review_spec.success_result_kwargs() == {
         "result_prefix": "review",
-        "target_suffix": "docs_review",
-        "artifact_suffix": "review",
     }
 
     assert all_review_spec.requested_target_name == "all-review"
@@ -1604,8 +1596,6 @@ def test_build_smoke_matrix_docs_review_observer_spec_uses_smoke_matrix_target_m
     assert all_review_spec.failure_result_kwargs() == {
         "detail_prefix": "stderr_",
         "result_prefix": "",
-        "target_suffix": "docs_review_all",
-        "artifact_suffix": "all_review",
     }
 
 

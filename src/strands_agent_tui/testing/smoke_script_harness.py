@@ -481,11 +481,7 @@ class SmokeMatrixDocsReviewResultNaming:
         )
 
     def success_result_kwargs(self) -> dict[str, str]:
-        return {
-            "result_prefix": self.result_prefix,
-            "target_suffix": self.target_suffix,
-            "artifact_suffix": self.artifact_suffix,
-        }
+        return {"result_prefix": self.result_prefix}
 
     def failure_result_kwargs(
         self,
@@ -496,8 +492,6 @@ class SmokeMatrixDocsReviewResultNaming:
         return {
             "detail_prefix": detail_prefix,
             "result_prefix": result_prefix,
-            "target_suffix": self.target_suffix,
-            "artifact_suffix": self.artifact_suffix,
         }
 
 
@@ -1824,12 +1818,9 @@ def build_review_artifact_observation_results(
     review_output: ReviewArtifactOutputObservation,
     review_spec: SmokeMatrixDocsReviewObserverSpec,
     *,
-    target_suffix: str,
-    artifact_suffix: str,
     result_prefix: str = "",
     line_detail_prefix: str = "",
 ) -> list[tuple[str, object]]:
-    del target_suffix, artifact_suffix
     result_names = review_spec.result_naming.observation_result_names(
         result_prefix=result_prefix,
         line_detail_prefix=line_detail_prefix,
@@ -1893,16 +1884,12 @@ def build_review_artifact_failure_results(
     review_output: ReviewArtifactOutputObservation,
     review_spec: SmokeMatrixDocsReviewObserverSpec,
     *,
-    target_suffix: str,
-    artifact_suffix: str,
     detail_prefix: str = "stderr_",
     result_prefix: str = "",
 ) -> list[tuple[str, object]]:
     return build_review_artifact_observation_results(
         review_output,
         review_spec,
-        target_suffix=target_suffix,
-        artifact_suffix=artifact_suffix,
         result_prefix=result_prefix,
         line_detail_prefix=detail_prefix,
     )
@@ -1988,8 +1975,6 @@ def build_review_artifact_success_results(
     review_spec: SmokeMatrixDocsReviewObserverSpec,
     *,
     result_prefix: str,
-    target_suffix: str,
-    artifact_suffix: str,
     success_summary_line: str,
     rerun_hint_line: str,
     success_defaults: SmokeMatrixDocsReviewSuccessDefaults,
@@ -2005,8 +1990,6 @@ def build_review_artifact_success_results(
         *build_review_artifact_observation_results(
             review_output,
             review_spec,
-            target_suffix=target_suffix,
-            artifact_suffix=artifact_suffix,
             result_prefix=result_prefix,
         ),
         (result_names.summary_line, success_summary_line),
