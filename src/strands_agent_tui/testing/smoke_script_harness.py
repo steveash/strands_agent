@@ -227,6 +227,28 @@ SmokeMatrixDocsReviewFailureStep = Literal[
     "failure_summary",
 ]
 
+SmokeMatrixDocsReviewMatrixSummaryAssertionCheck = Literal[
+    "metadata_expected_path",
+    "matrix_summary_expected_path",
+    "matrix_summary_matches_metadata",
+    "matrix_summary_line_matches_metadata_path",
+    "bundle_rerun_hint_matches_matrix_summary_hint",
+]
+
+
+def _matrix_summary_assertion_result_name_keyword(
+    check: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+) -> str:
+    if check == "metadata_expected_path":
+        return "metadata_expected_path_result_name"
+    if check == "matrix_summary_expected_path":
+        return "matrix_summary_expected_path_result_name"
+    if check == "matrix_summary_matches_metadata":
+        return "matrix_summary_matches_metadata_result_name"
+    if check == "matrix_summary_line_matches_metadata_path":
+        return "matrix_summary_line_matches_metadata_result_name"
+    return "bundle_rerun_hint_result_name"
+
 
 @dataclass(frozen=True)
 class SmokeMatrixDocsReviewFailureObservation:
@@ -420,6 +442,15 @@ class SmokeMatrixDocsReviewResultNaming:
             ),
         )
 
+    def matrix_summary_assertion_result_name_kwargs(
+        self,
+        *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+        result_prefix: str | None = None,
+    ) -> dict[str, str]:
+        return self.matrix_summary_assertion_result_names(
+            result_prefix=result_prefix,
+        ).selected_result_name_kwargs(*checks)
+
     def success_result_names(
         self,
         *,
@@ -549,6 +580,21 @@ class SmokeMatrixDocsReviewMatrixSummaryAssertionResultNames:
     matrix_summary_line_matches_metadata_path: str
     bundle_rerun_hint_matches_matrix_summary_hint: str
 
+    def result_name(
+        self,
+        check: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+    ) -> str:
+        return getattr(self, check)
+
+    def selected_result_name_kwargs(
+        self,
+        *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+    ) -> dict[str, str]:
+        return {
+            _matrix_summary_assertion_result_name_keyword(check): self.result_name(check)
+            for check in checks
+        }
+
     def true_check_names(self) -> tuple[str, ...]:
         return (
             self.metadata_expected_path,
@@ -592,6 +638,17 @@ class SmokeMatrixDocsReviewSuccessResultNames:
     @property
     def matrix_summary_line(self) -> str:
         return self.observation.matrix_summary_line
+
+    def matrix_summary_assertion_result_names(
+        self,
+    ) -> SmokeMatrixDocsReviewMatrixSummaryAssertionResultNames:
+        return SmokeMatrixDocsReviewMatrixSummaryAssertionResultNames(
+            metadata_expected_path=self.metadata_matrix_summary_matches_expected_path,
+            matrix_summary_expected_path=self.matrix_summary_line_matches_expected_path,
+            matrix_summary_matches_metadata=self.matrix_summary_path_matches_metadata,
+            matrix_summary_line_matches_metadata_path=self.matrix_summary_line_matches_metadata_path,
+            bundle_rerun_hint_matches_matrix_summary_hint=self.rerun_hint_line_matches_expected_hint,
+        )
 
     def required_line_prefixes(
         self,
@@ -1985,6 +2042,7 @@ def build_review_artifact_success_results(
     expected_paths = review_spec.resolve_expected_paths(checkout_root=review_output.checkout_root)
     artifact_root = review_output.matrix_summary_paths.get("artifact_root")
     result_names = review_spec.result_naming.success_result_names(result_prefix=result_prefix)
+    matrix_summary_result_names = result_names.matrix_summary_assertion_result_names()
     return [
         (result_names.artifact_root, str(artifact_root) if artifact_root is not None else ""),
         *build_review_artifact_observation_results(
@@ -2000,17 +2058,15 @@ def build_review_artifact_success_results(
             review_output,
             review_spec,
             result_prefix=result_prefix,
-            metadata_expected_path_result_name=result_names.metadata_matrix_summary_matches_expected_path,
-            matrix_summary_expected_path_result_name=result_names.matrix_summary_line_matches_expected_path,
-            matrix_summary_matches_metadata_result_name=result_names.matrix_summary_path_matches_metadata,
-            matrix_summary_line_matches_metadata_result_name=(
-                result_names.matrix_summary_line_matches_metadata_path
+            **matrix_summary_result_names.selected_result_name_kwargs(
+                "metadata_expected_path",
+                "matrix_summary_expected_path",
+                "matrix_summary_matches_metadata",
+                "matrix_summary_line_matches_metadata_path",
+                "bundle_rerun_hint_matches_matrix_summary_hint",
             ),
-        ),
-        (
-            result_names.rerun_hint_line_matches_expected_hint,
-            rerun_hint_line
-            == success_defaults.format_rerun_hint_line(review_spec.expected_bundle_index_rerun_hint),
+            bundle_rerun_hint_line=rerun_hint_line,
+            bundle_rerun_hint_prefix=success_defaults.rerun_hint_prefix,
         ),
         (result_names.paths_loaded_from_matrix_summary, bool(review_output.matrix_summary_paths)),
         (result_names.artifacts_exist, artifacts_exist),
