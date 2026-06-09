@@ -606,6 +606,80 @@ def build_smoke_matrix_review_metadata_line(**kwargs: object) -> str:
     )
 
 
+@dataclass(frozen=True)
+class SmokeMatrixDocsReviewObservationFixture:
+    review_output: ReviewArtifactOutputObservation
+    review_spec: SmokeMatrixDocsReviewObserverSpec
+    metadata_payload: dict[str, str]
+    summary_path: Path
+
+
+def build_smoke_matrix_docs_review_observation_fixture(
+    checkout_root: Path,
+    *,
+    requested_target_name: Literal["review", "all-review"],
+    artifact_root: str = "artifacts/review",
+    bundle_index_rerun_hint: str | None = None,
+    driver_filename: str = "unused.py",
+) -> SmokeMatrixDocsReviewObservationFixture:
+    if requested_target_name == "review":
+        target_name = "docs-review"
+    elif requested_target_name == "all-review":
+        target_name = "docs-review-all"
+    else:
+        raise ValueError(
+            "requested_target_name must be one of {'review', 'all-review'}"
+        )
+
+    metadata_payload = build_smoke_matrix_review_metadata_payload(
+        artifact_root=artifact_root,
+        bundle_index_rerun_hint=bundle_index_rerun_hint,
+        display_name=target_name,
+        target_name=target_name,
+    )
+    expected_artifact_paths = {
+        key: value
+        for key, value in metadata_payload.items()
+        if key not in {"display_name", "target_name", "bundle_index_rerun_hint"}
+    }
+    summary_path = resolve_checkout_path(
+        metadata_payload["matrix_summary_path"],
+        checkout_root=checkout_root,
+    )
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(metadata_payload, indent=2) + "\n", encoding="utf-8")
+
+    review_output = collect_review_artifact_output(
+        [
+            build_smoke_matrix_review_metadata_line(**metadata_payload),
+            f"{SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX}{metadata_payload['artifact_root']}",
+            (
+                f"{SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX}"
+                f"{metadata_payload['matrix_summary_path']}"
+            ),
+        ],
+        checkout_root=checkout_root,
+        metadata_prefix=SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+        artifacts_prefix=SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+        matrix_summary_prefix=SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
+    )
+    review_spec = SmokeMatrixDocsReviewObserverSpec(
+        requested_target_name=requested_target_name,
+        expected_target_name=target_name,
+        expected_artifact_root=metadata_payload["artifact_root"],
+        expected_matrix_summary_path=metadata_payload["matrix_summary_path"],
+        expected_bundle_index_rerun_hint=metadata_payload["bundle_index_rerun_hint"],
+        expected_artifact_paths=expected_artifact_paths,
+        driver_filename=driver_filename,
+    )
+    return SmokeMatrixDocsReviewObservationFixture(
+        review_output=review_output,
+        review_spec=review_spec,
+        metadata_payload=metadata_payload,
+        summary_path=summary_path,
+    )
+
+
 def build_smoke_matrix_review_artifact_location_messages(
     *,
     artifact_root: str | None = None,

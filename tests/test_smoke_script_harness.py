@@ -52,6 +52,7 @@ from strands_agent_tui.testing import (
     build_smoke_matrix_review_metadata_payload,
     build_review_artifact_success_results,
     build_script_driver_source,
+    build_smoke_matrix_docs_review_observation_fixture,
     build_smoke_matrix_docs_review_observer_spec,
     build_standalone_docs_rerun_hint_results,
     collect_smoke_wrapper_failure_output,
@@ -617,41 +618,32 @@ def test_collect_smoke_matrix_docs_review_failure_output_validates_failed_matche
         )
 
 
-def test_build_review_artifact_observation_results_support_shared_review_checks(tmp_path: Path) -> None:
-    checkout_root = tmp_path / "checkout"
-    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_payload = {
-        "bundle_index_rerun_hint": "rerun docs parity",
-        "display_name": "docs-review-all",
-        "target_name": "docs-review-all",
-        "artifact_root": "artifacts/review",
-        "matrix_summary_path": "artifacts/review/matrix-summary.json",
-    }
-    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
-    review_output = collect_review_artifact_output(
-        [
-            f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
-            "[smoke-matrix] review artifacts: artifacts/review",
-            "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
-        ],
-        checkout_root=checkout_root,
-        metadata_prefix="[smoke-matrix] review metadata: ",
-        artifacts_prefix="[smoke-matrix] review artifacts: ",
-        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
-    )
-    review_spec = SmokeMatrixDocsReviewObserverSpec(
+def test_build_smoke_matrix_docs_review_observation_fixture_builds_shared_review_setup(
+    tmp_path: Path,
+) -> None:
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
         requested_target_name="all-review",
-        expected_target_name="docs-review-all",
-        expected_artifact_root="artifacts/review",
-        expected_matrix_summary_path="artifacts/review/matrix-summary.json",
-        expected_bundle_index_rerun_hint="rerun docs parity",
-        expected_artifact_paths={
-            "artifact_root": "artifacts/review",
-            "matrix_summary_path": "artifacts/review/matrix-summary.json",
-        },
-        driver_filename="unused.py",
     )
+
+    assert fixture.summary_path == tmp_path / "checkout" / "artifacts" / "review" / "matrix-summary.json"
+    assert fixture.metadata_payload["target_name"] == "docs-review-all"
+    assert fixture.review_spec.expected_target_name == "docs-review-all"
+    assert fixture.review_spec.expected_artifact_root == "artifacts/review"
+    assert fixture.review_spec.expected_matrix_summary_path == "artifacts/review/matrix-summary.json"
+    assert fixture.review_output.matrix_summary_artifact_exists is True
+    assert fixture.review_spec.metadata_artifact_paths_match(fixture.review_output) is True
+    assert fixture.review_spec.matrix_summary_artifact_paths_match(fixture.review_output) is True
+
+
+
+def test_build_review_artifact_observation_results_support_shared_review_checks(tmp_path: Path) -> None:
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
+        requested_target_name="all-review",
+    )
+    review_output = fixture.review_output
+    review_spec = fixture.review_spec
 
     result_map = dict(
         build_review_artifact_observation_results(
@@ -684,40 +676,12 @@ def test_build_review_artifact_observation_results_support_shared_review_checks(
 
 
 def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_path: Path) -> None:
-    checkout_root = tmp_path / "checkout"
-    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_payload = {
-        "bundle_index_rerun_hint": "rerun docs parity",
-        "display_name": "docs-review-all",
-        "target_name": "docs-review-all",
-        "artifact_root": "artifacts/review",
-        "matrix_summary_path": "artifacts/review/matrix-summary.json",
-    }
-    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
-    review_output = collect_review_artifact_output(
-        [
-            f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
-            "[smoke-matrix] review artifacts: artifacts/review",
-            "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
-        ],
-        checkout_root=checkout_root,
-        metadata_prefix="[smoke-matrix] review metadata: ",
-        artifacts_prefix="[smoke-matrix] review artifacts: ",
-        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
-    )
-    review_spec = SmokeMatrixDocsReviewObserverSpec(
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
         requested_target_name="all-review",
-        expected_target_name="docs-review-all",
-        expected_artifact_root="artifacts/review",
-        expected_matrix_summary_path="artifacts/review/matrix-summary.json",
-        expected_bundle_index_rerun_hint="rerun docs parity",
-        expected_artifact_paths={
-            "artifact_root": "artifacts/review",
-            "matrix_summary_path": "artifacts/review/matrix-summary.json",
-        },
-        driver_filename="unused.py",
     )
+    review_output = fixture.review_output
+    review_spec = fixture.review_spec
 
     result_map = dict(
         build_review_artifact_failure_results(
@@ -743,40 +707,12 @@ def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_p
 def test_build_review_artifact_matrix_summary_assertion_results_support_expected_path_and_hint_checks(
     tmp_path: Path,
 ) -> None:
-    checkout_root = tmp_path / "checkout"
-    summary_path = checkout_root / "artifacts" / "review" / "matrix-summary.json"
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_payload = {
-        "bundle_index_rerun_hint": "rerun docs parity",
-        "display_name": "docs-review-all",
-        "target_name": "docs-review-all",
-        "artifact_root": "artifacts/review",
-        "matrix_summary_path": "artifacts/review/matrix-summary.json",
-    }
-    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
-    review_output = collect_review_artifact_output(
-        [
-            f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
-            "[smoke-matrix] review artifacts: artifacts/review",
-            "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
-        ],
-        checkout_root=checkout_root,
-        metadata_prefix="[smoke-matrix] review metadata: ",
-        artifacts_prefix="[smoke-matrix] review artifacts: ",
-        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
-    )
-    review_spec = SmokeMatrixDocsReviewObserverSpec(
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
         requested_target_name="all-review",
-        expected_target_name="docs-review-all",
-        expected_artifact_root="artifacts/review",
-        expected_matrix_summary_path="artifacts/review/matrix-summary.json",
-        expected_bundle_index_rerun_hint="rerun docs parity",
-        expected_artifact_paths={
-            "artifact_root": "artifacts/review",
-            "matrix_summary_path": "artifacts/review/matrix-summary.json",
-        },
-        driver_filename="unused.py",
     )
+    review_output = fixture.review_output
+    review_spec = fixture.review_spec
 
     result_map = dict(
         build_review_artifact_matrix_summary_assertion_results(
@@ -787,7 +723,8 @@ def test_build_review_artifact_matrix_summary_assertion_results_support_expected
             matrix_summary_matches_metadata_result_name="matrix_summary_path_matches_metadata",
             matrix_summary_line_matches_metadata_result_name="matrix_summary_line_matches_metadata_path",
             bundle_rerun_hint_line=(
-                f"{SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}rerun docs parity"
+                f"{SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}"
+                f"{review_spec.expected_bundle_index_rerun_hint}"
             ),
             bundle_rerun_hint_prefix=SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
             bundle_rerun_hint_result_name="bundle_rerun_hint_line_matches_matrix_summary_hint",
@@ -805,47 +742,19 @@ def test_build_review_artifact_matrix_summary_assertion_results_support_expected
 
 
 def test_build_review_artifact_success_results_supports_prefixed_contract_output(tmp_path: Path) -> None:
-    checkout_root = tmp_path / "checkout"
-    artifact_root = checkout_root / "artifacts" / "review"
-    summary_path = artifact_root / "matrix-summary.json"
-    artifact_root.mkdir(parents=True, exist_ok=True)
-    summary_payload = {
-        "bundle_index_rerun_hint": "rerun docs parity",
-        "display_name": "docs-review",
-        "target_name": "docs-review",
-        "artifact_root": "artifacts/review",
-        "matrix_summary_path": "artifacts/review/matrix-summary.json",
-    }
-    summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
-    review_output = collect_review_artifact_output(
-        [
-            f"[smoke-matrix] review metadata: {json.dumps(summary_payload, sort_keys=True)}",
-            "[smoke-matrix] review artifacts: artifacts/review",
-            "[smoke-matrix] review matrix summary: artifacts/review/matrix-summary.json",
-        ],
-        checkout_root=checkout_root,
-        metadata_prefix="[smoke-matrix] review metadata: ",
-        artifacts_prefix="[smoke-matrix] review artifacts: ",
-        matrix_summary_prefix="[smoke-matrix] review matrix summary: ",
-    )
-    review_spec = SmokeMatrixDocsReviewObserverSpec(
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
         requested_target_name="review",
-        expected_target_name="docs-review",
-        expected_artifact_root="artifacts/review",
-        expected_matrix_summary_path="artifacts/review/matrix-summary.json",
-        expected_bundle_index_rerun_hint="rerun docs parity",
-        expected_artifact_paths={
-            "artifact_root": "artifacts/review",
-            "matrix_summary_path": "artifacts/review/matrix-summary.json",
-        },
-        driver_filename="unused.py",
     )
+    review_output = fixture.review_output
+    review_spec = fixture.review_spec
+    artifact_root = fixture.summary_path.parent
 
     success_summary_line = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_success_summary_line(
         0.1
     )
     rerun_hint_line = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line(
-        "rerun docs parity"
+        review_spec.expected_bundle_index_rerun_hint
     )
     result_map = dict(
         build_review_artifact_success_results(
