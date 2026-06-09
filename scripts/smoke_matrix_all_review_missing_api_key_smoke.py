@@ -61,6 +61,9 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
     )
     try:
         stderr_lines = smoke_run.stderr_lines
+        matrix_summary_result_names = review_spec.result_naming.matrix_summary_assertion_result_names(
+            result_prefix="",
+        )
         failure_output = collect_smoke_matrix_docs_review_failure_output(
             stderr_lines,
             review_output=review_output,
@@ -89,14 +92,20 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             *build_review_artifact_matrix_summary_assertion_results(
                 review_output,
                 review_spec,
-                metadata_expected_path_result_name="metadata_matrix_summary_matches_all_review",
-                matrix_summary_matches_metadata_result_name="matrix_summary_path_matches_metadata",
-                matrix_summary_line_matches_metadata_result_name="matrix_summary_line_matches_metadata_path",
+                metadata_expected_path_result_name=matrix_summary_result_names.metadata_expected_path,
+                matrix_summary_matches_metadata_result_name=(
+                    matrix_summary_result_names.matrix_summary_matches_metadata
+                ),
+                matrix_summary_line_matches_metadata_result_name=(
+                    matrix_summary_result_names.matrix_summary_line_matches_metadata_path
+                ),
                 bundle_rerun_hint_line=failure_output.bundle_rerun_hint_line,
                 bundle_rerun_hint_prefix=(
                     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_prefix
                 ),
-                bundle_rerun_hint_result_name="bundle_rerun_hint_line_matches_matrix_summary_hint",
+                bundle_rerun_hint_result_name=(
+                    matrix_summary_result_names.bundle_rerun_hint_matches_matrix_summary_hint
+                ),
             ),
             (
                 "metadata_before_missing_api_key_hint",
