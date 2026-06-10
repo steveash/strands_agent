@@ -2619,8 +2619,7 @@ async def test_session_switcher_reports_empty_filter_triage_guidance(tmp_path: P
             "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage."
             in output
         )
-        assert "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in output
-        assert "Enter switches the highlighted session once a visible row exists again." in output
+        assert "Press Enter or N to start a fresh session, or Esc/F11 to return to the active session." in output
         assert "session-current | 1 turn(s)" not in output
         assert "View: session switcher" in status
         assert prompt.disabled is True
@@ -2745,6 +2744,55 @@ async def test_session_switcher_supports_arrow_navigation_and_enter_selection(tm
         assert "inspect newer session" in output
         assert "Turns: 1" in status
         assert "View: live latest 1-1" in status
+        assert prompt.disabled is False
+
+
+@pytest.mark.asyncio
+async def test_session_switcher_enter_starts_new_session_when_filter_has_no_matches(tmp_path: Path) -> None:
+    current_store = SessionArtifactStore(tmp_path, session_id="session-current")
+    current_store.append_turn(
+        TurnArtifact(
+            prompt="current prompt",
+            response="current response",
+            provider="fake-strands",
+            mode="fake",
+            events=[],
+            response_metadata={"mode": "fake"},
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="session-current",
+        ),
+        artifact_store=current_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("f11", "p")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        output = str(app.query_one("#output").render())
+        status = str(app.query_one("#status").render())
+        workspace = str(app.query_one("#workspace").render())
+        events = str(app.query_one("#events").render())
+        prompt = app.query_one("#prompt", Input)
+
+        assert "Phase 1 proves the basic TUI-to-agent loop." in output
+        assert "Turns: 0" in status
+        assert "View: live" in status
+        assert "Session: session-current" not in workspace
+        assert "kind=session_started | New session started" in events
+        assert app.artifact_store.session_id != "session-current"
+        assert app.session_switcher_active is False
         assert prompt.disabled is False
 
 

@@ -92,7 +92,7 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
                     result_prefix="",
                 ),
                 bundle_rerun_hint_line=failure_output.bundle_rerun_hint_line,
-                bundle_rerun_hint_prefix=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.bundle_rerun_hint_prefix,
+                bundle_rerun_hint_defaults=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
             ),
             (
                 "bundle_rerun_hint_after_matrix_summary",

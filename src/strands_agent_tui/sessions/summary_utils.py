@@ -309,10 +309,9 @@ def render_recent_session_empty_state_lines(
         )
     else:
         lines.append(
-            "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists."
+            "Press Enter or N to start a fresh session, or Esc/F11 to return to the active session."
             f"{_stale_cutoff_inline_suffix(stale_cutoff)}"
         )
-        lines.append("Enter switches the highlighted session once a visible row exists again.")
     return lines
 
 

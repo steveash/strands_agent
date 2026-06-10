@@ -109,7 +109,7 @@ What exists now:
 - restart-safe restoration of event-filter, timeline detail/raw view, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
 - launch-time CLI picker triage controls for all/pending/denied/restore/restored-approval/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting, including `--pick-filter` / `--pick-sort` defaults and interactive `A` / `P` / `D` / `R` / `V` / `O` / `Q` / `X` / `U` / `T` / `W` / `E` / `G` / `H` / `I` / `Y` / `S` toggles,
-- an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline,
+- an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline even when the active filter has zero visible matches,
 - keyboard-driven session-switcher navigation with ↑/↓ (or J/K), Enter-to-switch, and a highlighted selection row rather than number-only switching,
 - in-app session-switcher triage controls for all/pending/denied/restore/restored-approval/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting so denser recent-session summaries stay skimmable as the list grows,
 - restart-safe session-switcher restoration so reopening a session can bring back the chooser with the prior target selection preserved where possible,
@@ -119,7 +119,7 @@ What exists now:
 - focused `workspace-edit` and `shell-test` backlog summaries that now add queue-mix metrics for `pending-only` vs `restored pending-only` matches plus oldest pending age/timestamp cues that can fall back to session activity when approval timestamps are missing, and those summary lines now explicitly label when the displayed oldest-age cue came from that fallback path, so approval-backed lane matches are visible and auditable at the page level too,
 - selected-session previews in both the launch-time picker and in-app `F11` switcher that now also show pending-only age, absolute UTC timestamp, whether that cue came from approval `created_at` or session-activity fallback, and bounded numbered queue breakdowns when multiple approvals share the focused pending-only lane, so operators can audit a highlighted queue-backed lane match without mentally joining it to the page-level rollup,
 - a selected-session preview block inside the in-app `F11` switcher so the highlighted session now exposes the same richer summary context as the launch-time picker,
-- explicit empty-filter guidance across both recent-session reopen surfaces so zero-match triage states say how many saved sessions still exist plus which keys recover all/pending/denied/restore/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test views,
+- explicit empty-filter guidance across both recent-session reopen surfaces so zero-match triage states say how many saved sessions still exist plus which keys recover all/pending/denied/restore/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test views, and the in-app switcher now advertises/exercises the same Enter-or-N fresh-session fallback as the launch-time picker,
 - active stale-approval cutoff hints echoed in picker/switcher legends, prompts, empty-state guidance, and stale page-level rollup lines so stale triage semantics stay visible even when the cutoff comes from CLI or env config,
 - deterministic recent-session ordering that now prefers the newest artifact turn timestamp instead of relying only on filesystem mtime ties,
 - attention sorting that now pulls sessions with pending approvals first, recently denied approvals next, then recent tool failures above generic restore/tool activity so blocked or broken work stays easier to spot,
@@ -133,28 +133,29 @@ What exists now:
 - and a dedicated `scripts/session_triage_intervention_mix_smoke.py` contract runner that exercises the public session-triage wrapper and asserts intervention target/continuation mix lines end-to-end across both picker and switcher flows.
 
 What changed this run:
-- updated `src/strands_agent_tui/sessions/summary_utils.py` so numbered preview sections can collapse after a configurable visible-item cap while still showing the full queue size and an explicit hidden-count line,
-- updated `src/strands_agent_tui/sessions/picker.py` so focused `workspace-edit` and `shell-test` selected-session previews now cap pending-only queue breakdowns at three visible approvals instead of letting long queues swamp the rest of the preview,
-- added regression coverage in `tests/test_summary_utils.py`, `tests/test_sessions.py`, and `tests/test_app.py`, plus smoke coverage in `scripts/summary_utils_smoke.py`, to lock the new collapse behavior across the picker and in-app switcher surfaces,
-- validated the change with focused preview/session/app pytest coverage, the public `session_triage_smoke.py both` bundle, the summary-utils smoke target, and the full pytest suite,
+- updated `src/strands_agent_tui/app.py` so pressing `Enter` inside the in-app `F11` switcher now starts a fresh session when the active filter has zero visible matches instead of doing nothing,
+- updated `src/strands_agent_tui/sessions/summary_utils.py` so the shared zero-match switcher guidance now reflects the new Enter-or-`N` fallback clearly,
+- added regression coverage in `tests/test_app.py` and `tests/test_summary_utils.py`, plus smoke coverage in `scripts/session_switcher_smoke.py` and `scripts/summary_utils_smoke.py`, to lock both the copy and the new zero-match Enter behavior,
+- tightened the smoke-doc review harness rerun-hint assertion helper so smoke scripts can derive expected bundle-hint prefixes from shared defaults instead of repeating raw prefix strings, with matching regression coverage in `tests/test_smoke_script_harness.py`,
+- validated the change with focused app/summary pytest coverage, the public `session_triage_smoke.py both` bundle, the summary-utils smoke target, and the full pytest suite,
 - and no destructive unblock step was needed this run.
 
 Why this matters now:
-- the recent-session picker and `F11` switcher are now rich enough that very long pending approval queues can drown out the rest of the per-session context,
-- capping those queue breakdowns keeps the reopen surfaces readable while still telling Steve exactly how many approvals remain queued,
-- and that makes approval-heavy Strands sessions easier to triage without losing the important provenance, age, and target cues.
+- the launch-time picker already treated zero-match triage as a place where Steve could immediately branch into a fresh session, but the in-app switcher still had a small dead-end interaction seam,
+- letting `Enter` start a fresh session from that zero-match state makes the reopen UX more consistent and keeps session triage feeling like an active control surface instead of a passive report,
+- and that makes it easier to study how Strands session persistence and operator steering behave when Steve pivots from blocked or over-filtered work into a new coding loop.
 
 How we know the prototype is working right now:
-- focused preview/session/app pytest coverage proves both the pure rendering helper and the picker/switcher surfaces collapse long queue breakdowns after three visible items,
-- `summary_utils_smoke.py` now exercises the capped-numbered-preview contract directly,
-- `session_triage_smoke.py both` still passes end-to-end, so the richer recent-session triage flows remain coherent after the preview compaction,
-- and the full pytest suite still passes after the queue-preview update.
+- focused pytest coverage now proves both the shared empty-state copy and the live TUI behavior when `Enter` is pressed from a zero-match switcher state,
+- `summary_utils_smoke.py` exercises the shared guidance contract directly,
+- `session_triage_smoke.py both` now covers the zero-match switcher hint plus the new `Enter`-starts-fresh-session smoke path end-to-end,
+- and the full pytest suite still passes after the switcher interaction change.
 
 Current evidence:
-- focused preview/session/app coverage: `.venv/bin/pytest -q tests/test_summary_utils.py tests/test_sessions.py tests/test_app.py` => `153 passed in 39.04s`,
+- focused app/summary coverage: `.venv/bin/pytest -q tests/test_summary_utils.py tests/test_app.py` => `84 passed in 44.00s`,
 - summary rendering smoke: `.venv/bin/python scripts/summary_utils_smoke.py` => all checks passed,
-- public triage smoke: `.venv/bin/python scripts/session_triage_smoke.py both` => `[session-triage-smoke] summary: 2/2 targets passed in 21.39s`,
-- full automated tests: `.venv/bin/pytest -q` => `518 passed in 132.50s (0:02:12)`.
+- public triage smoke: `.venv/bin/python scripts/session_triage_smoke.py both` => `[session-triage-smoke] summary: 2/2 targets passed in 26.20s`,
+- full automated tests: `.venv/bin/pytest -q` => `521 passed in 135.97s (0:02:15)`.
 
 ## First five phases
 
@@ -589,7 +590,7 @@ The launch-time picker now mirrors the in-app triage model: use `J` / `K` to mov
 
 Partially typed prompt text is also persisted in `session_state.json`, so a restart or session reload can reopen with the draft still in the input instead of discarding it.
 
-After startup, `F11` opens the same recent-session summaries inside the TUI so you can switch to another saved session or start a fresh one without restarting. Use ↑/↓ (or `J`/`K`) to move the highlighted row, `Enter` to switch to the highlighted session, number keys for quick direct selection, `W` / `E` to isolate workspace-inspect vs workspace-edit sessions, `V` to isolate restored-approval sessions, `G` for intervention-heavy sessions, `H` / `I` / `Y` for shell lanes, and `N` for a fresh session. Pending and denied switcher filters now reuse the same backlog headers as the launch-time picker, so approval volume and age are visible before you switch sessions. The highlighted row now expands into a selected-session preview block, including pending approval details, restored-approval badges, restore badges, workspace-lane cues, last prompt, last tool, and bounded recent tool/workspace streaks. If the active switcher filter narrows to zero matches, the switcher now explains how many saved sessions still exist, which triage keys widen the view again, when `Esc`/`F11` returns to the active session, and that `Enter` only becomes actionable once a visible row exists. If the target session has persisted approvals, they are restored automatically; if the current session still has an unresolved approval, switching is blocked until you approve or deny it.
+After startup, `F11` opens the same recent-session summaries inside the TUI so you can switch to another saved session or start a fresh one without restarting. Use ↑/↓ (or `J`/`K`) to move the highlighted row, `Enter` to switch to the highlighted session, number keys for quick direct selection, `W` / `E` to isolate workspace-inspect vs workspace-edit sessions, `V` to isolate restored-approval sessions, `G` for intervention-heavy sessions, `H` / `I` / `Y` for shell lanes, and `N` for a fresh session. Pending and denied switcher filters now reuse the same backlog headers as the launch-time picker, so approval volume and age are visible before you switch sessions. The highlighted row now expands into a selected-session preview block, including pending approval details, restored-approval badges, restore badges, workspace-lane cues, last prompt, last tool, and bounded recent tool/workspace streaks. If the active switcher filter narrows to zero matches, the switcher now explains how many saved sessions still exist, which triage keys widen the view again, when `Esc`/`F11` returns to the active session, and that `Enter` or `N` can immediately start a fresh session from that empty state. If the target session has persisted approvals, they are restored automatically; if the current session still has an unresolved approval, switching is blocked until you approve or deny it.
 
 If you restart while the switcher is open, the app now restores that chooser mode and preserves the previously highlighted target session where possible, so you can keep triaging recent work instead of manually reopening the same picker state.
 
@@ -676,7 +677,7 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - resumed sessions render a compact live history window instead of dumping the full backlog
   - replay shortcuts browse older/newer turns and can return to live/latest view
   - restart-safe draft prompt state is restored into the input after restart
-  - the in-app session switcher supports highlighted keyboard navigation, direct number shortcuts, selected-session preview rendering, explicit empty-filter triage guidance, and restart-safe chooser restoration
+  - the in-app session switcher supports highlighted keyboard navigation, direct number shortcuts, selected-session preview rendering, explicit empty-filter triage guidance, zero-match `Enter` fresh-session fallback, and restart-safe chooser restoration
 - the launch-time recent-session picker can page past the first 8 visible sessions while preserving the same triage filters and sorts, including restored-approval triage
   - CLI argument parsing overrides runtime/model/workspace selection correctly
   - CLI session selection can load an explicit session dir, reopen the latest session, or pick from recent sessions interactively
@@ -717,10 +718,10 @@ Why this stack:
 ## Next highest-value implementation order
 
 1. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
-2. decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
+2. decide whether the now-explicit picker/switcher intervention-mix expectations should be factored into a smaller shared smoke assertion/helper instead of repeating required snippets inline
 3. decide whether the now-capped selected-preview queue breakdowns should eventually support inline expand/collapse instead of a fixed three-item cap
-4. decide whether the now-explicit picker/switcher intervention-mix expectations should be factored into a smaller shared smoke assertion/helper instead of repeating required snippets inline
-5. decide whether the queue-preview cap should be configurable per surface or per lane once real-world session volume grows
+4. decide whether the queue-preview cap should be configurable per surface or per lane once real-world session volume grows
+5. decide whether the compact timeline view should eventually support per-event expansion instead of only global detail/raw toggles
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -750,7 +751,6 @@ Future daily iterations should:
 
 - decide whether the compact timeline view should eventually support per-event expansion instead of only global detail/raw toggles
 - decide whether smoke-doc artifact bundles should fold into `scripts/smoke_matrix.py` as an optional review lane
-- decide whether zero-match `Enter` in the in-app `F11` switcher should eventually start a fresh session or stay inert until a visible row exists
 - decide whether the now-capped selected-preview queue breakdowns should eventually support inline expand/collapse instead of a fixed three-item cap
 - decide whether the queue-preview cap should be configurable per surface or per lane once real-world session volume grows
 - decide whether the repeated picker/switcher intervention-mix smoke requirements should collapse into a smaller shared assertion helper

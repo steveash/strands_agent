@@ -1059,6 +1059,8 @@ class StrandsAgentApp(App):
     def _select_active_session_switcher_entry(self) -> None:
         summary = self._current_session_switcher_summary()
         if summary is None:
+            if self.session_switcher_total_matches == 0:
+                self._start_new_session()
             return
         self._switch_to_session(summary)
 

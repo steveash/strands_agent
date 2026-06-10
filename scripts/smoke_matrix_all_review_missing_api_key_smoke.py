@@ -94,9 +94,7 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
                     result_prefix="",
                 ),
                 bundle_rerun_hint_line=failure_output.bundle_rerun_hint_line,
-                bundle_rerun_hint_prefix=(
-                    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_prefix
-                ),
+                bundle_rerun_hint_defaults=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
             ),
             (
                 "metadata_before_missing_api_key_hint",

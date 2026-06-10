@@ -960,6 +960,9 @@ class SmokeMatrixDocsReviewSuccessDefaults:
     def format_rerun_hint_message(self, rerun_hint: str) -> str:
         return self.format_rerun_hint_line(rerun_hint).removeprefix("[smoke-matrix] ")
 
+    def bundle_rerun_hint_line_prefix(self) -> str:
+        return self.rerun_hint_prefix
+
 
 def build_smoke_matrix_review_metadata_payload(
     *,
@@ -1210,6 +1213,9 @@ class SmokeMatrixDocsReviewFailureDefaults:
                 "provide exactly one failed-line matcher: failed_line_prefix or failed_line_exact"
             )
 
+    def bundle_rerun_hint_line_prefix(self) -> str | None:
+        return self.bundle_rerun_hint_prefix
+
     def collect_kwargs(self) -> dict[str, str]:
         kwargs: dict[str, str] = {"failure_summary_prefix": self.failure_summary_prefix}
         optional_fields = (
@@ -1225,6 +1231,14 @@ class SmokeMatrixDocsReviewFailureDefaults:
             if value is not None:
                 kwargs[field_name] = value
         return kwargs
+
+
+def resolve_smoke_matrix_docs_review_bundle_rerun_hint_prefix(
+    defaults: SmokeMatrixDocsReviewSuccessDefaults | SmokeMatrixDocsReviewFailureDefaults | None,
+) -> str | None:
+    if defaults is None:
+        return None
+    return defaults.bundle_rerun_hint_line_prefix()
 
 
 def smoke_matrix_docs_review_success_summary_prefix(
@@ -2022,13 +2036,22 @@ def build_review_artifact_matrix_summary_assertion_results(
     matrix_summary_line_matches_metadata_result_name: str | None = None,
     bundle_rerun_hint_line: str | None = None,
     bundle_rerun_hint_prefix: str | None = None,
+    bundle_rerun_hint_defaults: (
+        SmokeMatrixDocsReviewSuccessDefaults | SmokeMatrixDocsReviewFailureDefaults | None
+    ) = None,
     bundle_rerun_hint_result_name: str | None = None,
 ) -> list[tuple[str, object]]:
+    resolved_bundle_rerun_hint_prefix = bundle_rerun_hint_prefix
+    if resolved_bundle_rerun_hint_prefix is None:
+        resolved_bundle_rerun_hint_prefix = resolve_smoke_matrix_docs_review_bundle_rerun_hint_prefix(
+            bundle_rerun_hint_defaults
+        )
+
     if bundle_rerun_hint_result_name is not None and (
-        bundle_rerun_hint_line is None or bundle_rerun_hint_prefix is None
+        bundle_rerun_hint_line is None or resolved_bundle_rerun_hint_prefix is None
     ):
         raise ValueError(
-            "bundle_rerun_hint_line and bundle_rerun_hint_prefix are required when "
+            "bundle_rerun_hint_line and a bundle_rerun_hint prefix/defaults are required when "
             "bundle_rerun_hint_result_name is set"
         )
 
@@ -2080,7 +2103,10 @@ def build_review_artifact_matrix_summary_assertion_results(
             (
                 _result_name(bundle_rerun_hint_result_name),
                 bundle_rerun_hint_line
-                == f"{bundle_rerun_hint_prefix}{review_spec.expected_bundle_index_rerun_hint}",
+                == (
+                    f"{resolved_bundle_rerun_hint_prefix}"
+                    f"{review_spec.expected_bundle_index_rerun_hint}"
+                ),
             )
         )
     return results
@@ -2125,7 +2151,7 @@ def build_review_artifact_success_results(
                 "bundle_rerun_hint_matches_matrix_summary_hint",
             ),
             bundle_rerun_hint_line=rerun_hint_line,
-            bundle_rerun_hint_prefix=success_defaults.rerun_hint_prefix,
+            bundle_rerun_hint_defaults=success_defaults,
         ),
         (result_names.paths_loaded_from_matrix_summary, bool(review_output.matrix_summary_paths)),
         (result_names.artifacts_exist, artifacts_exist),

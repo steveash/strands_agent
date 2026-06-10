@@ -808,7 +808,7 @@ def test_build_review_artifact_matrix_summary_assertion_results_support_expected
                 f"{SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}"
                 f"{review_spec.expected_bundle_index_rerun_hint}"
             ),
-            bundle_rerun_hint_prefix=SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+            bundle_rerun_hint_defaults=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
         )
     )
 
@@ -819,6 +819,23 @@ def test_build_review_artifact_matrix_summary_assertion_results_support_expected
         result_names.matrix_summary_line_matches_metadata_path: True,
         result_names.bundle_rerun_hint_matches_matrix_summary_hint: True,
     }
+
+
+
+def test_build_review_artifact_matrix_summary_assertion_results_rejects_missing_bundle_rerun_hint_defaults(
+    tmp_path: Path,
+) -> None:
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
+        requested_target_name="all-review",
+    )
+
+    with pytest.raises(ValueError, match="bundle_rerun_hint_line and a bundle_rerun_hint prefix/defaults"):
+        build_review_artifact_matrix_summary_assertion_results(
+            fixture.review_output,
+            fixture.review_spec,
+            bundle_rerun_hint_result_name="bundle_rerun_hint_matches_matrix_summary_hint",
+        )
 
 
 

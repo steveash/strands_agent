@@ -487,8 +487,7 @@ def main() -> int:
             "No saved sessions match the active switcher filter.",
             "2 saved sessions still exist under this root.",
             "Try A to show all sessions, or P/D/R/V/O/Q/X/U/T/W/E/G/H/I/Y to jump between pending, denied, restore, restored-approval, stale-approval, stale-pending, stale-denied, stale-restored, tool, workspace-inspect, workspace-edit, intervention, shell, shell-inspect, and shell-test triage.",
-            "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists.",
-            "Enter switches the highlighted session once a visible row exists again.",
+            "Press Enter or N to start a fresh session, or Esc/F11 to return to the active session.",
         ],
     )
     all_ok &= emit_smoke_check(

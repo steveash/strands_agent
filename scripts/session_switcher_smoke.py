@@ -947,7 +947,18 @@ async def run_smoke() -> None:
                 "switcher_empty_hint=",
                 "No saved sessions match the active switcher filter." in empty_hint_output
                 and "1 saved session still exists under this root." in empty_hint_output
-                and "Use N to start a fresh session, or Esc/F11 to return to the active session until a visible match exists." in empty_hint_output,
+                and "Press Enter or N to start a fresh session, or Esc/F11 to return to the active session." in empty_hint_output,
+            )
+            await pilot.press("enter")
+            await pilot.pause()
+            empty_enter_output = str(empty_hint_app.query_one("#output").render())
+            empty_enter_events = str(empty_hint_app.query_one("#events").render())
+            print(
+                "switcher_empty_enter_new_session=",
+                "Phase 1 proves the basic TUI-to-agent loop." in empty_enter_output
+                and "kind=session_started | New session started" in empty_enter_events
+                and empty_hint_app.session_switcher_active is False
+                and empty_hint_app.artifact_store.session_id != "session-empty-current",
             )
 
     with TemporaryDirectory() as mixed_pending_root:
