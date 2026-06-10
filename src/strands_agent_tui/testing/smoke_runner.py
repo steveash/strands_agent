@@ -800,12 +800,93 @@ _STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET = {
 }
 
 
+_STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET = {
+    "docs": (
+        "standalone_smoke_help_missing= none",
+        "standalone_smoke_doc_parity= False",
+    ),
+    "docs-artifacts": (
+        "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+        "fix_post_check= False",
+    ),
+    "docs-rerun-hint": (
+        "checkout_root: /tmp/docs-rerun-hint",
+        "hint_before_failure_summary= False",
+    ),
+}
+
+
 _STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET = {
     "matrix-artifact-roots": ("review_matrix_summary_line_matches_metadata= False",),
     "matrix-all-review-order": ("docs_hint_before_failure_summary= False",),
     "matrix-all-review-missing-api-key": ("docs_hint_before_failure_summary= False",),
     "matrix-docs-review-hint": ("hint_before_failure_summary= False",),
 }
+
+
+def build_standalone_follow_up_failure_cases(
+    *,
+    requested_target_names: Sequence[str],
+    failure_output_lines_by_target: Mapping[str, tuple[str, ...]],
+    hint_for_failure: Callable[[str, str], str | None],
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+) -> tuple[StandaloneSmokeFailureCase, ...]:
+    cases: list[StandaloneSmokeFailureCase] = []
+    for requested_target_name in requested_target_names:
+        resolved_target_names = cli_spec.resolve_target_names(requested_target_name)
+        total_count = len(resolved_target_names)
+        for passed_count, failed_target_name in enumerate(resolved_target_names):
+            stdout_lines = failure_output_lines_by_target.get(failed_target_name)
+            if stdout_lines is None:
+                continue
+            expected_hint = hint_for_failure(requested_target_name, failed_target_name)
+            if expected_hint is None:
+                continue
+            cases.append(
+                StandaloneSmokeFailureCase(
+                    requested_target_name=requested_target_name,
+                    failed_target_name=failed_target_name,
+                    stdout_lines=stdout_lines,
+                    failed_line=stdout_lines[-1],
+                    passed_count=passed_count,
+                    total_count=total_count,
+                    expected_hint=expected_hint,
+                )
+            )
+    return tuple(cases)
+
+
+def standalone_docs_parity_follow_up_hint_for_failure(
+    *,
+    requested_target_name: str | None,
+    target: SmokeScriptTarget | str,
+) -> str | None:
+    if requested_target_name is None:
+        return None
+    target_name = target.name if isinstance(target, SmokeScriptTarget) else target
+    if target_name not in _STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET:
+        return None
+    from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
+
+    return smoke_cli_docs_parity_rerun_hint()
+
+
+def build_standalone_docs_parity_follow_up_failure_cases(
+    *,
+    requested_target_names: Sequence[str],
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+) -> tuple[StandaloneSmokeFailureCase, ...]:
+    return build_standalone_follow_up_failure_cases(
+        requested_target_names=requested_target_names,
+        failure_output_lines_by_target=_STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET,
+        hint_for_failure=lambda requested_target_name, failed_target_name: (
+            standalone_docs_parity_follow_up_hint_for_failure(
+                requested_target_name=requested_target_name,
+                target=failed_target_name,
+            )
+        ),
+        cli_spec=cli_spec,
+    )
 
 
 def standalone_malformed_contract_hint_for_failure(
@@ -830,33 +911,17 @@ def build_standalone_malformed_contract_failure_cases(
     requested_target_name: str,
     cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
 ) -> tuple[StandaloneSmokeFailureCase, ...]:
-    resolved_target_names = cli_spec.resolve_target_names(requested_target_name)
-    total_count = len(resolved_target_names)
-    cases: list[StandaloneSmokeFailureCase] = []
-    for failed_target_name in resolved_target_names:
-        stdout_lines = _STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET.get(
-            failed_target_name
-        )
-        if stdout_lines is None:
-            continue
-        expected_hint = standalone_malformed_contract_hint_for_failure(
-            requested_target_name=requested_target_name,
-            target=failed_target_name,
-        )
-        if expected_hint is None:
-            continue
-        cases.append(
-            StandaloneSmokeFailureCase(
+    return build_standalone_follow_up_failure_cases(
+        requested_target_names=(requested_target_name,),
+        failure_output_lines_by_target=_STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET,
+        hint_for_failure=lambda requested_target_name, failed_target_name: (
+            standalone_malformed_contract_hint_for_failure(
                 requested_target_name=requested_target_name,
-                failed_target_name=failed_target_name,
-                stdout_lines=stdout_lines,
-                failed_line=stdout_lines[-1],
-                passed_count=resolved_target_names.index(failed_target_name),
-                total_count=total_count,
-                expected_hint=expected_hint,
+                target=failed_target_name,
             )
-        )
-    return tuple(cases)
+        ),
+        cli_spec=cli_spec,
+    )
 
 
 def build_standalone_docs_review_follow_up_failure_cases(
@@ -866,26 +931,16 @@ def build_standalone_docs_review_follow_up_failure_cases(
     metadata: StandaloneDocsReviewFollowUpMetadata = STANDALONE_DOCS_REVIEW_FOLLOW_UP,
 ) -> tuple[StandaloneSmokeFailureCase, ...]:
     selected_requested_target_names = tuple(requested_target_names or metadata.requested_target_names)
-    cases: list[StandaloneSmokeFailureCase] = []
-    for requested_target_name in selected_requested_target_names:
-        resolved_target_names = cli_spec.resolve_target_names(requested_target_name)
-        total_count = len(resolved_target_names)
-        for failed_target_name in metadata.docs_review_target_names:
-            if failed_target_name not in resolved_target_names:
-                continue
-            stdout_lines = _STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET[failed_target_name]
-            cases.append(
-                StandaloneSmokeFailureCase(
-                    requested_target_name=requested_target_name,
-                    failed_target_name=failed_target_name,
-                    stdout_lines=stdout_lines,
-                    failed_line=stdout_lines[-1],
-                    passed_count=resolved_target_names.index(failed_target_name),
-                    total_count=total_count,
-                    expected_hint=metadata.rerun_hint,
-                )
-            )
-    return tuple(cases)
+    return build_standalone_follow_up_failure_cases(
+        requested_target_names=selected_requested_target_names,
+        failure_output_lines_by_target=_STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET,
+        hint_for_failure=lambda requested_target_name, failed_target_name: (
+            metadata.rerun_hint
+            if failed_target_name in metadata.docs_review_target_names
+            else None
+        ),
+        cli_spec=cli_spec,
+    )
 
 
 def standalone_docs_review_follow_up_hint_for_failure(

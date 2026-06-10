@@ -8,8 +8,8 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     SmokeScriptTarget,
     run_smoke_targets,
-    smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
+    standalone_docs_parity_follow_up_hint_for_failure,
     standalone_docs_review_follow_up_hint_for_failure,
     standalone_malformed_contract_hint_for_failure,
 )
@@ -20,7 +20,6 @@ SMOKE_TARGETS = CLI_SPEC.build_targets(script_dir=SCRIPT_DIR)
 DEFAULT_TARGET_NAMES = list(CLI_SPEC.default_target_names())
 ALL_TARGET_NAMES = list(CLI_SPEC.resolve_target_names("all"))
 LIVE_TARGET_NAME = "live"
-DOCS_PARITY_TARGET_NAMES = {"docs", "docs-artifacts", "docs-rerun-hint"}
 LIVE_RUNTIME_REQUESTED_FALSE_LINE = "live_runtime_requested= False"
 LIVE_RUNTIME_API_KEY_ERROR = "OPENAI_API_KEY is required for live runtime mode"
 DOCS_REVIEW_ONLY_RERUN_HINT = STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint
@@ -75,8 +74,12 @@ def _build_failure_hint(requested_target_name: str):
             )
             if hint is not None:
                 return hint
-        if target.name in DOCS_PARITY_TARGET_NAMES:
-            return smoke_cli_docs_parity_rerun_hint()
+        docs_parity_hint = standalone_docs_parity_follow_up_hint_for_failure(
+            requested_target_name=requested_target_name,
+            target=target,
+        )
+        if docs_parity_hint is not None:
+            return docs_parity_hint
         docs_review_hint = standalone_docs_review_follow_up_hint_for_failure(
             requested_target_name=requested_target_name,
             target=target,
