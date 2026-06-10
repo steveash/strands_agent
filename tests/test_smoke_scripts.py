@@ -28,6 +28,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_WRAPPER,
     SMOKE_SCRIPT_CONTRACT_CASES,
     SMOKE_WRAPPER_CLI_SPECS,
+    STANDALONE_DOCS_PARITY_FOLLOW_UP,
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_SMOKE_WRAPPER,
     SmokeScriptContractCase,
@@ -41,6 +42,7 @@ from strands_agent_tui.testing import (
     build_smoke_cli_doc_drift_report_payload,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
+    build_standalone_docs_contract_failure_cases,
     build_standalone_docs_parity_follow_up_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
     build_standalone_malformed_contract_failure_cases,
@@ -179,24 +181,6 @@ def _assert_standalone_smoke_failure(
             elapsed_seconds=elapsed_seconds,
         ),
     ]
-
-
-
-def _standalone_docs_contract_failure_cases() -> tuple[StandaloneSmokeFailureCase, ...]:
-    requested_target_name = "docs-contract"
-    return (
-        *build_standalone_docs_parity_follow_up_failure_cases(
-            requested_target_names=(requested_target_name,),
-        ),
-        *build_standalone_malformed_contract_failure_cases(
-            requested_target_name=requested_target_name,
-        ),
-        *build_standalone_docs_review_follow_up_failure_cases(
-            requested_target_names=(requested_target_name,),
-        ),
-    )
-
-
 
 def _selected_smoke_cli_doc_script_names(requested_target_name: str | None) -> tuple[str, ...]:
     if requested_target_name in (None, "all"):
@@ -944,7 +928,7 @@ def test_standalone_smoke_live_failure_emits_missing_api_key_hint(monkeypatch) -
         pytest.param(case, elapsed_seconds, id=f"default-{case.failed_target_name}")
         for case, elapsed_seconds in zip(
             build_standalone_docs_parity_follow_up_failure_cases(
-                requested_target_names=("local",),
+                requested_target_names=STANDALONE_DOCS_PARITY_FOLLOW_UP.default_requested_target_names,
             ),
             (1.6, 1.9),
             strict=True,
@@ -975,7 +959,7 @@ def test_standalone_smoke_default_local_docs_parity_failure_emits_docs_parity_on
         pytest.param(case, elapsed_seconds, id=f"{case.requested_target_name}-{case.failed_target_name}")
         for case, elapsed_seconds in zip(
             build_standalone_docs_parity_follow_up_failure_cases(
-                requested_target_names=("docs-focused",),
+                requested_target_names=STANDALONE_DOCS_PARITY_FOLLOW_UP.docs_review_requested_target_names,
             ),
             (1.6, 1.9, 2.2),
             strict=True,
@@ -1036,7 +1020,7 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
     [
         pytest.param(case, elapsed_seconds, id=case.failed_target_name)
         for case, elapsed_seconds in zip(
-            _standalone_docs_contract_failure_cases(),
+            build_standalone_docs_contract_failure_cases(),
             (1.8, 2.1, 2.4, 2.8, 3.0, 3.3, 3.6),
             strict=True,
         )
@@ -1065,7 +1049,7 @@ def test_standalone_smoke_docs_contract_failure_emits_expected_follow_up_hint(
     [
         pytest.param(case, id=f"{case.requested_target_name}-{case.failed_target_name}")
         for case in build_standalone_docs_review_follow_up_failure_cases(
-            requested_target_names=("docs-focused", "docs-review-only")
+            requested_target_names=STANDALONE_DOCS_REVIEW_FOLLOW_UP.alias_requested_target_names
         )
     ],
 )

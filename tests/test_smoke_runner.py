@@ -17,6 +17,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
+    STANDALONE_DOCS_PARITY_FOLLOW_UP,
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
@@ -25,6 +26,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeTargetSelector,
     SmokeWrapperMetadata,
     build_smoke_cli_parser,
+    build_standalone_docs_contract_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
     build_standalone_malformed_contract_failure_cases,
     run_smoke_target,
@@ -723,6 +725,26 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
     )
 
 
+def test_standalone_docs_parity_follow_up_metadata_tracks_alias_groups() -> None:
+    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.rerun_target_name == "docs-parity-only"
+    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.docs_parity_target_names == (
+        "docs",
+        "docs-artifacts",
+        "docs-rerun-hint",
+    )
+    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.requested_target_names == (
+        "local",
+        "docs-contract",
+        "docs-parity-only",
+        "docs-focused",
+    )
+    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.default_requested_target_names == ("local",)
+    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.contract_requested_target_names == ("docs-contract",)
+    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.docs_review_requested_target_names == (
+        "docs-focused",
+    )
+
+
 def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selection() -> None:
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_target_name == "docs-review-only"
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.docs_review_target_names == (
@@ -733,6 +755,13 @@ def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selec
     )
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.requested_target_names == (
         "docs-contract",
+        "docs-focused",
+        "docs-review-only",
+    )
+    assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.contract_requested_target_names == (
+        "docs-contract",
+    )
+    assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.alias_requested_target_names == (
         "docs-focused",
         "docs-review-only",
     )
@@ -958,6 +987,21 @@ def test_build_standalone_malformed_contract_failure_cases_tracks_alias_position
                 target="malformed-detail",
             ),
         ),
+    ]
+
+
+def test_build_standalone_docs_contract_failure_cases_tracks_registry_derived_alias_selection() -> None:
+    cases = build_standalone_docs_contract_failure_cases()
+
+    assert [case.requested_target_name for case in cases] == ["docs-contract"] * 7
+    assert [case.failed_target_name for case in cases] == [
+        "docs-rerun-hint",
+        "malformed-result",
+        "malformed-detail",
+        "matrix-artifact-roots",
+        "matrix-all-review-order",
+        "matrix-all-review-missing-api-key",
+        "matrix-docs-review-hint",
     ]
 
 

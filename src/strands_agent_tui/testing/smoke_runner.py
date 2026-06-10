@@ -508,10 +508,23 @@ class SmokeWrapperCliSpec:
 
 
 @dataclass(frozen=True)
+class StandaloneDocsParityFollowUpMetadata:
+    rerun_target_name: str
+    docs_parity_target_names: tuple[str, ...]
+    requested_target_names: tuple[str, ...]
+    default_requested_target_names: tuple[str, ...]
+    contract_requested_target_names: tuple[str, ...]
+    docs_review_requested_target_names: tuple[str, ...]
+    rerun_hint: str
+
+
+@dataclass(frozen=True)
 class StandaloneDocsReviewFollowUpMetadata:
     rerun_target_name: str
     docs_review_target_names: tuple[str, ...]
     requested_target_names: tuple[str, ...]
+    contract_requested_target_names: tuple[str, ...]
+    alias_requested_target_names: tuple[str, ...]
     rerun_hint: str
 
     def applies_to_failure(self, *, requested_target_name: str | None, target_name: str) -> bool:
@@ -761,17 +774,116 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
 )
 
 
+def _alias_target_names_with_any_targets(
+    target_names: Sequence[str],
+    *,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+) -> tuple[str, ...]:
+    target_name_set = set(target_names)
+    return tuple(
+        alias_name
+        for alias_name in cli_spec.alias_target_names
+        if target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+    )
+
+
+def _alias_target_names_with_all_targets(
+    target_names: Sequence[str],
+    *,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+) -> tuple[str, ...]:
+    target_name_set = set(target_names)
+    return tuple(
+        alias_name
+        for alias_name in cli_spec.alias_target_names
+        if target_name_set.issubset(cli_spec.resolve_target_names(alias_name))
+    )
+
+
+_STANDALONE_DOCS_PARITY_RERUN_HINT = (
+    "hint: standalone wrapper docs drift is easiest to isolate with `standalone_smoke.py docs-parity-only`; rerun "
+    "`.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to recheck the docs parity lane "
+    "without the broader docs-review regressions or the rest of the local bundle."
+)
+_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES = (
+    "malformed-result",
+    "malformed-detail",
+)
+
+
+def build_standalone_docs_parity_follow_up_metadata(
+    *,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+    rerun_target_name: str = "docs-parity-only",
+    docs_review_rerun_target_name: str = "docs-review-only",
+) -> StandaloneDocsParityFollowUpMetadata:
+    docs_parity_target_names = cli_spec.resolve_target_names(rerun_target_name)
+    docs_parity_target_name_set = set(docs_parity_target_names)
+    docs_review_target_name_set = set(cli_spec.resolve_target_names(docs_review_rerun_target_name))
+    malformed_target_name_set = set(_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES)
+    default_requested_target_names = tuple(
+        alias_name
+        for alias_name in cli_spec.alias_target_names
+        if alias_name == cli_spec.default_target_name
+        and docs_parity_target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+    )
+    contract_requested_target_names = tuple(
+        alias_name
+        for alias_name in _alias_target_names_with_any_targets(
+            docs_parity_target_names,
+            cli_spec=cli_spec,
+        )
+        if malformed_target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+    )
+    docs_review_requested_target_names = tuple(
+        alias_name
+        for alias_name in _alias_target_names_with_all_targets(
+            docs_parity_target_names,
+            cli_spec=cli_spec,
+        )
+        if docs_review_target_name_set.issubset(cli_spec.resolve_target_names(alias_name))
+    )
+    requested_target_name_set = set(default_requested_target_names)
+    requested_target_name_set.update(contract_requested_target_names)
+    requested_target_name_set.update(docs_review_requested_target_names)
+    if rerun_target_name in cli_spec.alias_target_names:
+        requested_target_name_set.add(rerun_target_name)
+    requested_target_names = tuple(
+        alias_name
+        for alias_name in cli_spec.alias_target_names
+        if alias_name in requested_target_name_set
+    )
+    return StandaloneDocsParityFollowUpMetadata(
+        rerun_target_name=rerun_target_name,
+        docs_parity_target_names=docs_parity_target_names,
+        requested_target_names=requested_target_names,
+        default_requested_target_names=default_requested_target_names,
+        contract_requested_target_names=contract_requested_target_names,
+        docs_review_requested_target_names=docs_review_requested_target_names,
+        rerun_hint=_STANDALONE_DOCS_PARITY_RERUN_HINT,
+    )
+
+
 def build_standalone_docs_review_follow_up_metadata(
     *,
     cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
     rerun_target_name: str = "docs-review-only",
 ) -> StandaloneDocsReviewFollowUpMetadata:
     docs_review_target_names = cli_spec.resolve_target_names(rerun_target_name)
-    docs_review_target_name_set = set(docs_review_target_names)
-    requested_target_names = tuple(
+    requested_target_names = _alias_target_names_with_all_targets(
+        docs_review_target_names,
+        cli_spec=cli_spec,
+    )
+    malformed_target_name_set = set(_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES)
+    contract_requested_target_names = tuple(
         alias_name
-        for alias_name in cli_spec.alias_target_names
-        if docs_review_target_name_set.issubset(cli_spec.resolve_target_names(alias_name))
+        for alias_name in requested_target_names
+        if malformed_target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+    )
+    alias_requested_target_names = tuple(
+        alias_name
+        for alias_name in requested_target_names
+        if alias_name not in contract_requested_target_names
     )
     rerun_hint = (
         f"hint: docs-review drift is easiest to isolate with `standalone_smoke.py {rerun_target_name}`; rerun "
@@ -782,10 +894,13 @@ def build_standalone_docs_review_follow_up_metadata(
         rerun_target_name=rerun_target_name,
         docs_review_target_names=docs_review_target_names,
         requested_target_names=requested_target_names,
+        contract_requested_target_names=contract_requested_target_names,
+        alias_requested_target_names=alias_requested_target_names,
         rerun_hint=rerun_hint,
     )
 
 
+STANDALONE_DOCS_PARITY_FOLLOW_UP = build_standalone_docs_parity_follow_up_metadata()
 STANDALONE_DOCS_REVIEW_FOLLOW_UP = build_standalone_docs_review_follow_up_metadata()
 
 _STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET = {
@@ -866,18 +981,18 @@ def standalone_docs_parity_follow_up_hint_for_failure(
     target_name = target.name if isinstance(target, SmokeScriptTarget) else target
     if target_name not in _STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET:
         return None
-    from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
-
-    return smoke_cli_docs_parity_rerun_hint()
+    return _STANDALONE_DOCS_PARITY_RERUN_HINT
 
 
 def build_standalone_docs_parity_follow_up_failure_cases(
     *,
-    requested_target_names: Sequence[str],
+    requested_target_names: Sequence[str] | None = None,
     cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+    metadata: StandaloneDocsParityFollowUpMetadata = STANDALONE_DOCS_PARITY_FOLLOW_UP,
 ) -> tuple[StandaloneSmokeFailureCase, ...]:
+    selected_requested_target_names = tuple(requested_target_names or metadata.requested_target_names)
     return build_standalone_follow_up_failure_cases(
-        requested_target_names=requested_target_names,
+        requested_target_names=selected_requested_target_names,
         failure_output_lines_by_target=_STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET,
         hint_for_failure=lambda requested_target_name, failed_target_name: (
             standalone_docs_parity_follow_up_hint_for_failure(
@@ -941,6 +1056,42 @@ def build_standalone_docs_review_follow_up_failure_cases(
         ),
         cli_spec=cli_spec,
     )
+
+
+def build_standalone_docs_contract_failure_cases(
+    *,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+    docs_parity_metadata: StandaloneDocsParityFollowUpMetadata = STANDALONE_DOCS_PARITY_FOLLOW_UP,
+    docs_review_metadata: StandaloneDocsReviewFollowUpMetadata = STANDALONE_DOCS_REVIEW_FOLLOW_UP,
+) -> tuple[StandaloneSmokeFailureCase, ...]:
+    requested_target_names = tuple(
+        alias_name
+        for alias_name in docs_parity_metadata.contract_requested_target_names
+        if alias_name in docs_review_metadata.contract_requested_target_names
+    )
+    cases: list[StandaloneSmokeFailureCase] = []
+    for requested_target_name in requested_target_names:
+        cases.extend(
+            build_standalone_docs_parity_follow_up_failure_cases(
+                requested_target_names=(requested_target_name,),
+                cli_spec=cli_spec,
+                metadata=docs_parity_metadata,
+            )
+        )
+        cases.extend(
+            build_standalone_malformed_contract_failure_cases(
+                requested_target_name=requested_target_name,
+                cli_spec=cli_spec,
+            )
+        )
+        cases.extend(
+            build_standalone_docs_review_follow_up_failure_cases(
+                requested_target_names=(requested_target_name,),
+                cli_spec=cli_spec,
+                metadata=docs_review_metadata,
+            )
+        )
+    return tuple(cases)
 
 
 def standalone_docs_review_follow_up_hint_for_failure(
