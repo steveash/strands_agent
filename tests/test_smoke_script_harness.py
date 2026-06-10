@@ -447,21 +447,31 @@ def test_exported_docs_review_failure_defaults_share_expected_prefixes() -> None
 
     assert SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.collect_kwargs() == {
         "failed_line_exact": SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
-        "bundle_rerun_hint_prefix": SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+        "bundle_rerun_hint_prefix": (
+            SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_line_prefix()
+        ),
         "docs_review_only_hint_prefix": SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
         "missing_api_key_hint_prefix": SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX,
         "failure_summary_prefix": smoke_matrix_docs_review_failure_summary_prefix(passed_count=0),
     }
+    assert SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.format_bundle_rerun_hint_line(
+        "rerun docs parity"
+    ) == "[smoke-matrix] review bundle rerun hint: rerun docs parity"
 
     assert SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.collect_kwargs() == {
         "failed_line_prefix": SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
-        "bundle_rerun_hint_prefix": SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+        "bundle_rerun_hint_prefix": (
+            SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.bundle_rerun_hint_line_prefix()
+        ),
         "docs_review_only_hint_prefix": SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
         "failure_summary_prefix": smoke_matrix_docs_review_failure_summary_prefix(passed_count=3),
     }
     assert SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.stdout_running_prefix == (
         SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX
     )
+    assert SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS.format_bundle_rerun_hint_line(
+        "rerun docs parity"
+    ) is None
 
 
 def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None:
@@ -478,6 +488,9 @@ def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_line("rerun docs parity") == (
         "[smoke-matrix] review bundle rerun hint: rerun docs parity"
     )
+    assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_bundle_rerun_hint_line(
+        "rerun docs parity"
+    ) == "[smoke-matrix] review bundle rerun hint: rerun docs parity"
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.format_rerun_hint_message(
         "rerun docs parity"
     ) == "review bundle rerun hint: rerun docs parity"
@@ -486,7 +499,10 @@ def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None
         in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
     )
     assert (
-        f"all_review_rerun_hint_line: {SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_prefix}"
+        (
+            "all_review_rerun_hint_line: "
+            f"{SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.bundle_rerun_hint_line_prefix()}"
+        )
         in SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT.required_line_prefixes
     )
 
@@ -676,16 +692,27 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         "matrix_summary_line_matches_metadata_path",
         "bundle_rerun_hint_line_matches_matrix_summary_hint",
     )
+    selected_assertions = failure_naming.matrix_summary_assertion_selection(
+        "metadata_expected_path",
+        "matrix_summary_matches_metadata",
+    )
     assert failure_naming.matrix_summary_assertion_result_name_kwargs(
         "metadata_expected_path",
         "matrix_summary_matches_metadata",
-    ) == {
+    ) == selected_assertions.result_name_kwargs() == {
         "metadata_expected_path_result_name": "metadata_matrix_summary_matches_all_review",
         "matrix_summary_matches_metadata_result_name": "matrix_summary_path_matches_metadata",
     }
+    assert selected_assertions.contract_metadata().true_check_names == (
+        "metadata_matrix_summary_matches_all_review",
+        "matrix_summary_path_matches_metadata",
+    )
+    bundle_assertions = failure_naming.matrix_summary_assertion_bundle_selection(
+        "all_review_missing_api_key_failure"
+    )
     assert failure_naming.matrix_summary_assertion_result_name_bundle_kwargs(
         "all_review_missing_api_key_failure"
-    ) == {
+    ) == bundle_assertions.result_name_kwargs() == {
         "metadata_expected_path_result_name": "metadata_matrix_summary_matches_all_review",
         "matrix_summary_matches_metadata_result_name": "matrix_summary_path_matches_metadata",
         "matrix_summary_line_matches_metadata_result_name": "matrix_summary_line_matches_metadata_path",
@@ -695,6 +722,13 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         "metadata_matrix_summary_matches_all_review",
         "matrix_summary_path_matches_all_review",
         "bundle_rerun_hint_line_matches_matrix_summary_hint",
+    )
+    assert success_names.matrix_summary_assertion_selection(
+        "metadata_expected_path",
+        "bundle_rerun_hint_matches_matrix_summary_hint",
+    ).true_check_names() == (
+        "all_review_metadata_matrix_summary_matches_expected_path",
+        "all_review_rerun_hint_line_matches_expected_hint",
     )
     assert success_names.required_line_prefixes(
         success_defaults=SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
@@ -784,6 +818,41 @@ def test_build_review_artifact_failure_results_reuses_shared_review_checks(tmp_p
 
 
 
+def test_matrix_summary_assertion_result_names_bundle_contract_metadata_supports_excluding_common_checks() -> None:
+    result_names = build_smoke_matrix_docs_review_result_naming(
+        "all-review",
+        result_prefix="",
+    ).matrix_summary_assertion_result_names(result_prefix="")
+
+    common_selection = result_names.selected_selection("metadata_expected_path")
+    common_contract = common_selection.contract_metadata()
+    assert common_contract.required_line_prefixes == ()
+    assert common_contract.true_check_names == (result_names.metadata_expected_path,)
+    assert common_selection.result_name_kwargs() == {
+        "metadata_expected_path_result_name": result_names.metadata_expected_path,
+    }
+
+    bundle_selection = result_names.bundle_selection(
+        "all_review_missing_api_key_failure",
+        excluding_checks=("metadata_expected_path",),
+    )
+    bundle_contract = bundle_selection.contract_metadata()
+    assert bundle_contract.required_line_prefixes == ()
+    assert bundle_contract.true_check_names == (
+        result_names.matrix_summary_matches_metadata,
+        result_names.matrix_summary_line_matches_metadata_path,
+        result_names.bundle_rerun_hint_matches_matrix_summary_hint,
+    )
+    assert bundle_selection.result_name_kwargs() == {
+        "matrix_summary_matches_metadata_result_name": result_names.matrix_summary_matches_metadata,
+        "matrix_summary_line_matches_metadata_result_name": (
+            result_names.matrix_summary_line_matches_metadata_path
+        ),
+        "bundle_rerun_hint_result_name": result_names.bundle_rerun_hint_matches_matrix_summary_hint,
+    }
+
+
+
 def test_build_review_artifact_matrix_summary_assertion_results_support_expected_path_and_hint_checks(
     tmp_path: Path,
 ) -> None:
@@ -794,19 +863,24 @@ def test_build_review_artifact_matrix_summary_assertion_results_support_expected
     review_output = fixture.review_output
     review_spec = fixture.review_spec
     result_names = review_spec.result_naming.matrix_summary_assertion_result_names(result_prefix="")
+    selected_assertions = review_spec.result_naming.matrix_summary_assertion_selection(
+        "metadata_expected_path",
+        "matrix_summary_expected_path",
+        "matrix_summary_matches_metadata",
+        "matrix_summary_line_matches_metadata_path",
+        "bundle_rerun_hint_matches_matrix_summary_hint",
+        result_prefix="",
+    )
 
     result_map = dict(
         build_review_artifact_matrix_summary_assertion_results(
             review_output,
             review_spec,
-            **review_spec.result_naming.matrix_summary_assertion_result_name_bundle_kwargs(
-                "all_review_missing_api_key_failure",
-                result_prefix="",
-            ),
-            matrix_summary_expected_path_result_name=result_names.matrix_summary_expected_path,
+            **selected_assertions.result_name_kwargs(),
             bundle_rerun_hint_line=(
-                f"{SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}"
-                f"{review_spec.expected_bundle_index_rerun_hint}"
+                SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.format_bundle_rerun_hint_line(
+                    review_spec.expected_bundle_index_rerun_hint
+                )
             ),
             bundle_rerun_hint_defaults=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
         )

@@ -30,6 +30,10 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
         requested_target_name="all-review",
         driver_stem="smoke_matrix_all_review_order",
     )
+    matrix_summary_selection = review_spec.result_naming.matrix_summary_assertion_bundle_selection(
+        "all_review_order_failure",
+        result_prefix="",
+    )
     smoke_run, review_output = observe_review_artifact_output_in_temp_checkout(
         module=smoke_matrix_module,
         argv=[review_spec.requested_target_name],
@@ -66,10 +70,7 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
             *build_review_artifact_matrix_summary_assertion_results(
                 review_output,
                 review_spec,
-                **review_spec.result_naming.matrix_summary_assertion_result_name_bundle_kwargs(
-                    "all_review_order_failure",
-                    result_prefix="",
-                ),
+                **matrix_summary_selection.result_name_kwargs(),
             ),
             (
                 "metadata_before_hint",

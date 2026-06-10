@@ -476,9 +476,19 @@ class SmokeMatrixDocsReviewResultNaming:
         *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
         result_prefix: str | None = None,
     ) -> dict[str, str]:
+        return self.matrix_summary_assertion_selection(
+            *checks,
+            result_prefix=result_prefix,
+        ).result_name_kwargs()
+
+    def matrix_summary_assertion_selection(
+        self,
+        *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+        result_prefix: str | None = None,
+    ) -> SmokeMatrixDocsReviewMatrixSummaryAssertionSelection:
         return self.matrix_summary_assertion_result_names(
             result_prefix=result_prefix,
-        ).selected_result_name_kwargs(*checks)
+        ).selected_selection(*checks)
 
     def matrix_summary_assertion_result_name_bundle_kwargs(
         self,
@@ -486,9 +496,21 @@ class SmokeMatrixDocsReviewResultNaming:
         *,
         result_prefix: str | None = None,
     ) -> dict[str, str]:
+        return self.matrix_summary_assertion_bundle_selection(
+            bundle,
+            result_prefix=result_prefix,
+        ).result_name_kwargs()
+
+    def matrix_summary_assertion_bundle_selection(
+        self,
+        bundle: SmokeMatrixDocsReviewMatrixSummaryAssertionBundle,
+        *,
+        result_prefix: str | None = None,
+        excluding_checks: Sequence[SmokeMatrixDocsReviewMatrixSummaryAssertionCheck] = (),
+    ) -> SmokeMatrixDocsReviewMatrixSummaryAssertionSelection:
         return self.matrix_summary_assertion_result_names(
             result_prefix=result_prefix,
-        ).bundle_result_name_kwargs(bundle)
+        ).bundle_selection(bundle, excluding_checks=excluding_checks)
 
     def success_result_names(
         self,
@@ -625,14 +647,31 @@ class SmokeMatrixDocsReviewMatrixSummaryAssertionResultNames:
     ) -> str:
         return getattr(self, check)
 
+    def selected_selection(
+        self,
+        *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+    ) -> SmokeMatrixDocsReviewMatrixSummaryAssertionSelection:
+        return SmokeMatrixDocsReviewMatrixSummaryAssertionSelection(
+            result_names=self,
+            checks=tuple(checks),
+        )
+
+    def bundle_selection(
+        self,
+        bundle: SmokeMatrixDocsReviewMatrixSummaryAssertionBundle,
+        *,
+        excluding_checks: Sequence[SmokeMatrixDocsReviewMatrixSummaryAssertionCheck] = (),
+    ) -> SmokeMatrixDocsReviewMatrixSummaryAssertionSelection:
+        excluded_check_set = set(excluding_checks)
+        return self.selected_selection(
+            *(check for check in self.bundle_checks(bundle) if check not in excluded_check_set)
+        )
+
     def selected_result_name_kwargs(
         self,
         *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
     ) -> dict[str, str]:
-        return {
-            _matrix_summary_assertion_result_name_keyword(check): self.result_name(check)
-            for check in checks
-        }
+        return self.selected_selection(*checks).result_name_kwargs()
 
     def bundle_checks(
         self,
@@ -644,13 +683,30 @@ class SmokeMatrixDocsReviewMatrixSummaryAssertionResultNames:
         self,
         bundle: SmokeMatrixDocsReviewMatrixSummaryAssertionBundle,
     ) -> dict[str, str]:
-        return self.selected_result_name_kwargs(*self.bundle_checks(bundle))
+        return self.bundle_selection(bundle).result_name_kwargs()
 
     def bundle_true_check_names(
         self,
         bundle: SmokeMatrixDocsReviewMatrixSummaryAssertionBundle,
     ) -> tuple[str, ...]:
-        return tuple(self.result_name(check) for check in self.bundle_checks(bundle))
+        return self.bundle_selection(bundle).true_check_names()
+
+    def selected_contract_metadata(
+        self,
+        *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+    ) -> SmokeScriptContractMetadata:
+        return self.selected_selection(*checks).contract_metadata()
+
+    def bundle_contract_metadata(
+        self,
+        bundle: SmokeMatrixDocsReviewMatrixSummaryAssertionBundle,
+        *,
+        excluding_checks: Sequence[SmokeMatrixDocsReviewMatrixSummaryAssertionCheck] = (),
+    ) -> SmokeScriptContractMetadata:
+        return self.bundle_selection(
+            bundle,
+            excluding_checks=excluding_checks,
+        ).contract_metadata()
 
     def true_check_names(self) -> tuple[str, ...]:
         return (
@@ -660,6 +716,27 @@ class SmokeMatrixDocsReviewMatrixSummaryAssertionResultNames:
             self.matrix_summary_line_matches_metadata_path,
             self.bundle_rerun_hint_matches_matrix_summary_hint,
         )
+
+
+@dataclass(frozen=True)
+class SmokeMatrixDocsReviewMatrixSummaryAssertionSelection:
+    result_names: SmokeMatrixDocsReviewMatrixSummaryAssertionResultNames
+    checks: tuple[SmokeMatrixDocsReviewMatrixSummaryAssertionCheck, ...]
+
+    def result_name_kwargs(self) -> dict[str, str]:
+        return {
+            _matrix_summary_assertion_result_name_keyword(check): self.result_names.result_name(check)
+            for check in self.checks
+        }
+
+    def contract_metadata(self) -> SmokeScriptContractMetadata:
+        return SmokeScriptContractMetadata(
+            required_line_prefixes=(),
+            true_check_names=self.true_check_names(),
+        )
+
+    def true_check_names(self) -> tuple[str, ...]:
+        return tuple(self.result_names.result_name(check) for check in self.checks)
 
 
 @dataclass(frozen=True)
@@ -706,6 +783,12 @@ class SmokeMatrixDocsReviewSuccessResultNames:
             matrix_summary_line_matches_metadata_path=self.matrix_summary_line_matches_metadata_path,
             bundle_rerun_hint_matches_matrix_summary_hint=self.rerun_hint_line_matches_expected_hint,
         )
+
+    def matrix_summary_assertion_selection(
+        self,
+        *checks: SmokeMatrixDocsReviewMatrixSummaryAssertionCheck,
+    ) -> SmokeMatrixDocsReviewMatrixSummaryAssertionSelection:
+        return self.matrix_summary_assertion_result_names().selected_selection(*checks)
 
     def required_line_prefixes(
         self,
@@ -954,8 +1037,11 @@ class SmokeMatrixDocsReviewSuccessDefaults:
     def matches_success_summary_line(self, line: str) -> bool:
         return line.startswith(self.success_summary_prefix)
 
-    def format_rerun_hint_line(self, rerun_hint: str) -> str:
+    def format_bundle_rerun_hint_line(self, rerun_hint: str) -> str:
         return f"{self.rerun_hint_prefix}{rerun_hint}"
+
+    def format_rerun_hint_line(self, rerun_hint: str) -> str:
+        return self.format_bundle_rerun_hint_line(rerun_hint)
 
     def format_rerun_hint_message(self, rerun_hint: str) -> str:
         return self.format_rerun_hint_line(rerun_hint).removeprefix("[smoke-matrix] ")
@@ -1216,6 +1302,12 @@ class SmokeMatrixDocsReviewFailureDefaults:
     def bundle_rerun_hint_line_prefix(self) -> str | None:
         return self.bundle_rerun_hint_prefix
 
+    def format_bundle_rerun_hint_line(self, rerun_hint: str) -> str | None:
+        prefix = self.bundle_rerun_hint_line_prefix()
+        if prefix is None:
+            return None
+        return f"{prefix}{rerun_hint}"
+
     def collect_kwargs(self) -> dict[str, str]:
         kwargs: dict[str, str] = {"failure_summary_prefix": self.failure_summary_prefix}
         optional_fields = (
@@ -1239,6 +1331,21 @@ def resolve_smoke_matrix_docs_review_bundle_rerun_hint_prefix(
     if defaults is None:
         return None
     return defaults.bundle_rerun_hint_line_prefix()
+
+
+def format_smoke_matrix_docs_review_bundle_rerun_hint_line(
+    rerun_hint: str,
+    *,
+    bundle_rerun_hint_prefix: str | None = None,
+    bundle_rerun_hint_defaults: (
+        SmokeMatrixDocsReviewSuccessDefaults | SmokeMatrixDocsReviewFailureDefaults | None
+    ) = None,
+) -> str | None:
+    if bundle_rerun_hint_defaults is not None:
+        return bundle_rerun_hint_defaults.format_bundle_rerun_hint_line(rerun_hint)
+    if bundle_rerun_hint_prefix is None:
+        return None
+    return f"{bundle_rerun_hint_prefix}{rerun_hint}"
 
 
 def smoke_matrix_docs_review_success_summary_prefix(
@@ -1364,7 +1471,20 @@ _ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES = (
     _ALL_REVIEW_FAILURE_RESULT_NAMING.matrix_summary_assertion_result_names()
 )
 
-_DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT = SmokeScriptContractMetadata(
+_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS = (
+    "metadata_expected_path",
+)
+_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_SELECTION = (
+    _ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.selected_selection(
+        *_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS
+    )
+)
+_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CONTRACT = (
+    _DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_SELECTION.contract_metadata()
+)
+
+_DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT = merge_smoke_script_contract_metadata(
+    _DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CONTRACT,
     required_line_prefixes=(
         "checkout_root: ",
         'stderr_metadata_line: [smoke-matrix] review metadata: {"artifact_root": ',
@@ -1376,7 +1496,6 @@ _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT = SmokeScriptContractMetadata(
         "failed_line_present",
         "summary_line_present",
         *_ALL_REVIEW_FAILURE_OBSERVATION_RESULT_NAMES.true_check_names(),
-        _ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.metadata_expected_path,
     ),
 )
 
@@ -1391,9 +1510,10 @@ SMOKE_MATRIX_ALL_REVIEW_ORDER_CONTRACT = merge_smoke_script_contract_metadata(
     true_check_names=(
         "hint_line_present",
         "docs_hint_line_present",
-        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_true_check_names(
-            "all_review_order_failure"
-        )[1:],
+        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_contract_metadata(
+            "all_review_order_failure",
+            excluding_checks=_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS,
+        ).true_check_names,
         "metadata_before_hint",
         "artifacts_before_hint",
         "matrix_summary_before_hint",
@@ -1415,7 +1535,10 @@ SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT = merge_smoke_script_contract_m
     required_line_prefixes=(
         f"stderr_failed_line: {SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE}",
         f"stderr_missing_api_key_hint_line: {SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX}",
-        f"stderr_bundle_rerun_hint_line: {SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}",
+        (
+            "stderr_bundle_rerun_hint_line: "
+            f"{SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_line_prefix()}"
+        ),
         f"stderr_docs_hint_line: {SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX}",
         f"stderr_summary_line: {SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.failure_summary_prefix}",
     ),
@@ -1423,9 +1546,10 @@ SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT = merge_smoke_script_contract_m
         "missing_api_key_hint_line_present",
         "bundle_rerun_hint_line_present",
         "docs_hint_line_present",
-        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_true_check_names(
-            "all_review_missing_api_key_failure"
-        )[1:],
+        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_contract_metadata(
+            "all_review_missing_api_key_failure",
+            excluding_checks=_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS,
+        ).true_check_names,
         "metadata_before_missing_api_key_hint",
         "artifacts_before_missing_api_key_hint",
         "matrix_summary_before_missing_api_key_hint",
@@ -1449,16 +1573,20 @@ SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT = merge_smoke_script_contract_metadata(
     required_line_prefixes=(
         f"stdout_last_line: {SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX}",
         "stderr_failed_line: docs-review smoke failed fast: render_manifest_payload=False",
-        f"stderr_bundle_rerun_hint_line: {SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX}",
+        (
+            "stderr_bundle_rerun_hint_line: "
+            f"{SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.bundle_rerun_hint_line_prefix()}"
+        ),
         f"stderr_hint_line: {SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX}",
         f"stderr_summary_line: {SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.failure_summary_prefix}",
     ),
     true_check_names=(
         "bundle_rerun_hint_line_present",
         "hint_line_present",
-        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_true_check_names(
-            "docs_review_hint_failure"
-        )[1:],
+        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_contract_metadata(
+            "docs_review_hint_failure",
+            excluding_checks=_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS,
+        ).true_check_names,
         "bundle_rerun_hint_after_matrix_summary",
         "hint_after_matrix_summary",
         "bundle_rerun_hint_before_docs_hint",
@@ -2099,14 +2227,15 @@ def build_review_artifact_matrix_summary_assertion_results(
             )
         )
     if bundle_rerun_hint_result_name is not None:
+        expected_bundle_rerun_hint_line = format_smoke_matrix_docs_review_bundle_rerun_hint_line(
+            review_spec.expected_bundle_index_rerun_hint,
+            bundle_rerun_hint_prefix=resolved_bundle_rerun_hint_prefix,
+            bundle_rerun_hint_defaults=bundle_rerun_hint_defaults,
+        )
         results.append(
             (
                 _result_name(bundle_rerun_hint_result_name),
-                bundle_rerun_hint_line
-                == (
-                    f"{resolved_bundle_rerun_hint_prefix}"
-                    f"{review_spec.expected_bundle_index_rerun_hint}"
-                ),
+                bundle_rerun_hint_line == expected_bundle_rerun_hint_line,
             )
         )
     return results
@@ -2127,7 +2256,13 @@ def build_review_artifact_success_results(
     expected_paths = review_spec.resolve_expected_paths(checkout_root=review_output.checkout_root)
     artifact_root = review_output.matrix_summary_paths.get("artifact_root")
     result_names = review_spec.result_naming.success_result_names(result_prefix=result_prefix)
-    matrix_summary_result_names = result_names.matrix_summary_assertion_result_names()
+    matrix_summary_selection = result_names.matrix_summary_assertion_selection(
+        "metadata_expected_path",
+        "matrix_summary_expected_path",
+        "matrix_summary_matches_metadata",
+        "matrix_summary_line_matches_metadata_path",
+        "bundle_rerun_hint_matches_matrix_summary_hint",
+    )
     return [
         (result_names.artifact_root, str(artifact_root) if artifact_root is not None else ""),
         *build_review_artifact_observation_results(
@@ -2143,13 +2278,7 @@ def build_review_artifact_success_results(
             review_output,
             review_spec,
             result_prefix=result_prefix,
-            **matrix_summary_result_names.selected_result_name_kwargs(
-                "metadata_expected_path",
-                "matrix_summary_expected_path",
-                "matrix_summary_matches_metadata",
-                "matrix_summary_line_matches_metadata_path",
-                "bundle_rerun_hint_matches_matrix_summary_hint",
-            ),
+            **matrix_summary_selection.result_name_kwargs(),
             bundle_rerun_hint_line=rerun_hint_line,
             bundle_rerun_hint_defaults=success_defaults,
         ),

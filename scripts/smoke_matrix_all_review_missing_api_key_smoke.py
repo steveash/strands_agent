@@ -34,6 +34,10 @@ def _docs_review_all_spec():
 
 def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "stderr") -> list[tuple[str, object]]:
     review_spec = _docs_review_all_spec()
+    matrix_summary_selection = review_spec.result_naming.matrix_summary_assertion_bundle_selection(
+        "all_review_missing_api_key_failure",
+        result_prefix="",
+    )
     smoke_run, review_output = observe_script_module_main_via_driver_review_artifact_output(
         repo_root=REPO_ROOT,
         script_path=SMOKE_MATRIX_SCRIPT_PATH,
@@ -89,10 +93,7 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             *build_review_artifact_matrix_summary_assertion_results(
                 review_output,
                 review_spec,
-                **review_spec.result_naming.matrix_summary_assertion_result_name_bundle_kwargs(
-                    "all_review_missing_api_key_failure",
-                    result_prefix="",
-                ),
+                **matrix_summary_selection.result_name_kwargs(),
                 bundle_rerun_hint_line=failure_output.bundle_rerun_hint_line,
                 bundle_rerun_hint_defaults=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
             ),
