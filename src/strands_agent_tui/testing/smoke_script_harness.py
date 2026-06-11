@@ -1363,6 +1363,125 @@ class SmokeMatrixDocsReviewFailureResultPreset:
     stdout_last_line_startswith_result_name: str | None = None
     stdout_last_line_startswith_prefix: str | None = None
 
+    def _line_value_prefix_for_step(
+        self,
+        step: SmokeMatrixDocsReviewFailureStep,
+        *,
+        failure_defaults: SmokeMatrixDocsReviewFailureDefaults,
+    ) -> str | None:
+        if step == "bundle_rerun_hint":
+            return failure_defaults.bundle_rerun_hint_line_prefix()
+        if step == "docs_review_only_hint":
+            return failure_defaults.docs_review_only_hint_prefix
+        if step == "live_runtime_hint":
+            return failure_defaults.live_runtime_hint_prefix
+        if step == "missing_api_key_hint":
+            return failure_defaults.missing_api_key_hint_prefix
+        if step == "failure_summary":
+            return failure_defaults.failure_summary_prefix
+        return None
+
+    def required_line_prefixes(
+        self,
+        *,
+        failure_defaults: SmokeMatrixDocsReviewFailureDefaults,
+        failed_line_value_prefix: str,
+        stdout_last_line_value_prefix: str | None = None,
+    ) -> tuple[str, ...]:
+        required_line_prefixes: list[str] = []
+
+        if self.stdout_last_line_result_name is not None:
+            resolved_stdout_last_line_value_prefix = stdout_last_line_value_prefix
+            if resolved_stdout_last_line_value_prefix is None:
+                resolved_stdout_last_line_value_prefix = failure_defaults.stdout_running_prefix
+            if resolved_stdout_last_line_value_prefix is None:
+                raise ValueError(
+                    "stdout_last_line_value_prefix or failure_defaults.stdout_running_prefix "
+                    "is required when stdout_last_line_result_name is set"
+                )
+            required_line_prefixes.append(
+                f"{self.stdout_last_line_result_name}: {resolved_stdout_last_line_value_prefix}"
+            )
+
+        required_line_prefixes.append(f"{self.failed_line_result_name}: {failed_line_value_prefix}")
+        for result_name, step in self.extra_line_result_names:
+            line_value_prefix = self._line_value_prefix_for_step(
+                step,
+                failure_defaults=failure_defaults,
+            )
+            if line_value_prefix is None:
+                raise ValueError(
+                    f"{step} line prefix is required when {result_name} is declared"
+                )
+            required_line_prefixes.append(f"{result_name}: {line_value_prefix}")
+
+        required_line_prefixes.append(
+            f"stderr_summary_line: {failure_defaults.failure_summary_prefix}"
+        )
+        return tuple(required_line_prefixes)
+
+    def matrix_summary_contract_metadata(
+        self,
+        *,
+        result_naming: SmokeMatrixDocsReviewResultNaming,
+        result_prefix: str = "",
+        excluding_checks: Sequence[SmokeMatrixDocsReviewMatrixSummaryAssertionCheck] = (),
+    ) -> SmokeScriptContractMetadata:
+        return result_naming.matrix_summary_assertion_bundle_selection(
+            self.matrix_summary_bundle,
+            result_prefix=result_prefix,
+            excluding_checks=excluding_checks,
+        ).contract_metadata()
+
+    def true_check_names(
+        self,
+        *,
+        result_naming: SmokeMatrixDocsReviewResultNaming,
+        result_prefix: str = "",
+        common_matrix_summary_excluding_checks: Sequence[
+            SmokeMatrixDocsReviewMatrixSummaryAssertionCheck
+        ] = (),
+    ) -> tuple[str, ...]:
+        return (
+            *(result_name for result_name, _ in self.extra_present_result_names),
+            *self.matrix_summary_contract_metadata(
+                result_naming=result_naming,
+                result_prefix=result_prefix,
+                excluding_checks=common_matrix_summary_excluding_checks,
+            ).true_check_names,
+            *(result_name for result_name, _, _ in self.ordering_result_names),
+            *(
+                (self.stdout_last_line_startswith_result_name,)
+                if self.stdout_last_line_startswith_result_name is not None
+                else ()
+            ),
+        )
+
+    def contract_metadata(
+        self,
+        *,
+        failure_defaults: SmokeMatrixDocsReviewFailureDefaults,
+        result_naming: SmokeMatrixDocsReviewResultNaming,
+        failed_line_value_prefix: str,
+        result_prefix: str = "",
+        stdout_last_line_value_prefix: str | None = None,
+        common_matrix_summary_excluding_checks: Sequence[
+            SmokeMatrixDocsReviewMatrixSummaryAssertionCheck
+        ] = (),
+    ) -> SmokeScriptContractMetadata:
+        return merge_smoke_script_contract_metadata(
+            required_line_prefixes=self.required_line_prefixes(
+                failure_defaults=failure_defaults,
+                failed_line_value_prefix=failed_line_value_prefix,
+                stdout_last_line_value_prefix=stdout_last_line_value_prefix,
+            ),
+            true_check_names=self.true_check_names(
+                result_naming=result_naming,
+                result_prefix=result_prefix,
+                common_matrix_summary_excluding_checks=common_matrix_summary_excluding_checks,
+            ),
+        )
+
     def build_results(
         self,
         smoke_run: SmokeScriptRunResult,
@@ -1677,27 +1796,15 @@ _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT = merge_smoke_script_contract_metada
 
 SMOKE_MATRIX_ALL_REVIEW_ORDER_CONTRACT = merge_smoke_script_contract_metadata(
     _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT,
-    required_line_prefixes=(
-        f"stderr_failed_line: {detail_safe_text(SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE)}",
-        f"stderr_hint_line: {SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX}",
-        f"stderr_docs_hint_line: {SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX}",
-        f"stderr_summary_line: {SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS.failure_summary_prefix}",
-    ),
-    true_check_names=(
-        "hint_line_present",
-        "docs_hint_line_present",
-        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_contract_metadata(
-            "all_review_order_failure",
-            excluding_checks=_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS,
-        ).true_check_names,
-        "metadata_before_hint",
-        "artifacts_before_hint",
-        "matrix_summary_before_hint",
-        "live_hint_before_docs_hint",
-        "docs_hint_before_failure_summary",
-        "metadata_before_failure_summary",
-        "artifacts_before_failure_summary",
-        "matrix_summary_before_failure_summary",
+    SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_RESULT_PRESET.contract_metadata(
+        failure_defaults=SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
+        result_naming=_ALL_REVIEW_FAILURE_RESULT_NAMING,
+        failed_line_value_prefix=detail_safe_text(
+            SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE
+        ),
+        common_matrix_summary_excluding_checks=(
+            _DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS
+        ),
     ),
 )
 SMOKE_MATRIX_ALL_REVIEW_ORDER_SCRIPT_CONTRACT = SmokeScriptContractCase(
@@ -1708,34 +1815,13 @@ SMOKE_MATRIX_ALL_REVIEW_ORDER_SCRIPT_CONTRACT = SmokeScriptContractCase(
 
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT = merge_smoke_script_contract_metadata(
     _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT,
-    required_line_prefixes=(
-        f"stderr_failed_line: {SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE}",
-        f"stderr_missing_api_key_hint_line: {SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX}",
-        (
-            "stderr_bundle_rerun_hint_line: "
-            f"{SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.bundle_rerun_hint_line_prefix()}"
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET.contract_metadata(
+        failure_defaults=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
+        result_naming=_ALL_REVIEW_FAILURE_RESULT_NAMING,
+        failed_line_value_prefix=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
+        common_matrix_summary_excluding_checks=(
+            _DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS
         ),
-        f"stderr_docs_hint_line: {SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX}",
-        f"stderr_summary_line: {SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.failure_summary_prefix}",
-    ),
-    true_check_names=(
-        "missing_api_key_hint_line_present",
-        "bundle_rerun_hint_line_present",
-        "docs_hint_line_present",
-        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_contract_metadata(
-            "all_review_missing_api_key_failure",
-            excluding_checks=_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS,
-        ).true_check_names,
-        "metadata_before_missing_api_key_hint",
-        "artifacts_before_missing_api_key_hint",
-        "matrix_summary_before_missing_api_key_hint",
-        "bundle_rerun_hint_before_missing_api_key_hint",
-        "bundle_rerun_hint_before_docs_hint",
-        "missing_api_key_hint_before_docs_hint",
-        "docs_hint_before_failure_summary",
-        "metadata_before_failure_summary",
-        "artifacts_before_failure_summary",
-        "matrix_summary_before_failure_summary",
     ),
 )
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_SCRIPT_CONTRACT = SmokeScriptContractCase(
@@ -1746,28 +1832,14 @@ SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_SCRIPT_CONTRACT = SmokeScriptContractCas
 
 SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT = merge_smoke_script_contract_metadata(
     _DOCS_REVIEW_MATRIX_COMMON_FAILURE_CONTRACT,
-    required_line_prefixes=(
-        f"stdout_last_line: {SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX}",
-        "stderr_failed_line: docs-review smoke failed fast: render_manifest_payload=False",
-        (
-            "stderr_bundle_rerun_hint_line: "
-            f"{SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.bundle_rerun_hint_line_prefix()}"
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET.contract_metadata(
+        failure_defaults=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
+        result_naming=_ALL_REVIEW_FAILURE_RESULT_NAMING,
+        failed_line_value_prefix="docs-review smoke failed fast: render_manifest_payload=False",
+        stdout_last_line_value_prefix=SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX,
+        common_matrix_summary_excluding_checks=(
+            _DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS
         ),
-        f"stderr_hint_line: {SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX}",
-        f"stderr_summary_line: {SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.failure_summary_prefix}",
-    ),
-    true_check_names=(
-        "bundle_rerun_hint_line_present",
-        "hint_line_present",
-        *_ALL_REVIEW_FAILURE_MATRIX_SUMMARY_ASSERTION_RESULT_NAMES.bundle_contract_metadata(
-            "docs_review_hint_failure",
-            excluding_checks=_DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS,
-        ).true_check_names,
-        "bundle_rerun_hint_after_matrix_summary",
-        "hint_after_matrix_summary",
-        "bundle_rerun_hint_before_docs_hint",
-        "hint_before_failure_summary",
-        "stdout_docs_review_started",
     ),
 )
 SMOKE_MATRIX_DOCS_REVIEW_HINT_SCRIPT_CONTRACT = SmokeScriptContractCase(
