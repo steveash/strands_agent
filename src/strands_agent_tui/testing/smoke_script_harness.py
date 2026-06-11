@@ -995,6 +995,21 @@ def build_smoke_matrix_docs_review_observer_spec(
     )
 
 
+def load_smoke_matrix_docs_review_module_and_spec(
+    script_path: Path,
+    module_name: str,
+    *,
+    requested_target_name: Literal["review", "all-review"],
+    driver_stem: str,
+) -> tuple[Any, SmokeMatrixDocsReviewObserverSpec]:
+    smoke_matrix_module = load_script_module(script_path, module_name)
+    return smoke_matrix_module, build_smoke_matrix_docs_review_observer_spec(
+        smoke_matrix_module,
+        requested_target_name=requested_target_name,
+        driver_stem=driver_stem,
+    )
+
+
 def find_prefixed_line_index(lines: Sequence[str], prefix: str) -> int | None:
     for index, line in enumerate(lines):
         if line.startswith(prefix):
@@ -2151,6 +2166,89 @@ def build_review_artifact_failure_results(
         result_prefix=result_prefix,
         line_detail_prefix=detail_prefix,
     )
+
+
+def build_smoke_matrix_docs_review_failure_results(
+    smoke_run: SmokeScriptRunResult,
+    failure_output: SmokeMatrixDocsReviewFailureObservation,
+    review_spec: SmokeMatrixDocsReviewObserverSpec,
+    *,
+    failure_defaults: SmokeMatrixDocsReviewFailureDefaults,
+    matrix_summary_bundle: SmokeMatrixDocsReviewMatrixSummaryAssertionBundle,
+    extra_line_result_names: Sequence[tuple[str, SmokeMatrixDocsReviewFailureStep]] = (),
+    extra_present_result_names: Sequence[tuple[str, SmokeMatrixDocsReviewFailureStep]] = (),
+    ordering_result_names: Sequence[
+        tuple[str, SmokeMatrixDocsReviewFailureStep, SmokeMatrixDocsReviewFailureStep]
+    ] = (),
+    failed_line_result_name: str = "stderr_failed_line",
+    failed_line_detail_safe: bool = False,
+    stdout_last_line_result_name: str | None = None,
+    detail_prefix: str = "stderr_",
+    result_prefix: str = "",
+) -> list[tuple[str, object]]:
+    failed_line = failure_output.failed_line
+    if failed_line_detail_safe:
+        failed_line = detail_safe_text(failed_line)
+
+    results: list[tuple[str, object]] = [("checkout_root", str(smoke_run.checkout_root))]
+    if stdout_last_line_result_name is not None:
+        stdout_lines = smoke_run.stdout_lines
+        results.append((stdout_last_line_result_name, stdout_lines[-1] if stdout_lines else ""))
+
+    results.extend(
+        [
+            (failed_line_result_name, failed_line),
+            *build_review_artifact_failure_results(
+                failure_output.review_output,
+                review_spec,
+                detail_prefix=detail_prefix,
+                result_prefix=result_prefix,
+            ),
+        ]
+    )
+    results.extend(
+        (result_name, failure_output.line(step))
+        for result_name, step in extra_line_result_names
+    )
+    results.extend(
+        [
+            ("stderr_summary_line", failure_output.failure_summary_line),
+            ("exit_code", smoke_run.exit_code),
+            ("exit_code_non_zero", smoke_run.exit_code != 0),
+            ("failed_line_present", failure_output.present("failed")),
+        ]
+    )
+    results.extend(
+        (result_name, failure_output.present(step))
+        for result_name, step in extra_present_result_names
+    )
+    results.append(("summary_line_present", failure_output.present("failure_summary")))
+
+    matrix_summary_selection = review_spec.result_naming.matrix_summary_assertion_bundle_selection(
+        matrix_summary_bundle,
+        result_prefix=result_prefix,
+    )
+    matrix_summary_kwargs = matrix_summary_selection.result_name_kwargs()
+    if "bundle_rerun_hint_result_name" in matrix_summary_kwargs:
+        matrix_summary_kwargs.update(
+            {
+                "bundle_rerun_hint_line": failure_output.bundle_rerun_hint_line,
+                "bundle_rerun_hint_defaults": failure_defaults,
+            }
+        )
+    results.extend(
+        build_review_artifact_matrix_summary_assertion_results(
+            failure_output.review_output,
+            review_spec,
+            result_prefix=result_prefix,
+            **matrix_summary_kwargs,
+        )
+    )
+    results.extend(
+        (result_name, failure_output.appears_before(left, right))
+        for result_name, left, right in ordering_result_names
+    )
+    return results
 
 
 def build_review_artifact_matrix_summary_assertion_results(

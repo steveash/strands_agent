@@ -19,6 +19,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
     SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX,
@@ -44,6 +45,7 @@ from strands_agent_tui.testing import (
     build_malformed_smoke_script_detail_results,
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
+    build_smoke_matrix_docs_review_failure_results,
     build_review_artifact_matrix_summary_assertion_results,
     build_review_artifact_observation_results,
     build_smoke_matrix_review_artifact_location_lines,
@@ -401,6 +403,100 @@ def test_build_standalone_docs_rerun_hint_results_reuses_shared_contract_metadat
     for prefix in STANDALONE_DOCS_RERUN_HINT_CONTRACT.required_line_prefixes:
         assert any(line.startswith(prefix) for line in lines), prefix
     for check_name in STANDALONE_DOCS_RERUN_HINT_CONTRACT.true_check_names:
+        assert f"{check_name}= True" in lines
+
+
+def test_build_smoke_matrix_docs_review_failure_results_reuses_shared_docs_review_contracts(
+    tmp_path: Path,
+) -> None:
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
+        requested_target_name="all-review",
+    )
+    combined_output_lines = [
+        fixture.review_output.metadata_line,
+        fixture.review_output.artifacts_line,
+        fixture.review_output.matrix_summary_line,
+        "docs-review smoke failed fast: render_manifest_payload= False",
+        SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.format_bundle_rerun_hint_line(
+            fixture.review_spec.expected_bundle_index_rerun_hint
+        )
+        or "",
+        SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
+        f"{SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.failure_summary_prefix}0.10s",
+    ]
+    review_output = collect_review_artifact_output(
+        combined_output_lines,
+        checkout_root=fixture.review_output.checkout_root,
+        metadata_prefix=SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+        artifacts_prefix=SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+        matrix_summary_prefix=SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
+    )
+    smoke_run = SmokeScriptRunResult(
+        checkout_root=review_output.checkout_root,
+        exit_code=1,
+        stdout=f"{SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX}\n",
+        stderr="",
+        cleanup_callback=lambda: None,
+    )
+    failure_output = collect_smoke_matrix_docs_review_failure_output(
+        combined_output_lines,
+        review_output=review_output,
+        **SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.collect_kwargs(),
+    )
+
+    results = build_smoke_matrix_docs_review_failure_results(
+        smoke_run,
+        failure_output,
+        fixture.review_spec,
+        failure_defaults=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
+        matrix_summary_bundle="docs_review_hint_failure",
+        extra_line_result_names=(
+            ("stderr_bundle_rerun_hint_line", "bundle_rerun_hint"),
+            ("stderr_hint_line", "docs_review_only_hint"),
+        ),
+        extra_present_result_names=(
+            ("bundle_rerun_hint_line_present", "bundle_rerun_hint"),
+            ("hint_line_present", "docs_review_only_hint"),
+        ),
+        ordering_result_names=(
+            (
+                "bundle_rerun_hint_after_matrix_summary",
+                "matrix_summary",
+                "bundle_rerun_hint",
+            ),
+            ("hint_after_matrix_summary", "matrix_summary", "docs_review_only_hint"),
+            (
+                "bundle_rerun_hint_before_docs_hint",
+                "bundle_rerun_hint",
+                "docs_review_only_hint",
+            ),
+            (
+                "hint_before_failure_summary",
+                "docs_review_only_hint",
+                "failure_summary",
+            ),
+        ),
+        failed_line_detail_safe=True,
+        stdout_last_line_result_name="stdout_last_line",
+    )
+    results.append(
+        (
+            "stdout_docs_review_started",
+            smoke_run.stdout_lines[-1].startswith(
+                SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.stdout_running_prefix or ""
+            ),
+        )
+    )
+
+    output = StringIO()
+    exit_code = emit_smoke_results(results, stdout=output)
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    for prefix in SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT.required_line_prefixes:
+        assert any(line.startswith(prefix) for line in lines), prefix
+    for check_name in SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT.true_check_names:
         assert f"{check_name}= True" in lines
 
 
