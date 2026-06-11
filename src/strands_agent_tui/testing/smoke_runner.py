@@ -547,6 +547,97 @@ class StandaloneSmokeFailureCase:
     expected_hint: str
 
 
+@dataclass(frozen=True)
+class StandaloneFollowUpFailureFixture:
+    failed_target_name: str
+    stdout_lines: tuple[str, ...]
+
+    @property
+    def failed_line(self) -> str:
+        return self.stdout_lines[-1]
+
+    def build_failure_case(
+        self,
+        *,
+        requested_target_name: str,
+        passed_count: int,
+        total_count: int,
+        expected_hint: str,
+    ) -> StandaloneSmokeFailureCase:
+        return StandaloneSmokeFailureCase(
+            requested_target_name=requested_target_name,
+            failed_target_name=self.failed_target_name,
+            stdout_lines=self.stdout_lines,
+            failed_line=self.failed_line,
+            passed_count=passed_count,
+            total_count=total_count,
+            expected_hint=expected_hint,
+        )
+
+
+@dataclass(frozen=True)
+class StandaloneFollowUpFailureFixtureSet:
+    fixtures: tuple[StandaloneFollowUpFailureFixture, ...]
+
+    @property
+    def target_names(self) -> tuple[str, ...]:
+        return tuple(fixture.failed_target_name for fixture in self.fixtures)
+
+    def fixture_for_target(self, target_name: str) -> StandaloneFollowUpFailureFixture | None:
+        return next(
+            (fixture for fixture in self.fixtures if fixture.failed_target_name == target_name),
+            None,
+        )
+
+    def output_lines_by_target(self) -> dict[str, tuple[str, ...]]:
+        return {
+            fixture.failed_target_name: fixture.stdout_lines
+            for fixture in self.fixtures
+        }
+
+    def build_failure_cases(
+        self,
+        *,
+        requested_target_names: Sequence[str],
+        hint_for_failure: Callable[[str, str], str | None],
+        cli_spec: SmokeWrapperCliSpec,
+    ) -> tuple[StandaloneSmokeFailureCase, ...]:
+        cases: list[StandaloneSmokeFailureCase] = []
+        for requested_target_name in requested_target_names:
+            resolved_target_names = cli_spec.resolve_target_names(requested_target_name)
+            total_count = len(resolved_target_names)
+            for passed_count, failed_target_name in enumerate(resolved_target_names):
+                fixture = self.fixture_for_target(failed_target_name)
+                if fixture is None:
+                    continue
+                expected_hint = hint_for_failure(requested_target_name, failed_target_name)
+                if expected_hint is None:
+                    continue
+                cases.append(
+                    fixture.build_failure_case(
+                        requested_target_name=requested_target_name,
+                        passed_count=passed_count,
+                        total_count=total_count,
+                        expected_hint=expected_hint,
+                    )
+                )
+        return tuple(cases)
+
+
+def build_standalone_follow_up_failure_fixture_set(
+    failure_output_lines_by_target: Mapping[str, Sequence[str]],
+) -> StandaloneFollowUpFailureFixtureSet:
+    return StandaloneFollowUpFailureFixtureSet(
+        fixtures=tuple(
+            StandaloneFollowUpFailureFixture(
+                failed_target_name=failed_target_name,
+                stdout_lines=tuple(stdout_lines),
+            )
+            for failed_target_name, stdout_lines in failure_output_lines_by_target.items()
+        )
+    )
+
+
 STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     script_name="standalone_smoke",
     description=(
@@ -912,72 +1003,60 @@ def build_standalone_docs_review_follow_up_metadata(
 STANDALONE_DOCS_PARITY_FOLLOW_UP = build_standalone_docs_parity_follow_up_metadata()
 STANDALONE_DOCS_REVIEW_FOLLOW_UP = build_standalone_docs_review_follow_up_metadata()
 
-_STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET = {
-    "malformed-result": (
-        "assertion_message: result[15]: ('malformed', 'value', 'extra')",
-        "result_contract= False",
-    ),
-    "malformed-detail": (
-        "missing_detail: stdout_fix_check_summary",
-        "detail_contract= False",
-    ),
-}
+STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES = build_standalone_follow_up_failure_fixture_set(
+    {
+        "malformed-result": (
+            "assertion_message: result[15]: ('malformed', 'value', 'extra')",
+            "result_contract= False",
+        ),
+        "malformed-detail": (
+            "missing_detail: stdout_fix_check_summary",
+            "detail_contract= False",
+        ),
+    }
+)
 
 
-_STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET = {
-    "docs": (
-        "standalone_smoke_help_missing= none",
-        "standalone_smoke_doc_parity= False",
-    ),
-    "docs-artifacts": (
-        "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
-        "fix_post_check= False",
-    ),
-    "docs-rerun-hint": (
-        "checkout_root: /tmp/docs-rerun-hint",
-        "hint_before_failure_summary= False",
-    ),
-}
+STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES = build_standalone_follow_up_failure_fixture_set(
+    {
+        "docs": (
+            "standalone_smoke_help_missing= none",
+            "standalone_smoke_doc_parity= False",
+        ),
+        "docs-artifacts": (
+            "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
+            "fix_post_check= False",
+        ),
+        "docs-rerun-hint": (
+            "checkout_root: /tmp/docs-rerun-hint",
+            "hint_before_failure_summary= False",
+        ),
+    }
+)
 
 
-_STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET = {
-    "matrix-artifact-roots": ("review_matrix_summary_line_matches_metadata= False",),
-    "matrix-all-review-order": ("docs_hint_before_failure_summary= False",),
-    "matrix-all-review-missing-api-key": ("docs_hint_before_failure_summary= False",),
-    "matrix-docs-review-hint": ("hint_before_failure_summary= False",),
-}
+STANDALONE_DOCS_REVIEW_FOLLOW_UP_FAILURE_FIXTURES = build_standalone_follow_up_failure_fixture_set(
+    {
+        "matrix-artifact-roots": ("review_matrix_summary_line_matches_metadata= False",),
+        "matrix-all-review-order": ("docs_hint_before_failure_summary= False",),
+        "matrix-all-review-missing-api-key": ("docs_hint_before_failure_summary= False",),
+        "matrix-docs-review-hint": ("hint_before_failure_summary= False",),
+    }
+)
 
 
 def build_standalone_follow_up_failure_cases(
     *,
     requested_target_names: Sequence[str],
-    failure_output_lines_by_target: Mapping[str, tuple[str, ...]],
+    fixture_set: StandaloneFollowUpFailureFixtureSet,
     hint_for_failure: Callable[[str, str], str | None],
     cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
 ) -> tuple[StandaloneSmokeFailureCase, ...]:
-    cases: list[StandaloneSmokeFailureCase] = []
-    for requested_target_name in requested_target_names:
-        resolved_target_names = cli_spec.resolve_target_names(requested_target_name)
-        total_count = len(resolved_target_names)
-        for passed_count, failed_target_name in enumerate(resolved_target_names):
-            stdout_lines = failure_output_lines_by_target.get(failed_target_name)
-            if stdout_lines is None:
-                continue
-            expected_hint = hint_for_failure(requested_target_name, failed_target_name)
-            if expected_hint is None:
-                continue
-            cases.append(
-                StandaloneSmokeFailureCase(
-                    requested_target_name=requested_target_name,
-                    failed_target_name=failed_target_name,
-                    stdout_lines=stdout_lines,
-                    failed_line=stdout_lines[-1],
-                    passed_count=passed_count,
-                    total_count=total_count,
-                    expected_hint=expected_hint,
-                )
-            )
-    return tuple(cases)
+    return fixture_set.build_failure_cases(
+        requested_target_names=requested_target_names,
+        hint_for_failure=hint_for_failure,
+        cli_spec=cli_spec,
+    )
 
 
 def standalone_docs_parity_follow_up_hint_for_failure(
@@ -988,7 +1067,7 @@ def standalone_docs_parity_follow_up_hint_for_failure(
     if requested_target_name is None:
         return None
     target_name = target.name if isinstance(target, SmokeScriptTarget) else target
-    if target_name not in _STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET:
+    if target_name not in STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.target_names:
         return None
     return _STANDALONE_DOCS_PARITY_RERUN_HINT
 
@@ -1002,7 +1081,7 @@ def build_standalone_docs_parity_follow_up_failure_cases(
     selected_requested_target_names = tuple(requested_target_names or metadata.requested_target_names)
     return build_standalone_follow_up_failure_cases(
         requested_target_names=selected_requested_target_names,
-        failure_output_lines_by_target=_STANDALONE_DOCS_PARITY_FAILURE_OUTPUT_LINES_BY_TARGET,
+        fixture_set=STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES,
         hint_for_failure=lambda requested_target_name, failed_target_name: (
             standalone_docs_parity_follow_up_hint_for_failure(
                 requested_target_name=requested_target_name,
@@ -1021,7 +1100,7 @@ def standalone_malformed_contract_hint_for_failure(
     if requested_target_name is None:
         return None
     target_name = target.name if isinstance(target, SmokeScriptTarget) else target
-    if target_name not in _STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET:
+    if target_name not in STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES.target_names:
         return None
     return (
         f"hint: `standalone_smoke.py {requested_target_name}` failed inside "
@@ -1037,7 +1116,7 @@ def build_standalone_malformed_contract_failure_cases(
 ) -> tuple[StandaloneSmokeFailureCase, ...]:
     return build_standalone_follow_up_failure_cases(
         requested_target_names=(requested_target_name,),
-        failure_output_lines_by_target=_STANDALONE_MALFORMED_CONTRACT_FAILURE_OUTPUT_LINES_BY_TARGET,
+        fixture_set=STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES,
         hint_for_failure=lambda requested_target_name, failed_target_name: (
             standalone_malformed_contract_hint_for_failure(
                 requested_target_name=requested_target_name,
@@ -1057,7 +1136,7 @@ def build_standalone_docs_review_follow_up_failure_cases(
     selected_requested_target_names = tuple(requested_target_names or metadata.requested_target_names)
     return build_standalone_follow_up_failure_cases(
         requested_target_names=selected_requested_target_names,
-        failure_output_lines_by_target=_STANDALONE_DOCS_REVIEW_FAILURE_OUTPUT_LINES_BY_TARGET,
+        fixture_set=STANDALONE_DOCS_REVIEW_FOLLOW_UP_FAILURE_FIXTURES,
         hint_for_failure=lambda requested_target_name, failed_target_name: (
             metadata.rerun_hint
             if failed_target_name in metadata.docs_review_target_names

@@ -18,9 +18,13 @@ from strands_agent_tui.testing.smoke_runner import (
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
     STANDALONE_DOCS_PARITY_FOLLOW_UP,
+    STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES,
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
+    STANDALONE_DOCS_REVIEW_FOLLOW_UP_FAILURE_FIXTURES,
+    STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES,
     STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
+    StandaloneFollowUpFailureFixtureSet,
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
@@ -44,6 +48,13 @@ def _write_script(tmp_path, name: str, body: str):
     path = tmp_path / name
     path.write_text(dedent(body), encoding="utf-8")
     return path
+
+
+def _failure_case_positions(cases):
+    return [
+        (case.requested_target_name, case.failed_target_name, case.passed_count, case.total_count)
+        for case in cases
+    ]
 
 
 def test_run_smoke_target_streams_successful_output(tmp_path) -> None:
@@ -763,6 +774,25 @@ def test_standalone_docs_parity_follow_up_metadata_tracks_alias_groups() -> None
     )
 
 
+def test_standalone_follow_up_failure_fixtures_expose_target_lookup_and_failed_lines() -> None:
+    fixture_sets: tuple[StandaloneFollowUpFailureFixtureSet, ...] = (
+        STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES,
+        STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES,
+        STANDALONE_DOCS_REVIEW_FOLLOW_UP_FAILURE_FIXTURES,
+    )
+
+    for fixture_set in fixture_sets:
+        assert fixture_set.target_names
+        assert fixture_set.output_lines_by_target() == {
+            fixture.failed_target_name: fixture.stdout_lines
+            for fixture in fixture_set.fixtures
+        }
+        for fixture in fixture_set.fixtures:
+            assert fixture.failed_line == fixture.stdout_lines[-1]
+            assert fixture_set.fixture_for_target(fixture.failed_target_name) == fixture
+        assert fixture_set.fixture_for_target("missing") is None
+
+
 def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selection() -> None:
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_target_name == "docs-review-only"
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.docs_review_target_names == (
@@ -800,127 +830,88 @@ def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selec
 def test_build_standalone_docs_review_follow_up_failure_cases_tracks_alias_positions() -> None:
     cases = build_standalone_docs_review_follow_up_failure_cases()
 
-    assert [
-        (
-            case.requested_target_name,
-            case.failed_target_name,
-            case.stdout_lines,
-            case.failed_line,
-            case.passed_count,
-            case.total_count,
-            case.expected_hint,
-        )
-        for case in cases
-    ] == [
+    assert _failure_case_positions(cases) == [
         (
             "docs-contract",
             "matrix-artifact-roots",
-            ("review_matrix_summary_line_matches_metadata= False",),
-            "review_matrix_summary_line_matches_metadata= False",
             3,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-contract",
             "matrix-all-review-order",
-            ("docs_hint_before_failure_summary= False",),
-            "docs_hint_before_failure_summary= False",
             4,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-contract",
             "matrix-all-review-missing-api-key",
-            ("docs_hint_before_failure_summary= False",),
-            "docs_hint_before_failure_summary= False",
             5,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-contract",
             "matrix-docs-review-hint",
-            ("hint_before_failure_summary= False",),
-            "hint_before_failure_summary= False",
             6,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-focused",
             "matrix-artifact-roots",
-            ("review_matrix_summary_line_matches_metadata= False",),
-            "review_matrix_summary_line_matches_metadata= False",
             3,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-focused",
             "matrix-all-review-order",
-            ("docs_hint_before_failure_summary= False",),
-            "docs_hint_before_failure_summary= False",
             4,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-focused",
             "matrix-all-review-missing-api-key",
-            ("docs_hint_before_failure_summary= False",),
-            "docs_hint_before_failure_summary= False",
             5,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-focused",
             "matrix-docs-review-hint",
-            ("hint_before_failure_summary= False",),
-            "hint_before_failure_summary= False",
             6,
             7,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-review-only",
             "matrix-artifact-roots",
-            ("review_matrix_summary_line_matches_metadata= False",),
-            "review_matrix_summary_line_matches_metadata= False",
             0,
             4,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-review-only",
             "matrix-all-review-order",
-            ("docs_hint_before_failure_summary= False",),
-            "docs_hint_before_failure_summary= False",
             1,
             4,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-review-only",
             "matrix-all-review-missing-api-key",
-            ("docs_hint_before_failure_summary= False",),
-            "docs_hint_before_failure_summary= False",
             2,
             4,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
         (
             "docs-review-only",
             "matrix-docs-review-hint",
-            ("hint_before_failure_summary= False",),
-            "hint_before_failure_summary= False",
             3,
             4,
-            STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint,
         ),
     ]
+    for case in cases:
+        fixture = STANDALONE_DOCS_REVIEW_FOLLOW_UP_FAILURE_FIXTURES.fixture_for_target(
+            case.failed_target_name
+        )
+        assert fixture is not None
+        assert case.stdout_lines == fixture.stdout_lines
+        assert case.failed_line == fixture.failed_line
+        assert case.expected_hint == STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_hint
 
 
 
@@ -932,80 +923,57 @@ def test_build_standalone_malformed_contract_failure_cases_tracks_alias_position
         requested_target_name="contract-negative"
     )
 
-    assert [
-        (
-            case.requested_target_name,
-            case.failed_target_name,
-            case.stdout_lines,
-            case.failed_line,
-            case.passed_count,
-            case.total_count,
-            case.expected_hint,
-        )
-        for case in docs_contract_cases
-    ] == [
+    assert _failure_case_positions(docs_contract_cases) == [
         (
             "docs-contract",
             "malformed-result",
-            (
-                "assertion_message: result[15]: ('malformed', 'value', 'extra')",
-                "result_contract= False",
-            ),
-            "result_contract= False",
             1,
             7,
-            standalone_malformed_contract_hint_for_failure(
-                requested_target_name="docs-contract",
-                target="malformed-result",
-            ),
         ),
         (
             "docs-contract",
             "malformed-detail",
-            (
-                "missing_detail: stdout_fix_check_summary",
-                "detail_contract= False",
-            ),
-            "detail_contract= False",
             2,
             7,
-            standalone_malformed_contract_hint_for_failure(
-                requested_target_name="docs-contract",
-                target="malformed-detail",
-            ),
         ),
     ]
-    assert [
-        (
-            case.requested_target_name,
-            case.failed_target_name,
-            case.passed_count,
-            case.total_count,
-            case.expected_hint,
+    for case in docs_contract_cases:
+        fixture = STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES.fixture_for_target(
+            case.failed_target_name
         )
-        for case in contract_negative_cases
-    ] == [
+        assert fixture is not None
+        assert case.stdout_lines == fixture.stdout_lines
+        assert case.failed_line == fixture.failed_line
+        assert case.expected_hint == standalone_malformed_contract_hint_for_failure(
+            requested_target_name=case.requested_target_name,
+            target=case.failed_target_name,
+        )
+
+    assert _failure_case_positions(contract_negative_cases) == [
         (
             "contract-negative",
             "malformed-result",
             0,
             2,
-            standalone_malformed_contract_hint_for_failure(
-                requested_target_name="contract-negative",
-                target="malformed-result",
-            ),
         ),
         (
             "contract-negative",
             "malformed-detail",
             1,
             2,
-            standalone_malformed_contract_hint_for_failure(
-                requested_target_name="contract-negative",
-                target="malformed-detail",
-            ),
         ),
     ]
+    for case in contract_negative_cases:
+        fixture = STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES.fixture_for_target(
+            case.failed_target_name
+        )
+        assert fixture is not None
+        assert case.stdout_lines == fixture.stdout_lines
+        assert case.failed_line == fixture.failed_line
+        assert case.expected_hint == standalone_malformed_contract_hint_for_failure(
+            requested_target_name=case.requested_target_name,
+            target=case.failed_target_name,
+        )
 
 
 def test_build_standalone_docs_contract_failure_cases_tracks_registry_derived_alias_selection() -> None:
