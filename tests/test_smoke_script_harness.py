@@ -1009,6 +1009,14 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         "metadata_expected_path_result_name": "metadata_matrix_summary_matches_all_review",
         "matrix_summary_matches_metadata_result_name": "matrix_summary_path_matches_metadata",
     }
+    assert failure_naming.matrix_summary_assertion_true_check_names(
+        "metadata_expected_path",
+        "matrix_summary_matches_metadata",
+    ) == selected_assertions.true_check_names()
+    assert failure_naming.matrix_summary_assertion_contract_metadata(
+        "metadata_expected_path",
+        "matrix_summary_matches_metadata",
+    ) == selected_assertions.contract_metadata()
     assert selected_assertions.contract_metadata().true_check_names == (
         "metadata_matrix_summary_matches_all_review",
         "matrix_summary_path_matches_metadata",
@@ -1024,8 +1032,31 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         "matrix_summary_line_matches_metadata_result_name": "matrix_summary_line_matches_metadata_path",
         "bundle_rerun_hint_result_name": "bundle_rerun_hint_line_matches_matrix_summary_hint",
     }
+    bundle_assertions_without_common = failure_naming.matrix_summary_assertion_bundle_selection(
+        "all_review_missing_api_key_failure",
+        excluding_checks=("metadata_expected_path",),
+    )
+    assert failure_naming.matrix_summary_assertion_result_name_bundle_kwargs(
+        "all_review_missing_api_key_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == bundle_assertions_without_common.result_name_kwargs()
+    assert failure_naming.matrix_summary_assertion_bundle_true_check_names(
+        "all_review_missing_api_key_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == bundle_assertions_without_common.true_check_names()
+    assert failure_naming.matrix_summary_assertion_bundle_contract_metadata(
+        "all_review_missing_api_key_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == bundle_assertions_without_common.contract_metadata()
     assert failure_matrix_summary_names.bundle_true_check_names("docs_review_hint_failure") == (
         "metadata_matrix_summary_matches_all_review",
+        "matrix_summary_path_matches_all_review",
+        "bundle_rerun_hint_line_matches_matrix_summary_hint",
+    )
+    assert failure_matrix_summary_names.bundle_true_check_names(
+        "docs_review_hint_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == (
         "matrix_summary_path_matches_all_review",
         "bundle_rerun_hint_line_matches_matrix_summary_hint",
     )
@@ -1034,6 +1065,52 @@ def test_build_smoke_matrix_docs_review_result_naming_exposes_shared_result_name
         "bundle_rerun_hint_matches_matrix_summary_hint",
     ).true_check_names() == (
         "all_review_metadata_matrix_summary_matches_expected_path",
+        "all_review_rerun_hint_line_matches_expected_hint",
+    )
+    assert success_names.matrix_summary_assertion_result_name_kwargs(
+        "metadata_expected_path",
+        "bundle_rerun_hint_matches_matrix_summary_hint",
+    ) == {
+        "metadata_expected_path_result_name": (
+            "all_review_metadata_matrix_summary_matches_expected_path"
+        ),
+        "bundle_rerun_hint_result_name": "all_review_rerun_hint_line_matches_expected_hint",
+    }
+    assert success_names.matrix_summary_assertion_true_check_names(
+        "metadata_expected_path",
+        "bundle_rerun_hint_matches_matrix_summary_hint",
+    ) == (
+        "all_review_metadata_matrix_summary_matches_expected_path",
+        "all_review_rerun_hint_line_matches_expected_hint",
+    )
+    assert success_names.matrix_summary_assertion_contract_metadata(
+        "metadata_expected_path",
+        "bundle_rerun_hint_matches_matrix_summary_hint",
+    ).true_check_names == (
+        "all_review_metadata_matrix_summary_matches_expected_path",
+        "all_review_rerun_hint_line_matches_expected_hint",
+    )
+    assert success_names.matrix_summary_assertion_result_name_bundle_kwargs(
+        "docs_review_hint_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == {
+        "matrix_summary_expected_path_result_name": (
+            "all_review_matrix_summary_line_matches_expected_path"
+        ),
+        "bundle_rerun_hint_result_name": "all_review_rerun_hint_line_matches_expected_hint",
+    }
+    assert success_names.matrix_summary_assertion_bundle_true_check_names(
+        "docs_review_hint_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == (
+        "all_review_matrix_summary_line_matches_expected_path",
+        "all_review_rerun_hint_line_matches_expected_hint",
+    )
+    assert success_names.matrix_summary_assertion_bundle_contract_metadata(
+        "docs_review_hint_failure",
+        excluding_checks=("metadata_expected_path",),
+    ).true_check_names == (
+        "all_review_matrix_summary_line_matches_expected_path",
         "all_review_rerun_hint_line_matches_expected_hint",
     )
     assert success_names.required_line_prefixes(
@@ -1137,6 +1214,12 @@ def test_matrix_summary_assertion_result_names_bundle_contract_metadata_supports
     assert common_selection.result_name_kwargs() == {
         "metadata_expected_path_result_name": result_names.metadata_expected_path,
     }
+    assert result_names.selected_result_name_kwargs("metadata_expected_path") == {
+        "metadata_expected_path_result_name": result_names.metadata_expected_path,
+    }
+    assert result_names.selected_true_check_names("metadata_expected_path") == (
+        result_names.metadata_expected_path,
+    )
 
     bundle_selection = result_names.bundle_selection(
         "all_review_missing_api_key_failure",
@@ -1156,6 +1239,14 @@ def test_matrix_summary_assertion_result_names_bundle_contract_metadata_supports
         ),
         "bundle_rerun_hint_result_name": result_names.bundle_rerun_hint_matches_matrix_summary_hint,
     }
+    assert result_names.bundle_result_name_kwargs(
+        "all_review_missing_api_key_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == bundle_selection.result_name_kwargs()
+    assert result_names.bundle_true_check_names(
+        "all_review_missing_api_key_failure",
+        excluding_checks=("metadata_expected_path",),
+    ) == bundle_selection.true_check_names()
 
 
 
