@@ -172,6 +172,53 @@ def matches_intervention_filter_output(
     )
 
 
+def intervention_mix_smoke_results(
+    text: str,
+    *,
+    result_prefix: str,
+    surface_result_name: str | None = None,
+    sort_mode: str = "recent",
+    surface_required_session_ids: Iterable[str] = (),
+    surface_excluded_session_ids: Iterable[str] = (),
+    surface_required: Iterable[str] = (),
+    surface_excluded: Iterable[str] = (),
+    require_preview: bool = False,
+    target_mix_required: Iterable[str] = (),
+    continuation_mix_required: Iterable[str] = (),
+) -> tuple[tuple[str, bool], ...]:
+    surface_name = surface_result_name or f"{result_prefix}_intervention_surface"
+    return (
+        (
+            surface_name,
+            matches_intervention_filter_output(
+                text,
+                sort_mode=sort_mode,
+                required_session_ids=surface_required_session_ids,
+                excluded_session_ids=surface_excluded_session_ids,
+                required=surface_required,
+                excluded=surface_excluded,
+                require_preview=require_preview,
+            ),
+        ),
+        (
+            f"{result_prefix}_intervention_target_mix",
+            matches_intervention_filter_output(
+                text,
+                sort_mode=sort_mode,
+                required=target_mix_required,
+            ),
+        ),
+        (
+            f"{result_prefix}_intervention_continuation_mix",
+            matches_intervention_filter_output(
+                text,
+                sort_mode=sort_mode,
+                required=continuation_mix_required,
+            ),
+        ),
+    )
+
+
 def matches_pending_filter_output(
     text: str,
     *,

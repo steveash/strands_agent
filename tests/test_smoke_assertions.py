@@ -37,6 +37,7 @@ from strands_agent_tui.testing import (
     matches_broad_stale_row_focus_suppression,
     matches_compact_stale_preview_output,
     matches_custom_stale_cutoff_output,
+    intervention_mix_smoke_results,
     matches_denied_filter_output,
     matches_denied_page_rollup_output,
     matches_denied_preview_output,
@@ -810,7 +811,7 @@ def test_default_tool_and_intervention_smoke_helpers_cover_remaining_picker_swit
     intervention_text = dedent(
         """
         Filter: intervention | Sort: recent
-        Intervention mix: pending 1, denied 1
+        Intervention mix: requests: 7 | families: test 4, edit 3 | targets: path 3, command 4 | continuations: approved result 1
         > 1. session-pending | 1 turn(s) | intervention: pending 1
           2. session-denied | 1 turn(s) | intervention: denied 1
         - last intervention: pending run_shell_command via fake_runtime
@@ -858,6 +859,32 @@ def test_default_tool_and_intervention_smoke_helpers_cover_remaining_picker_swit
         excluded_session_ids=["session-plain"],
         required=["intervention: pending 1"],
         require_preview=True,
+    )
+    assert intervention_mix_smoke_results(
+        intervention_text,
+        result_prefix="picker",
+        surface_required_session_ids=["session-pending", "session-denied"],
+        surface_excluded_session_ids=["session-plain"],
+        surface_required=["intervention: pending 1"],
+        require_preview=True,
+        target_mix_required=["targets: path 3, command 4"],
+        continuation_mix_required=["continuations: approved result 1"],
+    ) == (
+        ("picker_intervention_surface", True),
+        ("picker_intervention_target_mix", True),
+        ("picker_intervention_continuation_mix", True),
+    )
+    assert intervention_mix_smoke_results(
+        intervention_text,
+        result_prefix="switcher",
+        surface_result_name="switcher_intervention_filter",
+        sort_mode="attention",
+        target_mix_required=["targets: path 3, command 4"],
+        continuation_mix_required=["continuations: approved result 1"],
+    ) == (
+        ("switcher_intervention_filter", False),
+        ("switcher_intervention_target_mix", False),
+        ("switcher_intervention_continuation_mix", False),
     )
     assert matches_switcher_default_output(switcher_default_text)
     assert matches_switcher_selected_preview_output(switcher_preview_text)

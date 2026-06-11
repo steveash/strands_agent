@@ -21,10 +21,10 @@ from strands_agent_tui.testing import (
     matches_broad_stale_row_focus_suppression,
     matches_compact_stale_preview_output,
     matches_custom_stale_cutoff_output,
+    intervention_mix_smoke_results,
     matches_denied_filter_output,
     matches_denied_page_rollup_output,
     matches_denied_preview_output,
-    matches_intervention_filter_output,
     matches_pending_age_output,
     matches_pending_filter_output,
     matches_pending_page_rollup_output,
@@ -347,40 +347,26 @@ async def run_smoke() -> None:
             await pilot.press("g")
             await pilot.pause()
             intervention_output = str(first_app.query_one("#output").render())
-            print(
-                "switcher_intervention_filter=",
-                matches_intervention_filter_output(
-                    intervention_output,
-                    sort_mode="attention",
-                    required_session_ids=[
-                        "session-restored-pending",
-                        "session-restored-edit-pending",
-                        "session-aged",
-                        "session-newer",
-                        "session-pending-edit",
-                        "session-denied",
-                    ],
-                    excluded_session_ids=["session-older", "session-tool"],
-                    required=["intervention: pending 1"],
-                    require_preview=True,
-                ),
-            )
-            print(
-                "switcher_intervention_target_mix=",
-                matches_intervention_filter_output(
-                    intervention_output,
-                    sort_mode="attention",
-                    required=["targets: path 3, command 3"],
-                ),
-            )
-            print(
-                "switcher_intervention_continuation_mix=",
-                matches_intervention_filter_output(
-                    intervention_output,
-                    sort_mode="attention",
-                    required=["continuations: approved result 1"],
-                ),
-            )
+            for result_name, result_value in intervention_mix_smoke_results(
+                intervention_output,
+                result_prefix="switcher",
+                surface_result_name="switcher_intervention_filter",
+                sort_mode="attention",
+                surface_required_session_ids=[
+                    "session-restored-pending",
+                    "session-restored-edit-pending",
+                    "session-aged",
+                    "session-newer",
+                    "session-pending-edit",
+                    "session-denied",
+                ],
+                surface_excluded_session_ids=["session-older", "session-tool"],
+                surface_required=["intervention: pending 1"],
+                require_preview=True,
+                target_mix_required=["targets: path 3, command 3"],
+                continuation_mix_required=["continuations: approved result 1"],
+            ):
+                print(f"{result_name}=", result_value)
             await pilot.press("t")
             await pilot.pause()
             tool_output = str(first_app.query_one("#output").render())

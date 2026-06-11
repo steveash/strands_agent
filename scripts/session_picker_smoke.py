@@ -23,10 +23,10 @@ from strands_agent_tui.testing import (
     matches_broad_stale_row_focus_suppression,
     matches_compact_stale_preview_output,
     matches_custom_stale_cutoff_output,
+    intervention_mix_smoke_results,
     matches_denied_filter_output,
     matches_denied_page_rollup_output,
     matches_denied_preview_output,
-    matches_intervention_filter_output,
     matches_pending_age_output,
     matches_pending_filter_output,
     matches_pending_page_rollup_output,
@@ -584,30 +584,17 @@ def main() -> None:
                 excluded_session_ids=["session-restore"],
             ),
         )
-        print(
-            "picker_intervention_surface=",
-            matches_intervention_filter_output(
-                intervention_picker,
-                required_session_ids=["session-pending", "session-denied"],
-                excluded_session_ids=["session-plain"],
-                required=["intervention: pending 1"],
-                require_preview=True,
-            ),
-        )
-        print(
-            "picker_intervention_target_mix=",
-            matches_intervention_filter_output(
-                intervention_picker,
-                required=["targets: path 3, command 4"],
-            ),
-        )
-        print(
-            "picker_intervention_continuation_mix=",
-            matches_intervention_filter_output(
-                intervention_picker,
-                required=["continuations: approved result 1"],
-            ),
-        )
+        for result_name, result_value in intervention_mix_smoke_results(
+            intervention_picker,
+            result_prefix="picker",
+            surface_required_session_ids=["session-pending", "session-denied"],
+            surface_excluded_session_ids=["session-plain"],
+            surface_required=["intervention: pending 1"],
+            require_preview=True,
+            target_mix_required=["targets: path 3, command 4"],
+            continuation_mix_required=["continuations: approved result 1"],
+        ):
+            print(f"{result_name}=", result_value)
         print(
             "picker_shell_inspect_filter=",
             matches_shell_filter_output(
