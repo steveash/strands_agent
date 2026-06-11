@@ -6,7 +6,7 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
-    build_smoke_matrix_docs_review_failure_results,
+    SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_RESULT_PRESET,
     collect_smoke_matrix_docs_review_failure_output,
     emit_smoke_results,
     load_smoke_matrix_docs_review_module_and_spec,
@@ -40,39 +40,11 @@ def run_smoke_matrix_all_review_order_smoke(*, output_stream: str = "stderr") ->
             **SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS.collect_kwargs(),
         )
 
-        return build_smoke_matrix_docs_review_failure_results(
+        return SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_RESULT_PRESET.build_results(
             smoke_run,
             failure_output,
             review_spec,
             failure_defaults=SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
-            matrix_summary_bundle="all_review_order_failure",
-            extra_line_result_names=(
-                ("stderr_hint_line", "live_runtime_hint"),
-                ("stderr_docs_hint_line", "docs_review_only_hint"),
-            ),
-            extra_present_result_names=(
-                ("hint_line_present", "live_runtime_hint"),
-                ("docs_hint_line_present", "docs_review_only_hint"),
-            ),
-            ordering_result_names=(
-                ("metadata_before_hint", "metadata", "live_runtime_hint"),
-                ("artifacts_before_hint", "artifacts", "live_runtime_hint"),
-                ("matrix_summary_before_hint", "matrix_summary", "live_runtime_hint"),
-                ("live_hint_before_docs_hint", "live_runtime_hint", "docs_review_only_hint"),
-                (
-                    "docs_hint_before_failure_summary",
-                    "docs_review_only_hint",
-                    "failure_summary",
-                ),
-                ("metadata_before_failure_summary", "metadata", "failure_summary"),
-                ("artifacts_before_failure_summary", "artifacts", "failure_summary"),
-                (
-                    "matrix_summary_before_failure_summary",
-                    "matrix_summary",
-                    "failure_summary",
-                ),
-            ),
-            failed_line_detail_safe=True,
         )
     finally:
         smoke_run.cleanup()

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
-    build_smoke_matrix_docs_review_failure_results,
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET,
     collect_smoke_matrix_docs_review_failure_output,
     emit_smoke_results,
     load_smoke_matrix_docs_review_module_and_spec,
@@ -58,51 +58,12 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
             **SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.collect_kwargs(),
         )
 
-        results = build_smoke_matrix_docs_review_failure_results(
+        return SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET.build_results(
             smoke_run,
             failure_output,
             review_spec,
             failure_defaults=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
-            matrix_summary_bundle="docs_review_hint_failure",
-            extra_line_result_names=(
-                ("stderr_bundle_rerun_hint_line", "bundle_rerun_hint"),
-                ("stderr_hint_line", "docs_review_only_hint"),
-            ),
-            extra_present_result_names=(
-                ("bundle_rerun_hint_line_present", "bundle_rerun_hint"),
-                ("hint_line_present", "docs_review_only_hint"),
-            ),
-            ordering_result_names=(
-                (
-                    "bundle_rerun_hint_after_matrix_summary",
-                    "matrix_summary",
-                    "bundle_rerun_hint",
-                ),
-                ("hint_after_matrix_summary", "matrix_summary", "docs_review_only_hint"),
-                (
-                    "bundle_rerun_hint_before_docs_hint",
-                    "bundle_rerun_hint",
-                    "docs_review_only_hint",
-                ),
-                (
-                    "hint_before_failure_summary",
-                    "docs_review_only_hint",
-                    "failure_summary",
-                ),
-            ),
-            failed_line_detail_safe=True,
-            stdout_last_line_result_name="stdout_last_line",
         )
-        stdout_last_line = dict(results).get("stdout_last_line", "")
-        results.append(
-            (
-                "stdout_docs_review_started",
-                str(stdout_last_line).startswith(
-                    SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.stdout_running_prefix or ""
-                ),
-            )
-        )
-        return results
     finally:
         smoke_run.cleanup()
 

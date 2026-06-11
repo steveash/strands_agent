@@ -6,7 +6,7 @@ from pathlib import Path
 
 from strands_agent_tui.testing import (
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
-    build_smoke_matrix_docs_review_failure_results,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET,
     collect_smoke_matrix_docs_review_failure_output,
     emit_smoke_results,
     load_smoke_matrix_docs_review_module_and_spec,
@@ -62,58 +62,11 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
             **SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.collect_kwargs(),
         )
 
-        return build_smoke_matrix_docs_review_failure_results(
+        return SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET.build_results(
             smoke_run,
             failure_output,
             review_spec,
             failure_defaults=SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
-            matrix_summary_bundle="all_review_missing_api_key_failure",
-            extra_line_result_names=(
-                ("stderr_missing_api_key_hint_line", "missing_api_key_hint"),
-                ("stderr_bundle_rerun_hint_line", "bundle_rerun_hint"),
-                ("stderr_docs_hint_line", "docs_review_only_hint"),
-            ),
-            extra_present_result_names=(
-                ("missing_api_key_hint_line_present", "missing_api_key_hint"),
-                ("bundle_rerun_hint_line_present", "bundle_rerun_hint"),
-                ("docs_hint_line_present", "docs_review_only_hint"),
-            ),
-            ordering_result_names=(
-                ("metadata_before_missing_api_key_hint", "metadata", "missing_api_key_hint"),
-                ("artifacts_before_missing_api_key_hint", "artifacts", "missing_api_key_hint"),
-                (
-                    "matrix_summary_before_missing_api_key_hint",
-                    "matrix_summary",
-                    "missing_api_key_hint",
-                ),
-                (
-                    "bundle_rerun_hint_before_missing_api_key_hint",
-                    "bundle_rerun_hint",
-                    "missing_api_key_hint",
-                ),
-                (
-                    "bundle_rerun_hint_before_docs_hint",
-                    "bundle_rerun_hint",
-                    "docs_review_only_hint",
-                ),
-                (
-                    "missing_api_key_hint_before_docs_hint",
-                    "missing_api_key_hint",
-                    "docs_review_only_hint",
-                ),
-                (
-                    "docs_hint_before_failure_summary",
-                    "docs_review_only_hint",
-                    "failure_summary",
-                ),
-                ("metadata_before_failure_summary", "metadata", "failure_summary"),
-                ("artifacts_before_failure_summary", "artifacts", "failure_summary"),
-                (
-                    "matrix_summary_before_failure_summary",
-                    "matrix_summary",
-                    "failure_summary",
-                ),
-            ),
         )
     finally:
         smoke_run.cleanup()

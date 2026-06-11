@@ -13,14 +13,17 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX,
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_RESULT_PRESET,
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET,
     SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
@@ -35,6 +38,8 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_RERUN_HINT_CONTRACT,
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     SmokeMatrixDocsReviewFailureDefaults,
+    SmokeMatrixDocsReviewFailureObservation,
+    SmokeMatrixDocsReviewFailureResultPreset,
     SmokeMatrixDocsReviewObserverSpec,
     SmokeMatrixDocsReviewSuccessDefaults,
     SmokeScriptContractCase,
@@ -445,48 +450,11 @@ def test_build_smoke_matrix_docs_review_failure_results_reuses_shared_docs_revie
         **SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.collect_kwargs(),
     )
 
-    results = build_smoke_matrix_docs_review_failure_results(
+    results = SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET.build_results(
         smoke_run,
         failure_output,
         fixture.review_spec,
         failure_defaults=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
-        matrix_summary_bundle="docs_review_hint_failure",
-        extra_line_result_names=(
-            ("stderr_bundle_rerun_hint_line", "bundle_rerun_hint"),
-            ("stderr_hint_line", "docs_review_only_hint"),
-        ),
-        extra_present_result_names=(
-            ("bundle_rerun_hint_line_present", "bundle_rerun_hint"),
-            ("hint_line_present", "docs_review_only_hint"),
-        ),
-        ordering_result_names=(
-            (
-                "bundle_rerun_hint_after_matrix_summary",
-                "matrix_summary",
-                "bundle_rerun_hint",
-            ),
-            ("hint_after_matrix_summary", "matrix_summary", "docs_review_only_hint"),
-            (
-                "bundle_rerun_hint_before_docs_hint",
-                "bundle_rerun_hint",
-                "docs_review_only_hint",
-            ),
-            (
-                "hint_before_failure_summary",
-                "docs_review_only_hint",
-                "failure_summary",
-            ),
-        ),
-        failed_line_detail_safe=True,
-        stdout_last_line_result_name="stdout_last_line",
-    )
-    results.append(
-        (
-            "stdout_docs_review_started",
-            smoke_run.stdout_lines[-1].startswith(
-                SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS.stdout_running_prefix or ""
-            ),
-        )
     )
 
     output = StringIO()
@@ -498,6 +466,108 @@ def test_build_smoke_matrix_docs_review_failure_results_reuses_shared_docs_revie
         assert any(line.startswith(prefix) for line in lines), prefix
     for check_name in SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT.true_check_names:
         assert f"{check_name}= True" in lines
+
+
+def test_smoke_matrix_docs_review_failure_result_presets_capture_shared_result_layout() -> None:
+    assert SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_RESULT_PRESET == SmokeMatrixDocsReviewFailureResultPreset(
+        matrix_summary_bundle="all_review_order_failure",
+        extra_line_result_names=(
+            ("stderr_hint_line", "live_runtime_hint"),
+            ("stderr_docs_hint_line", "docs_review_only_hint"),
+        ),
+        extra_present_result_names=(
+            ("hint_line_present", "live_runtime_hint"),
+            ("docs_hint_line_present", "docs_review_only_hint"),
+        ),
+        ordering_result_names=(
+            ("metadata_before_hint", "metadata", "live_runtime_hint"),
+            ("artifacts_before_hint", "artifacts", "live_runtime_hint"),
+            ("matrix_summary_before_hint", "matrix_summary", "live_runtime_hint"),
+            ("live_hint_before_docs_hint", "live_runtime_hint", "docs_review_only_hint"),
+            ("docs_hint_before_failure_summary", "docs_review_only_hint", "failure_summary"),
+            ("metadata_before_failure_summary", "metadata", "failure_summary"),
+            ("artifacts_before_failure_summary", "artifacts", "failure_summary"),
+            ("matrix_summary_before_failure_summary", "matrix_summary", "failure_summary"),
+        ),
+        failed_line_detail_safe=True,
+    )
+    assert (
+        SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET.matrix_summary_bundle
+        == "all_review_missing_api_key_failure"
+    )
+    assert (
+        SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET.extra_line_result_names[0]
+        == ("stderr_missing_api_key_hint_line", "missing_api_key_hint")
+    )
+    assert (
+        SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET.ordering_result_names[-1]
+        == ("matrix_summary_before_failure_summary", "matrix_summary", "failure_summary")
+    )
+    assert SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET == SmokeMatrixDocsReviewFailureResultPreset(
+        matrix_summary_bundle="docs_review_hint_failure",
+        extra_line_result_names=(
+            ("stderr_bundle_rerun_hint_line", "bundle_rerun_hint"),
+            ("stderr_hint_line", "docs_review_only_hint"),
+        ),
+        extra_present_result_names=(
+            ("bundle_rerun_hint_line_present", "bundle_rerun_hint"),
+            ("hint_line_present", "docs_review_only_hint"),
+        ),
+        ordering_result_names=(
+            ("bundle_rerun_hint_after_matrix_summary", "matrix_summary", "bundle_rerun_hint"),
+            ("hint_after_matrix_summary", "matrix_summary", "docs_review_only_hint"),
+            ("bundle_rerun_hint_before_docs_hint", "bundle_rerun_hint", "docs_review_only_hint"),
+            ("hint_before_failure_summary", "docs_review_only_hint", "failure_summary"),
+        ),
+        failed_line_detail_safe=True,
+        stdout_last_line_result_name="stdout_last_line",
+        stdout_last_line_startswith_result_name="stdout_docs_review_started",
+    )
+
+
+def test_smoke_matrix_docs_review_failure_result_preset_requires_stdout_last_line_name(
+    tmp_path: Path,
+) -> None:
+    fixture = build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
+        requested_target_name="all-review",
+    )
+    smoke_run = SmokeScriptRunResult(
+        checkout_root=fixture.review_output.checkout_root,
+        exit_code=1,
+        stdout="",
+        stderr="",
+        cleanup_callback=lambda: None,
+    )
+    failure_output = SmokeMatrixDocsReviewFailureObservation(
+        review_output=fixture.review_output,
+        failed_index=None,
+        bundle_rerun_hint_index=None,
+        docs_review_only_hint_index=None,
+        live_runtime_hint_index=None,
+        missing_api_key_hint_index=None,
+        failure_summary_index=None,
+        failed_line="",
+        bundle_rerun_hint_line="",
+        docs_review_only_hint_line="",
+        live_runtime_hint_line="",
+        missing_api_key_hint_line="",
+        failure_summary_line="",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="stdout_last_line_result_name is required when stdout_last_line_startswith_result_name is set",
+    ):
+        SmokeMatrixDocsReviewFailureResultPreset(
+            matrix_summary_bundle="docs_review_hint_failure",
+            stdout_last_line_startswith_result_name="stdout_docs_review_started",
+        ).build_results(
+            smoke_run,
+            failure_output,
+            fixture.review_spec,
+            failure_defaults=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
+        )
 
 
 def test_exported_smoke_script_contract_cases_cover_shared_docs_review_wrappers() -> None:
