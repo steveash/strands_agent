@@ -774,16 +774,35 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
 )
 
 
+def _select_alias_target_names(
+    *,
+    required_any_target_groups: Sequence[Sequence[str]] = (),
+    required_all_target_names: Sequence[str] = (),
+    candidate_alias_names: Sequence[str] | None = None,
+    cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
+) -> tuple[str, ...]:
+    required_any_target_name_sets = [set(target_names) for target_names in required_any_target_groups if target_names]
+    required_all_target_name_set = set(required_all_target_names)
+    alias_names = tuple(cli_spec.alias_target_names) if candidate_alias_names is None else tuple(candidate_alias_names)
+    selected_alias_names: list[str] = []
+    for alias_name in alias_names:
+        resolved_target_names = set(cli_spec.resolve_target_names(alias_name))
+        if required_all_target_name_set and not required_all_target_name_set.issubset(resolved_target_names):
+            continue
+        if any(not target_name_set.intersection(resolved_target_names) for target_name_set in required_any_target_name_sets):
+            continue
+        selected_alias_names.append(alias_name)
+    return tuple(selected_alias_names)
+
+
 def _alias_target_names_with_any_targets(
     target_names: Sequence[str],
     *,
     cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
 ) -> tuple[str, ...]:
-    target_name_set = set(target_names)
-    return tuple(
-        alias_name
-        for alias_name in cli_spec.alias_target_names
-        if target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+    return _select_alias_target_names(
+        required_any_target_groups=(target_names,),
+        cli_spec=cli_spec,
     )
 
 
@@ -792,11 +811,9 @@ def _alias_target_names_with_all_targets(
     *,
     cli_spec: SmokeWrapperCliSpec = STANDALONE_SMOKE_CLI_SPEC,
 ) -> tuple[str, ...]:
-    target_name_set = set(target_names)
-    return tuple(
-        alias_name
-        for alias_name in cli_spec.alias_target_names
-        if target_name_set.issubset(cli_spec.resolve_target_names(alias_name))
+    return _select_alias_target_names(
+        required_all_target_names=target_names,
+        cli_spec=cli_spec,
     )
 
 
@@ -818,30 +835,22 @@ def build_standalone_docs_parity_follow_up_metadata(
     docs_review_rerun_target_name: str = "docs-review-only",
 ) -> StandaloneDocsParityFollowUpMetadata:
     docs_parity_target_names = cli_spec.resolve_target_names(rerun_target_name)
-    docs_parity_target_name_set = set(docs_parity_target_names)
-    docs_review_target_name_set = set(cli_spec.resolve_target_names(docs_review_rerun_target_name))
-    malformed_target_name_set = set(_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES)
-    default_requested_target_names = tuple(
-        alias_name
-        for alias_name in cli_spec.alias_target_names
-        if alias_name == cli_spec.default_target_name
-        and docs_parity_target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+    docs_review_target_names = cli_spec.resolve_target_names(docs_review_rerun_target_name)
+    default_requested_target_names = _select_alias_target_names(
+        required_any_target_groups=(docs_parity_target_names,),
+        candidate_alias_names=(cli_spec.default_target_name,),
+        cli_spec=cli_spec,
     )
-    contract_requested_target_names = tuple(
-        alias_name
-        for alias_name in _alias_target_names_with_any_targets(
+    contract_requested_target_names = _select_alias_target_names(
+        required_any_target_groups=(
             docs_parity_target_names,
-            cli_spec=cli_spec,
-        )
-        if malformed_target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+            _STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+        ),
+        cli_spec=cli_spec,
     )
-    docs_review_requested_target_names = tuple(
-        alias_name
-        for alias_name in _alias_target_names_with_all_targets(
-            docs_parity_target_names,
-            cli_spec=cli_spec,
-        )
-        if docs_review_target_name_set.issubset(cli_spec.resolve_target_names(alias_name))
+    docs_review_requested_target_names = _select_alias_target_names(
+        required_all_target_names=(*docs_parity_target_names, *docs_review_target_names),
+        cli_spec=cli_spec,
     )
     requested_target_name_set = set(default_requested_target_names)
     requested_target_name_set.update(contract_requested_target_names)
@@ -870,15 +879,15 @@ def build_standalone_docs_review_follow_up_metadata(
     rerun_target_name: str = "docs-review-only",
 ) -> StandaloneDocsReviewFollowUpMetadata:
     docs_review_target_names = cli_spec.resolve_target_names(rerun_target_name)
-    requested_target_names = _alias_target_names_with_all_targets(
-        docs_review_target_names,
+    requested_target_names = _select_alias_target_names(
+        required_all_target_names=docs_review_target_names,
         cli_spec=cli_spec,
     )
-    malformed_target_name_set = set(_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES)
-    contract_requested_target_names = tuple(
-        alias_name
-        for alias_name in requested_target_names
-        if malformed_target_name_set.intersection(cli_spec.resolve_target_names(alias_name))
+    contract_requested_target_names = _select_alias_target_names(
+        required_all_target_names=docs_review_target_names,
+        required_any_target_groups=(_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,),
+        candidate_alias_names=requested_target_names,
+        cli_spec=cli_spec,
     )
     alias_requested_target_names = tuple(
         alias_name
@@ -1064,10 +1073,13 @@ def build_standalone_docs_contract_failure_cases(
     docs_parity_metadata: StandaloneDocsParityFollowUpMetadata = STANDALONE_DOCS_PARITY_FOLLOW_UP,
     docs_review_metadata: StandaloneDocsReviewFollowUpMetadata = STANDALONE_DOCS_REVIEW_FOLLOW_UP,
 ) -> tuple[StandaloneSmokeFailureCase, ...]:
-    requested_target_names = tuple(
-        alias_name
-        for alias_name in docs_parity_metadata.contract_requested_target_names
-        if alias_name in docs_review_metadata.contract_requested_target_names
+    requested_target_names = _select_alias_target_names(
+        required_all_target_names=docs_review_metadata.docs_review_target_names,
+        required_any_target_groups=(
+            docs_parity_metadata.docs_parity_target_names,
+            _STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+        ),
+        cli_spec=cli_spec,
     )
     cases: list[StandaloneSmokeFailureCase] = []
     for requested_target_name in requested_target_names:

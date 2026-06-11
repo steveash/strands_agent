@@ -25,6 +25,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeScriptTarget,
     SmokeTargetSelector,
     SmokeWrapperMetadata,
+    _select_alias_target_names,
     build_smoke_cli_parser,
     build_standalone_docs_contract_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
@@ -723,6 +724,23 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
     assert standalone_spec.readme_operator_shortcut_lines() == tuple(
         f"- {snippet}" for snippet in standalone_spec.readme_all_shortcut_snippets()
     )
+
+
+def test_select_alias_target_names_supports_any_all_and_candidate_filters() -> None:
+    assert _select_alias_target_names(
+        required_any_target_groups=(("docs", "docs-artifacts", "docs-rerun-hint"),),
+        candidate_alias_names=("local", "docs-contract", "docs-focused"),
+    ) == ("local", "docs-contract", "docs-focused")
+    assert _select_alias_target_names(
+        required_all_target_names=(
+            "matrix-artifact-roots",
+            "matrix-all-review-order",
+            "matrix-all-review-missing-api-key",
+            "matrix-docs-review-hint",
+        ),
+        required_any_target_groups=(("malformed-result", "malformed-detail"),),
+    ) == ("docs-contract",)
+
 
 
 def test_standalone_docs_parity_follow_up_metadata_tracks_alias_groups() -> None:
