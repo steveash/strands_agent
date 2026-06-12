@@ -36,6 +36,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
     SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
     SMOKE_SCRIPT_CONTRACT_CASES,
+    STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES,
     STANDALONE_DOCS_RERUN_HINT_CONTRACT,
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     SmokeMatrixDocsReviewFailureDefaults,
@@ -380,13 +381,13 @@ def test_collect_smoke_wrapper_failure_output_validates_failed_matcher_contract(
 
 
 def test_build_standalone_docs_rerun_hint_results_reuses_shared_contract_metadata() -> None:
+    expected_failure_fixture = STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
+        "docs-artifacts"
+    )
     smoke_run = SmokeScriptRunResult(
         checkout_root=Path("/tmp/checkout"),
         exit_code=1,
-        stdout=(
-            "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke\n"
-            "fix_post_check= False\n"
-        ),
+        stdout="\n".join((*expected_failure_fixture.stdout_lines, "")),
         stderr="",
         cleanup_callback=lambda: None,
     )
@@ -394,7 +395,7 @@ def test_build_standalone_docs_rerun_hint_results_reuses_shared_contract_metadat
         failed_index=2,
         hint_index=3,
         failure_summary_index=4,
-        failed_line="docs-artifacts smoke failed fast: fix_post_check= False",
+        failed_line=expected_failure_fixture.failed_fast_message(),
         hint_line=(
             "[standalone-smoke] hint: standalone wrapper docs drift is easiest to isolate with "
             "`.venv/bin/python scripts/standalone_smoke.py docs-review-only`"

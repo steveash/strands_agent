@@ -792,7 +792,25 @@ def test_standalone_follow_up_failure_fixtures_expose_target_lookup_and_failed_l
         for fixture in fixture_set.fixtures:
             assert fixture.failed_line == fixture.stdout_lines[-1]
             assert fixture_set.fixture_for_target(fixture.failed_target_name) == fixture
+            assert fixture_set.require_fixture_for_target(fixture.failed_target_name) == fixture
+            assert fixture.failed_fast_message() == (
+                f"{fixture.failed_target_name} smoke failed fast: {fixture.failed_line}"
+            )
         assert fixture_set.fixture_for_target("missing") is None
+
+
+def test_standalone_follow_up_failure_fixture_emits_observed_stdout_lines() -> None:
+    fixture = STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
+        "docs-artifacts"
+    )
+
+    stdout = StringIO()
+    observed_lines: list[str] = []
+
+    fixture.emit_stdout_lines(stdout=stdout, output_line_observer=observed_lines.append)
+
+    assert stdout.getvalue().splitlines() == list(fixture.stdout_lines)
+    assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
 
 
 def test_build_timed_standalone_smoke_failure_cases_assigns_elapsed_seconds_in_order() -> None:

@@ -35,15 +35,11 @@ def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
             stdout = kwargs['stdout']
             stderr = kwargs['stderr']
             if target.name == 'docs-artifacts':
-                for line in (
-                    'fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke\\n',
-                    'fix_post_check= False\\n',
-                ):
-                    if observer is not None:
-                        observer(line)
-                    print(line, end='', file=stdout)
-                stdout.flush()
-                print('docs-artifacts smoke failed fast: fix_post_check= False', file=stderr)
+                fixture = smoke_runner.STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
+                    'docs-artifacts'
+                )
+                fixture.emit_stdout_lines(stdout=stdout, output_line_observer=observer)
+                print(fixture.failed_fast_message(), file=stderr)
                 return 1
             return 0
 

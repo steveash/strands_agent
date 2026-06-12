@@ -22,6 +22,7 @@ from .smoke_cli_doc_artifacts import (
     resolve_review_artifact_paths,
 )
 from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
+from .smoke_runner import STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES
 
 SMOKE_MATRIX_REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
 SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX = "[smoke-matrix] review artifacts: "
@@ -2345,6 +2346,9 @@ def build_standalone_docs_rerun_hint_results(
     smoke_run: SmokeScriptRunResult,
     failure_output: SmokeWrapperFailureObservation,
 ) -> list[tuple[str, object]]:
+    expected_failure_fixture = STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
+        "docs-artifacts"
+    )
     stdout_lines = smoke_run.stdout_lines
     return [
         ("checkout_root", str(smoke_run.checkout_root)),
@@ -2360,10 +2364,14 @@ def build_standalone_docs_rerun_hint_results(
         ("exit_code_non_zero", smoke_run.exit_code != 0),
         (
             "fix_check_summary_present",
-            STANDALONE_DOCS_RERUN_HINT_FIX_CHECK_SUMMARY_LINE in stdout_lines,
+            expected_failure_fixture.stdout_line(0) in stdout_lines,
         ),
-        ("false_line_present", STANDALONE_DOCS_RERUN_HINT_FALSE_LINE in stdout_lines),
-        ("failed_line_present", failure_output.present("failed")),
+        ("false_line_present", expected_failure_fixture.failed_line in stdout_lines),
+        (
+            "failed_line_present",
+            failure_output.failed_line
+            == expected_failure_fixture.failed_fast_message(),
+        ),
         ("hint_line_present", failure_output.present("hint")),
         ("summary_line_present", failure_output.present("failure_summary")),
         (

@@ -598,6 +598,28 @@ class StandaloneFollowUpFailureFixture:
             expected_hint=expected_hint,
         )
 
+    def stdout_line(self, index: int, *, default: str = "") -> str:
+        if -len(self.stdout_lines) <= index < len(self.stdout_lines):
+            return self.stdout_lines[index]
+        return default
+
+    def failed_fast_message(self, *, target_name: str | None = None) -> str:
+        selected_target_name = self.failed_target_name if target_name is None else target_name
+        return f"{selected_target_name} smoke failed fast: {self.failed_line}"
+
+    def emit_stdout_lines(
+        self,
+        *,
+        stdout: TextIO,
+        output_line_observer: Callable[[str], None] | None = None,
+    ) -> None:
+        for line in self.stdout_lines:
+            rendered_line = f"{line}\n"
+            if output_line_observer is not None:
+                output_line_observer(rendered_line)
+            print(line, file=stdout)
+        stdout.flush()
+
 
 @dataclass(frozen=True)
 class StandaloneFollowUpFailureFixtureSet:
@@ -612,6 +634,12 @@ class StandaloneFollowUpFailureFixtureSet:
             (fixture for fixture in self.fixtures if fixture.failed_target_name == target_name),
             None,
         )
+
+    def require_fixture_for_target(self, target_name: str) -> StandaloneFollowUpFailureFixture:
+        fixture = self.fixture_for_target(target_name)
+        if fixture is None:
+            raise KeyError(target_name)
+        return fixture
 
     def output_lines_by_target(self) -> dict[str, tuple[str, ...]]:
         return {
