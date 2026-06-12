@@ -548,6 +548,30 @@ class StandaloneSmokeFailureCase:
 
 
 @dataclass(frozen=True)
+class TimedStandaloneSmokeFailureCase:
+    failure_case: StandaloneSmokeFailureCase
+    elapsed_seconds: float
+
+
+def build_timed_standalone_smoke_failure_cases(
+    failure_cases: Sequence[StandaloneSmokeFailureCase],
+    *,
+    first_elapsed_seconds: float,
+    elapsed_step_seconds: float = 0.3,
+) -> tuple[TimedStandaloneSmokeFailureCase, ...]:
+    return tuple(
+        TimedStandaloneSmokeFailureCase(
+            failure_case=failure_case,
+            elapsed_seconds=round(
+                first_elapsed_seconds + index * elapsed_step_seconds,
+                4,
+            ),
+        )
+        for index, failure_case in enumerate(failure_cases)
+    )
+
+
+@dataclass(frozen=True)
 class StandaloneFollowUpFailureFixture:
     failed_target_name: str
     stdout_lines: tuple[str, ...]

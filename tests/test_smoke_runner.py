@@ -25,6 +25,7 @@ from strands_agent_tui.testing.smoke_runner import (
     STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
     StandaloneFollowUpFailureFixtureSet,
+    TimedStandaloneSmokeFailureCase,
     SmokeCliExample,
     SmokeScriptTarget,
     SmokeTargetSelector,
@@ -33,6 +34,7 @@ from strands_agent_tui.testing.smoke_runner import (
     build_smoke_cli_parser,
     build_standalone_docs_contract_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
+    build_timed_standalone_smoke_failure_cases,
     build_standalone_malformed_contract_failure_cases,
     run_smoke_target,
     run_smoke_targets,
@@ -792,6 +794,21 @@ def test_standalone_follow_up_failure_fixtures_expose_target_lookup_and_failed_l
             assert fixture_set.fixture_for_target(fixture.failed_target_name) == fixture
         assert fixture_set.fixture_for_target("missing") is None
 
+
+def test_build_timed_standalone_smoke_failure_cases_assigns_elapsed_seconds_in_order() -> None:
+    cases = build_standalone_docs_contract_failure_cases()
+
+    timed_cases = build_timed_standalone_smoke_failure_cases(
+        cases,
+        first_elapsed_seconds=1.8,
+    )
+
+    assert timed_cases[:3] == (
+        TimedStandaloneSmokeFailureCase(cases[0], 1.8),
+        TimedStandaloneSmokeFailureCase(cases[1], 2.1),
+        TimedStandaloneSmokeFailureCase(cases[2], 2.4),
+    )
+    assert timed_cases[-1] == TimedStandaloneSmokeFailureCase(cases[-1], 3.6)
 
 def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selection() -> None:
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_target_name == "docs-review-only"
