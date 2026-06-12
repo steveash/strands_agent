@@ -452,24 +452,33 @@ def test_timeline_smoke_emits_runtime_and_persistence_summary_checks(monkeypatch
     assert exit_code == 0
     _assert_mixed_smoke_result_contract(
         lines,
-        detail_names=["runtime_timeline_view", "persistence_timeline_view", "compact_timeline_view"],
+        detail_names=[
+            "runtime_timeline_view",
+            "persistence_timeline_view",
+            "compact_timeline_view",
+            "spotlight_timeline_view",
+        ],
         check_names=[
             "timeline_runtime_summary",
             "timeline_persistence_summary",
             "timeline_filter_counts",
             "timeline_compact_toggle",
+            "timeline_spotlight_focus",
         ],
     )
     assert "timeline_runtime_summary= True" in lines
     assert "timeline_persistence_summary= True" in lines
     assert "timeline_filter_counts= True" in lines
     assert "timeline_compact_toggle= True" in lines
+    assert "timeline_spotlight_focus= True" in lines
     assert "runtime_timeline_view: Event Timeline" in text
     assert "summary: response fake-strands/fake | pending 0" in text
     assert "persistence_timeline_view: Event Timeline" in text
     assert "summary: session state saved | pending 0 | filter runtime | draft 14c" in text
     assert "compact_timeline_view: Event Timeline" in text
     assert "View: detail off | raw off" in text
+    assert "spotlight_timeline_view: Event Timeline" in text
+    assert "Focus: event 2/4 | spotlight on" in text
 
 
 def test_approval_restart_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:

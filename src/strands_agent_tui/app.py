@@ -65,6 +65,9 @@ class StrandsAgentApp(App):
         Binding("f11", "toggle_session_switcher", "Switch session"),
         Binding("ctrl+t", "toggle_event_details", "Toggle event details"),
         Binding("ctrl+r", "toggle_event_data", "Toggle raw event data"),
+        Binding("ctrl+up", "focus_older_event", "Older event"),
+        Binding("ctrl+down", "focus_newer_event", "Newer event"),
+        Binding("ctrl+o", "toggle_event_spotlight", "Toggle event spotlight"),
     ]
 
     CSS = """
@@ -134,6 +137,8 @@ class StrandsAgentApp(App):
         self.event_filter = "all"
         self.show_event_details = True
         self.show_event_data = True
+        self.event_focus_index: int | None = None
+        self.event_focus_expanded = False
         self.history_focus_index: int | None = None
         self.draft_prompt = ""
         self.session_switcher_active = False
@@ -357,6 +362,8 @@ class StrandsAgentApp(App):
         self.events = []
         self.show_event_details = True
         self.show_event_data = True
+        self.event_focus_index = None
+        self.event_focus_expanded = False
         self.history_focus_index = None
         self.draft_prompt = ""
         self.pending_approval = None
@@ -381,6 +388,9 @@ class StrandsAgentApp(App):
         self.event_filter = self._sanitize_event_filter(session_state.event_filter)
         self.show_event_details = session_state.show_event_details
         self.show_event_data = session_state.show_event_data
+        self.event_focus_index = self._normalize_event_focus_index(session_state.event_focus_index)
+        self.event_focus_expanded = session_state.event_focus_expanded and self.event_focus_index is not None
+        self._reconcile_event_focus_for_filter()
         self.history_focus_index = self._normalize_history_focus_index(session_state.history_focus_index)
         self.draft_prompt = session_state.draft_prompt
 
@@ -405,16 +415,21 @@ class StrandsAgentApp(App):
             session_state.event_filter != "all"
             or session_state.show_event_details is not True
             or session_state.show_event_data is not True
+            or session_state.event_focus_index is not None
+            or session_state.event_focus_expanded is True
             or session_state.history_focus_index is not None
             or session_state.draft_prompt
         ):
             restored_view = self.history_view_label()
+            focus_label = self._event_focus_restore_label()
             restored_bits = [
                 (
                     f"Restored event filter `{self.event_filter}`, timeline detail/raw `"
                     f"{self.timeline_view_label()}`, and view `{restored_view}` from session state."
                 )
             ]
+            if focus_label:
+                restored_bits.append(f"Timeline spotlight restored ({focus_label}).")
             if session_state.draft_prompt:
                 restored_bits.append(f"Draft prompt restored ({len(session_state.draft_prompt)} chars).")
             self.events.append(
@@ -429,6 +444,7 @@ class StrandsAgentApp(App):
                         "view": restored_view,
                         "show_event_details": self.show_event_details,
                         "show_event_data": self.show_event_data,
+                        **self._event_focus_metadata(),
                         "draft_prompt_length": len(session_state.draft_prompt),
                     },
                 )
@@ -637,6 +653,8 @@ class StrandsAgentApp(App):
             event_filter=self.event_filter,
             show_details=self.show_event_details,
             show_data=self.show_event_data,
+            focused_event_index=self.event_focus_index,
+            focus_expanded=self.event_focus_expanded,
         )
 
     def filtered_events(self) -> list[RuntimeEvent]:
@@ -644,6 +662,7 @@ class StrandsAgentApp(App):
 
     def action_set_event_filter(self, value: str) -> None:
         self.event_filter = self._sanitize_event_filter(value)
+        self._reconcile_event_focus_for_filter()
         self._persist_session_view_state()
         self.query_one("#events", Static).update(self.render_events())
 
@@ -654,6 +673,29 @@ class StrandsAgentApp(App):
 
     def action_toggle_event_data(self) -> None:
         self.show_event_data = not self.show_event_data
+        self._persist_session_view_state()
+        self.query_one("#events", Static).update(self.render_events())
+
+    def action_focus_older_event(self) -> None:
+        self._move_event_focus(-1)
+
+    def action_focus_newer_event(self) -> None:
+        self._move_event_focus(1)
+
+    def action_toggle_event_spotlight(self) -> None:
+        filtered_indices = self._filtered_event_indices()
+        if not filtered_indices:
+            return
+
+        if self.event_focus_index is None or self.event_focus_index not in filtered_indices:
+            self.event_focus_index = filtered_indices[-1]
+            self.event_focus_expanded = True
+        elif self.event_focus_expanded:
+            self.event_focus_index = None
+            self.event_focus_expanded = False
+        else:
+            self.event_focus_expanded = True
+
         self._persist_session_view_state()
         self.query_one("#events", Static).update(self.render_events())
 
@@ -1072,6 +1114,8 @@ class StrandsAgentApp(App):
             event_filter=self.event_filter,
             show_event_details=self.show_event_details,
             show_event_data=self.show_event_data,
+            event_focus_index=self.event_focus_index,
+            event_focus_expanded=self.event_focus_expanded,
             history_focus_index=self.history_focus_index,
             draft_prompt=self.draft_prompt,
             session_switcher_active=self.session_switcher_active,
@@ -1112,6 +1156,7 @@ class StrandsAgentApp(App):
                         "event_filter": self.event_filter,
                         "show_event_details": self.show_event_details,
                         "show_event_data": self.show_event_data,
+                        **self._event_focus_metadata(),
                         "history_focus_index": self.history_focus_index,
                         "draft_prompt_length": len(self.draft_prompt),
                         "session_switcher_page_index": self.session_switcher_page_index,
@@ -1129,10 +1174,67 @@ class StrandsAgentApp(App):
     def _sanitize_event_filter(self, value: str) -> str:
         return value if value in EVENT_FILTER_MODES else "all"
 
+    def _filtered_event_indices(self) -> list[int]:
+        if self.event_filter == "all":
+            return list(range(len(self.events)))
+        return [index for index, event in enumerate(self.events) if event.category == self.event_filter]
+
+    def _reconcile_event_focus_for_filter(self) -> None:
+        filtered_indices = self._filtered_event_indices()
+        if self.event_focus_index not in filtered_indices:
+            self.event_focus_index = None
+            self.event_focus_expanded = False
+
+    def _move_event_focus(self, direction: int) -> None:
+        filtered_indices = self._filtered_event_indices()
+        if not filtered_indices:
+            return
+
+        if self.event_focus_index is None or self.event_focus_index not in filtered_indices:
+            position = max(len(filtered_indices) - 2, 0) if direction < 0 else len(filtered_indices) - 1
+        else:
+            current_position = filtered_indices.index(self.event_focus_index)
+            position = min(max(current_position + direction, 0), len(filtered_indices) - 1)
+
+        self.event_focus_index = filtered_indices[position]
+        self.event_focus_expanded = True
+        self._persist_session_view_state()
+        self.query_one("#events", Static).update(self.render_events())
+
+    def _event_focus_metadata(self) -> dict[str, object]:
+        filtered_indices = self._filtered_event_indices()
+        if self.event_focus_index is None or self.event_focus_index not in filtered_indices:
+            return {}
+
+        return {
+            "event_focus_index": self.event_focus_index,
+            "event_focus_position": filtered_indices.index(self.event_focus_index) + 1,
+            "event_focus_event_count": len(filtered_indices),
+            "event_focus_expanded": self.event_focus_expanded,
+        }
+
+    def _event_focus_restore_label(self) -> str:
+        metadata = self._event_focus_metadata()
+        position = metadata.get("event_focus_position")
+        total = metadata.get("event_focus_event_count")
+        if not isinstance(position, int) or not isinstance(total, int):
+            return ""
+        label = f"event {position}/{total}"
+        if bool(metadata.get("event_focus_expanded", False)):
+            label += ", spotlight"
+        return label
+
     def _normalize_history_focus_index(self, value: int | None) -> int | None:
         if value is None or not self.history:
             return None if value is None else None
         if 0 <= value < len(self.history):
+            return value
+        return None
+
+    def _normalize_event_focus_index(self, value: int | None) -> int | None:
+        if value is None or not self.events:
+            return None
+        if 0 <= value < len(self.events):
             return value
         return None
 

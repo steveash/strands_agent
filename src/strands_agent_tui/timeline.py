@@ -7,7 +7,7 @@ from strands_agent_tui.runtime import RuntimeEvent
 EVENT_FILTER_MODES = frozenset({"all", "runtime", "tool", "failure", "persistence", "intervention"})
 TIMELINE_KEYS_LINE = (
     "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence, F12 intervention, "
-    "Ctrl+T detail, Ctrl+R raw"
+    "Ctrl+T detail, Ctrl+R raw, Ctrl+Up older event, Ctrl+Down newer event, Ctrl+O spotlight"
 )
 
 
@@ -24,6 +24,8 @@ def render_event_timeline(
     max_events: int = 12,
     show_details: bool = True,
     show_data: bool = True,
+    focused_event_index: int | None = None,
+    focus_expanded: bool = False,
 ) -> str:
     if not events:
         return (
@@ -32,25 +34,51 @@ def render_event_timeline(
             "Tool calls, runtime milestones, and failures will appear here."
         )
 
-    filtered = filter_events(events, event_filter)
+    filtered_entries = [
+        (global_index, event)
+        for global_index, event in enumerate(events)
+        if event_filter == "all" or event.category == event_filter
+    ]
+    filtered = [event for _, event in filtered_entries]
+    focus_position: int | None = None
+    if focused_event_index is not None:
+        for candidate_position, (global_index, _event) in enumerate(filtered_entries):
+            if global_index == focused_event_index:
+                focus_position = candidate_position
+                break
+
     lines = [
         "Event Timeline",
         f"Filter: {event_filter} ({len(filtered)}/{len(events)} events)",
         f"View: detail {'on' if show_details else 'off'} | raw {'on' if show_data else 'off'}",
+        (
+            f"Focus: event {focus_position + 1}/{len(filtered)} | spotlight {'on' if focus_expanded else 'off'}"
+            if focus_position is not None
+            else "Focus: latest"
+        ),
         TIMELINE_KEYS_LINE,
         "",
     ]
-    visible = filtered[-max_events:]
-    start_index = max(len(filtered) - len(visible) + 1, 1)
-    for index, event in enumerate(visible, start=start_index):
+    if focus_position is None:
+        visible_entries = filtered_entries[-max_events:]
+        start_index = max(len(filtered) - len(visible_entries) + 1, 1)
+    else:
+        last_start = max(len(filtered_entries) - max_events, 0)
+        start_offset = min(max(focus_position - (max_events // 2), 0), last_start)
+        visible_entries = filtered_entries[start_offset : start_offset + max_events]
+        start_index = start_offset + 1
+
+    for index, (global_index, event) in enumerate(visible_entries, start=start_index):
         timestamp = event.timestamp[11:19] if event.timestamp else "--:--:--"
-        lines.append(f"{index}. [{timestamp}] ({event.category}) kind={event.kind} | {event.title}")
+        cursor = ">" if global_index == focused_event_index else " "
+        lines.append(f"{cursor}{index}. [{timestamp}] ({event.category}) kind={event.kind} | {event.title}")
         summary = summarize_event(event)
         if summary:
             lines.append(f"   summary: {summary}")
-        if show_details:
+        expanded = focus_expanded and global_index == focused_event_index
+        if show_details or expanded:
             lines.append(f"   {event.detail}")
-        if show_data and event.data:
+        if (show_data or expanded) and event.data:
             compact_data = ", ".join(f"{key}={value!r}" for key, value in sorted(event.data.items()))
             lines.append(f"   data: {compact_data}")
     return "\n".join(lines)
@@ -251,6 +279,9 @@ def _summarize_persistence_event(event: RuntimeEvent) -> str:
         detail_state = _timeline_state_label(data)
         if detail_state != "detail on | raw on":
             parts.append(detail_state)
+        focus_state = _timeline_focus_label(data)
+        if focus_state:
+            parts.append(focus_state)
         draft_length = _int_value(data.get("draft_prompt_length"))
         if draft_length:
             parts.append(f"draft {draft_length}c")
@@ -274,6 +305,9 @@ def _summarize_persistence_event(event: RuntimeEvent) -> str:
         detail_state = _timeline_state_label(data)
         if detail_state != "detail on | raw on":
             parts.append(detail_state)
+        focus_state = _timeline_focus_label(data)
+        if focus_state:
+            parts.append(focus_state)
         view = _text(data.get("view"))
         if view:
             parts.append(view)
@@ -346,6 +380,18 @@ def _timeline_state_label(data: dict[str, object]) -> str:
     detail_on = bool(data.get("show_event_details", True))
     raw_on = bool(data.get("show_event_data", True))
     return f"detail {'on' if detail_on else 'off'} | raw {'on' if raw_on else 'off'}"
+
+
+def _timeline_focus_label(data: dict[str, object]) -> str:
+    position = _int_value(data.get("event_focus_position"))
+    total = _int_value(data.get("event_focus_event_count"))
+    if position is None or total is None or position < 1 or total < 1:
+        return ""
+
+    label = f"event {position}/{total}"
+    if bool(data.get("event_focus_expanded", False)):
+        label += " spotlight"
+    return label
 
 
 def _int_value(value: object) -> int | None:

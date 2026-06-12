@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views with oldest pending age/timestamp cues that now fall back to session activity when approval timestamps are missing and explicitly label when that fallback was used, selected-session preview provenance lines that now show pending-only age/timestamp/source plus fresh-vs-restored queue provenance and bounded numbered multi-approval queue breakdowns inside both reopen surfaces, explicit stale-cutoff hints in picker/switcher legends, prompts, empty states, and stale page-level rollup lines, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording while collapsing after three visible items with an explicit hidden-count cue, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts, recent-session intervention previews/rollups that now reuse the same timeline wording plus target-kind and continuation mix metrics, operator-controlled timeline detail/raw toggles whose compact-vs-expanded state now survives a TUI restart, and a shared intervention-mix smoke helper so picker/switcher triage checks keep one contract for their intervention surface, target-kind mix, and continuation mix expectations.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, restart-safe per-event timeline spotlight navigation on top of the existing compact-vs-expanded observability controls, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, focused timeline inspection context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views with oldest pending age/timestamp cues that now fall back to session activity when approval timestamps are missing and explicitly label when that fallback was used, selected-session preview provenance lines that now show pending-only age/timestamp/source plus fresh-vs-restored queue provenance and bounded numbered multi-approval queue breakdowns inside both reopen surfaces, explicit stale-cutoff hints in picker/switcher legends, prompts, empty states, and stale page-level rollup lines, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording while collapsing after three visible items with an explicit hidden-count cue, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts, recent-session intervention previews/rollups that now reuse the same timeline wording plus target-kind and continuation mix metrics, operator-controlled timeline detail/raw toggles plus per-event spotlight inspection whose state now survives a TUI restart, and a shared intervention-mix smoke helper so picker/switcher triage checks keep one contract for their intervention surface, target-kind mix, and continuation mix expectations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -99,14 +99,14 @@ What exists now:
 - recent-session intervention previews now reuse the same timeline wording, pending approvals render as normalized `approval pending ...` queue summaries, and intervention triage headers now expose family, target-kind, and continuation mix metrics across both reopen surfaces,
 - a dedicated event timeline pane for runtime milestones, tool activity, failures, compact human-readable summary lines, and raw structured event data,
 - keyboard-driven event filtering in the timeline pane for all/runtime/tool/failure/persistence/intervention views,
-- keyboard-driven `Ctrl+T` detail and `Ctrl+R` raw-data toggles so the event pane can switch between compact summary-only and fully expanded observability views,
+- keyboard-driven `Ctrl+T` detail and `Ctrl+R` raw-data toggles plus `Ctrl+Up` / `Ctrl+Down` / `Ctrl+O` per-event spotlight controls so the event pane can switch between compact summary-only, fully expanded, and single-event-inspection observability views,
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with both `turns.jsonl` and `transcript.md`,
 - structured event payloads with timestamps and metadata for both fake and live runtime paths,
 - explicit `artifact_saved` persistence events emitted by the app after each turn is written,
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
 - compact replay navigation for resumed sessions so the conversation pane can browse older turns without dumping the full backlog into the live transcript view,
-- restart-safe restoration of event-filter, timeline detail/raw view, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
+- restart-safe restoration of event-filter, timeline detail/raw state, per-event spotlight focus, replay-focus, and draft-prompt state so reopening a session can preserve the user's inspection context as well as pending approvals,
 - a compact recent-session picker plus a `--resume-last` shortcut so reopen flow is no longer gated on manually passing `--session-dir`,
 - launch-time CLI picker triage controls for all/pending/denied/restore/restored-approval/stale-approval/stale-pending/stale-denied/stale-restored/tool/workspace-inspect/workspace-edit/intervention/shell/shell-inspect/shell-test filters plus recent-vs-attention sorting, including `--pick-filter` / `--pick-sort` defaults and interactive `A` / `P` / `D` / `R` / `V` / `O` / `Q` / `X` / `U` / `T` / `W` / `E` / `G` / `H` / `I` / `Y` / `S` toggles,
 - an in-app `F11` session switcher that reuses the same recent-session summaries after startup, can jump into another saved session without restarting the TUI, and can start a fresh session inline even when the active filter has zero visible matches,
@@ -133,26 +133,26 @@ What exists now:
 - and a dedicated `scripts/session_triage_intervention_mix_smoke.py` contract runner that exercises the public session-triage wrapper and asserts intervention target/continuation mix lines end-to-end across both picker and switcher flows.
 
 What changed this run:
-- added `intervention_mix_smoke_results()` in `src/strands_agent_tui/testing/smoke_assertions.py` so the picker and switcher smokes share one assertion helper for intervention surface, target-kind mix, and continuation-mix checks,
-- refactored `scripts/session_picker_smoke.py` and `scripts/session_switcher_smoke.py` to emit their intervention triage checks through that helper instead of repeating three inline `matches_intervention_filter_output(...)` calls per surface,
-- added regression coverage in `tests/test_smoke_assertions.py` and exported the helper through `src/strands_agent_tui/testing/__init__.py` so future smoke-script work can reuse it directly,
-- validated the refactor with focused smoke-helper pytest coverage, the public `session_triage_smoke.py both` bundle, and the full pytest suite,
+- added per-event timeline spotlight navigation/rendering so compact timeline mode can temporarily expand one chosen event without turning global detail/raw back on,
+- persisted the focused timeline event + spotlight state in `session_state.json` and restored it on restart so inspection context now survives alongside replay/filter/draft state,
+- extended `scripts/timeline_smoke.py`, `tests/test_timeline.py`, `tests/test_app.py`, `tests/test_sessions.py`, and `tests/test_smoke_scripts.py` to cover spotlight rendering, persistence summaries, and restart recovery,
+- validated the increment with focused pytest coverage, the public `timeline_smoke.py` walkthrough, and the full pytest suite,
 - and no destructive unblock step was needed this run.
 
 Why this matters now:
-- the intervention lane is where Strands steering, approvals, and post-tool continuation behavior are most visible to Steve today, so drift between picker and switcher smoke expectations would make the learning surface noisier,
-- collapsing those repeated checks into one helper keeps the observable contract for intervention triage consistent across both reopen surfaces,
-- and that makes future work on intervention rollups, queue previews, or continuation wording safer because one helper now carries the shared assertion seam.
+- compact summary-only mode is useful for dense Strands traces, but without a way to temporarily drill into one event Steve had to globally expand the whole pane and lose signal-to-noise,
+- spotlighting one event at a time makes the Strands loop easier to study because tool calls, response metadata, and persistence events can now be inspected in place without blowing open the full timeline,
+- and persisting that spotlight state across restart keeps the TUI aligned with the repo's broader goal of making agent/session behavior visible and hackable instead of ephemeral.
 
 How we know the prototype is working right now:
-- focused pytest coverage now proves the shared intervention-mix helper returns the expected named smoke results and preserves sort-sensitive behavior,
-- `session_triage_smoke.py both` still exercises the picker and switcher intervention surfaces end-to-end and emits the same `picker_*` / `switcher_*` intervention lines as before,
-- and the full pytest suite still passes after the smoke-helper refactor.
+- focused pytest coverage now proves compact timeline mode can spotlight one selected event, persist that focus, and restore it on restart,
+- `timeline_smoke.py` now exercises runtime, persistence, compact, and spotlight timeline views end-to-end without live credentials,
+- and the full pytest suite still passes after the observability increment.
 
 Current evidence:
-- focused smoke-helper coverage: `.venv/bin/pytest -q tests/test_smoke_assertions.py tests/test_smoke_scripts.py tests/test_smoke_script_harness.py` => `252 passed in 125.85s (0:02:05)`,
-- public triage smoke: `.venv/bin/python scripts/session_triage_smoke.py both` => `[session-triage-smoke] summary: 2/2 targets passed in 25.82s`,
-- full automated tests: `.venv/bin/pytest -q` => `526 passed in 152.40s (0:02:32)`.
+- focused timeline/session coverage: `.venv/bin/pytest -q tests/test_timeline.py tests/test_sessions.py tests/test_app.py tests/test_smoke_scripts.py` => `296 passed in 139.44s (0:02:19)`,
+- public timeline smoke: `.venv/bin/python scripts/timeline_smoke.py` => `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, `timeline_compact_toggle= True`, `timeline_spotlight_focus= True`,
+- full automated tests: `.venv/bin/pytest -q` => `537 passed in 148.53s (0:02:28)`.
 
 ## First five phases
 
@@ -249,6 +249,7 @@ Make the Strands loop legible by exposing intermediate events, tool uses, failur
 - response metadata capture so replay artifacts retain model/runtime context without scraping prose,
 - event-pane filtering and explicit persistence events so replay/debugging concepts are also visible in the live TUI,
 - compact `summary:` lines in the event pane for tool results, response completions, and approval/intervention queue context while preserving raw structured event payloads underneath,
+- per-event spotlight navigation in compact timeline mode so one selected event can temporarily re-expand its detail/raw payload without globally expanding the whole pane,
 - steering decision events in the same timeline so policy behavior is inspectable without reading code.
 
 **Why this matters**
@@ -458,7 +459,7 @@ To verify the compact runtime-vs-persistence timeline summaries without launchin
 
 This walkthrough now also runs as the public `timeline` target inside `.venv/bin/python scripts/standalone_smoke.py` and therefore inside the default local `.venv/bin/python scripts/smoke_matrix.py` path.
 
-Expected result includes `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, and `timeline_filter_counts= True`, plus rendered timeline snapshots for the runtime and persistence filters.
+Expected result includes `timeline_runtime_summary= True`, `timeline_persistence_summary= True`, `timeline_compact_toggle= True`, and `timeline_spotlight_focus= True`, plus rendered timeline snapshots for the runtime, persistence, compact, and spotlight views.
 
 ### Session triage smoke bundle
 
@@ -605,10 +606,13 @@ Inside the TUI, use these shortcuts to focus the event pane:
 - `F12` intervention / approval events
 - `Ctrl+T` toggle event detail lines on/off
 - `Ctrl+R` toggle raw structured event data on/off
+- `Ctrl+Up` move the spotlight to the previous visible event and temporarily expand it
+- `Ctrl+Down` move the spotlight to the next visible event and temporarily expand it
+- `Ctrl+O` toggle spotlight mode on the newest visible event (or clear the current spotlight)
 
 Each event row now also includes a compact `summary:` line when the formatter can derive something higher-signal than the raw detail string, for example approval queue position/source, resumed-after-approval state, shell command previews, or artifact/session-state save context.
 
-The current detail/raw toggle state is shown at the top of the pane and is also persisted in `session_state.json`, so a restart can reopen the same compact or expanded timeline view.
+The current detail/raw toggle state plus any active spotlighted event are shown at the top of the pane and are also persisted in `session_state.json`, so a restart can reopen the same compact, spotlighted, or expanded timeline view.
 
 This is intentionally simple, but it already makes it much easier to inspect Strands loop behavior without losing the complete turn transcript.
 
@@ -671,8 +675,10 @@ This is still deliberately narrow, but it now creates the exact seam we will nee
   - pending approvals block new prompts until resolved
   - approval resolutions persist as normal session turns
   - timeline filter shortcuts isolate tool and persistence activity correctly
+  - compact timeline mode can spotlight one selected event without globally re-enabling detail/raw output
   - resumed sessions render a compact live history window instead of dumping the full backlog
   - replay shortcuts browse older/newer turns and can return to live/latest view
+  - restart-safe timeline spotlight focus is restored from session state after restart
   - restart-safe draft prompt state is restored into the input after restart
   - the in-app session switcher supports highlighted keyboard navigation, direct number shortcuts, selected-session preview rendering, explicit empty-filter triage guidance, zero-match `Enter` fresh-session fallback, and restart-safe chooser restoration
 - the launch-time recent-session picker can page past the first 8 visible sessions while preserving the same triage filters and sorts, including restored-approval triage
@@ -717,8 +723,8 @@ Why this stack:
 1. reconcile the pinned prototype path with the canonical repo so future automation does not need recovery indirection
 2. decide whether the now-capped selected-preview queue breakdowns should eventually support inline expand/collapse instead of a fixed three-item cap
 3. decide whether the queue-preview cap should be configurable per surface or per lane once real-world session volume grows
-4. decide whether the compact timeline view should eventually support per-event expansion instead of only global detail/raw toggles
-5. decide whether smoke-doc artifact bundles should fold into `scripts/smoke_matrix.py` as an optional review lane
+4. decide whether timeline spotlight mode should gain an explicit jump-back-to-latest control in addition to `Ctrl+O`
+5. decide whether timeline spotlight/restore cues should surface in recent-session restore badges and previews
 
 1. scaffold Python project + TUI entrypoint
 2. add thin Strands runtime wrapper
@@ -746,9 +752,9 @@ Future daily iterations should:
 
 ## Next iteration ideas
 
-- decide whether the compact timeline view should eventually support per-event expansion instead of only global detail/raw toggles
-- decide whether smoke-doc artifact bundles should fold into `scripts/smoke_matrix.py` as an optional review lane
 - decide whether the now-capped selected-preview queue breakdowns should eventually support inline expand/collapse instead of a fixed three-item cap
 - decide whether the queue-preview cap should be configurable per surface or per lane once real-world session volume grows
+- decide whether timeline spotlight mode should gain an explicit jump-back-to-latest control in addition to `Ctrl+O`
+- decide whether timeline spotlight/restore cues should surface in recent-session restore badges and previews
 - decide whether the new intervention-mix helper should also subsume the contract-script line-prefix plumbing in `session_triage_intervention_mix_smoke.py`
 - decide whether the `smoke_cli_docs` audit should expand beyond wrapper scripts if more operator-facing entrypoints become public

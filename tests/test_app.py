@@ -470,6 +470,46 @@ async def test_timeline_toggle_shortcuts_hide_detail_and_raw_data_and_persist_st
 
 
 @pytest.mark.asyncio
+async def test_timeline_event_spotlight_restores_selected_event_detail_in_compact_view(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="timeline-spotlight-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("l", "i", "s", "t", " ", "f", "i", "l", "e", "s", "enter")
+        await pilot.pause()
+
+        app.action_toggle_event_details()
+        app.action_toggle_event_data()
+        app.action_set_event_filter("tool")
+        app.action_focus_older_event()
+        await pilot.pause()
+
+        events = str(app.query_one("#events").render())
+        stored_state = SessionArtifactStore(tmp_path, session_id="timeline-spotlight-session").load_session_state()
+
+        assert "Filter: tool (2/6 events)" in events
+        assert "View: detail off | raw off" in events
+        assert "Focus: event 1/2 | spotlight on" in events
+        assert ">1. [" in events
+        assert "   Deterministic fake tool event for workspace inspection." in events
+        assert "data: source='fake_runtime', tool_name='list_files'" in events
+        assert "Produced deterministic fake response for the submitted prompt." not in events
+        assert stored_state is not None
+        assert stored_state.event_filter == "tool"
+        assert stored_state.event_focus_index == 2
+        assert stored_state.event_focus_expanded is True
+
+
+@pytest.mark.asyncio
 async def test_app_renders_pending_approval_banner_for_risky_mutation(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="confirm-session")
     app = StrandsAgentApp(
@@ -969,6 +1009,63 @@ async def test_app_restores_timeline_detail_and_raw_view_from_session_state(tmp_
         assert "View: detail off | raw off" in events
         assert "summary: session view restored | filter all | detail off | raw off" in events
         assert "data: tool_name='list_files'" not in events
+
+
+@pytest.mark.asyncio
+async def test_app_restores_timeline_event_spotlight_from_session_state(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="timeline-spotlight-restore-session")
+    for index in range(1, 3):
+        artifact_store.append_turn(
+            TurnArtifact(
+                prompt=f"prompt {index}",
+                response=f"response {index}",
+                provider="fake-strands",
+                mode="fake",
+                events=[
+                    runtime_event(
+                        "tool_finished",
+                        "list_files",
+                        f"listed files {index}",
+                        data={"tool_name": "list_files", "result_preview": f"match {index}"},
+                    )
+                ],
+                response_metadata={"mode": "fake"},
+            )
+        )
+
+    artifact_store.save_session_state(
+        SessionState(
+            show_event_details=False,
+            show_event_data=False,
+            event_focus_index=1,
+            event_focus_expanded=True,
+        )
+    )
+
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+            session_id="timeline-spotlight-restore-session",
+        ),
+        artifact_store=SessionArtifactStore(tmp_path, session_id="timeline-spotlight-restore-session"),
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        events = str(app.query_one("#events").render())
+
+        assert app.event_focus_index == 1
+        assert app.event_focus_expanded is True
+        assert "Focus: event 2/3 | spotlight on" in events
+        assert ">2. [" in events
+        assert "listed files 2" in events
+        assert "data: result_preview='match 2', tool_name='list_files'" in events
+        assert "summary: session view restored | filter all | detail off | raw off | event 2/2 spotlight" in events
 
 
 @pytest.mark.asyncio

@@ -2063,6 +2063,8 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
                 )
             ],
             event_filter="tool",
+            event_focus_index=3,
+            event_focus_expanded=True,
             history_focus_index=2,
             draft_prompt="summarize the failing test output",
             session_switcher_active=True,
@@ -2077,6 +2079,8 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
 
     assert restored is not None
     assert restored.event_filter == "tool"
+    assert restored.event_focus_index == 3
+    assert restored.event_focus_expanded is True
     assert restored.history_focus_index == 2
     assert restored.draft_prompt == "summarize the failing test output"
     assert restored.session_switcher_active is True
@@ -2093,6 +2097,8 @@ def test_session_artifact_store_persists_restart_safe_view_state_alongside_pendi
     assert preserved_view_state is not None
     assert preserved_view_state.pending_approvals == []
     assert preserved_view_state.event_filter == "tool"
+    assert preserved_view_state.event_focus_index == 3
+    assert preserved_view_state.event_focus_expanded is True
     assert preserved_view_state.history_focus_index == 2
     assert preserved_view_state.draft_prompt == "summarize the failing test output"
     assert preserved_view_state.session_switcher_active is True

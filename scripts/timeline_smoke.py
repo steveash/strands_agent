@@ -40,6 +40,14 @@ def main() -> int:
     runtime_timeline = render_event_timeline(events, event_filter="runtime")
     persistence_timeline = render_event_timeline(events, event_filter="persistence")
     compact_timeline = render_event_timeline(events, event_filter="all", show_details=False, show_data=False)
+    spotlight_timeline = render_event_timeline(
+        events,
+        event_filter="all",
+        show_details=False,
+        show_data=False,
+        focused_event_index=1,
+        focus_expanded=True,
+    )
 
     print("FULL TIMELINE")
     print(full_timeline)
@@ -49,6 +57,8 @@ def main() -> int:
     print(persistence_timeline)
     print("\nCOMPACT VIEW")
     print(compact_timeline)
+    print("\nSPOTLIGHT VIEW")
+    print(spotlight_timeline)
 
     return emit_smoke_results(
         [
@@ -74,9 +84,18 @@ def main() -> int:
                 and "Produced a deterministic fake-runtime answer" not in compact_timeline
                 and "data:" not in compact_timeline,
             ),
+            (
+                "timeline_spotlight_focus",
+                "Focus: event 2/4 | spotlight on" in spotlight_timeline
+                and ">2. [" in spotlight_timeline
+                and "Produced a deterministic fake-runtime answer for the timeline smoke walkthrough." in spotlight_timeline
+                and "summary: prompt 27 chars" in spotlight_timeline
+                and "Queued the operator prompt for the fake Strands runtime." not in spotlight_timeline,
+            ),
             ("runtime_timeline_view", runtime_timeline),
             ("persistence_timeline_view", persistence_timeline),
             ("compact_timeline_view", compact_timeline),
+            ("spotlight_timeline_view", spotlight_timeline),
         ]
     )
 

@@ -99,6 +99,44 @@ def test_render_event_timeline_hides_detail_and_raw_sections_when_toggled_off() 
     assert "data: result_preview='.: README.md'" not in rendered
 
 
+def test_render_event_timeline_spotlights_single_event_in_compact_view() -> None:
+    events = [
+        runtime_event(
+            kind="prompt_received",
+            title="Prompt accepted",
+            detail="Queued the operator prompt.",
+            data={"prompt_length": 12},
+        ),
+        runtime_event(
+            kind="tool_finished",
+            title="list_files",
+            detail="Returned a simulated workspace listing without touching disk.",
+            data={"tool_name": "list_files", "result_preview": ".: README.md", "source": "fake_runtime"},
+        ),
+        runtime_event(
+            kind="response_completed",
+            title="Fake runtime response ready",
+            detail="Produced a deterministic fake-runtime answer.",
+            data={"provider": "fake-strands", "mode": "fake", "pending_count": 0},
+        ),
+    ]
+
+    rendered = render_event_timeline(
+        events,
+        show_details=False,
+        show_data=False,
+        focused_event_index=1,
+        focus_expanded=True,
+    )
+
+    assert "Focus: event 2/3 | spotlight on" in rendered
+    assert ">2. [" in rendered
+    assert "   Returned a simulated workspace listing without touching disk." in rendered
+    assert "data: result_preview='.: README.md', source='fake_runtime', tool_name='list_files'" in rendered
+    assert "Queued the operator prompt." not in rendered
+    assert "Produced a deterministic fake-runtime answer." not in rendered
+
+
 def test_render_event_timeline_preserves_empty_state() -> None:
     rendered = render_event_timeline([], event_filter="intervention")
 
@@ -164,3 +202,41 @@ def test_summarize_event_compacts_persistence_state() -> None:
     assert summarize_event(artifact_event) == "artifact saved | session session-1 | pending no"
     assert summarize_event(state_event) == "session state saved | pending 0 | filter runtime | draft 14c"
     assert summarize_event(toggled_state_event) == "session view restored | filter tool | detail off | raw off | replay 3/4"
+
+
+def test_summarize_event_compacts_timeline_focus_restore_state() -> None:
+    state_event = runtime_event(
+        kind="session_state_saved",
+        title="Pending approvals saved",
+        detail="Persisted pending approvals plus restart-safe view state.",
+        data={
+            "pending_count": 1,
+            "event_filter": "tool",
+            "show_event_details": False,
+            "show_event_data": False,
+            "event_focus_position": 2,
+            "event_focus_event_count": 5,
+            "event_focus_expanded": True,
+        },
+    )
+    restored_event = runtime_event(
+        kind="session_view_restored",
+        title="Session view restored",
+        detail="Restored saved timeline state.",
+        data={
+            "event_filter": "tool",
+            "show_event_details": False,
+            "show_event_data": False,
+            "event_focus_position": 2,
+            "event_focus_event_count": 5,
+            "event_focus_expanded": True,
+            "view": "replay 3/4",
+        },
+    )
+
+    assert summarize_event(state_event) == (
+        "session state saved | pending 1 | filter tool | detail off | raw off | event 2/5 spotlight"
+    )
+    assert summarize_event(restored_event) == (
+        "session view restored | filter tool | detail off | raw off | event 2/5 spotlight | replay 3/4"
+    )
