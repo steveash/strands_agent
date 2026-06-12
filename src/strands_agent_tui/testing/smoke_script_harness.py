@@ -70,6 +70,10 @@ class SmokeScriptContractCase:
         return self.contract.true_check_names
 
 
+def smoke_script_contract_case_id(case: SmokeScriptContractCase) -> str:
+    return case.script_name
+
+
 @dataclass(frozen=True)
 class ReviewArtifactOutputObservation:
     checkout_root: Path

@@ -82,6 +82,10 @@ class SmokeCliDocSpec:
     readme_required_snippets: tuple[str, ...]
 
 
+def smoke_cli_doc_spec_id(spec: SmokeCliDocSpec) -> str:
+    return spec.script_name
+
+
 def build_smoke_cli_doc_spec(spec: SmokeWrapperCliSpec) -> SmokeCliDocSpec:
     if spec.readme_section_heading is None:
         raise ValueError(f"readme_section_heading is required for {spec.script_name}")

@@ -114,6 +114,7 @@ from .smoke_cli_assertions import (
     replace_markdown_section,
     resolve_smoke_cli_doc_target_names,
     smoke_cli_doc_spec,
+    smoke_cli_doc_spec_id,
 )
 from .smoke_cli_doc_artifacts import (
     build_smoke_cli_doc_drift_report_payload,
@@ -235,6 +236,7 @@ from .smoke_script_harness import (
     run_loaded_script_module_main_in_temp_checkout,
     run_script_module_main_in_temp_checkout,
     run_script_module_main_via_driver_in_temp_checkout,
+    smoke_script_contract_case_id,
 )
 from .smoke_results import emit_smoke_check, emit_smoke_checks, emit_smoke_results
 from .smoke_runner import (
@@ -377,6 +379,7 @@ __all__ = [
     "replace_markdown_section",
     "resolve_smoke_cli_doc_target_names",
     "smoke_cli_doc_spec",
+    "smoke_cli_doc_spec_id",
     "seed_denied_approval_session",
     "seed_approval_restore_overlap_session",
     "seed_approval_restore_rollup_scenario",
@@ -557,6 +560,7 @@ __all__ = [
     "run_loaded_script_module_main",
     "run_script_module_main_in_temp_checkout",
     "run_script_module_main_via_driver_in_temp_checkout",
+    "smoke_script_contract_case_id",
     "smoke_text_matches",
     "run_smoke_target",
     "run_smoke_targets",

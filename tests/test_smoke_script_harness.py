@@ -90,6 +90,7 @@ from strands_agent_tui.testing import (
     smoke_contract_detail_expectation,
     smoke_matrix_docs_review_failure_summary_prefix,
     smoke_matrix_docs_review_success_summary_prefix,
+    smoke_script_contract_case_id,
 )
 
 
@@ -122,6 +123,19 @@ def _required_contract_detail_with_value_prefix(case: SmokeScriptContractCase) -
         )
         if detail_value_prefix
     )
+
+
+SCRIPT_NAME_ID_CONTRACT_CASES = (
+    STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+    SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
+    SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
+)
+
+
+def test_smoke_script_contract_case_id_returns_script_name() -> None:
+    assert [smoke_script_contract_case_id(case) for case in SCRIPT_NAME_ID_CONTRACT_CASES] == [
+        case.script_name for case in SCRIPT_NAME_ID_CONTRACT_CASES
+    ]
 
 
 def test_find_prefixed_line_index_and_detail_safe_text() -> None:
@@ -2375,12 +2389,8 @@ def test_shared_smoke_script_contract_assertion_helpers_accept_exported_artifact
 
 @pytest.mark.parametrize(
     "case",
-    (
-        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
-        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
-    ),
-    ids=lambda case: case.script_name,
+    SCRIPT_NAME_ID_CONTRACT_CASES,
+    ids=smoke_script_contract_case_id,
 )
 def test_assert_smoke_script_output_matches_contract_reports_offending_prefix_and_check(
     case: SmokeScriptContractCase,
@@ -2407,12 +2417,8 @@ def test_assert_smoke_script_output_matches_contract_reports_offending_prefix_an
 
 @pytest.mark.parametrize(
     "case",
-    (
-        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
-        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
-    ),
-    ids=lambda case: case.script_name,
+    SCRIPT_NAME_ID_CONTRACT_CASES,
+    ids=smoke_script_contract_case_id,
 )
 def test_assert_smoke_script_results_match_contract_reports_offending_prefix_and_check(
     case: SmokeScriptContractCase,
@@ -2463,12 +2469,8 @@ def test_assert_smoke_script_results_match_contract_reports_offending_prefix_and
 
 @pytest.mark.parametrize(
     "case",
-    (
-        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
-        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
-    ),
-    ids=lambda case: case.script_name,
+    SCRIPT_NAME_ID_CONTRACT_CASES,
+    ids=smoke_script_contract_case_id,
 )
 def test_assert_smoke_script_results_match_contract_accepts_reordered_results_and_last_duplicate_repairs(
     case: SmokeScriptContractCase,
@@ -2498,12 +2500,8 @@ def test_assert_smoke_script_results_match_contract_accepts_reordered_results_an
 
 @pytest.mark.parametrize(
     "case",
-    (
-        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
-        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
-    ),
-    ids=lambda case: case.script_name,
+    SCRIPT_NAME_ID_CONTRACT_CASES,
+    ids=smoke_script_contract_case_id,
 )
 def test_assert_smoke_script_results_match_contract_reports_final_duplicate_detail_and_check(
     case: SmokeScriptContractCase,
@@ -2529,12 +2527,8 @@ def test_assert_smoke_script_results_match_contract_reports_final_duplicate_deta
 
 @pytest.mark.parametrize(
     "case",
-    (
-        STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
-        SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
-        SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT,
-    ),
-    ids=lambda case: case.script_name,
+    SCRIPT_NAME_ID_CONTRACT_CASES,
+    ids=smoke_script_contract_case_id,
 )
 def test_assert_smoke_script_results_match_contract_rejects_malformed_non_pair_entries(
     case: SmokeScriptContractCase,

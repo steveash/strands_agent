@@ -71,7 +71,9 @@ from strands_agent_tui.testing import (
     seed_workspace_inspect_session,
     set_session_artifact_mtime,
     smoke_cli_doc_spec,
+    smoke_cli_doc_spec_id,
     smoke_cli_docs_parity_rerun_hint,
+    smoke_script_contract_case_id,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -725,7 +727,7 @@ def test_docs_review_matrix_smokes_import_shared_failure_defaults() -> None:
 @pytest.mark.parametrize(
     "case",
     SMOKE_SCRIPT_CONTRACT_CASES,
-    ids=lambda case: case.script_name,
+    ids=smoke_script_contract_case_id,
 )
 def test_smoke_scripts_emit_expected_contracts(
     case: SmokeScriptContractCase,
@@ -743,7 +745,7 @@ def test_smoke_scripts_emit_expected_contracts(
 @pytest.mark.parametrize(
     "case",
     SMOKE_SCRIPT_CONTRACT_CASES,
-    ids=lambda case: case.script_name,
+    ids=smoke_script_contract_case_id,
 )
 def test_smoke_script_runner_functions_return_expected_contract_results(
     case: SmokeScriptContractCase,
@@ -1344,7 +1346,13 @@ def test_smoke_cli_docs_artifacts_smoke_invalid_choice_errors_show_public_cli_ch
     )
 
 
-@pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
+def test_smoke_cli_doc_spec_id_returns_script_name() -> None:
+    assert [smoke_cli_doc_spec_id(spec) for spec in SMOKE_CLI_DOC_SPECS] == [
+        spec.script_name for spec in SMOKE_CLI_DOC_SPECS
+    ]
+
+
+@pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=smoke_cli_doc_spec_id)
 def test_smoke_wrapper_help_and_readme_docs_stay_in_sync(doc_spec) -> None:
     assert matches_smoke_cli_doc_parity(
         script_name=doc_spec.script_name,
@@ -2470,7 +2478,7 @@ def test_smoke_wrapper_invalid_choice_errors_show_public_cli_choices(
     )
 
 
-@pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=lambda spec: spec.script_name)
+@pytest.mark.parametrize("doc_spec", SMOKE_CLI_DOC_SPECS, ids=smoke_cli_doc_spec_id)
 def test_smoke_script_main_help_exits_zero_and_prints_expected_text(doc_spec, capsys) -> None:
     module = _load_script_module(doc_spec.script_name)
 
