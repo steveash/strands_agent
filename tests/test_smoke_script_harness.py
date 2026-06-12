@@ -484,6 +484,83 @@ def test_build_malformed_smoke_script_contract_helpers_track_source_contract_met
     )
 
 
+def test_build_malformed_smoke_script_result_results_reuse_custom_contract_metadata() -> None:
+    source_case = SmokeScriptContractCase(
+        script_name="custom_follow_up_smoke",
+        runner_name="run_custom_follow_up_smoke",
+        contract=SmokeScriptContractMetadata(
+            required_line_prefixes=(
+                "stdout_custom_detail: custom detail prefix",
+                "stderr_failed_line: custom failed prefix",
+            ),
+            true_check_names=("custom_check",),
+        ),
+    )
+    malformed_entry = ("oops", "value", "extra")
+    source_results = _matching_contract_results(source_case)
+    contract = build_malformed_smoke_script_result_contract(
+        source_case=source_case,
+        malformed_entry=malformed_entry,
+    )
+
+    results = build_malformed_smoke_script_result_results(
+        source_results,
+        source_case=source_case,
+        malformed_entry=malformed_entry,
+    )
+
+    assert_smoke_script_results_match_contract(
+        results,
+        SmokeScriptContractCase(
+            script_name="custom_malformed_result_smoke",
+            runner_name="run_custom_malformed_result_smoke",
+            contract=contract,
+        ),
+    )
+    result_map = dict(results)
+    assert result_map["source_contract_script_name"] == source_case.script_name
+    assert result_map["source_result_count"] == len(source_results)
+    assert result_map["malformed_entry"] == repr(malformed_entry)
+
+
+def test_build_malformed_smoke_script_detail_results_reuse_custom_contract_metadata() -> None:
+    source_case = SmokeScriptContractCase(
+        script_name="custom_follow_up_smoke",
+        runner_name="run_custom_follow_up_smoke",
+        contract=SmokeScriptContractMetadata(
+            required_line_prefixes=(
+                "stdout_custom_detail: custom detail prefix",
+                "stderr_failed_line: custom failed prefix",
+            ),
+            true_check_names=("custom_check",),
+        ),
+    )
+    source_results = _matching_contract_results(source_case)
+    contract = build_malformed_smoke_script_detail_contract(
+        source_case=source_case,
+    )
+
+    results = build_malformed_smoke_script_detail_results(
+        source_results,
+        source_case=source_case,
+    )
+
+    assert_smoke_script_results_match_contract(
+        results,
+        SmokeScriptContractCase(
+            script_name="custom_malformed_detail_smoke",
+            runner_name="run_custom_malformed_detail_smoke",
+            contract=contract,
+        ),
+    )
+    result_map = dict(results)
+    assert result_map["source_contract_script_name"] == source_case.script_name
+    assert result_map["source_result_count"] == len(source_results)
+    assert result_map["malformed_detail_name"] == "stdout_custom_detail"
+    assert result_map["expected_detail_prefix"] == "custom detail prefix"
+    assert result_map["mismatched_detail_value"] == "unexpected-custom detail prefixfixture"
+
+
 def test_build_smoke_matrix_docs_review_failure_results_reuses_shared_docs_review_contracts(
     tmp_path: Path,
 ) -> None:

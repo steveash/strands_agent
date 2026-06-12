@@ -2049,26 +2049,214 @@ SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT = SmokeScriptContractCase(
 DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY = ("malformed", "value", "extra")
 
 
+@dataclass(frozen=True)
+class _MalformedSmokeScriptBasePreset:
+    source_case: SmokeScriptContractCase
+    source_contract_script_name_result_name: str = "source_contract_script_name"
+    source_result_count_result_name: str = "source_result_count"
+    source_contract_valid_check_name: str = "source_contract_valid"
+    source_result_count_positive_check_name: str = "source_result_count_positive"
+
+    def required_line_prefixes(self) -> tuple[str, str]:
+        return (
+            f"{self.source_contract_script_name_result_name}: {self.source_case.script_name}",
+            f"{self.source_result_count_result_name}: ",
+        )
+
+    def true_check_names(self) -> tuple[str, str]:
+        return (
+            self.source_contract_valid_check_name,
+            self.source_result_count_positive_check_name,
+        )
+
+    def detail_results(self, *, source_result_count: int) -> list[tuple[str, object]]:
+        return [
+            (self.source_contract_script_name_result_name, self.source_case.script_name),
+            (self.source_result_count_result_name, source_result_count),
+        ]
+
+    def check_results(self, *, source_result_count: int) -> list[tuple[str, object]]:
+        return [
+            (self.source_contract_valid_check_name, True),
+            (self.source_result_count_positive_check_name, source_result_count > 0),
+        ]
+
+
+@dataclass(frozen=True)
+class _MalformedSmokeScriptResultPreset:
+    base: _MalformedSmokeScriptBasePreset
+    malformed_entry: object = DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY
+    malformed_entry_result_name: str = "malformed_entry"
+    assertion_message_result_name: str = "assertion_message"
+    malformed_result_reported_check_name: str = "malformed_result_reported"
+    malformed_result_index_matches_source_length_check_name: str = (
+        "malformed_result_index_matches_source_length"
+    )
+    malformed_result_mentions_entry_check_name: str = "malformed_result_mentions_entry"
+
+    @property
+    def malformed_entry_text(self) -> str:
+        return repr(self.malformed_entry)
+
+    def contract_metadata(self) -> SmokeScriptContractMetadata:
+        return SmokeScriptContractMetadata(
+            required_line_prefixes=(
+                *self.base.required_line_prefixes(),
+                f"{self.malformed_entry_result_name}: {self.malformed_entry_text}",
+                f"{self.assertion_message_result_name}: result[",
+            ),
+            true_check_names=(
+                *self.base.true_check_names(),
+                self.malformed_result_reported_check_name,
+                self.malformed_result_index_matches_source_length_check_name,
+                self.malformed_result_mentions_entry_check_name,
+            ),
+        )
+
+    def result_index_assertion_message(self, *, malformed_index: int) -> str:
+        return _malformed_smoke_script_result_entry_name(
+            malformed_index,
+            self.malformed_entry,
+        )
+
+    def build_results(
+        self,
+        *,
+        source_result_count: int,
+        assertion_message: str,
+        malformed_index: int,
+    ) -> list[tuple[str, object]]:
+        return [
+            *self.base.detail_results(source_result_count=source_result_count),
+            (self.malformed_entry_result_name, self.malformed_entry_text),
+            (self.assertion_message_result_name, assertion_message),
+            *self.base.check_results(source_result_count=source_result_count),
+            (
+                self.malformed_result_reported_check_name,
+                assertion_message == self.result_index_assertion_message(malformed_index=malformed_index),
+            ),
+            (
+                self.malformed_result_index_matches_source_length_check_name,
+                assertion_message.startswith(f"result[{malformed_index}]: "),
+            ),
+            (
+                self.malformed_result_mentions_entry_check_name,
+                self.malformed_entry_text in assertion_message,
+            ),
+        ]
+
+
+@dataclass(frozen=True)
+class _MalformedSmokeScriptDetailPreset:
+    base: _MalformedSmokeScriptBasePreset
+    detail_name: str
+    expected_detail_prefix: str
+    mismatched_detail_value: str
+    malformed_detail_name_result_name: str = "malformed_detail_name"
+    expected_detail_prefix_result_name: str = "expected_detail_prefix"
+    mismatched_detail_value_result_name: str = "mismatched_detail_value"
+    missing_detail_assertion_result_name: str = "missing_detail_assertion"
+    mismatched_detail_assertion_result_name: str = "mismatched_detail_assertion"
+    boolean_detail_assertion_result_name: str = "boolean_detail_assertion"
+    malformed_detail_name_present_check_name: str = "malformed_detail_name_present"
+    expected_detail_prefix_present_check_name: str = "expected_detail_prefix_present"
+    missing_detail_reported_check_name: str = "missing_detail_reported"
+    mismatched_detail_prefix_reported_check_name: str = "mismatched_detail_prefix_reported"
+    boolean_detail_reported_check_name: str = "boolean_detail_reported"
+    mismatched_detail_mentions_expected_prefix_check_name: str = (
+        "mismatched_detail_mentions_expected_prefix"
+    )
+
+    def contract_metadata(self) -> SmokeScriptContractMetadata:
+        return SmokeScriptContractMetadata(
+            required_line_prefixes=(
+                *self.base.required_line_prefixes(),
+                f"{self.malformed_detail_name_result_name}: {self.detail_name}",
+                f"{self.expected_detail_prefix_result_name}: {self.expected_detail_prefix}",
+                f"{self.mismatched_detail_value_result_name}: {self.mismatched_detail_value}",
+                f"{self.missing_detail_assertion_result_name}: {self.detail_name}",
+                f"{self.mismatched_detail_assertion_result_name}: {self.detail_name}",
+                f"{self.boolean_detail_assertion_result_name}: {self.detail_name}",
+            ),
+            true_check_names=(
+                *self.base.true_check_names(),
+                self.malformed_detail_name_present_check_name,
+                self.expected_detail_prefix_present_check_name,
+                self.missing_detail_reported_check_name,
+                self.mismatched_detail_prefix_reported_check_name,
+                self.boolean_detail_reported_check_name,
+                self.mismatched_detail_mentions_expected_prefix_check_name,
+            ),
+        )
+
+    def build_results(
+        self,
+        *,
+        source_result_count: int,
+        missing_detail_assertion: str,
+        mismatched_detail_assertion: str,
+        boolean_detail_assertion: str,
+    ) -> list[tuple[str, object]]:
+        return [
+            *self.base.detail_results(source_result_count=source_result_count),
+            (self.malformed_detail_name_result_name, self.detail_name),
+            (self.expected_detail_prefix_result_name, self.expected_detail_prefix),
+            (self.mismatched_detail_value_result_name, self.mismatched_detail_value),
+            (self.missing_detail_assertion_result_name, missing_detail_assertion),
+            (self.mismatched_detail_assertion_result_name, mismatched_detail_assertion),
+            (self.boolean_detail_assertion_result_name, boolean_detail_assertion),
+            *self.base.check_results(source_result_count=source_result_count),
+            (self.malformed_detail_name_present_check_name, bool(self.detail_name)),
+            (
+                self.expected_detail_prefix_present_check_name,
+                bool(self.expected_detail_prefix),
+            ),
+            (self.missing_detail_reported_check_name, missing_detail_assertion == self.detail_name),
+            (
+                self.mismatched_detail_prefix_reported_check_name,
+                mismatched_detail_assertion == self.detail_name,
+            ),
+            (self.boolean_detail_reported_check_name, boolean_detail_assertion == self.detail_name),
+            (
+                self.mismatched_detail_mentions_expected_prefix_check_name,
+                self.expected_detail_prefix in self.mismatched_detail_value,
+            ),
+        ]
+
+
+def _build_malformed_smoke_script_result_preset(
+    *,
+    source_case: SmokeScriptContractCase,
+    malformed_entry: object = DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
+) -> _MalformedSmokeScriptResultPreset:
+    return _MalformedSmokeScriptResultPreset(
+        base=_MalformedSmokeScriptBasePreset(source_case=source_case),
+        malformed_entry=malformed_entry,
+    )
+
+
+def _build_malformed_smoke_script_detail_preset(
+    *,
+    source_case: SmokeScriptContractCase,
+) -> _MalformedSmokeScriptDetailPreset:
+    detail_name, expected_detail_prefix = _required_smoke_script_detail_with_value_prefix(source_case)
+    return _MalformedSmokeScriptDetailPreset(
+        base=_MalformedSmokeScriptBasePreset(source_case=source_case),
+        detail_name=detail_name,
+        expected_detail_prefix=expected_detail_prefix,
+        mismatched_detail_value=f"unexpected-{expected_detail_prefix}fixture",
+    )
+
+
 def build_malformed_smoke_script_result_contract(
     *,
     source_case: SmokeScriptContractCase,
     malformed_entry: object = DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
 ) -> SmokeScriptContractMetadata:
-    return SmokeScriptContractMetadata(
-        required_line_prefixes=(
-            f"source_contract_script_name: {source_case.script_name}",
-            "source_result_count: ",
-            f"malformed_entry: {repr(malformed_entry)}",
-            "assertion_message: result[",
-        ),
-        true_check_names=(
-            "source_contract_valid",
-            "source_result_count_positive",
-            "malformed_result_reported",
-            "malformed_result_index_matches_source_length",
-            "malformed_result_mentions_entry",
-        ),
-    )
+    return _build_malformed_smoke_script_result_preset(
+        source_case=source_case,
+        malformed_entry=malformed_entry,
+    ).contract_metadata()
 
 
 def _required_smoke_script_detail_with_value_prefix(
@@ -2086,30 +2274,9 @@ def build_malformed_smoke_script_detail_contract(
     *,
     source_case: SmokeScriptContractCase,
 ) -> SmokeScriptContractMetadata:
-    detail_name, expected_detail_prefix = _required_smoke_script_detail_with_value_prefix(source_case)
-    mismatched_detail_value = f"unexpected-{expected_detail_prefix}fixture"
-    return SmokeScriptContractMetadata(
-        required_line_prefixes=(
-            f"source_contract_script_name: {source_case.script_name}",
-            "source_result_count: ",
-            f"malformed_detail_name: {detail_name}",
-            f"expected_detail_prefix: {expected_detail_prefix}",
-            f"mismatched_detail_value: {mismatched_detail_value}",
-            f"missing_detail_assertion: {detail_name}",
-            f"mismatched_detail_assertion: {detail_name}",
-            f"boolean_detail_assertion: {detail_name}",
-        ),
-        true_check_names=(
-            "source_contract_valid",
-            "source_result_count_positive",
-            "malformed_detail_name_present",
-            "expected_detail_prefix_present",
-            "missing_detail_reported",
-            "mismatched_detail_prefix_reported",
-            "boolean_detail_reported",
-            "mismatched_detail_mentions_expected_prefix",
-        ),
-    )
+    return _build_malformed_smoke_script_detail_preset(
+        source_case=source_case,
+    ).contract_metadata()
 
 
 SMOKE_SCRIPT_MALFORMED_RESULT_CONTRACT = build_malformed_smoke_script_result_contract(
@@ -2222,16 +2389,16 @@ def build_malformed_smoke_script_result_results(
     source_results: Mapping[str, object] | Iterable[tuple[str, object]],
     *,
     source_case: SmokeScriptContractCase,
-    malformed_entry: object = ("malformed", "value", "extra"),
+    malformed_entry: object = DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
 ) -> list[tuple[str, object]]:
     source_result_pairs = _smoke_script_result_pairs(source_results)
     assert_smoke_script_results_match_contract(source_result_pairs, source_case)
+    preset = _build_malformed_smoke_script_result_preset(
+        source_case=source_case,
+        malformed_entry=malformed_entry,
+    )
 
     malformed_index = len(source_result_pairs)
-    expected_assertion_message = _malformed_smoke_script_result_entry_name(
-        malformed_index,
-        malformed_entry,
-    )
     try:
         assert_smoke_script_results_match_contract(
             source_result_pairs + (malformed_entry,),
@@ -2242,24 +2409,11 @@ def build_malformed_smoke_script_result_results(
     else:
         assertion_message = ""
 
-    malformed_entry_text = repr(malformed_entry)
-    return [
-        ("source_contract_script_name", source_case.script_name),
-        ("source_result_count", len(source_result_pairs)),
-        ("malformed_entry", malformed_entry_text),
-        ("assertion_message", assertion_message),
-        ("source_contract_valid", True),
-        ("source_result_count_positive", len(source_result_pairs) > 0),
-        ("malformed_result_reported", assertion_message == expected_assertion_message),
-        (
-            "malformed_result_index_matches_source_length",
-            assertion_message.startswith(f"result[{malformed_index}]: "),
-        ),
-        (
-            "malformed_result_mentions_entry",
-            malformed_entry_text in assertion_message,
-        ),
-    ]
+    return preset.build_results(
+        source_result_count=len(source_result_pairs),
+        assertion_message=assertion_message,
+        malformed_index=malformed_index,
+    )
 
 
 def build_malformed_smoke_script_detail_results(
@@ -2269,16 +2423,14 @@ def build_malformed_smoke_script_detail_results(
 ) -> list[tuple[str, object]]:
     source_result_pairs = _smoke_script_result_pairs(source_results)
     assert_smoke_script_results_match_contract(source_result_pairs, source_case)
-
-    detail_name, expected_detail_prefix = _required_smoke_script_detail_with_value_prefix(source_case)
-    mismatched_detail_value = f"unexpected-{expected_detail_prefix}fixture"
+    preset = _build_malformed_smoke_script_detail_preset(source_case=source_case)
 
     try:
         assert_smoke_script_results_match_contract(
             [
                 (name, value)
                 for name, value in source_result_pairs
-                if name != detail_name
+                if name != preset.detail_name
             ],
             source_case,
         )
@@ -2292,7 +2444,7 @@ def build_malformed_smoke_script_detail_results(
             [
                 (
                     name,
-                    mismatched_detail_value if name == detail_name else value,
+                    preset.mismatched_detail_value if name == preset.detail_name else value,
                 )
                 for name, value in source_result_pairs
             ],
@@ -2306,7 +2458,7 @@ def build_malformed_smoke_script_detail_results(
     try:
         assert_smoke_script_results_match_contract(
             [
-                (name, True if name == detail_name else value)
+                (name, True if name == preset.detail_name else value)
                 for name, value in source_result_pairs
             ],
             source_case,
@@ -2316,30 +2468,12 @@ def build_malformed_smoke_script_detail_results(
     else:
         boolean_detail_assertion = ""
 
-    return [
-        ("source_contract_script_name", source_case.script_name),
-        ("source_result_count", len(source_result_pairs)),
-        ("malformed_detail_name", detail_name),
-        ("expected_detail_prefix", expected_detail_prefix),
-        ("mismatched_detail_value", mismatched_detail_value),
-        ("missing_detail_assertion", missing_detail_assertion),
-        ("mismatched_detail_assertion", mismatched_detail_assertion),
-        ("boolean_detail_assertion", boolean_detail_assertion),
-        ("source_contract_valid", True),
-        ("source_result_count_positive", len(source_result_pairs) > 0),
-        ("malformed_detail_name_present", bool(detail_name)),
-        ("expected_detail_prefix_present", bool(expected_detail_prefix)),
-        ("missing_detail_reported", missing_detail_assertion == detail_name),
-        (
-            "mismatched_detail_prefix_reported",
-            mismatched_detail_assertion == detail_name,
-        ),
-        ("boolean_detail_reported", boolean_detail_assertion == detail_name),
-        (
-            "mismatched_detail_mentions_expected_prefix",
-            expected_detail_prefix in mismatched_detail_value,
-        ),
-    ]
+    return preset.build_results(
+        source_result_count=len(source_result_pairs),
+        missing_detail_assertion=missing_detail_assertion,
+        mismatched_detail_assertion=mismatched_detail_assertion,
+        boolean_detail_assertion=boolean_detail_assertion,
+    )
 
 
 def build_standalone_docs_rerun_hint_results(
