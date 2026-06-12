@@ -35,6 +35,7 @@ from strands_agent_tui.testing.smoke_runner import (
     build_standalone_docs_contract_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
     build_timed_standalone_smoke_failure_cases,
+    build_timed_standalone_smoke_failure_pytest_params,
     build_standalone_malformed_contract_failure_cases,
     run_smoke_target,
     run_smoke_targets,
@@ -42,6 +43,7 @@ from strands_agent_tui.testing.smoke_runner import (
     smoke_wrapper_metadata_from_specs,
     standalone_docs_review_follow_up_hint_for_failure,
     standalone_malformed_contract_hint_for_failure,
+    standalone_smoke_failure_case_id,
     summary_line_prefixes,
 )
 
@@ -827,6 +829,36 @@ def test_build_timed_standalone_smoke_failure_cases_assigns_elapsed_seconds_in_o
         TimedStandaloneSmokeFailureCase(cases[2], 2.4),
     )
     assert timed_cases[-1] == TimedStandaloneSmokeFailureCase(cases[-1], 3.6)
+
+
+def test_standalone_smoke_failure_case_id_supports_default_target_only_and_prefixed_formats() -> None:
+    case = build_standalone_docs_contract_failure_cases()[0]
+
+    assert standalone_smoke_failure_case_id(case) == "docs-contract-docs-rerun-hint"
+    assert standalone_smoke_failure_case_id(
+        case,
+        include_requested_target_name=False,
+    ) == "docs-rerun-hint"
+    assert standalone_smoke_failure_case_id(
+        case,
+        requested_target_name_prefix="default-",
+    ) == "default-docs-rerun-hint"
+
+
+def test_build_timed_standalone_smoke_failure_pytest_params_reuses_shared_id_formats() -> None:
+    cases = build_standalone_docs_contract_failure_cases()[:2]
+    params = build_timed_standalone_smoke_failure_pytest_params(
+        cases,
+        first_elapsed_seconds=1.8,
+        include_requested_target_name_in_id=False,
+    )
+
+    assert [param.id for param in params] == ["docs-rerun-hint", "malformed-result"]
+    assert [param.values for param in params] == [
+        (cases[0], 1.8),
+        (cases[1], 2.1),
+    ]
+
 
 def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selection() -> None:
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_target_name == "docs-review-only"

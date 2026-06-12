@@ -46,7 +46,7 @@ from strands_agent_tui.testing import (
     build_standalone_docs_parity_follow_up_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
     build_standalone_malformed_contract_failure_cases,
-    build_timed_standalone_smoke_failure_cases,
+    build_timed_standalone_smoke_failure_pytest_params,
     collect_smoke_cli_readme_diffs,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
@@ -183,29 +183,6 @@ def _assert_standalone_smoke_failure(
         ),
     ]
 
-
-def _standalone_smoke_failure_params(
-    failure_cases,
-    *,
-    first_elapsed_seconds: float,
-    elapsed_step_seconds: float = 0.3,
-    id_builder=None,
-):
-    timed_cases = build_timed_standalone_smoke_failure_cases(
-        tuple(failure_cases),
-        first_elapsed_seconds=first_elapsed_seconds,
-        elapsed_step_seconds=elapsed_step_seconds,
-    )
-    if id_builder is None:
-        id_builder = lambda case: f"{case.requested_target_name}-{case.failed_target_name}"
-    return [
-        pytest.param(
-            timed_case.failure_case,
-            timed_case.elapsed_seconds,
-            id=id_builder(timed_case.failure_case),
-        )
-        for timed_case in timed_cases
-    ]
 
 def _selected_smoke_cli_doc_script_names(requested_target_name: str | None) -> tuple[str, ...]:
     if requested_target_name in (None, "all"):
@@ -958,12 +935,12 @@ def test_standalone_smoke_live_failure_emits_missing_api_key_hint(monkeypatch) -
 
 @pytest.mark.parametrize(
     ("failure_case", "elapsed_seconds"),
-    _standalone_smoke_failure_params(
+    build_timed_standalone_smoke_failure_pytest_params(
         build_standalone_docs_parity_follow_up_failure_cases(
             requested_target_names=STANDALONE_DOCS_PARITY_FOLLOW_UP.default_requested_target_names,
         ),
         first_elapsed_seconds=1.6,
-        id_builder=lambda case: f"default-{case.failed_target_name}",
+        requested_target_name_id_prefix="default-",
     ),
 )
 def test_standalone_smoke_default_local_docs_parity_failure_emits_docs_parity_only_hint(
@@ -986,7 +963,7 @@ def test_standalone_smoke_default_local_docs_parity_failure_emits_docs_parity_on
 
 @pytest.mark.parametrize(
     ("failure_case", "elapsed_seconds"),
-    _standalone_smoke_failure_params(
+    build_timed_standalone_smoke_failure_pytest_params(
         build_standalone_docs_parity_follow_up_failure_cases(
             requested_target_names=STANDALONE_DOCS_PARITY_FOLLOW_UP.docs_review_requested_target_names,
         ),
@@ -1013,13 +990,13 @@ def test_standalone_smoke_docs_focused_docs_parity_failure_emits_docs_parity_onl
 
 @pytest.mark.parametrize(
     ("failure_case", "elapsed_seconds"),
-    _standalone_smoke_failure_params(
+    build_timed_standalone_smoke_failure_pytest_params(
         build_standalone_malformed_contract_failure_cases(
             requested_target_name="contract-negative",
         ),
         first_elapsed_seconds=1.4,
         elapsed_step_seconds=1.2,
-        id_builder=lambda case: case.failed_target_name,
+        include_requested_target_name_in_id=False,
     ),
 )
 def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hint(
@@ -1042,10 +1019,10 @@ def test_standalone_smoke_contract_negative_failure_emits_targeted_follow_up_hin
 
 @pytest.mark.parametrize(
     ("failure_case", "elapsed_seconds"),
-    _standalone_smoke_failure_params(
+    build_timed_standalone_smoke_failure_pytest_params(
         build_standalone_docs_contract_failure_cases(),
         first_elapsed_seconds=1.8,
-        id_builder=lambda case: case.failed_target_name,
+        include_requested_target_name_in_id=False,
     ),
 )
 def test_standalone_smoke_docs_contract_failure_emits_expected_follow_up_hint(
@@ -1068,7 +1045,7 @@ def test_standalone_smoke_docs_contract_failure_emits_expected_follow_up_hint(
 
 @pytest.mark.parametrize(
     ("failure_case", "elapsed_seconds"),
-    _standalone_smoke_failure_params(
+    build_timed_standalone_smoke_failure_pytest_params(
         build_standalone_docs_review_follow_up_failure_cases(
             requested_target_names=STANDALONE_DOCS_REVIEW_FOLLOW_UP.alias_requested_target_names
         ),

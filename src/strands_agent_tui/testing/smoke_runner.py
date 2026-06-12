@@ -553,6 +553,19 @@ class TimedStandaloneSmokeFailureCase:
     elapsed_seconds: float
 
 
+def standalone_smoke_failure_case_id(
+    failure_case: StandaloneSmokeFailureCase,
+    *,
+    include_requested_target_name: bool = True,
+    requested_target_name_prefix: str | None = None,
+) -> str:
+    if requested_target_name_prefix is not None:
+        return f"{requested_target_name_prefix}{failure_case.failed_target_name}"
+    if not include_requested_target_name:
+        return failure_case.failed_target_name
+    return f"{failure_case.requested_target_name}-{failure_case.failed_target_name}"
+
+
 def build_timed_standalone_smoke_failure_cases(
     failure_cases: Sequence[StandaloneSmokeFailureCase],
     *,
@@ -568,6 +581,34 @@ def build_timed_standalone_smoke_failure_cases(
             ),
         )
         for index, failure_case in enumerate(failure_cases)
+    )
+
+
+def build_timed_standalone_smoke_failure_pytest_params(
+    failure_cases: Sequence[StandaloneSmokeFailureCase],
+    *,
+    first_elapsed_seconds: float,
+    elapsed_step_seconds: float = 0.3,
+    include_requested_target_name_in_id: bool = True,
+    requested_target_name_id_prefix: str | None = None,
+) -> tuple[object, ...]:
+    import pytest
+
+    return tuple(
+        pytest.param(
+            timed_case.failure_case,
+            timed_case.elapsed_seconds,
+            id=standalone_smoke_failure_case_id(
+                timed_case.failure_case,
+                include_requested_target_name=include_requested_target_name_in_id,
+                requested_target_name_prefix=requested_target_name_id_prefix,
+            ),
+        )
+        for timed_case in build_timed_standalone_smoke_failure_cases(
+            failure_cases,
+            first_elapsed_seconds=first_elapsed_seconds,
+            elapsed_step_seconds=elapsed_step_seconds,
+        )
     )
 
 

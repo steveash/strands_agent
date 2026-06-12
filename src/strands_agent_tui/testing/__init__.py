@@ -273,6 +273,7 @@ from .smoke_runner import (
     build_standalone_docs_parity_follow_up_failure_cases,
     build_standalone_docs_parity_follow_up_metadata,
     build_timed_standalone_smoke_failure_cases,
+    build_timed_standalone_smoke_failure_pytest_params,
     build_standalone_docs_review_follow_up_failure_cases,
     build_standalone_docs_review_follow_up_metadata,
     build_standalone_malformed_contract_failure_cases,
@@ -283,6 +284,7 @@ from .smoke_runner import (
     standalone_docs_parity_follow_up_hint_for_failure,
     standalone_docs_review_follow_up_hint_for_failure,
     standalone_malformed_contract_hint_for_failure,
+    standalone_smoke_failure_case_id,
     summary_line_prefixes,
 )
 
@@ -542,6 +544,7 @@ __all__ = [
     "build_standalone_docs_parity_follow_up_failure_cases",
     "build_standalone_docs_parity_follow_up_metadata",
     "build_timed_standalone_smoke_failure_cases",
+    "build_timed_standalone_smoke_failure_pytest_params",
     "build_standalone_docs_review_follow_up_failure_cases",
     "build_standalone_docs_review_follow_up_metadata",
     "build_standalone_malformed_contract_failure_cases",
@@ -562,5 +565,6 @@ __all__ = [
     "standalone_docs_parity_follow_up_hint_for_failure",
     "standalone_docs_review_follow_up_hint_for_failure",
     "standalone_malformed_contract_hint_for_failure",
+    "standalone_smoke_failure_case_id",
     "summary_line_prefixes",
 ]
