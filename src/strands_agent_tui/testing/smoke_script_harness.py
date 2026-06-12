@@ -1719,26 +1719,35 @@ STANDALONE_DOCS_RERUN_HINT_FIX_CHECK_SUMMARY_LINE = (
     "fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke"
 )
 STANDALONE_DOCS_RERUN_HINT_FALSE_LINE = "fix_post_check= False"
-STANDALONE_DOCS_RERUN_HINT_CONTRACT = SmokeScriptContractMetadata(
-    required_line_prefixes=(
-        "checkout_root: ",
-        f"stdout_fix_check_summary: {STANDALONE_DOCS_RERUN_HINT_FIX_CHECK_SUMMARY_LINE}",
-        f"stdout_false_line: {detail_safe_text(STANDALONE_DOCS_RERUN_HINT_FALSE_LINE)}",
-        f"stderr_failed_line: {detail_safe_text(STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX + STANDALONE_DOCS_RERUN_HINT_FALSE_LINE)}",
-        f"stderr_hint_line: {STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX}",
-        f"stderr_summary_line: {STANDALONE_DOCS_RERUN_HINT_SUMMARY_PREFIX}",
-    ),
-    true_check_names=(
-        "exit_code_non_zero",
-        "fix_check_summary_present",
-        "false_line_present",
-        "failed_line_present",
-        "hint_line_present",
-        "summary_line_present",
-        "hint_after_failed_line",
-        "hint_before_failure_summary",
-    ),
-)
+
+
+def build_standalone_docs_rerun_hint_contract() -> SmokeScriptContractMetadata:
+    return SmokeScriptContractMetadata(
+        required_line_prefixes=(
+            "checkout_root: ",
+            f"stdout_fix_check_summary: {STANDALONE_DOCS_RERUN_HINT_FIX_CHECK_SUMMARY_LINE}",
+            f"stdout_false_line: {detail_safe_text(STANDALONE_DOCS_RERUN_HINT_FALSE_LINE)}",
+            (
+                "stderr_failed_line: "
+                f"{detail_safe_text(STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX + STANDALONE_DOCS_RERUN_HINT_FALSE_LINE)}"
+            ),
+            f"stderr_hint_line: {STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX}",
+            f"stderr_summary_line: {STANDALONE_DOCS_RERUN_HINT_SUMMARY_PREFIX}",
+        ),
+        true_check_names=(
+            "exit_code_non_zero",
+            "fix_check_summary_present",
+            "false_line_present",
+            "failed_line_present",
+            "hint_line_present",
+            "summary_line_present",
+            "hint_after_failed_line",
+            "hint_before_failure_summary",
+        ),
+    )
+
+
+STANDALONE_DOCS_RERUN_HINT_CONTRACT = build_standalone_docs_rerun_hint_contract()
 STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT = SmokeScriptContractCase(
     script_name="standalone_docs_rerun_hint_smoke",
     runner_name="run_standalone_docs_rerun_hint_smoke",
@@ -2036,20 +2045,74 @@ SESSION_TRIAGE_INTERVENTION_MIX_SCRIPT_CONTRACT = SmokeScriptContractCase(
     contract=SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
 )
 
-SMOKE_SCRIPT_MALFORMED_RESULT_CONTRACT = SmokeScriptContractMetadata(
-    required_line_prefixes=(
-        "source_contract_script_name: standalone_docs_rerun_hint_smoke",
-        "source_result_count: ",
-        "malformed_entry: ('malformed', 'value', 'extra')",
-        "assertion_message: result[",
-    ),
-    true_check_names=(
-        "source_contract_valid",
-        "source_result_count_positive",
-        "malformed_result_reported",
-        "malformed_result_index_matches_source_length",
-        "malformed_result_mentions_entry",
-    ),
+DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY = ("malformed", "value", "extra")
+
+
+def build_malformed_smoke_script_result_contract(
+    *,
+    source_case: SmokeScriptContractCase,
+    malformed_entry: object = DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
+) -> SmokeScriptContractMetadata:
+    return SmokeScriptContractMetadata(
+        required_line_prefixes=(
+            f"source_contract_script_name: {source_case.script_name}",
+            "source_result_count: ",
+            f"malformed_entry: {repr(malformed_entry)}",
+            "assertion_message: result[",
+        ),
+        true_check_names=(
+            "source_contract_valid",
+            "source_result_count_positive",
+            "malformed_result_reported",
+            "malformed_result_index_matches_source_length",
+            "malformed_result_mentions_entry",
+        ),
+    )
+
+
+def _required_smoke_script_detail_with_value_prefix(
+    case: SmokeScriptContractCase,
+) -> tuple[str, str]:
+    for required_line_prefix in case.required_line_prefixes:
+        detail_name, separator, detail_value_prefix = required_line_prefix.partition(": ")
+        assert separator, required_line_prefix
+        if detail_value_prefix:
+            return detail_name, detail_value_prefix
+    raise AssertionError(f"no detail prefix found for {case.script_name}")
+
+
+def build_malformed_smoke_script_detail_contract(
+    *,
+    source_case: SmokeScriptContractCase,
+) -> SmokeScriptContractMetadata:
+    detail_name, expected_detail_prefix = _required_smoke_script_detail_with_value_prefix(source_case)
+    mismatched_detail_value = f"unexpected-{expected_detail_prefix}fixture"
+    return SmokeScriptContractMetadata(
+        required_line_prefixes=(
+            f"source_contract_script_name: {source_case.script_name}",
+            "source_result_count: ",
+            f"malformed_detail_name: {detail_name}",
+            f"expected_detail_prefix: {expected_detail_prefix}",
+            f"mismatched_detail_value: {mismatched_detail_value}",
+            f"missing_detail_assertion: {detail_name}",
+            f"mismatched_detail_assertion: {detail_name}",
+            f"boolean_detail_assertion: {detail_name}",
+        ),
+        true_check_names=(
+            "source_contract_valid",
+            "source_result_count_positive",
+            "malformed_detail_name_present",
+            "expected_detail_prefix_present",
+            "missing_detail_reported",
+            "mismatched_detail_prefix_reported",
+            "boolean_detail_reported",
+            "mismatched_detail_mentions_expected_prefix",
+        ),
+    )
+
+
+SMOKE_SCRIPT_MALFORMED_RESULT_CONTRACT = build_malformed_smoke_script_result_contract(
+    source_case=STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
 )
 SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT = SmokeScriptContractCase(
     script_name="smoke_script_malformed_result_smoke",
@@ -2057,27 +2120,8 @@ SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT = SmokeScriptContractCase(
     contract=SMOKE_SCRIPT_MALFORMED_RESULT_CONTRACT,
 )
 
-SMOKE_SCRIPT_MALFORMED_DETAIL_CONTRACT = SmokeScriptContractMetadata(
-    required_line_prefixes=(
-        "source_contract_script_name: standalone_docs_rerun_hint_smoke",
-        "source_result_count: ",
-        "malformed_detail_name: stdout_fix_check_summary",
-        "expected_detail_prefix: fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
-        "mismatched_detail_value: unexpected-fix_check_summary: smoke README drift detected in 1 section(s) for README.md: standalone_smoke",
-        "missing_detail_assertion: stdout_fix_check_summary",
-        "mismatched_detail_assertion: stdout_fix_check_summary",
-        "boolean_detail_assertion: stdout_fix_check_summary",
-    ),
-    true_check_names=(
-        "source_contract_valid",
-        "source_result_count_positive",
-        "malformed_detail_name_present",
-        "expected_detail_prefix_present",
-        "missing_detail_reported",
-        "mismatched_detail_prefix_reported",
-        "boolean_detail_reported",
-        "mismatched_detail_mentions_expected_prefix",
-    ),
+SMOKE_SCRIPT_MALFORMED_DETAIL_CONTRACT = build_malformed_smoke_script_detail_contract(
+    source_case=STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
 )
 SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT = SmokeScriptContractCase(
     script_name="smoke_script_malformed_detail_smoke",
@@ -2215,16 +2259,6 @@ def build_malformed_smoke_script_result_results(
             malformed_entry_text in assertion_message,
         ),
     ]
-
-
-def _required_smoke_script_detail_with_value_prefix(
-    case: SmokeScriptContractCase,
-) -> tuple[str, str]:
-    for required_line_prefix in case.required_line_prefixes:
-        detail_name, detail_value_prefix = smoke_contract_detail_expectation(required_line_prefix)
-        if detail_value_prefix:
-            return detail_name, detail_value_prefix
-    raise AssertionError(f"no detail prefix found for {case.script_name}")
 
 
 def build_malformed_smoke_script_detail_results(

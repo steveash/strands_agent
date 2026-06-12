@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from strands_agent_tui.testing import (
+    DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE,
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
@@ -48,7 +49,9 @@ from strands_agent_tui.testing import (
     SmokeWrapperFailureObservation,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
+    build_malformed_smoke_script_detail_contract,
     build_malformed_smoke_script_detail_results,
+    build_malformed_smoke_script_result_contract,
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
     build_smoke_matrix_docs_review_failure_results,
@@ -63,6 +66,7 @@ from strands_agent_tui.testing import (
     build_script_driver_source,
     build_smoke_matrix_docs_review_observation_fixture,
     build_smoke_matrix_docs_review_observer_spec,
+    build_standalone_docs_rerun_hint_contract,
     build_standalone_docs_rerun_hint_results,
     collect_smoke_wrapper_failure_output,
     collect_smoke_matrix_docs_review_failure_output,
@@ -410,6 +414,73 @@ def test_build_standalone_docs_rerun_hint_results_reuses_shared_contract_metadat
         assert any(line.startswith(prefix) for line in lines), prefix
     for check_name in STANDALONE_DOCS_RERUN_HINT_CONTRACT.true_check_names:
         assert f"{check_name}= True" in lines
+
+
+def test_build_standalone_docs_follow_up_contract_helpers_derive_exported_contracts() -> None:
+    assert build_standalone_docs_rerun_hint_contract() == STANDALONE_DOCS_RERUN_HINT_CONTRACT
+    assert build_malformed_smoke_script_result_contract(
+        source_case=STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+        malformed_entry=DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
+    ) == SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT.contract
+    assert build_malformed_smoke_script_detail_contract(
+        source_case=STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+    ) == SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT.contract
+
+
+def test_build_malformed_smoke_script_contract_helpers_track_source_contract_metadata() -> None:
+    source_case = SmokeScriptContractCase(
+        script_name="custom_follow_up_smoke",
+        runner_name="run_custom_follow_up_smoke",
+        contract=SmokeScriptContractMetadata(
+            required_line_prefixes=(
+                "stdout_custom_detail: custom detail prefix",
+                "stderr_failed_line: custom failed prefix",
+            ),
+            true_check_names=("custom_check",),
+        ),
+    )
+
+    malformed_result_contract = build_malformed_smoke_script_result_contract(
+        source_case=source_case,
+        malformed_entry=("oops", "value", "extra"),
+    )
+    malformed_detail_contract = build_malformed_smoke_script_detail_contract(
+        source_case=source_case,
+    )
+
+    assert malformed_result_contract.required_line_prefixes == (
+        "source_contract_script_name: custom_follow_up_smoke",
+        "source_result_count: ",
+        "malformed_entry: ('oops', 'value', 'extra')",
+        "assertion_message: result[",
+    )
+    assert malformed_result_contract.true_check_names == (
+        "source_contract_valid",
+        "source_result_count_positive",
+        "malformed_result_reported",
+        "malformed_result_index_matches_source_length",
+        "malformed_result_mentions_entry",
+    )
+    assert malformed_detail_contract.required_line_prefixes == (
+        "source_contract_script_name: custom_follow_up_smoke",
+        "source_result_count: ",
+        "malformed_detail_name: stdout_custom_detail",
+        "expected_detail_prefix: custom detail prefix",
+        "mismatched_detail_value: unexpected-custom detail prefixfixture",
+        "missing_detail_assertion: stdout_custom_detail",
+        "mismatched_detail_assertion: stdout_custom_detail",
+        "boolean_detail_assertion: stdout_custom_detail",
+    )
+    assert malformed_detail_contract.true_check_names == (
+        "source_contract_valid",
+        "source_result_count_positive",
+        "malformed_detail_name_present",
+        "expected_detail_prefix_present",
+        "missing_detail_reported",
+        "mismatched_detail_prefix_reported",
+        "boolean_detail_reported",
+        "mismatched_detail_mentions_expected_prefix",
+    )
 
 
 def test_build_smoke_matrix_docs_review_failure_results_reuses_shared_docs_review_contracts(
