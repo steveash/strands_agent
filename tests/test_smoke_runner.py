@@ -24,6 +24,7 @@ from strands_agent_tui.testing.smoke_runner import (
     STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES,
     STANDALONE_SMOKE_CLI_SPEC,
     STANDALONE_SMOKE_WRAPPER,
+    StandaloneFollowUpFailureFixture,
     StandaloneFollowUpFailureFixtureSet,
     TimedStandaloneSmokeFailureCase,
     SmokeCliExample,
@@ -813,6 +814,37 @@ def test_standalone_follow_up_failure_fixture_emits_observed_stdout_lines() -> N
 
     assert stdout.getvalue().splitlines() == list(fixture.stdout_lines)
     assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
+
+
+def test_standalone_follow_up_failure_fixture_emit_failed_target_run_reuses_shared_stdout_stderr_path() -> None:
+    fixture = STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
+        "docs-artifacts"
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    observed_lines: list[str] = []
+
+    exit_code = fixture.emit_failed_target_run(
+        stdout=stdout,
+        stderr=stderr,
+        output_line_observer=observed_lines.append,
+        target_name="docs-artifacts",
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == list(fixture.stdout_lines)
+    assert stderr.getvalue().strip() == fixture.failed_fast_message()
+    assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
+
+
+def test_standalone_smoke_failure_case_build_fixture_reuses_fixture_shape() -> None:
+    failure_case = build_standalone_docs_contract_failure_cases()[1]
+
+    assert failure_case.build_fixture() == StandaloneFollowUpFailureFixture(
+        failed_target_name=failure_case.failed_target_name,
+        stdout_lines=failure_case.stdout_lines,
+    )
 
 
 def test_build_timed_standalone_smoke_failure_cases_assigns_elapsed_seconds_in_order() -> None:

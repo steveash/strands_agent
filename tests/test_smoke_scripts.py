@@ -32,6 +32,7 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_SMOKE_WRAPPER,
     SmokeScriptContractCase,
+    StandaloneFollowUpFailureFixture,
     StandaloneSmokeFailureCase,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
@@ -126,12 +127,17 @@ def _observe_standalone_smoke_failure(
         stdout = kwargs["stdout"]
         stderr = kwargs["stderr"]
         if target.name == failed_target_name:
-            for line in stdout_lines:
-                observer(f"{line}\n")
-                print(line, file=stdout)
-            stdout.flush()
-            print(f"{target.name} smoke failed fast: {failed_line}", file=stderr)
-            return 1
+            fixture = StandaloneFollowUpFailureFixture(
+                failed_target_name=failed_target_name,
+                stdout_lines=tuple(stdout_lines),
+            )
+            assert fixture.failed_line == failed_line
+            return fixture.emit_failed_target_run(
+                stdout=stdout,
+                stderr=stderr,
+                output_line_observer=observer,
+                target_name=target.name,
+            )
         return 0
 
     monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)

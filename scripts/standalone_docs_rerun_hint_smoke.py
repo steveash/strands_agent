@@ -38,9 +38,11 @@ def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
                 fixture = smoke_runner.STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
                     'docs-artifacts'
                 )
-                fixture.emit_stdout_lines(stdout=stdout, output_line_observer=observer)
-                print(fixture.failed_fast_message(), file=stderr)
-                return 1
+                return fixture.emit_failed_target_run(
+                    stdout=stdout,
+                    stderr=stderr,
+                    output_line_observer=observer,
+                )
             return 0
 
         smoke_runner.run_smoke_target = fake_run_smoke_target

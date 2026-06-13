@@ -546,6 +546,12 @@ class StandaloneSmokeFailureCase:
     total_count: int
     expected_hint: str
 
+    def build_fixture(self) -> StandaloneFollowUpFailureFixture:
+        return StandaloneFollowUpFailureFixture(
+            failed_target_name=self.failed_target_name,
+            stdout_lines=self.stdout_lines,
+        )
+
 
 @dataclass(frozen=True)
 class TimedStandaloneSmokeFailureCase:
@@ -660,6 +666,19 @@ class StandaloneFollowUpFailureFixture:
                 output_line_observer(rendered_line)
             print(line, file=stdout)
         stdout.flush()
+
+    def emit_failed_target_run(
+        self,
+        *,
+        stdout: TextIO,
+        stderr: TextIO,
+        output_line_observer: Callable[[str], None] | None = None,
+        target_name: str | None = None,
+    ) -> int:
+        self.emit_stdout_lines(stdout=stdout, output_line_observer=output_line_observer)
+        print(self.failed_fast_message(target_name=target_name), file=stderr)
+        stderr.flush()
+        return 1
 
 
 @dataclass(frozen=True)
