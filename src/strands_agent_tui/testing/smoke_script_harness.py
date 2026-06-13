@@ -49,6 +49,22 @@ class SmokeScriptRunResult:
         self.cleanup_callback()
 
 
+def emit_smoke_target_run_stdout_lines(
+    stdout_lines: Sequence[str],
+    *,
+    stdout: TextIO,
+    output_line_observer: Callable[[str], None] | None = None,
+    output_line_filter: Callable[[str], bool] | None = None,
+) -> None:
+    for line in stdout_lines:
+        rendered_line = f"{line}\n"
+        if output_line_observer is not None:
+            output_line_observer(rendered_line)
+        if output_line_filter is None or output_line_filter(rendered_line):
+            print(line, file=stdout)
+    stdout.flush()
+
+
 @dataclass(frozen=True)
 class SmokeTargetRunFailureFixture:
     stdout_lines: tuple[str, ...] = ()
@@ -87,13 +103,12 @@ class SmokeTargetRunFailureFixture:
         output_line_observer: Callable[[str], None] | None = None,
         output_line_filter: Callable[[str], bool] | None = None,
     ) -> None:
-        for line in self.stdout_lines:
-            rendered_line = f"{line}\n"
-            if output_line_observer is not None:
-                output_line_observer(rendered_line)
-            if output_line_filter is None or output_line_filter(rendered_line):
-                print(line, file=stdout)
-        stdout.flush()
+        emit_smoke_target_run_stdout_lines(
+            self.stdout_lines,
+            stdout=stdout,
+            output_line_observer=output_line_observer,
+            output_line_filter=output_line_filter,
+        )
 
     def emit_stderr_lines(self, *, stderr: TextIO) -> None:
         for line in self.stderr_lines:

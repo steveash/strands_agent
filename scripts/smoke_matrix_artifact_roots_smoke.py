@@ -16,6 +16,7 @@ from strands_agent_tui.testing import (
     build_review_artifact_success_results,
     build_smoke_matrix_docs_review_observer_spec,
     build_smoke_matrix_review_metadata_payload,
+    emit_smoke_target_run_stdout_lines,
     emit_smoke_results,
     load_script_module,
     observe_loaded_review_artifact_output,
@@ -31,13 +32,6 @@ RERUN_HINT_PREFIX = SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS.rerun_hint_pref
 @contextmanager
 def _patched_run_smoke_target(smoke_matrix_module, checkout_root: Path) -> Iterator[None]:
     original = smoke_matrix_module.run_smoke_target
-
-    def _emit_output(line: str, *, stdout, output_line_filter, output_line_observer) -> None:
-        if output_line_observer is not None:
-            output_line_observer(line)
-        if output_line_filter is None or output_line_filter(line):
-            print(line, end="", file=stdout)
-            stdout.flush()
 
     def _write_fake_docs_review_artifacts(target) -> None:
         metadata = smoke_matrix_module._docs_review_artifact_metadata(target)
@@ -74,21 +68,12 @@ def _patched_run_smoke_target(smoke_matrix_module, checkout_root: Path) -> Itera
         stdout = kwargs["stdout"]
         output_line_filter = kwargs.get("output_line_filter")
         output_line_observer = kwargs.get("output_line_observer")
+        stdout_lines: list[str] = []
         if target.name == smoke_matrix_module.LIVE_INCLUSIVE_STANDALONE_TARGET_NAME:
-            _emit_output(
-                "provider=fake-live mode=live\n",
-                stdout=stdout,
-                output_line_filter=output_line_filter,
-                output_line_observer=output_line_observer,
-            )
-            _emit_output(
-                "live_runtime_requested= True\n",
-                stdout=stdout,
-                output_line_filter=output_line_filter,
-                output_line_observer=output_line_observer,
-            )
-        _emit_output(
-            f"{target.name}_check= True\n",
+            stdout_lines.extend(("provider=fake-live mode=live", "live_runtime_requested= True"))
+        stdout_lines.append(f"{target.name}_check= True")
+        emit_smoke_target_run_stdout_lines(
+            stdout_lines,
             stdout=stdout,
             output_line_filter=output_line_filter,
             output_line_observer=output_line_observer,

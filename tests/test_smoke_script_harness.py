@@ -77,6 +77,7 @@ from strands_agent_tui.testing import (
     collect_smoke_matrix_docs_review_failure_output,
     collect_review_artifact_output,
     detail_safe_text,
+    emit_smoke_target_run_stdout_lines,
     emit_smoke_results,
     find_prefixed_line_index,
     load_script_module,
@@ -173,6 +174,29 @@ def test_smoke_target_run_failure_fixture_emits_observed_stdout_and_stderr_lines
     assert observed_lines == [
         f"{SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE}\n",
         "alpha= True\n",
+    ]
+
+
+def test_emit_smoke_target_run_stdout_lines_honors_filter_and_observer() -> None:
+    stdout = StringIO()
+    observed_lines: list[str] = []
+
+    emit_smoke_target_run_stdout_lines(
+        (
+            "[bundle-smoke] summary: 1/1 targets passed in 0.50s",
+            "visible= True",
+            "hidden= True",
+        ),
+        stdout=stdout,
+        output_line_observer=observed_lines.append,
+        output_line_filter=lambda line: not line.startswith("[") and not line.startswith("hidden="),
+    )
+
+    assert stdout.getvalue() == "visible= True\n"
+    assert observed_lines == [
+        "[bundle-smoke] summary: 1/1 targets passed in 0.50s\n",
+        "visible= True\n",
+        "hidden= True\n",
     ]
 
 
