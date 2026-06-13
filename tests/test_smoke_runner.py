@@ -816,6 +816,33 @@ def test_standalone_follow_up_failure_fixture_emits_observed_stdout_lines() -> N
     assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
 
 
+def test_standalone_follow_up_failure_fixture_honors_shared_filter_and_observer() -> None:
+    fixture = StandaloneFollowUpFailureFixture(
+        failed_target_name="docs-artifacts",
+        stdout_lines=(
+            "[standalone-smoke] summary: 1/1 targets passed in 0.50s",
+            "visible= True",
+            "hidden_failure= False",
+        ),
+    )
+
+    stdout = StringIO()
+    observed_lines: list[str] = []
+
+    fixture.emit_stdout_lines(
+        stdout=stdout,
+        output_line_observer=observed_lines.append,
+        output_line_filter=lambda line: not line.startswith("[") and not line.startswith("hidden_failure="),
+    )
+
+    assert stdout.getvalue() == "visible= True\n"
+    assert observed_lines == [
+        "[standalone-smoke] summary: 1/1 targets passed in 0.50s\n",
+        "visible= True\n",
+        "hidden_failure= False\n",
+    ]
+
+
 def test_standalone_follow_up_failure_fixture_emit_failed_target_run_reuses_shared_stdout_stderr_path() -> None:
     fixture = STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
         "docs-artifacts"
@@ -829,11 +856,12 @@ def test_standalone_follow_up_failure_fixture_emit_failed_target_run_reuses_shar
         stdout=stdout,
         stderr=stderr,
         output_line_observer=observed_lines.append,
+        output_line_filter=lambda line: not line.startswith("fix_check_summary:"),
         target_name="docs-artifacts",
     )
 
     assert exit_code == 1
-    assert stdout.getvalue().splitlines() == list(fixture.stdout_lines)
+    assert stdout.getvalue().splitlines() == [fixture.stdout_line(-1)]
     assert stderr.getvalue().strip() == fixture.failed_fast_message()
     assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
 

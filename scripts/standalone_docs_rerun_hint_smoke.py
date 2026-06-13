@@ -42,6 +42,7 @@ def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
                     stdout=stdout,
                     stderr=stderr,
                     output_line_observer=observer,
+                    output_line_filter=kwargs.get('output_line_filter'),
                 )
             return 0
 

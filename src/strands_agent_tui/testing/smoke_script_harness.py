@@ -22,6 +22,7 @@ from .smoke_cli_doc_artifacts import (
     resolve_review_artifact_paths,
 )
 from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
+from .smoke_output import emit_smoke_target_run_stdout_lines
 from .smoke_runner import STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES
 
 SMOKE_MATRIX_REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
@@ -47,22 +48,6 @@ class SmokeScriptRunResult:
 
     def cleanup(self) -> None:
         self.cleanup_callback()
-
-
-def emit_smoke_target_run_stdout_lines(
-    stdout_lines: Sequence[str],
-    *,
-    stdout: TextIO,
-    output_line_observer: Callable[[str], None] | None = None,
-    output_line_filter: Callable[[str], bool] | None = None,
-) -> None:
-    for line in stdout_lines:
-        rendered_line = f"{line}\n"
-        if output_line_observer is not None:
-            output_line_observer(rendered_line)
-        if output_line_filter is None or output_line_filter(rendered_line):
-            print(line, file=stdout)
-    stdout.flush()
 
 
 @dataclass(frozen=True)

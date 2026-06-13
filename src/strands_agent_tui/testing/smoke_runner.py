@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import TextIO
 
 from .smoke_assertions import is_failed_smoke_check_line
+from .smoke_output import emit_smoke_target_run_stdout_lines
 
 
 @dataclass(frozen=True)
@@ -659,13 +660,14 @@ class StandaloneFollowUpFailureFixture:
         *,
         stdout: TextIO,
         output_line_observer: Callable[[str], None] | None = None,
+        output_line_filter: SmokeOutputLineFilter | None = None,
     ) -> None:
-        for line in self.stdout_lines:
-            rendered_line = f"{line}\n"
-            if output_line_observer is not None:
-                output_line_observer(rendered_line)
-            print(line, file=stdout)
-        stdout.flush()
+        emit_smoke_target_run_stdout_lines(
+            self.stdout_lines,
+            stdout=stdout,
+            output_line_observer=output_line_observer,
+            output_line_filter=output_line_filter,
+        )
 
     def emit_failed_target_run(
         self,
@@ -673,9 +675,14 @@ class StandaloneFollowUpFailureFixture:
         stdout: TextIO,
         stderr: TextIO,
         output_line_observer: Callable[[str], None] | None = None,
+        output_line_filter: SmokeOutputLineFilter | None = None,
         target_name: str | None = None,
     ) -> int:
-        self.emit_stdout_lines(stdout=stdout, output_line_observer=output_line_observer)
+        self.emit_stdout_lines(
+            stdout=stdout,
+            output_line_observer=output_line_observer,
+            output_line_filter=output_line_filter,
+        )
         print(self.failed_fast_message(target_name=target_name), file=stderr)
         stderr.flush()
         return 1

@@ -136,6 +136,7 @@ def _observe_standalone_smoke_failure(
                 stdout=stdout,
                 stderr=stderr,
                 output_line_observer=observer,
+                output_line_filter=kwargs.get("output_line_filter"),
                 target_name=target.name,
             )
         return 0
