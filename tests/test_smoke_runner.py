@@ -36,6 +36,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeWrapperMetadata,
     _select_alias_target_names,
     build_smoke_cli_parser,
+    build_standalone_follow_up_failure_run_smoke_target,
     build_standalone_docs_contract_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
     build_timed_standalone_smoke_failure_cases,
@@ -873,6 +874,53 @@ def test_standalone_follow_up_failure_fixture_emit_failed_target_run_reuses_shar
     assert stdout.getvalue().splitlines() == [fixture.stdout_line(-1)]
     assert stderr.getvalue().strip() == fixture.failed_fast_message()
     assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
+
+
+def test_build_standalone_follow_up_failure_run_smoke_target_reuses_fixture_emission_path(
+    tmp_path,
+) -> None:
+    fixture = STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
+        "docs-artifacts"
+    )
+    fake_run_smoke_target = build_standalone_follow_up_failure_run_smoke_target(fixture)
+
+    stdout = StringIO()
+    stderr = StringIO()
+    observed_lines: list[str] = []
+
+    exit_code = fake_run_smoke_target(
+        SmokeScriptTarget("docs-artifacts", tmp_path / "unused.py"),
+        stdout=stdout,
+        stderr=stderr,
+        output_line_observer=observed_lines.append,
+        output_line_filter=lambda line: not line.startswith("fix_check_summary:"),
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == [fixture.stdout_line(-1)]
+    assert stderr.getvalue().strip() == fixture.failed_fast_message()
+    assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
+
+
+def test_build_standalone_follow_up_failure_run_smoke_target_ignores_other_targets(tmp_path) -> None:
+    fixture = StandaloneFollowUpFailureFixture(
+        failed_target_name="docs-artifacts",
+        stdout_lines=("docs_artifacts_check= False",),
+    )
+    fake_run_smoke_target = build_standalone_follow_up_failure_run_smoke_target(fixture)
+
+    stdout = StringIO()
+    stderr = StringIO()
+
+    exit_code = fake_run_smoke_target(
+        SmokeScriptTarget("docs-review-hint", tmp_path / "unused.py"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert exit_code == 0
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == ""
 
 
 def test_standalone_smoke_failure_case_build_fixture_reuses_fixture_shape() -> None:

@@ -688,6 +688,27 @@ class StandaloneFollowUpFailureFixture:
         return 1
 
 
+def build_standalone_follow_up_failure_run_smoke_target(
+    fixture: StandaloneFollowUpFailureFixture,
+    *,
+    failed_target_name: str | None = None,
+) -> Callable[[SmokeScriptTarget], int]:
+    selected_target_name = fixture.failed_target_name if failed_target_name is None else failed_target_name
+
+    def fake_run_smoke_target(target: SmokeScriptTarget, **kwargs: object) -> int:
+        if target.name != selected_target_name:
+            return 0
+        return fixture.emit_failed_target_run(
+            stdout=kwargs["stdout"],
+            stderr=kwargs["stderr"],
+            output_line_observer=kwargs.get("output_line_observer"),
+            output_line_filter=kwargs.get("output_line_filter"),
+            target_name=target.name,
+        )
+
+    return fake_run_smoke_target
+
+
 @dataclass(frozen=True)
 class StandaloneFollowUpFailureFixtureSet:
     fixtures: tuple[StandaloneFollowUpFailureFixture, ...]

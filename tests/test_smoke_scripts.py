@@ -36,6 +36,7 @@ from strands_agent_tui.testing import (
     StandaloneSmokeFailureCase,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
+    build_standalone_follow_up_failure_run_smoke_target,
     build_smoke_matrix_review_artifact_location_lines,
     build_smoke_matrix_review_artifact_location_messages,
     build_smoke_matrix_review_metadata_line,
@@ -122,24 +123,12 @@ def _observe_standalone_smoke_failure(
 ) -> tuple[int, list[str], list[str]]:
     standalone_smoke = _load_script_module("standalone_smoke")
 
-    def _run_smoke_target(target, **kwargs):
-        observer = kwargs["output_line_observer"]
-        stdout = kwargs["stdout"]
-        stderr = kwargs["stderr"]
-        if target.name == failed_target_name:
-            fixture = StandaloneFollowUpFailureFixture(
-                failed_target_name=failed_target_name,
-                stdout_lines=tuple(stdout_lines),
-            )
-            assert fixture.failed_line == failed_line
-            return fixture.emit_failed_target_run(
-                stdout=stdout,
-                stderr=stderr,
-                output_line_observer=observer,
-                output_line_filter=kwargs.get("output_line_filter"),
-                target_name=target.name,
-            )
-        return 0
+    fixture = StandaloneFollowUpFailureFixture(
+        failed_target_name=failed_target_name,
+        stdout_lines=tuple(stdout_lines),
+    )
+    assert fixture.failed_line == failed_line
+    _run_smoke_target = build_standalone_follow_up_failure_run_smoke_target(fixture)
 
     monkeypatch.setattr("strands_agent_tui.testing.smoke_runner.run_smoke_target", _run_smoke_target)
     perf_values = iter([0.0, elapsed_seconds])

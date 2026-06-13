@@ -8,6 +8,7 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_RERUN_HINT_FAILED_LINE_PREFIX,
     STANDALONE_DOCS_RERUN_HINT_HINT_PREFIX,
     STANDALONE_DOCS_RERUN_HINT_SUMMARY_PREFIX,
+    build_standalone_follow_up_failure_run_smoke_target,
     build_standalone_docs_rerun_hint_results,
     collect_smoke_wrapper_failure_output,
     emit_smoke_results,
@@ -28,23 +29,15 @@ def run_standalone_docs_rerun_hint_smoke() -> list[tuple[str, object]]:
         temp_prefix="standalone-docs-rerun-hint-",
         driver_filename="run_standalone_docs_rerun_hint.py",
         hook_source="""
+        from strands_agent_tui.testing import (
+            STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES,
+            build_standalone_follow_up_failure_run_smoke_target,
+        )
         from strands_agent_tui.testing import smoke_runner
 
-        def fake_run_smoke_target(target, **kwargs):
-            observer = kwargs.get('output_line_observer')
-            stdout = kwargs['stdout']
-            stderr = kwargs['stderr']
-            if target.name == 'docs-artifacts':
-                fixture = smoke_runner.STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target(
-                    'docs-artifacts'
-                )
-                return fixture.emit_failed_target_run(
-                    stdout=stdout,
-                    stderr=stderr,
-                    output_line_observer=observer,
-                    output_line_filter=kwargs.get('output_line_filter'),
-                )
-            return 0
+        fake_run_smoke_target = build_standalone_follow_up_failure_run_smoke_target(
+            STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES.require_fixture_for_target('docs-artifacts')
+        )
 
         smoke_runner.run_smoke_target = fake_run_smoke_target
         module.run_smoke_target = fake_run_smoke_target
