@@ -6,6 +6,9 @@ from textwrap import dedent
 
 import pytest
 
+from strands_agent_tui.testing.smoke_script_harness import (
+    build_standalone_malformed_contract_failure_output_lines,
+)
 from strands_agent_tui.testing.smoke_runner import (
     NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS,
     NON_MATRIX_SMOKE_WRAPPER_METADATA,
@@ -800,6 +803,12 @@ def test_standalone_follow_up_failure_fixtures_expose_target_lookup_and_failed_l
                 f"{fixture.failed_target_name} smoke failed fast: {fixture.failed_line}"
             )
         assert fixture_set.fixture_for_target("missing") is None
+
+
+def test_standalone_malformed_contract_failure_fixtures_reuse_shared_output_lines() -> None:
+    assert STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES.output_lines_by_target() == (
+        build_standalone_malformed_contract_failure_output_lines()
+    )
 
 
 def test_standalone_follow_up_failure_fixture_emits_observed_stdout_lines() -> None:

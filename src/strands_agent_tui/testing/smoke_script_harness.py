@@ -2353,6 +2353,39 @@ def _required_smoke_script_detail_with_value_prefix(
     raise AssertionError(f"no detail prefix found for {case.script_name}")
 
 
+def _smoke_script_contract_result_count(case: SmokeScriptContractCase) -> int:
+    return len(case.required_line_prefixes) + len(case.true_check_names)
+
+
+def build_standalone_malformed_contract_failure_output_lines(
+    *,
+    source_case: SmokeScriptContractCase = STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+    malformed_entry: object = DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
+    result_contract_check_name: str = "result_contract",
+    detail_contract_check_name: str = "detail_contract",
+) -> dict[str, tuple[str, str]]:
+    source_result_count = _smoke_script_contract_result_count(source_case)
+    result_preset = _build_malformed_smoke_script_result_preset(
+        source_case=source_case,
+        malformed_entry=malformed_entry,
+    )
+    detail_preset = _build_malformed_smoke_script_detail_preset(source_case=source_case)
+    missing_detail_result_name = detail_preset.missing_detail_assertion_result_name.removesuffix(
+        "_assertion"
+    )
+    return {
+        "malformed-result": (
+            f"{result_preset.assertion_message_result_name}: "
+            f"{result_preset.result_index_assertion_message(malformed_index=source_result_count)}",
+            f"{result_contract_check_name}= False",
+        ),
+        "malformed-detail": (
+            f"{missing_detail_result_name}: {detail_preset.detail_name}",
+            f"{detail_contract_check_name}= False",
+        ),
+    }
+
+
 def build_malformed_smoke_script_detail_contract(
     *,
     source_case: SmokeScriptContractCase,

@@ -743,6 +743,50 @@ class StandaloneFollowUpFailureFixtureSet:
         return tuple(cases)
 
 
+class _LazyStandaloneFollowUpFailureFixtureSet:
+    def __init__(
+        self,
+        loader: Callable[[], StandaloneFollowUpFailureFixtureSet],
+    ) -> None:
+        self._loader = loader
+        self._fixture_set: StandaloneFollowUpFailureFixtureSet | None = None
+
+    def _loaded_fixture_set(self) -> StandaloneFollowUpFailureFixtureSet:
+        if self._fixture_set is None:
+            self._fixture_set = self._loader()
+        return self._fixture_set
+
+    @property
+    def fixtures(self) -> tuple[StandaloneFollowUpFailureFixture, ...]:
+        return self._loaded_fixture_set().fixtures
+
+    @property
+    def target_names(self) -> tuple[str, ...]:
+        return self._loaded_fixture_set().target_names
+
+    def fixture_for_target(self, target_name: str) -> StandaloneFollowUpFailureFixture | None:
+        return self._loaded_fixture_set().fixture_for_target(target_name)
+
+    def require_fixture_for_target(self, target_name: str) -> StandaloneFollowUpFailureFixture:
+        return self._loaded_fixture_set().require_fixture_for_target(target_name)
+
+    def output_lines_by_target(self) -> dict[str, tuple[str, ...]]:
+        return self._loaded_fixture_set().output_lines_by_target()
+
+    def build_failure_cases(
+        self,
+        *,
+        requested_target_names: Sequence[str],
+        hint_for_failure: Callable[[str, str], str | None],
+        cli_spec: SmokeWrapperCliSpec,
+    ) -> tuple[StandaloneSmokeFailureCase, ...]:
+        return self._loaded_fixture_set().build_failure_cases(
+            requested_target_names=requested_target_names,
+            hint_for_failure=hint_for_failure,
+            cli_spec=cli_spec,
+        )
+
+
 def build_standalone_follow_up_failure_fixture_set(
     failure_output_lines_by_target: Mapping[str, Sequence[str]],
 ) -> StandaloneFollowUpFailureFixtureSet:
@@ -1122,19 +1166,6 @@ def build_standalone_docs_review_follow_up_metadata(
 STANDALONE_DOCS_PARITY_FOLLOW_UP = build_standalone_docs_parity_follow_up_metadata()
 STANDALONE_DOCS_REVIEW_FOLLOW_UP = build_standalone_docs_review_follow_up_metadata()
 
-STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES = build_standalone_follow_up_failure_fixture_set(
-    {
-        "malformed-result": (
-            "assertion_message: result[15]: ('malformed', 'value', 'extra')",
-            "result_contract= False",
-        ),
-        "malformed-detail": (
-            "missing_detail: stdout_fix_check_summary",
-            "detail_contract= False",
-        ),
-    }
-)
-
 
 STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES = build_standalone_follow_up_failure_fixture_set(
     {
@@ -1151,6 +1182,19 @@ STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES = build_standalone_follow_up_f
             "hint_before_failure_summary= False",
         ),
     }
+)
+
+
+def _build_standalone_malformed_contract_failure_fixture_set() -> StandaloneFollowUpFailureFixtureSet:
+    from .smoke_script_harness import build_standalone_malformed_contract_failure_output_lines
+
+    return build_standalone_follow_up_failure_fixture_set(
+        build_standalone_malformed_contract_failure_output_lines()
+    )
+
+
+STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES = _LazyStandaloneFollowUpFailureFixtureSet(
+    _build_standalone_malformed_contract_failure_fixture_set
 )
 
 

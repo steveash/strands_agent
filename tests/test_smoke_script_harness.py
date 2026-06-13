@@ -59,6 +59,7 @@ from strands_agent_tui.testing import (
     build_malformed_smoke_script_result_contract,
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
+    build_standalone_malformed_contract_failure_output_lines,
     build_smoke_matrix_docs_review_failure_results,
     build_review_artifact_matrix_summary_assertion_results,
     build_review_artifact_observation_results,
@@ -645,6 +646,36 @@ def test_build_malformed_smoke_script_detail_results_reuse_custom_contract_metad
     assert result_map["malformed_detail_name"] == "stdout_custom_detail"
     assert result_map["expected_detail_prefix"] == "custom detail prefix"
     assert result_map["mismatched_detail_value"] == "unexpected-custom detail prefixfixture"
+
+
+def test_build_standalone_malformed_contract_failure_output_lines_reuse_custom_contract_metadata() -> None:
+    source_case = SmokeScriptContractCase(
+        script_name="custom_follow_up_smoke",
+        runner_name="run_custom_follow_up_smoke",
+        contract=SmokeScriptContractMetadata(
+            required_line_prefixes=(
+                "stdout_custom_detail: custom detail prefix",
+                "stderr_failed_line: custom failed prefix",
+            ),
+            true_check_names=("custom_check",),
+        ),
+    )
+
+    assert build_standalone_malformed_contract_failure_output_lines(
+        source_case=source_case,
+        malformed_entry=("oops", "value", "extra"),
+        result_contract_check_name="custom_result_contract",
+        detail_contract_check_name="custom_detail_contract",
+    ) == {
+        "malformed-result": (
+            "assertion_message: result[3]: ('oops', 'value', 'extra')",
+            "custom_result_contract= False",
+        ),
+        "malformed-detail": (
+            "missing_detail: stdout_custom_detail",
+            "custom_detail_contract= False",
+        ),
+    }
 
 
 def test_build_smoke_matrix_docs_review_failure_results_reuses_shared_docs_review_contracts(
