@@ -13,7 +13,7 @@ from io import StringIO
 from pathlib import Path
 from shutil import rmtree
 from textwrap import dedent
-from typing import Any, Callable, Iterator, Literal
+from typing import Any, Callable, Iterator, Literal, TextIO
 
 from .smoke_cli_doc_artifacts import (
     load_review_matrix_summary,
@@ -47,6 +47,75 @@ class SmokeScriptRunResult:
 
     def cleanup(self) -> None:
         self.cleanup_callback()
+
+
+@dataclass(frozen=True)
+class SmokeTargetRunFailureFixture:
+    stdout_lines: tuple[str, ...] = ()
+    stderr_lines: tuple[str, ...] = ()
+    observed_lines: tuple[str, ...] = ()
+
+    @classmethod
+    def build_failed_fast(
+        cls,
+        *,
+        target_name: str,
+        failed_line: str,
+        stdout_lines: Sequence[str] = (),
+        observed_lines: Sequence[str] = (),
+    ) -> SmokeTargetRunFailureFixture:
+        return cls(
+            stdout_lines=tuple(stdout_lines),
+            stderr_lines=(f"{target_name} smoke failed fast: {failed_line}",),
+            observed_lines=tuple(observed_lines),
+        )
+
+    def emit_observed_lines(
+        self,
+        *,
+        output_line_observer: Callable[[str], None] | None = None,
+    ) -> None:
+        if output_line_observer is None:
+            return
+        for line in self.observed_lines:
+            output_line_observer(f"{line}\n")
+
+    def emit_stdout_lines(
+        self,
+        *,
+        stdout: TextIO,
+        output_line_observer: Callable[[str], None] | None = None,
+        output_line_filter: Callable[[str], bool] | None = None,
+    ) -> None:
+        for line in self.stdout_lines:
+            rendered_line = f"{line}\n"
+            if output_line_observer is not None:
+                output_line_observer(rendered_line)
+            if output_line_filter is None or output_line_filter(rendered_line):
+                print(line, file=stdout)
+        stdout.flush()
+
+    def emit_stderr_lines(self, *, stderr: TextIO) -> None:
+        for line in self.stderr_lines:
+            print(line, file=stderr)
+        stderr.flush()
+
+    def emit_failed_target_run(
+        self,
+        *,
+        stdout: TextIO,
+        stderr: TextIO,
+        output_line_observer: Callable[[str], None] | None = None,
+        output_line_filter: Callable[[str], bool] | None = None,
+    ) -> int:
+        self.emit_observed_lines(output_line_observer=output_line_observer)
+        self.emit_stdout_lines(
+            stdout=stdout,
+            output_line_observer=output_line_observer,
+            output_line_filter=output_line_filter,
+        )
+        self.emit_stderr_lines(stderr=stderr)
+        return 1
 
 
 @dataclass(frozen=True)
@@ -1777,10 +1846,18 @@ SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in "
     "`standalone_smoke.py all`;"
 )
+SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE = (
+    "RuntimeError: OPENAI_API_KEY is required for live runtime mode"
+)
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE = "standalone smoke exited with status 1"
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but "
     "`OPENAI_API_KEY` was missing;"
+)
+SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE = "render_manifest_payload= False"
+SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE = SmokeTargetRunFailureFixture(
+    observed_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE,),
+    stderr_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,),
 )
 
 SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS = SmokeMatrixDocsReviewFailureDefaults(
@@ -1966,7 +2043,9 @@ SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT = merge_smoke_script_contract_metadata(
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET.contract_metadata(
         failure_defaults=SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
         result_naming=_ALL_REVIEW_FAILURE_RESULT_NAMING,
-        failed_line_value_prefix="docs-review smoke failed fast: render_manifest_payload=False",
+        failed_line_value_prefix=detail_safe_text(
+            f"docs-review smoke failed fast: {SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE}"
+        ),
         stdout_last_line_value_prefix=SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX,
         common_matrix_summary_excluding_checks=(
             _DOCS_REVIEW_MATRIX_COMMON_FAILURE_MATRIX_SUMMARY_ASSERTION_CHECKS

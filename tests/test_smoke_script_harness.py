@@ -14,8 +14,10 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE,
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_RESULT_PRESET,
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
@@ -24,6 +26,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET,
     SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX,
@@ -47,6 +50,7 @@ from strands_agent_tui.testing import (
     SmokeScriptContractMetadata,
     SmokeScriptContractCase,
     SmokeScriptRunResult,
+    SmokeTargetRunFailureFixture,
     SmokeWrapperFailureObservation,
     assert_smoke_script_output_matches_contract,
     assert_smoke_script_results_match_contract,
@@ -144,6 +148,50 @@ def test_find_prefixed_line_index_and_detail_safe_text() -> None:
     assert find_prefixed_line_index(lines, "beta:") == 1
     assert find_prefixed_line_index(lines, "gamma:") is None
     assert detail_safe_text("render_manifest_payload= False") == "render_manifest_payload=False"
+
+
+def test_smoke_target_run_failure_fixture_emits_observed_stdout_and_stderr_lines() -> None:
+    fixture = SmokeTargetRunFailureFixture(
+        stdout_lines=("alpha= True",),
+        stderr_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,),
+        observed_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE,),
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    observed_lines: list[str] = []
+
+    exit_code = fixture.emit_failed_target_run(
+        stdout=stdout,
+        stderr=stderr,
+        output_line_observer=observed_lines.append,
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == ["alpha= True"]
+    assert stderr.getvalue().splitlines() == [SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE]
+    assert observed_lines == [
+        f"{SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE}\n",
+        "alpha= True\n",
+    ]
+
+
+def test_smoke_target_run_failure_fixture_build_failed_fast_formats_shared_stderr_line() -> None:
+    fixture = SmokeTargetRunFailureFixture.build_failed_fast(
+        target_name="docs-review",
+        failed_line=SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE,
+    )
+
+    assert fixture == SmokeTargetRunFailureFixture(
+        stderr_lines=(f"docs-review smoke failed fast: {SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE}",),
+    )
+
+
+def test_exported_missing_api_key_failure_fixture_tracks_runtime_error_and_wrapper_failure_lines() -> None:
+    assert SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE == SmokeTargetRunFailureFixture(
+        observed_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE,),
+        stderr_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,),
+    )
 
 
 def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_path: Path) -> None:

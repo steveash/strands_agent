@@ -40,14 +40,16 @@ def run_smoke_matrix_all_review_missing_api_key_smoke(*, output_stream: str = "s
         env_assignments={"STRANDS_AGENT_RUNTIME": "live"},
         env_unsets=("OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
         hook_source="""
+        from strands_agent_tui.testing import SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE
+
         def fake_run_smoke_target(target, **kwargs):
-            observer = kwargs.get('output_line_observer')
-            stderr = kwargs['stderr']
             if target.name == module.LIVE_INCLUSIVE_STANDALONE_TARGET_NAME:
-                if observer is not None:
-                    observer('RuntimeError: OPENAI_API_KEY is required for live runtime mode\\n')
-                print('standalone smoke exited with status 1', file=stderr)
-                return 1
+                return SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE.emit_failed_target_run(
+                    stdout=kwargs['stdout'],
+                    stderr=kwargs['stderr'],
+                    output_line_observer=kwargs.get('output_line_observer'),
+                    output_line_filter=kwargs.get('output_line_filter'),
+                )
             return 0
 
         module.run_smoke_target = fake_run_smoke_target

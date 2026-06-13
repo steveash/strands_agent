@@ -39,11 +39,22 @@ def run_smoke_matrix_docs_review_hint_smoke(*, output_stream: str = "stderr") ->
         **review_spec.observer_kwargs(),
         env_unsets=("STRANDS_AGENT_RUNTIME", "OPENAI_API_KEY", "STRANDS_AGENT_OPENAI_MODEL"),
         hook_source="""
+        from strands_agent_tui.testing import (
+            SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE,
+            SmokeTargetRunFailureFixture,
+        )
+
         def fake_run_smoke_target(target, **kwargs):
-            stderr = kwargs['stderr']
             if target.name == module.DOCS_REVIEW_ALL_TARGET_NAME:
-                print(f"{target.display_label} smoke failed fast: render_manifest_payload= False", file=stderr)
-                return 1
+                return SmokeTargetRunFailureFixture.build_failed_fast(
+                    target_name=target.display_label,
+                    failed_line=SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE,
+                ).emit_failed_target_run(
+                    stdout=kwargs['stdout'],
+                    stderr=kwargs['stderr'],
+                    output_line_observer=kwargs.get('output_line_observer'),
+                    output_line_filter=kwargs.get('output_line_filter'),
+                )
             return 0
 
         module.run_smoke_target = fake_run_smoke_target
