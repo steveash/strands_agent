@@ -2668,6 +2668,55 @@ def test_list_recent_sessions_surfaces_restore_badges_from_session_state(tmp_pat
     assert "restore: filter=tool, replay 2/2, draft 15c, chooser p2" in summary.render_line(1)
 
 
+def test_list_recent_sessions_surfaces_timeline_restore_cues_in_summary_and_preview(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-timeline-restore")
+    store.append_turn(
+        TurnArtifact(
+            prompt="inspect timeline state",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event("prompt_submitted", "Prompt submitted", "queued prompt"),
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "listed files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "read_file",
+                    "read file",
+                    data={"tool_name": "read_file", "result_preview": "README.md: 1-20"},
+                ),
+            ],
+            response_metadata={"mode": "fake"},
+        )
+    )
+    store.save_session_state(
+        SessionState(
+            event_filter="tool",
+            show_event_details=False,
+            show_event_data=False,
+            event_focus_index=2,
+            event_focus_expanded=True,
+        )
+    )
+
+    summary = list_recent_sessions(tmp_path)[0]
+    preview = "\n".join(summary.render_preview(visible_index=1, overall_index=1, total_matches=1))
+
+    assert summary.restore_badges == ["filter=tool", "timeline compact", "spotlight 2/2"]
+    assert summary.restored_event_filter == "tool"
+    assert summary.restored_timeline_view == "detail off / raw off"
+    assert summary.restored_timeline_focus == "event 2/2 spotlight"
+    assert "restore: filter=tool, timeline compact, spotlight 2/2" in summary.render_line(1)
+    assert "- timeline filter: tool" in preview
+    assert "- timeline view: detail off / raw off" in preview
+    assert "- timeline focus: event 2/2 spotlight" in preview
+
+
 def test_list_recent_sessions_supports_offset_for_paged_switcher_views(tmp_path: Path) -> None:
     created_ids: list[str] = []
     for index in range(MAX_RECENT_SESSIONS + 2):

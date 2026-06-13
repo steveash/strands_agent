@@ -537,18 +537,26 @@ def test_session_state_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -
             "restored_view",
             "restored_draft",
             "restored_timeline_view",
+            "restored_timeline_focus",
             "latest_visible_event",
+            "recent_session_restore_line",
+            "recent_session_restore_preview",
         ],
         check_names=[
             "session_state_restored_event_filter",
             "session_state_restored_view",
             "session_state_restored_draft",
             "session_state_restored_timeline_view",
+            "session_state_restored_timeline_focus",
             "session_state_latest_visible_event",
+            "session_state_recent_session_restore_badges",
+            "session_state_recent_session_restore_preview",
         ],
     )
     assert "restored_timeline_view: detail off / raw off" in lines
     assert "session_state_restored_timeline_view= True" in lines
+    assert "restored_timeline_focus: event 4/4, spotlight" in lines
+    assert "session_state_recent_session_restore_badges= True" in lines
 
 
 def test_live_restore_smoke_wrapper_preserves_detail_lines_and_success_exit(monkeypatch) -> None:

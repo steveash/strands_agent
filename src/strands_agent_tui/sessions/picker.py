@@ -224,6 +224,9 @@ class SessionSummary:
     session_activity_age_sort_key: int = 0
     stale_session_sort_key: int = 0
     restore_badges: list[str] = field(default_factory=list)
+    restored_event_filter: str = ""
+    restored_timeline_view: str = ""
+    restored_timeline_focus: str = ""
     draft_prompt_preview: str = ""
 
     def _focused_workspace_preview_context(self, filter_mode: str) -> tuple[str, list[str]]:
@@ -600,6 +603,9 @@ class SessionSummary:
 
         session_lines = render_selected_preview_section_lines(
             render_preview_badges_line("restore", self.restore_badges),
+            render_preview_detail_line("timeline filter", self.restored_event_filter),
+            render_preview_detail_line("timeline view", self.restored_timeline_view),
+            render_preview_detail_line("timeline focus", self.restored_timeline_focus),
             render_preview_detail_line("session age", self.stale_session_summary),
             render_preview_detail_line("draft", self.draft_prompt_preview),
             render_preview_detail_line("last prompt", self.last_prompt_preview),
@@ -916,6 +922,9 @@ def _ordered_recent_sessions(
             "shell-test",
             restored_only=True,
         )
+        restored_event_filter = _restored_event_filter_label(session_state)
+        restored_timeline_view = _restored_timeline_view_label(session_state)
+        restored_timeline_focus = _restored_timeline_focus_label(session_state, turns)
 
         summary = SessionSummary(
             session_id=store.session_id,
@@ -1043,7 +1052,10 @@ def _ordered_recent_sessions(
             pending_approval_age_sort_key=int(pending_approval_age_seconds or 0),
             session_activity_age_sort_key=session_activity_age_sort_key,
             stale_session_sort_key=int(stale_session_sort_key),
-            restore_badges=_restore_badges(session_state, len(turns)),
+            restore_badges=_restore_badges(session_state, len(turns), turns),
+            restored_event_filter=restored_event_filter,
+            restored_timeline_view=restored_timeline_view,
+            restored_timeline_focus=restored_timeline_focus,
             draft_prompt_preview=draft_prompt_preview,
         )
         summary.attention_reason_summary = _attention_reason_summary(summary)
@@ -4547,11 +4559,24 @@ def _sort_key(item: tuple[float, str, SessionSummary], sort_mode: str) -> tuple[
     return (activity_timestamp, session_id)
 
 
-def _restore_badges(state: SessionState, turn_count: int) -> list[str]:
+def _restore_badges(state: SessionState, turn_count: int, turns: Sequence[TurnArtifact]) -> list[str]:
     badges: list[str] = []
 
-    if state.event_filter != "all":
-        badges.append(f"filter={state.event_filter}")
+    restored_event_filter = _restored_event_filter_label(state)
+    if restored_event_filter:
+        badges.append(f"filter={restored_event_filter}")
+
+    if not state.show_event_details and not state.show_event_data:
+        badges.append("timeline compact")
+    elif not state.show_event_details:
+        badges.append("timeline detail-off")
+    elif not state.show_event_data:
+        badges.append("timeline raw-off")
+
+    restored_timeline_focus = _restored_timeline_focus_label(state, turns)
+    if restored_timeline_focus:
+        focus_value = restored_timeline_focus.split()[1]
+        badges.append(f"{'spotlight' if state.event_focus_expanded else 'focus'} {focus_value}")
 
     if state.history_focus_index is not None:
         if turn_count > 0 and 0 <= state.history_focus_index < turn_count:
@@ -4569,6 +4594,43 @@ def _restore_badges(state: SessionState, turn_count: int) -> list[str]:
         badges.append(chooser_badge)
 
     return badges
+
+
+def _flatten_turn_events(turns: Sequence[TurnArtifact]) -> list[object]:
+    return [event for turn in turns for event in turn.events]
+
+
+def _restored_event_filter_label(state: SessionState) -> str:
+    event_filter = str(state.event_filter or "all")
+    return event_filter if event_filter != "all" else ""
+
+
+def _restored_timeline_view_label(state: SessionState) -> str:
+    if state.show_event_details is True and state.show_event_data is True:
+        return ""
+    return f"detail {'on' if state.show_event_details else 'off'} / raw {'on' if state.show_event_data else 'off'}"
+
+
+def _restored_timeline_focus_label(state: SessionState, turns: Sequence[TurnArtifact]) -> str:
+    focus_index = state.event_focus_index
+    if focus_index is None or focus_index < 0:
+        return ""
+
+    events = _flatten_turn_events(turns)
+    if focus_index >= len(events):
+        return ""
+
+    event_filter = _restored_event_filter_label(state) or "all"
+    filtered_indices = [
+        index for index, event in enumerate(events) if event_filter == "all" or event.category == event_filter
+    ]
+    if focus_index not in filtered_indices:
+        return ""
+
+    label = f"event {filtered_indices.index(focus_index) + 1}/{len(filtered_indices)}"
+    if state.event_focus_expanded:
+        label += " spotlight"
+    return label
 
 
 def _truncate(text: str, limit: int) -> str:
