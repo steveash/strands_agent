@@ -18,6 +18,7 @@ from strands_agent_tui.sessions import SessionArtifactStore, render_session_pick
 from strands_agent_tui.testing import (
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
+    SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME,
     SESSION_RECOVERY_SMOKE_SELECTION_CASES,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_SELECTION_CASES,
@@ -31,6 +32,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_WRAPPER,
     SMOKE_SCRIPT_CONTRACT_CASES,
     SMOKE_WRAPPER_CLI_SPECS,
+    SMOKE_WRAPPER_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME,
     STANDALONE_DOCS_PARITY_FOLLOW_UP,
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_SMOKE_SELECTION_CASES,
@@ -1273,7 +1275,9 @@ def test_smoke_cli_docs_artifacts_smoke_invalid_choice_errors_show_public_cli_ch
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target="docs",
-        expected_choices="{standalone_smoke,session_triage_smoke,session_recovery_smoke,smoke_matrix,all}",
+        expected_choices=SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME[
+            "smoke_cli_docs_artifacts_smoke"
+        ],
     )
 
 
@@ -1449,7 +1453,9 @@ def test_smoke_cli_docs_smoke_invalid_choice_errors_show_public_cli_choices(caps
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target="docs",
-        expected_choices="{standalone_smoke,session_triage_smoke,session_recovery_smoke,smoke_matrix,all}",
+        expected_choices=SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME[
+            "smoke_cli_docs_smoke"
+        ],
     )
 
 
@@ -1729,7 +1735,9 @@ def test_smoke_cli_docs_render_invalid_choice_errors_show_public_cli_choices(cap
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target="docs",
-        expected_choices="{standalone_smoke,session_triage_smoke,session_recovery_smoke,smoke_matrix,all}",
+        expected_choices=SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME[
+            "smoke_cli_docs_render"
+        ],
     )
 
 
@@ -2293,7 +2301,9 @@ def test_smoke_cli_docs_fix_invalid_choice_errors_show_public_cli_choices(capsys
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target="docs",
-        expected_choices="{standalone_smoke,session_triage_smoke,session_recovery_smoke,smoke_matrix,all}",
+        expected_choices=SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME[
+            "smoke_cli_docs_fix"
+        ],
     )
 
 
@@ -2344,7 +2354,9 @@ def test_smoke_matrix_hides_internal_bundle_names_from_cli_choices(capsys) -> No
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target="standalone-all",
-        expected_choices="{standalone,triage,recovery,docs-review,local,all,review,all-review}",
+        expected_choices=SMOKE_WRAPPER_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME[
+            "smoke_matrix"
+        ],
     )
 
 
@@ -2373,25 +2385,16 @@ def test_smoke_cli_docs_smoke_reports_exact_section_diffs_without_missing_snippe
 
 
 @pytest.mark.parametrize(
-    ("script_name", "invalid_target", "expected_choices"),
+    ("script_name", "invalid_target"),
     [
-        (
-            "standalone_smoke",
-            "standalone-local",
-            "{summary-utils,shell-tool,replay,timeline,docs,docs-artifacts,docs-rerun-hint,malformed-result,malformed-detail,matrix-artifact-roots,matrix-all-review-order,matrix-all-review-missing-api-key,matrix-docs-review-hint,live,local,contract-negative,docs-contract,docs-parity-only,docs-focused,docs-review-only,all}",
-        ),
-        ("session_triage_smoke", "local", "{picker,switcher,both,all}"),
-        (
-            "session_recovery_smoke",
-            "both",
-            "{approval,approval-restart,session-state,live-restore,live-restore-denied,all}",
-        ),
+        ("standalone_smoke", "standalone-local"),
+        ("session_triage_smoke", "local"),
+        ("session_recovery_smoke", "both"),
     ],
 )
 def test_smoke_wrapper_invalid_choice_errors_show_public_cli_choices(
     script_name: str,
     invalid_target: str,
-    expected_choices: str,
     capsys,
 ) -> None:
     module = _load_script_module(script_name)
@@ -2405,7 +2408,7 @@ def test_smoke_wrapper_invalid_choice_errors_show_public_cli_choices(
     assert matches_public_cli_invalid_choice(
         captured.err,
         invalid_target=invalid_target,
-        expected_choices=expected_choices,
+        expected_choices=SMOKE_WRAPPER_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME[script_name],
     )
 
 

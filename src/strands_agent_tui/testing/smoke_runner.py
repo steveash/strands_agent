@@ -228,6 +228,9 @@ class SmokeTargetSelector:
     def choices(self) -> tuple[str, ...]:
         return tuple(self._all_choice_target_names().keys())
 
+    def invalid_choice_expected_choices(self) -> str:
+        return format_cli_choices(self.choices)
+
     def resolve_target_names(self, requested_target_name: str | None = None) -> list[str]:
         target_name = self.default_target_name if requested_target_name is None else requested_target_name
         choice_target_names = self._all_choice_target_names()
@@ -328,6 +331,10 @@ def build_smoke_cli_parser(
     return parser
 
 
+def format_cli_choices(choices: Sequence[str]) -> str:
+    return "{" + ",".join(choices) + "}"
+
+
 @dataclass(frozen=True)
 class SmokeWrapperCliSpec:
     script_name: str
@@ -403,6 +410,9 @@ class SmokeWrapperCliSpec:
 
     def default_targets(self, *, script_dir: Path) -> tuple[SmokeScriptTarget, ...]:
         return self.resolve_targets(script_dir=script_dir)
+
+    def invalid_choice_expected_choices(self) -> str:
+        return self._build_doc_selector().invalid_choice_expected_choices()
 
     def build_parser(self, *, script_dir: Path) -> argparse.ArgumentParser:
         selector = self.build_target_selector(script_dir=script_dir)
@@ -1756,6 +1766,26 @@ SMOKE_WRAPPER_CLI_SPECS = (
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
     SMOKE_MATRIX_CLI_SPEC,
 )
+
+
+def build_smoke_wrapper_invalid_choice_expected_choices_registry(
+    specs: Iterable[SmokeWrapperCliSpec],
+) -> dict[str, str]:
+    registry: dict[str, str] = {}
+    for spec in specs:
+        if spec.script_name in registry:
+            raise ValueError(
+                f"duplicate smoke wrapper invalid-choice registry entry {spec.script_name!r}"
+            )
+        registry[spec.script_name] = spec.invalid_choice_expected_choices()
+    return registry
+
+
+SMOKE_WRAPPER_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME = (
+    build_smoke_wrapper_invalid_choice_expected_choices_registry(SMOKE_WRAPPER_CLI_SPECS)
+)
+
+
 SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME = {spec.script_name: spec for spec in SMOKE_WRAPPER_CLI_SPECS}
 NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS = tuple(
     spec for spec in SMOKE_WRAPPER_CLI_SPECS if spec.script_name != SMOKE_MATRIX_CLI_SPEC.script_name

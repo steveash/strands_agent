@@ -13,6 +13,7 @@ from .smoke_runner import (
     SmokeTargetSelector,
     SmokeWrapperCliSpec,
     build_smoke_cli_parser,
+    format_cli_choices,
     smoke_wrapper_cli_spec,
 )
 
@@ -140,6 +141,9 @@ def build_smoke_cli_doc_audit_selector() -> SmokeTargetSelector:
 SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR = build_smoke_cli_doc_audit_selector()
 SMOKE_CLI_DOC_AUDIT_TARGET_NAMES = tuple(SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.targets)
 DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES = tuple(SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.resolve_target_names())
+SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES = format_cli_choices(
+    SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.choices
+)
 
 
 def build_smoke_cli_doc_audit_examples() -> tuple[SmokeCliExample, ...]:
@@ -164,6 +168,16 @@ def build_smoke_cli_doc_audit_examples() -> tuple[SmokeCliExample, ...]:
 SMOKE_CLI_DOC_AUDIT_EXAMPLES = build_smoke_cli_doc_audit_examples()
 SMOKE_CLI_DOC_RENDER_SCRIPT_NAME = "smoke_cli_docs_render"
 SMOKE_CLI_DOC_FIX_SCRIPT_NAME = "smoke_cli_docs_fix"
+SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME = "smoke_cli_docs_artifacts_smoke"
+SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME = {
+    script_name: SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES
+    for script_name in (
+        SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME,
+        SMOKE_CLI_DOC_RENDER_SCRIPT_NAME,
+        SMOKE_CLI_DOC_FIX_SCRIPT_NAME,
+        SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME,
+    )
+}
 
 
 def build_smoke_cli_doc_render_examples() -> tuple[SmokeCliExample, ...]:

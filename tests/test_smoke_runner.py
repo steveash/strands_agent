@@ -23,6 +23,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SMOKE_MATRIX_SELECTION_CASES,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
+    SMOKE_WRAPPER_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME,
     STANDALONE_ALL_TARGET_NAMES,
     STANDALONE_CONTRACT_NEGATIVE_TARGET_NAMES,
     STANDALONE_DOCS_CONTRACT_TARGET_NAMES,
@@ -48,6 +49,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeWrapperSelectionCase,
     _select_alias_target_names,
     build_smoke_cli_parser,
+    build_smoke_wrapper_invalid_choice_expected_choices_registry,
     build_standalone_follow_up_failure_run_smoke_target,
     build_standalone_docs_contract_failure_cases,
     build_standalone_docs_review_follow_up_failure_cases,
@@ -557,6 +559,21 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
     assert "demo_smoke.py first # single target" in help_text
 
 
+def test_smoke_target_selector_invalid_choice_expected_choices_follow_choice_order(tmp_path) -> None:
+    first_script = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
+    second_script = _write_script(tmp_path, "second.py", "print('second_check= True', flush=True)\n")
+    selector = SmokeTargetSelector(
+        targets={
+            "first": SmokeScriptTarget("first", first_script),
+            "second": SmokeScriptTarget("second", second_script),
+        },
+        default_target_name="both",
+        alias_target_names={"both": ("first", "second")},
+    )
+
+    assert selector.invalid_choice_expected_choices() == "{first,second,both}"
+
+
 def test_smoke_wrapper_cli_spec_registry_tracks_shared_order_and_metadata() -> None:
     assert SMOKE_WRAPPER_CLI_SPECS == (
         STANDALONE_SMOKE_CLI_SPEC,
@@ -596,6 +613,12 @@ def test_smoke_wrapper_cli_spec_registry_tracks_shared_order_and_metadata() -> N
         "[standalone-smoke] summary:",
         "[session-triage-smoke] summary:",
         "[session-recovery-smoke] summary:",
+    )
+    assert SMOKE_WRAPPER_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME == (
+        build_smoke_wrapper_invalid_choice_expected_choices_registry(SMOKE_WRAPPER_CLI_SPECS)
+    )
+    assert SMOKE_WRAPPER_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME["smoke_matrix"] == (
+        "{standalone,triage,recovery,docs-review,local,all,review,all-review}"
     )
 
 
