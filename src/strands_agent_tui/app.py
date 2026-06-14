@@ -68,6 +68,7 @@ class StrandsAgentApp(App):
         Binding("ctrl+up", "focus_older_event", "Older event"),
         Binding("ctrl+down", "focus_newer_event", "Newer event"),
         Binding("ctrl+o", "toggle_event_spotlight", "Toggle event spotlight"),
+        Binding("ctrl+l", "focus_latest_event", "Latest event"),
     ]
 
     CSS = """
@@ -691,11 +692,17 @@ class StrandsAgentApp(App):
             self.event_focus_index = filtered_indices[-1]
             self.event_focus_expanded = True
         elif self.event_focus_expanded:
-            self.event_focus_index = None
-            self.event_focus_expanded = False
+            self._clear_event_focus()
         else:
             self.event_focus_expanded = True
 
+        self._persist_session_view_state()
+        self.query_one("#events", Static).update(self.render_events())
+
+    def action_focus_latest_event(self) -> None:
+        if self.event_focus_index is None and not self.event_focus_expanded:
+            return
+        self._clear_event_focus()
         self._persist_session_view_state()
         self.query_one("#events", Static).update(self.render_events())
 
@@ -1182,8 +1189,7 @@ class StrandsAgentApp(App):
     def _reconcile_event_focus_for_filter(self) -> None:
         filtered_indices = self._filtered_event_indices()
         if self.event_focus_index not in filtered_indices:
-            self.event_focus_index = None
-            self.event_focus_expanded = False
+            self._clear_event_focus()
 
     def _move_event_focus(self, direction: int) -> None:
         filtered_indices = self._filtered_event_indices()
@@ -1200,6 +1206,10 @@ class StrandsAgentApp(App):
         self.event_focus_expanded = True
         self._persist_session_view_state()
         self.query_one("#events", Static).update(self.render_events())
+
+    def _clear_event_focus(self) -> None:
+        self.event_focus_index = None
+        self.event_focus_expanded = False
 
     def _event_focus_metadata(self) -> dict[str, object]:
         filtered_indices = self._filtered_event_indices()

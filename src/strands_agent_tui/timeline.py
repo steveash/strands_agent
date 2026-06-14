@@ -7,7 +7,7 @@ from strands_agent_tui.runtime import RuntimeEvent
 EVENT_FILTER_MODES = frozenset({"all", "runtime", "tool", "failure", "persistence", "intervention"})
 TIMELINE_KEYS_LINE = (
     "Keys: F1 all, F2 runtime, F3 tool, F4 failure, F5 persistence, F12 intervention, "
-    "Ctrl+T detail, Ctrl+R raw, Ctrl+Up older event, Ctrl+Down newer event, Ctrl+O spotlight"
+    "Ctrl+T detail, Ctrl+R raw, Ctrl+Up older event, Ctrl+Down newer event, Ctrl+O spotlight, Ctrl+L latest"
 )
 
 

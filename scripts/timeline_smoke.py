@@ -48,6 +48,7 @@ def main() -> int:
         focused_event_index=1,
         focus_expanded=True,
     )
+    latest_timeline = render_event_timeline(events, event_filter="all", show_details=False, show_data=False)
 
     print("FULL TIMELINE")
     print(full_timeline)
@@ -59,6 +60,8 @@ def main() -> int:
     print(compact_timeline)
     print("\nSPOTLIGHT VIEW")
     print(spotlight_timeline)
+    print("\nLATEST VIEW")
+    print(latest_timeline)
 
     return emit_smoke_results(
         [
@@ -92,10 +95,17 @@ def main() -> int:
                 and "summary: prompt 27 chars" in spotlight_timeline
                 and "Queued the operator prompt for the fake Strands runtime." not in spotlight_timeline,
             ),
+            (
+                "timeline_latest_shortcut",
+                "Focus: latest" in latest_timeline
+                and "Ctrl+L latest" in latest_timeline
+                and "Produced a deterministic fake-runtime answer for the timeline smoke walkthrough." not in latest_timeline,
+            ),
             ("runtime_timeline_view", runtime_timeline),
             ("persistence_timeline_view", persistence_timeline),
             ("compact_timeline_view", compact_timeline),
             ("spotlight_timeline_view", spotlight_timeline),
+            ("latest_timeline_view", latest_timeline),
         ]
     )
 

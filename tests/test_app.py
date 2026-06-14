@@ -510,6 +510,47 @@ async def test_timeline_event_spotlight_restores_selected_event_detail_in_compac
 
 
 @pytest.mark.asyncio
+async def test_timeline_latest_shortcut_clears_spotlight_and_restores_latest_view(tmp_path: Path) -> None:
+    artifact_store = SessionArtifactStore(tmp_path, session_id="timeline-latest-session")
+    app = StrandsAgentApp(
+        runtime=FakeStrandsRuntime(),
+        config=AppConfig(
+            runtime_mode="fake",
+            openai_model="gpt-4o-mini",
+            workspace_root=".",
+            artifacts_root=str(tmp_path),
+        ),
+        artifact_store=artifact_store,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("l", "i", "s", "t", " ", "f", "i", "l", "e", "s", "enter")
+        await pilot.pause()
+        app.action_toggle_event_details()
+        app.action_toggle_event_data()
+        app.action_set_event_filter("tool")
+        app.action_focus_older_event()
+        await pilot.pause()
+
+        await pilot.press("ctrl+l")
+        await pilot.pause()
+
+        events = str(app.query_one("#events").render())
+        stored_state = SessionArtifactStore(tmp_path, session_id="timeline-latest-session").load_session_state()
+
+        assert "Filter: tool (2/6 events)" in events
+        assert "View: detail off | raw off" in events
+        assert "Focus: latest" in events
+        assert ">1. [" not in events
+        assert "   Deterministic fake tool event for workspace inspection." not in events
+        assert "data: source='fake_runtime', tool_name='list_files'" not in events
+        assert stored_state is not None
+        assert stored_state.event_filter == "tool"
+        assert stored_state.event_focus_index is None
+        assert stored_state.event_focus_expanded is False
+
+
+@pytest.mark.asyncio
 async def test_app_renders_pending_approval_banner_for_risky_mutation(tmp_path: Path) -> None:
     artifact_store = SessionArtifactStore(tmp_path, session_id="confirm-session")
     app = StrandsAgentApp(

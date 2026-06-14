@@ -462,6 +462,7 @@ def test_timeline_smoke_emits_runtime_and_persistence_summary_checks(monkeypatch
             "persistence_timeline_view",
             "compact_timeline_view",
             "spotlight_timeline_view",
+            "latest_timeline_view",
         ],
         check_names=[
             "timeline_runtime_summary",
@@ -469,6 +470,7 @@ def test_timeline_smoke_emits_runtime_and_persistence_summary_checks(monkeypatch
             "timeline_filter_counts",
             "timeline_compact_toggle",
             "timeline_spotlight_focus",
+            "timeline_latest_shortcut",
         ],
     )
     assert "timeline_runtime_summary= True" in lines
@@ -476,6 +478,7 @@ def test_timeline_smoke_emits_runtime_and_persistence_summary_checks(monkeypatch
     assert "timeline_filter_counts= True" in lines
     assert "timeline_compact_toggle= True" in lines
     assert "timeline_spotlight_focus= True" in lines
+    assert "timeline_latest_shortcut= True" in lines
     assert "runtime_timeline_view: Event Timeline" in text
     assert "summary: response fake-strands/fake | pending 0" in text
     assert "persistence_timeline_view: Event Timeline" in text

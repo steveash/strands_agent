@@ -137,6 +137,20 @@ def test_render_event_timeline_spotlights_single_event_in_compact_view() -> None
     assert "Produced a deterministic fake-runtime answer." not in rendered
 
 
+def test_render_event_timeline_includes_latest_shortcut_in_key_legend() -> None:
+    event = runtime_event(
+        kind="response_completed",
+        title="Fake runtime response ready",
+        detail="Produced a deterministic fake-runtime answer.",
+        data={"provider": "fake-strands", "mode": "fake", "pending_count": 0},
+    )
+
+    rendered = render_event_timeline([event], show_details=False, show_data=False)
+
+    assert "Focus: latest" in rendered
+    assert "Ctrl+L latest" in rendered
+
+
 def test_render_event_timeline_preserves_empty_state() -> None:
     rendered = render_event_timeline([], event_filter="intervention")
 
