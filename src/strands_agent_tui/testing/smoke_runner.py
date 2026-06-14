@@ -655,6 +655,10 @@ class StandaloneFollowUpFailureFixture:
         selected_target_name = self.failed_target_name if target_name is None else target_name
         return f"{selected_target_name} smoke failed fast: {self.failed_line}"
 
+    def exited_with_status_message(self, exit_code: int, *, target_name: str | None = None) -> str:
+        selected_target_name = self.failed_target_name if target_name is None else target_name
+        return f"{selected_target_name} smoke exited with status {exit_code}"
+
     def emit_stdout_lines(
         self,
         *,
@@ -669,6 +673,25 @@ class StandaloneFollowUpFailureFixture:
             output_line_filter=output_line_filter,
         )
 
+    def emit_target_run(
+        self,
+        *,
+        stdout: TextIO,
+        stderr: TextIO,
+        stderr_message: str,
+        exit_code: int = 1,
+        output_line_observer: Callable[[str], None] | None = None,
+        output_line_filter: SmokeOutputLineFilter | None = None,
+    ) -> int:
+        self.emit_stdout_lines(
+            stdout=stdout,
+            output_line_observer=output_line_observer,
+            output_line_filter=output_line_filter,
+        )
+        print(stderr_message, file=stderr)
+        stderr.flush()
+        return exit_code
+
     def emit_failed_target_run(
         self,
         *,
@@ -678,32 +701,53 @@ class StandaloneFollowUpFailureFixture:
         output_line_filter: SmokeOutputLineFilter | None = None,
         target_name: str | None = None,
     ) -> int:
-        self.emit_stdout_lines(
+        return self.emit_target_run(
             stdout=stdout,
+            stderr=stderr,
+            stderr_message=self.failed_fast_message(target_name=target_name),
             output_line_observer=output_line_observer,
             output_line_filter=output_line_filter,
         )
-        print(self.failed_fast_message(target_name=target_name), file=stderr)
-        stderr.flush()
-        return 1
+
+
+def _combine_output_line_filters(
+    primary: SmokeOutputLineFilter | None,
+    secondary: SmokeOutputLineFilter | None,
+) -> SmokeOutputLineFilter | None:
+    if primary is None:
+        return secondary
+    if secondary is None:
+        return primary
+    return lambda line: primary(line) and secondary(line)
 
 
 def build_standalone_follow_up_failure_run_smoke_target(
     fixture: StandaloneFollowUpFailureFixture,
     *,
     failed_target_name: str | None = None,
+    stderr_message: str | None = None,
+    exit_code: int = 1,
+    output_line_filter: SmokeOutputLineFilter | None = None,
 ) -> Callable[[SmokeScriptTarget], int]:
     selected_target_name = fixture.failed_target_name if failed_target_name is None else failed_target_name
 
     def fake_run_smoke_target(target: SmokeScriptTarget, **kwargs: object) -> int:
         if target.name != selected_target_name:
             return 0
-        return fixture.emit_failed_target_run(
+        return fixture.emit_target_run(
             stdout=kwargs["stdout"],
             stderr=kwargs["stderr"],
+            stderr_message=(
+                fixture.failed_fast_message(target_name=target.name)
+                if stderr_message is None
+                else stderr_message
+            ),
+            exit_code=exit_code,
             output_line_observer=kwargs.get("output_line_observer"),
-            output_line_filter=kwargs.get("output_line_filter"),
-            target_name=target.name,
+            output_line_filter=_combine_output_line_filters(
+                kwargs.get("output_line_filter"),
+                output_line_filter,
+            ),
         )
 
     return fake_run_smoke_target

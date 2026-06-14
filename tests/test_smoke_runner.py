@@ -876,6 +876,32 @@ def test_standalone_follow_up_failure_fixture_emit_failed_target_run_reuses_shar
     assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
 
 
+def test_standalone_follow_up_failure_fixture_emit_target_run_supports_custom_exit_message() -> None:
+    fixture = StandaloneFollowUpFailureFixture(
+        failed_target_name="live",
+        stdout_lines=(
+            "live_runtime_error: RuntimeError: OPENAI_API_KEY is required for live runtime mode",
+            "live_runtime_requested= True",
+        ),
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    observed_lines: list[str] = []
+
+    exit_code = fixture.emit_target_run(
+        stdout=stdout,
+        stderr=stderr,
+        stderr_message=fixture.exited_with_status_message(1),
+        output_line_observer=observed_lines.append,
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue().splitlines() == list(fixture.stdout_lines)
+    assert stderr.getvalue().strip() == fixture.exited_with_status_message(1)
+    assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
+
+
 def test_build_standalone_follow_up_failure_run_smoke_target_reuses_fixture_emission_path(
     tmp_path,
 ) -> None:
@@ -899,6 +925,39 @@ def test_build_standalone_follow_up_failure_run_smoke_target_reuses_fixture_emis
     assert exit_code == 1
     assert stdout.getvalue().splitlines() == [fixture.stdout_line(-1)]
     assert stderr.getvalue().strip() == fixture.failed_fast_message()
+    assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
+
+
+def test_build_standalone_follow_up_failure_run_smoke_target_supports_custom_exit_message_and_filter(
+    tmp_path,
+) -> None:
+    fixture = StandaloneFollowUpFailureFixture(
+        failed_target_name="live",
+        stdout_lines=(
+            "provider=fake-strands mode=fake",
+            "live_runtime_requested= False",
+        ),
+    )
+    fake_run_smoke_target = build_standalone_follow_up_failure_run_smoke_target(
+        fixture,
+        stderr_message=fixture.exited_with_status_message(1),
+        output_line_filter=lambda _line: False,
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    observed_lines: list[str] = []
+
+    exit_code = fake_run_smoke_target(
+        SmokeScriptTarget("live", tmp_path / "unused.py"),
+        stdout=stdout,
+        stderr=stderr,
+        output_line_observer=observed_lines.append,
+    )
+
+    assert exit_code == 1
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue().strip() == fixture.exited_with_status_message(1)
     assert observed_lines == [f"{line}\n" for line in fixture.stdout_lines]
 
 
