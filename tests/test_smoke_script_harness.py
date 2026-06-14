@@ -42,6 +42,7 @@ from strands_agent_tui.testing import (
     STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES,
     STANDALONE_DOCS_RERUN_HINT_CONTRACT,
     STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
+    STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES,
     SmokeMatrixDocsReviewFailureDefaults,
     SmokeMatrixDocsReviewFailureObservation,
     SmokeMatrixDocsReviewFailureResultPreset,
@@ -60,6 +61,7 @@ from strands_agent_tui.testing import (
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
     build_standalone_malformed_contract_failure_output_lines,
+    standalone_malformed_contract_failure_check_name,
     build_smoke_matrix_docs_review_failure_results,
     build_review_artifact_matrix_summary_assertion_results,
     build_review_artifact_observation_results,
@@ -648,6 +650,18 @@ def test_build_malformed_smoke_script_detail_results_reuse_custom_contract_metad
     assert result_map["mismatched_detail_value"] == "unexpected-custom detail prefixfixture"
 
 
+def test_standalone_malformed_contract_failure_check_name_derives_default_registry() -> None:
+    assert STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES == {
+        "malformed-result": "result_contract",
+        "malformed-detail": "detail_contract",
+    }
+    assert standalone_malformed_contract_failure_check_name("malformed-result") == "result_contract"
+    assert standalone_malformed_contract_failure_check_name("malformed-detail") == "detail_contract"
+    with pytest.raises(ValueError, match="unknown malformed smoke target"):
+        standalone_malformed_contract_failure_check_name("docs-rerun-hint")
+
+
+
 def test_build_standalone_malformed_contract_failure_output_lines_reuse_custom_contract_metadata() -> None:
     source_case = SmokeScriptContractCase(
         script_name="custom_follow_up_smoke",
@@ -674,6 +688,35 @@ def test_build_standalone_malformed_contract_failure_output_lines_reuse_custom_c
         "malformed-detail": (
             "missing_detail: stdout_custom_detail",
             "custom_detail_contract= False",
+        ),
+    }
+
+
+
+def test_build_standalone_malformed_contract_failure_output_lines_reuse_shared_check_names_by_default() -> None:
+    source_case = SmokeScriptContractCase(
+        script_name="custom_follow_up_smoke",
+        runner_name="run_custom_follow_up_smoke",
+        contract=SmokeScriptContractMetadata(
+            required_line_prefixes=(
+                "stdout_custom_detail: custom detail prefix",
+                "stderr_failed_line: custom failed prefix",
+            ),
+            true_check_names=("custom_check",),
+        ),
+    )
+
+    assert build_standalone_malformed_contract_failure_output_lines(
+        source_case=source_case,
+        malformed_entry=("oops", "value", "extra"),
+    ) == {
+        "malformed-result": (
+            "assertion_message: result[3]: ('oops', 'value', 'extra')",
+            f"{STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES['malformed-result']}= False",
+        ),
+        "malformed-detail": (
+            "missing_detail: stdout_custom_detail",
+            f"{STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES['malformed-detail']}= False",
         ),
     }
 

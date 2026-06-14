@@ -2357,13 +2357,35 @@ def _smoke_script_contract_result_count(case: SmokeScriptContractCase) -> int:
     return len(case.required_line_prefixes) + len(case.true_check_names)
 
 
+def standalone_malformed_contract_failure_check_name(target_name: str) -> str:
+    malformed_prefix = "malformed-"
+    if not target_name.startswith(malformed_prefix):
+        raise ValueError(f"unknown malformed smoke target {target_name!r}")
+    target_suffix = target_name.removeprefix(malformed_prefix)
+    if not target_suffix:
+        raise ValueError(f"unknown malformed smoke target {target_name!r}")
+    return f"{target_suffix.replace('-', '_')}_contract"
+
+
+STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES = {
+    target_name: standalone_malformed_contract_failure_check_name(target_name)
+    for target_name in ("malformed-result", "malformed-detail")
+}
+
+
 def build_standalone_malformed_contract_failure_output_lines(
     *,
     source_case: SmokeScriptContractCase = STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
     malformed_entry: object = DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
-    result_contract_check_name: str = "result_contract",
-    detail_contract_check_name: str = "detail_contract",
+    result_contract_check_name: str | None = None,
+    detail_contract_check_name: str | None = None,
 ) -> dict[str, tuple[str, str]]:
+    result_contract_check_name = result_contract_check_name or (
+        STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES["malformed-result"]
+    )
+    detail_contract_check_name = detail_contract_check_name or (
+        STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES["malformed-detail"]
+    )
     source_result_count = _smoke_script_contract_result_count(source_case)
     result_preset = _build_malformed_smoke_script_result_preset(
         source_case=source_case,
