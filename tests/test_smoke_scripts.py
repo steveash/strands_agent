@@ -23,6 +23,7 @@ from strands_agent_tui.testing import (
     SESSION_TRIAGE_SMOKE_SELECTION_CASES,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
+    SMOKE_MATRIX_SELECTION_CASES,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
@@ -2621,68 +2622,8 @@ def test_smoke_matrix_all_review_emits_distinct_artifact_location_after_docs_rev
     ]
 
 
-@pytest.mark.parametrize(
-    ("argv", "expected_names", "expected_args"),
-    [
-        (["standalone"], ["standalone-local"], [()]),
-        (["triage"], ["triage"], [()]),
-        (["recovery"], ["recovery"], [()]),
-        (["all-review"], ["standalone-all", "triage", "recovery", "docs-review-all"], [
-            ("all",),
-            (),
-            (),
-            (
-                "all",
-                "--output-dir",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
-                "--bundle-index-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/index.json",
-                "--drifted-readme-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/README-drifted.md",
-                "--render-output-dir",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/rendered",
-                "--render-manifest-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-manifest.json",
-                "--render-diff-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/render-review.patch",
-                "--fix-check-json-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-check.json",
-                "--fix-repair-json-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-repair.json",
-                "--fix-post-check-json-path",
-                "artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review/fix-post-check.json",
-            ),
-        ]),
-        (
-            ["docs-review"],
-            ["docs-review"],
-            [
-                (
-                    "all",
-                    "--output-dir",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review",
-                    "--bundle-index-path",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/index.json",
-                    "--drifted-readme-path",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/README-drifted.md",
-                    "--render-output-dir",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/rendered",
-                    "--render-manifest-path",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-manifest.json",
-                    "--render-diff-path",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/render-review.patch",
-                    "--fix-check-json-path",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-check.json",
-                    "--fix-repair-json-path",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-repair.json",
-                    "--fix-post-check-json-path",
-                    "artifacts/smoke-cli-docs-artifacts/smoke-matrix-review/fix-post-check.json",
-                )
-            ],
-        ),
-    ],
-)
-def test_smoke_matrix_single_bundle_target_selection(monkeypatch, argv, expected_names, expected_args) -> None:
+@pytest.mark.parametrize("case", SMOKE_MATRIX_SELECTION_CASES, ids=smoke_wrapper_selection_case_id)
+def test_smoke_matrix_single_bundle_target_selection(monkeypatch, case: SmokeWrapperSelectionCase) -> None:
     smoke_matrix = _load_script_module("smoke_matrix")
 
     seen = {}
@@ -2694,12 +2635,12 @@ def test_smoke_matrix_single_bundle_target_selection(monkeypatch, argv, expected
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
 
-    exit_code = smoke_matrix.main(argv)
+    exit_code = smoke_matrix.main(list(case.argv))
 
     assert exit_code == 0
     assert seen == {
-        "names": expected_names,
-        "args": expected_args,
+        "names": list(case.expected_target_names),
+        "args": list(case.expected_target_args),
     }
 
 

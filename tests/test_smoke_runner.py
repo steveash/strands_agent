@@ -20,6 +20,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SESSION_TRIAGE_SMOKE_CLI_SPEC,
     SESSION_TRIAGE_SMOKE_SELECTION_CASES,
     SESSION_TRIAGE_SMOKE_WRAPPER,
+    SMOKE_MATRIX_SELECTION_CASES,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
     STANDALONE_ALL_TARGET_NAMES,
@@ -800,6 +801,14 @@ def test_shared_smoke_wrapper_selection_cases_track_cli_spec_resolution() -> Non
     assert [case.expected_target_names for case in SESSION_RECOVERY_SMOKE_SELECTION_CASES] == [
         SESSION_RECOVERY_SMOKE_CLI_SPEC.resolve_target_names(case.requested_target_name)
         for case in SESSION_RECOVERY_SMOKE_SELECTION_CASES
+    ]
+    assert [case.expected_target_names for case in SMOKE_MATRIX_SELECTION_CASES] == [
+        SMOKE_MATRIX_CLI_SPEC.resolve_target_names(case.requested_target_name)
+        for case in SMOKE_MATRIX_SELECTION_CASES
+    ]
+    assert [case.expected_target_args for case in SMOKE_MATRIX_SELECTION_CASES] == [
+        SMOKE_MATRIX_CLI_SPEC.resolve_target_args(case.requested_target_name)
+        for case in SMOKE_MATRIX_SELECTION_CASES
     ]
 
 

@@ -381,6 +381,12 @@ class SmokeWrapperCliSpec:
     def resolve_display_names(self, requested_target_name: str | None = None) -> tuple[str, ...]:
         return tuple(self._build_doc_selector().resolve_display_names(requested_target_name))
 
+    def resolve_doc_targets(self, requested_target_name: str | None = None) -> tuple[SmokeScriptTarget, ...]:
+        return tuple(self._build_doc_selector().resolve_targets(requested_target_name))
+
+    def resolve_target_args(self, requested_target_name: str | None = None) -> tuple[tuple[str, ...], ...]:
+        return tuple(target.args for target in self.resolve_doc_targets(requested_target_name))
+
     def resolve_targets(
         self,
         *,
@@ -512,6 +518,8 @@ class SmokeWrapperCliSpec:
 class SmokeWrapperSelectionCase:
     argv: tuple[str, ...]
     expected_target_names: tuple[str, ...]
+    expected_target_args: tuple[tuple[str, ...], ...] = ()
+    expected_display_names: tuple[str, ...] = ()
 
     @property
     def requested_target_name(self) -> str | None:
@@ -535,6 +543,8 @@ def build_smoke_wrapper_selection_cases(
         SmokeWrapperSelectionCase(
             argv=() if requested_target_name is None else (requested_target_name,),
             expected_target_names=cli_spec.resolve_target_names(requested_target_name),
+            expected_target_args=cli_spec.resolve_target_args(requested_target_name),
+            expected_display_names=cli_spec.resolve_display_names(requested_target_name),
         )
         for requested_target_name in requested_target_names
     )
@@ -1796,6 +1806,10 @@ SESSION_TRIAGE_SMOKE_SELECTION_CASES = build_smoke_wrapper_selection_cases(
 SESSION_RECOVERY_SMOKE_SELECTION_CASES = build_smoke_wrapper_selection_cases(
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
     (None, "all", "approval", "live-restore-denied"),
+)
+SMOKE_MATRIX_SELECTION_CASES = build_smoke_wrapper_selection_cases(
+    SMOKE_MATRIX_CLI_SPEC,
+    (None, "standalone", "triage", "recovery", "docs-review", "local", "all", "review", "all-review"),
 )
 
 
