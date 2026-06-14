@@ -509,6 +509,38 @@ class SmokeWrapperCliSpec:
 
 
 @dataclass(frozen=True)
+class SmokeWrapperSelectionCase:
+    argv: tuple[str, ...]
+    expected_target_names: tuple[str, ...]
+
+    @property
+    def requested_target_name(self) -> str | None:
+        if not self.argv:
+            return None
+        return self.argv[0]
+
+
+def smoke_wrapper_selection_case_id(case: SmokeWrapperSelectionCase) -> str:
+    requested_target_name = case.requested_target_name
+    if requested_target_name is None:
+        return "default"
+    return requested_target_name
+
+
+def build_smoke_wrapper_selection_cases(
+    cli_spec: SmokeWrapperCliSpec,
+    requested_target_names: Sequence[str | None],
+) -> tuple[SmokeWrapperSelectionCase, ...]:
+    return tuple(
+        SmokeWrapperSelectionCase(
+            argv=() if requested_target_name is None else (requested_target_name,),
+            expected_target_names=cli_spec.resolve_target_names(requested_target_name),
+        )
+        for requested_target_name in requested_target_names
+    )
+
+
+@dataclass(frozen=True)
 class StandaloneDocsParityFollowUpMetadata:
     rerun_target_name: str
     docs_parity_target_names: tuple[str, ...]
@@ -1717,6 +1749,53 @@ SMOKE_WRAPPER_CLI_SPECS = (
 SMOKE_WRAPPER_CLI_SPECS_BY_SCRIPT_NAME = {spec.script_name: spec for spec in SMOKE_WRAPPER_CLI_SPECS}
 NON_MATRIX_SMOKE_WRAPPER_CLI_SPECS = tuple(
     spec for spec in SMOKE_WRAPPER_CLI_SPECS if spec.script_name != SMOKE_MATRIX_CLI_SPEC.script_name
+)
+
+STANDALONE_LOCAL_TARGET_NAMES = STANDALONE_SMOKE_CLI_SPEC.default_target_names()
+STANDALONE_ALL_TARGET_NAMES = STANDALONE_SMOKE_CLI_SPEC.resolve_target_names("all")
+STANDALONE_CONTRACT_NEGATIVE_TARGET_NAMES = STANDALONE_SMOKE_CLI_SPEC.resolve_target_names(
+    "contract-negative"
+)
+STANDALONE_DOCS_CONTRACT_TARGET_NAMES = STANDALONE_SMOKE_CLI_SPEC.resolve_target_names("docs-contract")
+STANDALONE_DOCS_PARITY_ONLY_TARGET_NAMES = STANDALONE_SMOKE_CLI_SPEC.resolve_target_names(
+    "docs-parity-only"
+)
+STANDALONE_DOCS_FOCUSED_TARGET_NAMES = STANDALONE_SMOKE_CLI_SPEC.resolve_target_names("docs-focused")
+STANDALONE_DOCS_REVIEW_ONLY_TARGET_NAMES = STANDALONE_SMOKE_CLI_SPEC.resolve_target_names(
+    "docs-review-only"
+)
+
+STANDALONE_SMOKE_SELECTION_CASES = build_smoke_wrapper_selection_cases(
+    STANDALONE_SMOKE_CLI_SPEC,
+    (
+        None,
+        "local",
+        "all",
+        "contract-negative",
+        "docs-contract",
+        "docs-parity-only",
+        "docs-focused",
+        "docs-review-only",
+        "summary-utils",
+        "timeline",
+        "docs",
+        "docs-artifacts",
+        "docs-rerun-hint",
+        "malformed-result",
+        "malformed-detail",
+        "matrix-artifact-roots",
+        "matrix-all-review-order",
+        "matrix-all-review-missing-api-key",
+        "live",
+    ),
+)
+SESSION_TRIAGE_SMOKE_SELECTION_CASES = build_smoke_wrapper_selection_cases(
+    SESSION_TRIAGE_SMOKE_CLI_SPEC,
+    (None, "both", "all", "picker", "switcher"),
+)
+SESSION_RECOVERY_SMOKE_SELECTION_CASES = build_smoke_wrapper_selection_cases(
+    SESSION_RECOVERY_SMOKE_CLI_SPEC,
+    (None, "all", "approval", "live-restore-denied"),
 )
 
 

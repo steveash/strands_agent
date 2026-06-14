@@ -18,7 +18,9 @@ from strands_agent_tui.sessions import SessionArtifactStore, render_session_pick
 from strands_agent_tui.testing import (
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
+    SESSION_RECOVERY_SMOKE_SELECTION_CASES,
     SESSION_RECOVERY_SMOKE_WRAPPER,
+    SESSION_TRIAGE_SMOKE_SELECTION_CASES,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
@@ -30,8 +32,10 @@ from strands_agent_tui.testing import (
     SMOKE_WRAPPER_CLI_SPECS,
     STANDALONE_DOCS_PARITY_FOLLOW_UP,
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
+    STANDALONE_SMOKE_SELECTION_CASES,
     STANDALONE_SMOKE_WRAPPER,
     SmokeScriptContractCase,
+    SmokeWrapperSelectionCase,
     StandaloneFollowUpFailureFixture,
     StandaloneSmokeFailureCase,
     assert_smoke_script_output_matches_contract,
@@ -76,6 +80,7 @@ from strands_agent_tui.testing import (
     smoke_cli_doc_spec_id,
     smoke_cli_docs_parity_rerun_hint,
     smoke_script_contract_case_id,
+    smoke_wrapper_selection_case_id,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -622,67 +627,13 @@ def test_live_restore_denied_smoke_wrapper_preserves_detail_lines_and_failure_ex
 
 
 @pytest.mark.parametrize(
-    ("argv", "expected_names"),
-    [
-        ([], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
-        (["local"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"]),
-        (["all"], ["summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts", "live"]),
-        (["contract-negative"], ["malformed-result", "malformed-detail"]),
-        (
-            ["docs-contract"],
-            [
-                "docs-rerun-hint",
-                "malformed-result",
-                "malformed-detail",
-                "matrix-artifact-roots",
-                "matrix-all-review-order",
-                "matrix-all-review-missing-api-key",
-                "matrix-docs-review-hint",
-            ],
-        ),
-        (
-            ["docs-parity-only"],
-            [
-                "docs",
-                "docs-artifacts",
-                "docs-rerun-hint",
-            ],
-        ),
-        (
-            ["docs-focused"],
-            [
-                "docs",
-                "docs-artifacts",
-                "docs-rerun-hint",
-                "matrix-artifact-roots",
-                "matrix-all-review-order",
-                "matrix-all-review-missing-api-key",
-                "matrix-docs-review-hint",
-            ],
-        ),
-        (
-            ["docs-review-only"],
-            [
-                "matrix-artifact-roots",
-                "matrix-all-review-order",
-                "matrix-all-review-missing-api-key",
-                "matrix-docs-review-hint",
-            ],
-        ),
-        (["summary-utils"], ["summary-utils"]),
-        (["timeline"], ["timeline"]),
-        (["docs"], ["docs"]),
-        (["docs-artifacts"], ["docs-artifacts"]),
-        (["docs-rerun-hint"], ["docs-rerun-hint"]),
-        (["malformed-result"], ["malformed-result"]),
-        (["malformed-detail"], ["malformed-detail"]),
-        (["matrix-artifact-roots"], ["matrix-artifact-roots"]),
-        (["matrix-all-review-order"], ["matrix-all-review-order"]),
-        (["matrix-all-review-missing-api-key"], ["matrix-all-review-missing-api-key"]),
-        (["live"], ["live"]),
-    ],
+    "case",
+    STANDALONE_SMOKE_SELECTION_CASES,
+    ids=smoke_wrapper_selection_case_id,
 )
-def test_standalone_smoke_selects_expected_targets(monkeypatch, argv, expected_names) -> None:
+def test_standalone_smoke_selects_expected_targets(
+    monkeypatch, case: SmokeWrapperSelectionCase
+) -> None:
     standalone_smoke = _load_script_module("standalone_smoke")
 
     seen = {}
@@ -694,12 +645,12 @@ def test_standalone_smoke_selects_expected_targets(monkeypatch, argv, expected_n
 
     monkeypatch.setattr(standalone_smoke, "run_smoke_targets", _run_smoke_targets)
 
-    exit_code = standalone_smoke.main(argv)
+    exit_code = standalone_smoke.main(list(case.argv))
 
     assert exit_code == 0
     assert seen == {
-        "names": expected_names,
-        "args": [() for _ in expected_names],
+        "names": list(case.expected_target_names),
+        "args": [() for _ in case.expected_target_names],
     }
 
 
@@ -770,16 +721,13 @@ def test_smoke_script_runner_functions_return_expected_contract_results(
 
 
 @pytest.mark.parametrize(
-    ("argv", "expected_names"),
-    [
-        ([], ["picker", "switcher"]),
-        (["both"], ["picker", "switcher"]),
-        (["all"], ["picker", "switcher"]),
-        (["picker"], ["picker"]),
-        (["switcher"], ["switcher"]),
-    ],
+    "case",
+    SESSION_TRIAGE_SMOKE_SELECTION_CASES,
+    ids=smoke_wrapper_selection_case_id,
 )
-def test_session_triage_smoke_selects_expected_targets(monkeypatch, argv, expected_names) -> None:
+def test_session_triage_smoke_selects_expected_targets(
+    monkeypatch, case: SmokeWrapperSelectionCase
+) -> None:
     session_triage_smoke = _load_script_module("session_triage_smoke")
 
     seen = {}
@@ -792,26 +740,24 @@ def test_session_triage_smoke_selects_expected_targets(monkeypatch, argv, expect
 
     monkeypatch.setattr(session_triage_smoke, "run_smoke_targets", _run_smoke_targets)
 
-    exit_code = session_triage_smoke.main(argv)
+    exit_code = session_triage_smoke.main(list(case.argv))
 
     assert exit_code == 0
     assert seen == {
-        "names": expected_names,
-        "args": [() for _ in expected_names],
+        "names": list(case.expected_target_names),
+        "args": [() for _ in case.expected_target_names],
         "wrapper_metadata": SESSION_TRIAGE_SMOKE_WRAPPER,
     }
 
 
 @pytest.mark.parametrize(
-    ("argv", "expected_names"),
-    [
-        ([], ["approval", "approval-restart", "session-state", "live-restore", "live-restore-denied"]),
-        (["all"], ["approval", "approval-restart", "session-state", "live-restore", "live-restore-denied"]),
-        (["approval"], ["approval"]),
-        (["live-restore-denied"], ["live-restore-denied"]),
-    ],
+    "case",
+    SESSION_RECOVERY_SMOKE_SELECTION_CASES,
+    ids=smoke_wrapper_selection_case_id,
 )
-def test_session_recovery_smoke_selects_expected_targets(monkeypatch, argv, expected_names) -> None:
+def test_session_recovery_smoke_selects_expected_targets(
+    monkeypatch, case: SmokeWrapperSelectionCase
+) -> None:
     session_recovery_smoke = _load_script_module("session_recovery_smoke")
 
     seen = {}
@@ -824,12 +770,12 @@ def test_session_recovery_smoke_selects_expected_targets(monkeypatch, argv, expe
 
     monkeypatch.setattr(session_recovery_smoke, "run_smoke_targets", _run_smoke_targets)
 
-    exit_code = session_recovery_smoke.main(argv)
+    exit_code = session_recovery_smoke.main(list(case.argv))
 
     assert exit_code == 0
     assert seen == {
-        "names": expected_names,
-        "args": [() for _ in expected_names],
+        "names": list(case.expected_target_names),
+        "args": [() for _ in case.expected_target_names],
         "wrapper_metadata": SESSION_RECOVERY_SMOKE_WRAPPER,
     }
 

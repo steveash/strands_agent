@@ -15,17 +15,27 @@ from strands_agent_tui.testing.smoke_runner import (
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
     SMOKE_MATRIX_CLI_SPEC,
     SESSION_RECOVERY_SMOKE_CLI_SPEC,
+    SESSION_RECOVERY_SMOKE_SELECTION_CASES,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_CLI_SPEC,
+    SESSION_TRIAGE_SMOKE_SELECTION_CASES,
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_MATRIX_WRAPPER,
     SMOKE_WRAPPER_CLI_SPECS,
+    STANDALONE_ALL_TARGET_NAMES,
+    STANDALONE_CONTRACT_NEGATIVE_TARGET_NAMES,
+    STANDALONE_DOCS_CONTRACT_TARGET_NAMES,
+    STANDALONE_DOCS_FOCUSED_TARGET_NAMES,
     STANDALONE_DOCS_PARITY_FOLLOW_UP,
     STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES,
+    STANDALONE_DOCS_PARITY_ONLY_TARGET_NAMES,
     STANDALONE_DOCS_REVIEW_FOLLOW_UP,
     STANDALONE_DOCS_REVIEW_FOLLOW_UP_FAILURE_FIXTURES,
+    STANDALONE_DOCS_REVIEW_ONLY_TARGET_NAMES,
+    STANDALONE_LOCAL_TARGET_NAMES,
     STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES,
     STANDALONE_SMOKE_CLI_SPEC,
+    STANDALONE_SMOKE_SELECTION_CASES,
     STANDALONE_SMOKE_WRAPPER,
     StandaloneFollowUpFailureFixture,
     StandaloneFollowUpFailureFixtureSet,
@@ -34,6 +44,7 @@ from strands_agent_tui.testing.smoke_runner import (
     SmokeScriptTarget,
     SmokeTargetSelector,
     SmokeWrapperMetadata,
+    SmokeWrapperSelectionCase,
     _select_alias_target_names,
     build_smoke_cli_parser,
     build_standalone_follow_up_failure_run_smoke_target,
@@ -46,6 +57,7 @@ from strands_agent_tui.testing.smoke_runner import (
     run_smoke_targets,
     smoke_wrapper_cli_spec,
     smoke_wrapper_metadata_from_specs,
+    smoke_wrapper_selection_case_id,
     standalone_docs_review_follow_up_hint_for_failure,
     standalone_malformed_contract_hint_for_failure,
     standalone_smoke_failure_case_id,
@@ -718,15 +730,7 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
     selector = standalone_spec._build_doc_selector()
 
     assert standalone_spec.readme_reference_command() == ".venv/bin/python scripts/standalone_smoke.py"
-    assert tuple(selector.resolve_target_names("docs-contract")) == (
-        "docs-rerun-hint",
-        "malformed-result",
-        "malformed-detail",
-        "matrix-artifact-roots",
-        "matrix-all-review-order",
-        "matrix-all-review-missing-api-key",
-        "matrix-docs-review-hint",
-    )
+    assert tuple(selector.resolve_target_names("docs-contract")) == STANDALONE_DOCS_CONTRACT_TARGET_NAMES
     assert standalone_spec.help_alias_lines() == tuple(
         f"{name} -> {', '.join(selector.resolve_display_names(name))}"
         for name in selector.alias_target_names
@@ -762,14 +766,46 @@ def test_select_alias_target_names_supports_any_all_and_candidate_filters() -> N
     ) == ("docs-contract",)
 
 
+@pytest.mark.parametrize(
+    ("case", "expected_id"),
+    [
+        (SmokeWrapperSelectionCase(argv=(), expected_target_names=("alpha",)), "default"),
+        (
+            SmokeWrapperSelectionCase(argv=("docs-contract",), expected_target_names=("docs-rerun-hint",)),
+            "docs-contract",
+        ),
+    ],
+)
+def test_smoke_wrapper_selection_case_id_tracks_requested_target_name(
+    case: SmokeWrapperSelectionCase, expected_id: str
+) -> None:
+    assert smoke_wrapper_selection_case_id(case) == expected_id
+
+
+def test_shared_smoke_wrapper_selection_cases_track_cli_spec_resolution() -> None:
+    assert [case.expected_target_names for case in STANDALONE_SMOKE_SELECTION_CASES[:8]] == [
+        STANDALONE_LOCAL_TARGET_NAMES,
+        STANDALONE_LOCAL_TARGET_NAMES,
+        STANDALONE_ALL_TARGET_NAMES,
+        STANDALONE_CONTRACT_NEGATIVE_TARGET_NAMES,
+        STANDALONE_DOCS_CONTRACT_TARGET_NAMES,
+        STANDALONE_DOCS_PARITY_ONLY_TARGET_NAMES,
+        STANDALONE_DOCS_FOCUSED_TARGET_NAMES,
+        STANDALONE_DOCS_REVIEW_ONLY_TARGET_NAMES,
+    ]
+    assert [case.expected_target_names for case in SESSION_TRIAGE_SMOKE_SELECTION_CASES] == [
+        SESSION_TRIAGE_SMOKE_CLI_SPEC.resolve_target_names(case.requested_target_name)
+        for case in SESSION_TRIAGE_SMOKE_SELECTION_CASES
+    ]
+    assert [case.expected_target_names for case in SESSION_RECOVERY_SMOKE_SELECTION_CASES] == [
+        SESSION_RECOVERY_SMOKE_CLI_SPEC.resolve_target_names(case.requested_target_name)
+        for case in SESSION_RECOVERY_SMOKE_SELECTION_CASES
+    ]
+
 
 def test_standalone_docs_parity_follow_up_metadata_tracks_alias_groups() -> None:
     assert STANDALONE_DOCS_PARITY_FOLLOW_UP.rerun_target_name == "docs-parity-only"
-    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.docs_parity_target_names == (
-        "docs",
-        "docs-artifacts",
-        "docs-rerun-hint",
-    )
+    assert STANDALONE_DOCS_PARITY_FOLLOW_UP.docs_parity_target_names == STANDALONE_DOCS_PARITY_ONLY_TARGET_NAMES
     assert STANDALONE_DOCS_PARITY_FOLLOW_UP.requested_target_names == (
         "local",
         "docs-contract",
@@ -1038,12 +1074,7 @@ def test_build_timed_standalone_smoke_failure_pytest_params_reuses_shared_id_for
 
 def test_standalone_docs_review_follow_up_metadata_tracks_aliases_and_hint_selection() -> None:
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.rerun_target_name == "docs-review-only"
-    assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.docs_review_target_names == (
-        "matrix-artifact-roots",
-        "matrix-all-review-order",
-        "matrix-all-review-missing-api-key",
-        "matrix-docs-review-hint",
-    )
+    assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.docs_review_target_names == STANDALONE_DOCS_REVIEW_ONLY_TARGET_NAMES
     assert STANDALONE_DOCS_REVIEW_FOLLOW_UP.requested_target_names == (
         "docs-contract",
         "docs-focused",
@@ -1222,16 +1253,10 @@ def test_build_standalone_malformed_contract_failure_cases_tracks_alias_position
 def test_build_standalone_docs_contract_failure_cases_tracks_registry_derived_alias_selection() -> None:
     cases = build_standalone_docs_contract_failure_cases()
 
-    assert [case.requested_target_name for case in cases] == ["docs-contract"] * 7
-    assert [case.failed_target_name for case in cases] == [
-        "docs-rerun-hint",
-        "malformed-result",
-        "malformed-detail",
-        "matrix-artifact-roots",
-        "matrix-all-review-order",
-        "matrix-all-review-missing-api-key",
-        "matrix-docs-review-hint",
-    ]
+    assert [case.requested_target_name for case in cases] == ["docs-contract"] * len(
+        STANDALONE_DOCS_CONTRACT_TARGET_NAMES
+    )
+    assert [case.failed_target_name for case in cases] == list(STANDALONE_DOCS_CONTRACT_TARGET_NAMES)
 
 
 def test_smoke_wrapper_cli_specs_share_parser_and_readme_metadata(tmp_path) -> None:
