@@ -9,6 +9,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import TextIO
 
+from .smoke_contract_registries import STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
 from .smoke_assertions import is_failed_smoke_check_line
 from .smoke_output import emit_smoke_target_run_stdout_lines
 
@@ -947,11 +948,10 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     default_target_name="local",
     alias_target_names={
         "local": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"),
-        "contract-negative": ("malformed-result", "malformed-detail"),
+        "contract-negative": STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
         "docs-contract": (
             "docs-rerun-hint",
-            "malformed-result",
-            "malformed-detail",
+            *STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
             "matrix-artifact-roots",
             "matrix-all-review-order",
             "matrix-all-review-missing-api-key",
@@ -1193,10 +1193,6 @@ _STANDALONE_DOCS_PARITY_RERUN_HINT = (
     "`.venv/bin/python scripts/standalone_smoke.py docs-parity-only` to recheck the docs parity lane "
     "without the broader docs-review regressions or the rest of the local bundle."
 )
-_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES = (
-    "malformed-result",
-    "malformed-detail",
-)
 
 
 def build_standalone_docs_parity_follow_up_metadata(
@@ -1215,7 +1211,7 @@ def build_standalone_docs_parity_follow_up_metadata(
     contract_requested_target_names = _select_alias_target_names(
         required_any_target_groups=(
             docs_parity_target_names,
-            _STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+            STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
         ),
         cli_spec=cli_spec,
     )
@@ -1256,7 +1252,7 @@ def build_standalone_docs_review_follow_up_metadata(
     )
     contract_requested_target_names = _select_alias_target_names(
         required_all_target_names=docs_review_target_names,
-        required_any_target_groups=(_STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,),
+        required_any_target_groups=(STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,),
         candidate_alias_names=requested_target_names,
         cli_spec=cli_spec,
     )
@@ -1436,7 +1432,7 @@ def build_standalone_docs_contract_failure_cases(
         required_all_target_names=docs_review_metadata.docs_review_target_names,
         required_any_target_groups=(
             docs_parity_metadata.docs_parity_target_names,
-            _STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+            STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
         ),
         cli_spec=cli_spec,
     )
@@ -1821,8 +1817,7 @@ STANDALONE_SMOKE_SELECTION_CASES = build_smoke_wrapper_selection_cases(
         "docs",
         "docs-artifacts",
         "docs-rerun-hint",
-        "malformed-result",
-        "malformed-detail",
+        *STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
         "matrix-artifact-roots",
         "matrix-all-review-order",
         "matrix-all-review-missing-api-key",

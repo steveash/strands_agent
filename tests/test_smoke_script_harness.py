@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from strands_agent_tui.testing.smoke_contract_registries import (
+    STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+)
 from strands_agent_tui.testing import (
     DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
@@ -652,11 +655,14 @@ def test_build_malformed_smoke_script_detail_results_reuse_custom_contract_metad
 
 def test_standalone_malformed_contract_failure_check_name_derives_default_registry() -> None:
     assert STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES == {
-        "malformed-result": "result_contract",
-        "malformed-detail": "detail_contract",
+        target_name: standalone_malformed_contract_failure_check_name(target_name)
+        for target_name in STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
     }
-    assert standalone_malformed_contract_failure_check_name("malformed-result") == "result_contract"
-    assert standalone_malformed_contract_failure_check_name("malformed-detail") == "detail_contract"
+    for target_name in STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES:
+        assert (
+            standalone_malformed_contract_failure_check_name(target_name)
+            == STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES[target_name]
+        )
     with pytest.raises(ValueError, match="unknown malformed smoke target"):
         standalone_malformed_contract_failure_check_name("docs-rerun-hint")
 
@@ -680,20 +686,27 @@ def test_build_standalone_malformed_contract_failure_output_lines_reuse_custom_c
         malformed_entry=("oops", "value", "extra"),
         result_contract_check_name="custom_result_contract",
         detail_contract_check_name="custom_detail_contract",
-    ) == {
-        "malformed-result": (
-            "assertion_message: result[3]: ('oops', 'value', 'extra')",
-            "custom_result_contract= False",
-        ),
-        "malformed-detail": (
-            "missing_detail: stdout_custom_detail",
-            "custom_detail_contract= False",
-        ),
-    }
+    ) == dict(
+        zip(
+            STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+            (
+                (
+                    "assertion_message: result[3]: ('oops', 'value', 'extra')",
+                    "custom_result_contract= False",
+                ),
+                (
+                    "missing_detail: stdout_custom_detail",
+                    "custom_detail_contract= False",
+                ),
+            ),
+            strict=True,
+        )
+    )
 
 
 
 def test_build_standalone_malformed_contract_failure_output_lines_reuse_shared_check_names_by_default() -> None:
+    result_target_name, detail_target_name = STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
     source_case = SmokeScriptContractCase(
         script_name="custom_follow_up_smoke",
         runner_name="run_custom_follow_up_smoke",
@@ -709,16 +722,22 @@ def test_build_standalone_malformed_contract_failure_output_lines_reuse_shared_c
     assert build_standalone_malformed_contract_failure_output_lines(
         source_case=source_case,
         malformed_entry=("oops", "value", "extra"),
-    ) == {
-        "malformed-result": (
-            "assertion_message: result[3]: ('oops', 'value', 'extra')",
-            f"{STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES['malformed-result']}= False",
-        ),
-        "malformed-detail": (
-            "missing_detail: stdout_custom_detail",
-            f"{STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES['malformed-detail']}= False",
-        ),
-    }
+    ) == dict(
+        zip(
+            STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+            (
+                (
+                    "assertion_message: result[3]: ('oops', 'value', 'extra')",
+                    f"{STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES[result_target_name]}= False",
+                ),
+                (
+                    "missing_detail: stdout_custom_detail",
+                    f"{STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES[detail_target_name]}= False",
+                ),
+            ),
+            strict=True,
+        )
+    )
 
 
 def test_build_smoke_matrix_docs_review_failure_results_reuses_shared_docs_review_contracts(

@@ -69,6 +69,13 @@ from .smoke_assertions import (
     matches_workspace_filter_output,
     smoke_text_matches,
 )
+from .smoke_contract_registries import (
+    STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+    STANDALONE_MALFORMED_DETAIL_TARGET_NAME,
+    STANDALONE_MALFORMED_RESULT_TARGET_NAME,
+    standalone_malformed_contract_failure_check_name,
+)
 from .smoke_cli_assertions import (
     DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME,
@@ -209,8 +216,6 @@ from .smoke_script_harness import (
     build_malformed_smoke_script_result_results,
     build_review_artifact_failure_results,
     build_standalone_malformed_contract_failure_output_lines,
-    standalone_malformed_contract_failure_check_name,
-    STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES,
     build_smoke_matrix_docs_review_failure_results,
     build_review_artifact_matrix_summary_assertion_results,
     build_review_artifact_observation_results,
@@ -363,6 +368,9 @@ __all__ = [
     "matches_switcher_selected_preview_output",
     "matches_tool_filter_output",
     "matches_workspace_filter_output",
+    "STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES",
+    "STANDALONE_MALFORMED_DETAIL_TARGET_NAME",
+    "STANDALONE_MALFORMED_RESULT_TARGET_NAME",
     "DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES",
     "SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME",
     "SMOKE_CLI_DOC_AUDIT_EXAMPLES",

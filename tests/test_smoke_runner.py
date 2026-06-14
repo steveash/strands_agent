@@ -6,6 +6,9 @@ from textwrap import dedent
 
 import pytest
 
+from strands_agent_tui.testing.smoke_contract_registries import (
+    STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+)
 from strands_agent_tui.testing.smoke_script_harness import (
     build_standalone_malformed_contract_failure_output_lines,
 )
@@ -786,7 +789,7 @@ def test_select_alias_target_names_supports_any_all_and_candidate_filters() -> N
             "matrix-all-review-missing-api-key",
             "matrix-docs-review-hint",
         ),
-        required_any_target_groups=(("malformed-result", "malformed-detail"),),
+        required_any_target_groups=(STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,),
     ) == ("docs-contract",)
 
 
@@ -1232,16 +1235,11 @@ def test_build_standalone_malformed_contract_failure_cases_tracks_alias_position
     assert _failure_case_positions(docs_contract_cases) == [
         (
             "docs-contract",
-            "malformed-result",
-            1,
-            7,
-        ),
-        (
-            "docs-contract",
-            "malformed-detail",
-            2,
-            7,
-        ),
+            target_name,
+            STANDALONE_DOCS_CONTRACT_TARGET_NAMES.index(target_name),
+            len(STANDALONE_DOCS_CONTRACT_TARGET_NAMES),
+        )
+        for target_name in STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
     ]
     for case in docs_contract_cases:
         fixture = STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES.fixture_for_target(
@@ -1256,18 +1254,8 @@ def test_build_standalone_malformed_contract_failure_cases_tracks_alias_position
         )
 
     assert _failure_case_positions(contract_negative_cases) == [
-        (
-            "contract-negative",
-            "malformed-result",
-            0,
-            2,
-        ),
-        (
-            "contract-negative",
-            "malformed-detail",
-            1,
-            2,
-        ),
+        ("contract-negative", target_name, index, len(STANDALONE_CONTRACT_NEGATIVE_TARGET_NAMES))
+        for index, target_name in enumerate(STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES)
     ]
     for case in contract_negative_cases:
         fixture = STANDALONE_MALFORMED_CONTRACT_FAILURE_FIXTURES.fixture_for_target(

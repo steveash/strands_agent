@@ -22,6 +22,13 @@ from .smoke_cli_doc_artifacts import (
     resolve_review_artifact_paths,
 )
 from .smoke_cli_assertions import smoke_cli_docs_parity_rerun_hint
+from .smoke_contract_registries import (
+    STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+    STANDALONE_MALFORMED_DETAIL_TARGET_NAME,
+    STANDALONE_MALFORMED_RESULT_TARGET_NAME,
+    standalone_malformed_contract_failure_check_name,
+)
 from .smoke_output import emit_smoke_target_run_stdout_lines
 from .smoke_runner import STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES
 
@@ -2355,24 +2362,6 @@ def _required_smoke_script_detail_with_value_prefix(
 
 def _smoke_script_contract_result_count(case: SmokeScriptContractCase) -> int:
     return len(case.required_line_prefixes) + len(case.true_check_names)
-
-
-def standalone_malformed_contract_failure_check_name(target_name: str) -> str:
-    malformed_prefix = "malformed-"
-    if not target_name.startswith(malformed_prefix):
-        raise ValueError(f"unknown malformed smoke target {target_name!r}")
-    target_suffix = target_name.removeprefix(malformed_prefix)
-    if not target_suffix:
-        raise ValueError(f"unknown malformed smoke target {target_name!r}")
-    return f"{target_suffix.replace('-', '_')}_contract"
-
-
-STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES = {
-    target_name: standalone_malformed_contract_failure_check_name(target_name)
-    for target_name in ("malformed-result", "malformed-detail")
-}
-
-
 def build_standalone_malformed_contract_failure_output_lines(
     *,
     source_case: SmokeScriptContractCase = STANDALONE_DOCS_RERUN_HINT_SCRIPT_CONTRACT,
@@ -2380,12 +2369,12 @@ def build_standalone_malformed_contract_failure_output_lines(
     result_contract_check_name: str | None = None,
     detail_contract_check_name: str | None = None,
 ) -> dict[str, tuple[str, str]]:
-    result_contract_check_name = result_contract_check_name or (
-        STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES["malformed-result"]
-    )
-    detail_contract_check_name = detail_contract_check_name or (
-        STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES["malformed-detail"]
-    )
+    result_contract_check_name = result_contract_check_name or STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES[
+        STANDALONE_MALFORMED_RESULT_TARGET_NAME
+    ]
+    detail_contract_check_name = detail_contract_check_name or STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES[
+        STANDALONE_MALFORMED_DETAIL_TARGET_NAME
+    ]
     source_result_count = _smoke_script_contract_result_count(source_case)
     result_preset = _build_malformed_smoke_script_result_preset(
         source_case=source_case,
@@ -2395,17 +2384,23 @@ def build_standalone_malformed_contract_failure_output_lines(
     missing_detail_result_name = detail_preset.missing_detail_assertion_result_name.removesuffix(
         "_assertion"
     )
-    return {
-        "malformed-result": (
-            f"{result_preset.assertion_message_result_name}: "
-            f"{result_preset.result_index_assertion_message(malformed_index=source_result_count)}",
-            f"{result_contract_check_name}= False",
-        ),
-        "malformed-detail": (
-            f"{missing_detail_result_name}: {detail_preset.detail_name}",
-            f"{detail_contract_check_name}= False",
-        ),
-    }
+    return dict(
+        zip(
+            STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+            (
+                (
+                    f"{result_preset.assertion_message_result_name}: "
+                    f"{result_preset.result_index_assertion_message(malformed_index=source_result_count)}",
+                    f"{result_contract_check_name}= False",
+                ),
+                (
+                    f"{missing_detail_result_name}: {detail_preset.detail_name}",
+                    f"{detail_contract_check_name}= False",
+                ),
+            ),
+            strict=True,
+        )
+    )
 
 
 def build_malformed_smoke_script_detail_contract(
