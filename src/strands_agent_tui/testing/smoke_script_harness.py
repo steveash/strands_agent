@@ -29,7 +29,11 @@ from .smoke_contract_registries import (
     STANDALONE_MALFORMED_RESULT_TARGET_NAME,
     standalone_malformed_contract_failure_check_name,
 )
-from .smoke_output import emit_smoke_target_run_stdout_lines
+from .smoke_output import (
+    emit_smoke_target_run_stdout_lines,
+    format_smoke_exited_with_status_message,
+    format_smoke_failed_fast_message,
+)
 from .smoke_runner import STANDALONE_DOCS_PARITY_FOLLOW_UP_FAILURE_FIXTURES
 
 SMOKE_MATRIX_REVIEW_METADATA_PREFIX = "[smoke-matrix] review metadata: "
@@ -74,7 +78,32 @@ class SmokeTargetRunFailureFixture:
     ) -> SmokeTargetRunFailureFixture:
         return cls(
             stdout_lines=tuple(stdout_lines),
-            stderr_lines=(f"{target_name} smoke failed fast: {failed_line}",),
+            stderr_lines=(
+                format_smoke_failed_fast_message(
+                    target_name=target_name,
+                    failed_line=failed_line,
+                ),
+            ),
+            observed_lines=tuple(observed_lines),
+        )
+
+    @classmethod
+    def build_exited_with_status(
+        cls,
+        *,
+        target_name: str,
+        exit_code: int,
+        stdout_lines: Sequence[str] = (),
+        observed_lines: Sequence[str] = (),
+    ) -> SmokeTargetRunFailureFixture:
+        return cls(
+            stdout_lines=tuple(stdout_lines),
+            stderr_lines=(
+                format_smoke_exited_with_status_message(
+                    target_name=target_name,
+                    exit_code=exit_code,
+                ),
+            ),
             observed_lines=tuple(observed_lines),
         )
 
@@ -107,11 +136,12 @@ class SmokeTargetRunFailureFixture:
             print(line, file=stderr)
         stderr.flush()
 
-    def emit_failed_target_run(
+    def emit_target_run(
         self,
         *,
         stdout: TextIO,
         stderr: TextIO,
+        exit_code: int,
         output_line_observer: Callable[[str], None] | None = None,
         output_line_filter: Callable[[str], bool] | None = None,
     ) -> int:
@@ -122,7 +152,23 @@ class SmokeTargetRunFailureFixture:
             output_line_filter=output_line_filter,
         )
         self.emit_stderr_lines(stderr=stderr)
-        return 1
+        return exit_code
+
+    def emit_failed_target_run(
+        self,
+        *,
+        stdout: TextIO,
+        stderr: TextIO,
+        output_line_observer: Callable[[str], None] | None = None,
+        output_line_filter: Callable[[str], bool] | None = None,
+    ) -> int:
+        return self.emit_target_run(
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=1,
+            output_line_observer=output_line_observer,
+            output_line_filter=output_line_filter,
+        )
 
 
 @dataclass(frozen=True)
@@ -1856,15 +1902,19 @@ SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX = (
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE = (
     "RuntimeError: OPENAI_API_KEY is required for live runtime mode"
 )
-SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE = "standalone smoke exited with status 1"
+SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE = format_smoke_exited_with_status_message(
+    target_name="standalone",
+    exit_code=1,
+)
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but "
     "`OPENAI_API_KEY` was missing;"
 )
 SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE = "render_manifest_payload= False"
-SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE = SmokeTargetRunFailureFixture(
+SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE = SmokeTargetRunFailureFixture.build_exited_with_status(
+    target_name="standalone",
+    exit_code=1,
     observed_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE,),
-    stderr_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,),
 )
 
 SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS = SmokeMatrixDocsReviewFailureDefaults(

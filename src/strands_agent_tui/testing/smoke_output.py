@@ -4,6 +4,14 @@ from collections.abc import Callable, Sequence
 from typing import TextIO
 
 
+def format_smoke_failed_fast_message(*, target_name: str, failed_line: str) -> str:
+    return f"{target_name} smoke failed fast: {failed_line}"
+
+
+def format_smoke_exited_with_status_message(*, target_name: str, exit_code: int) -> str:
+    return f"{target_name} smoke exited with status {exit_code}"
+
+
 def emit_smoke_target_run_stdout_lines(
     stdout_lines: Sequence[str],
     *,

@@ -26,6 +26,7 @@ from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_SPECS,
     SMOKE_MATRIX_SELECTION_CASES,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
+    SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE,
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
@@ -3196,9 +3197,13 @@ def test_smoke_matrix_all_failure_emits_missing_api_key_hint(monkeypatch) -> Non
         observer = kwargs["output_line_observer"]
         stderr = kwargs["stderr"]
         if target.name == "standalone-all":
-            observer("RuntimeError: OPENAI_API_KEY is required for live runtime mode\n")
-            print("standalone smoke exited with status 1", file=stderr)
-            return 1
+            return SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE.emit_target_run(
+                stdout=kwargs["stdout"],
+                stderr=stderr,
+                exit_code=1,
+                output_line_observer=observer,
+                output_line_filter=kwargs.get("output_line_filter"),
+            )
         return 0
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
@@ -3283,9 +3288,13 @@ def test_smoke_matrix_all_review_failure_emits_missing_api_key_hint_and_docs_foc
         observer = kwargs["output_line_observer"]
         stderr = kwargs["stderr"]
         if target.name == "standalone-all":
-            observer("RuntimeError: OPENAI_API_KEY is required for live runtime mode\n")
-            print("standalone smoke exited with status 1", file=stderr)
-            return 1
+            return SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE.emit_target_run(
+                stdout=kwargs["stdout"],
+                stderr=stderr,
+                exit_code=1,
+                output_line_observer=observer,
+                output_line_filter=kwargs.get("output_line_filter"),
+            )
         return 0
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)

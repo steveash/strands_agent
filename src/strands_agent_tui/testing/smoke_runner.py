@@ -11,7 +11,11 @@ from typing import TextIO
 
 from .smoke_contract_registries import STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
 from .smoke_assertions import is_failed_smoke_check_line
-from .smoke_output import emit_smoke_target_run_stdout_lines
+from .smoke_output import (
+    emit_smoke_target_run_stdout_lines,
+    format_smoke_exited_with_status_message,
+    format_smoke_failed_fast_message,
+)
 
 
 @dataclass(frozen=True)
@@ -706,11 +710,17 @@ class StandaloneFollowUpFailureFixture:
 
     def failed_fast_message(self, *, target_name: str | None = None) -> str:
         selected_target_name = self.failed_target_name if target_name is None else target_name
-        return f"{selected_target_name} smoke failed fast: {self.failed_line}"
+        return format_smoke_failed_fast_message(
+            target_name=selected_target_name,
+            failed_line=self.failed_line,
+        )
 
     def exited_with_status_message(self, exit_code: int, *, target_name: str | None = None) -> str:
         selected_target_name = self.failed_target_name if target_name is None else target_name
-        return f"{selected_target_name} smoke exited with status {exit_code}"
+        return format_smoke_exited_with_status_message(
+            target_name=selected_target_name,
+            exit_code=exit_code,
+        )
 
     def emit_stdout_lines(
         self,
@@ -1898,10 +1908,22 @@ def run_smoke_target(
 
     return_code = process.wait()
     if failed_line is not None:
-        print(f"{target.display_label} smoke failed fast: {failed_line}", file=stderr)
+        print(
+            format_smoke_failed_fast_message(
+                target_name=target.display_label,
+                failed_line=failed_line,
+            ),
+            file=stderr,
+        )
         return 1
     if return_code != 0:
-        print(f"{target.display_label} smoke exited with status {return_code}", file=stderr)
+        print(
+            format_smoke_exited_with_status_message(
+                target_name=target.display_label,
+                exit_code=return_code,
+            ),
+            file=stderr,
+        )
         return return_code
     return 0
 

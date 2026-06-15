@@ -217,10 +217,41 @@ def test_smoke_target_run_failure_fixture_build_failed_fast_formats_shared_stder
     )
 
 
+def test_smoke_target_run_failure_fixture_build_exited_with_status_reuses_target_run_emission() -> None:
+    fixture = SmokeTargetRunFailureFixture.build_exited_with_status(
+        target_name="standalone",
+        exit_code=7,
+        stdout_lines=("visible= True", "hidden= True"),
+        observed_lines=("runtime_error= True",),
+    )
+
+    stdout = StringIO()
+    stderr = StringIO()
+    observed_lines: list[str] = []
+
+    exit_code = fixture.emit_target_run(
+        stdout=stdout,
+        stderr=stderr,
+        exit_code=7,
+        output_line_observer=observed_lines.append,
+        output_line_filter=lambda line: line.startswith("visible="),
+    )
+
+    assert exit_code == 7
+    assert stdout.getvalue().splitlines() == ["visible= True"]
+    assert stderr.getvalue().splitlines() == ["standalone smoke exited with status 7"]
+    assert observed_lines == [
+        "runtime_error= True\n",
+        "visible= True\n",
+        "hidden= True\n",
+    ]
+
+
 def test_exported_missing_api_key_failure_fixture_tracks_runtime_error_and_wrapper_failure_lines() -> None:
-    assert SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE == SmokeTargetRunFailureFixture(
+    assert SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE == SmokeTargetRunFailureFixture.build_exited_with_status(
+        target_name="standalone",
+        exit_code=1,
         observed_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE,),
-        stderr_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,),
     )
 
 
