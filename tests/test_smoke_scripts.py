@@ -19,6 +19,7 @@ from strands_agent_tui.testing import (
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
     SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME,
+    SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME,
     SESSION_RECOVERY_SMOKE_SELECTION_CASES,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_SELECTION_CASES,
@@ -324,6 +325,14 @@ def _assert_script_help_contains(script_name: str, required_snippets: list[str] 
         assert matches_smoke_cli_help_for_script(help_text, script_name=script_name)
         return
     assert matches_public_cli_help(help_text, required_snippets=required_snippets)
+
+
+def _assert_script_parser_help_matches_shared_expectations(script_name: str) -> None:
+    module = _load_script_module(script_name)
+    help_text = " ".join(module.build_parser().format_help().split())
+
+    for snippet in SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME[script_name]:
+        assert snippet in help_text
 
 
 def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
@@ -1048,43 +1057,7 @@ def test_standalone_smoke_docs_review_alias_failure_emits_docs_review_only_hint(
 
 
 def test_smoke_cli_docs_artifacts_smoke_build_parser_lists_public_targets_and_output_dir() -> None:
-    smoke_cli_docs_artifacts_smoke = _load_script_module("smoke_cli_docs_artifacts_smoke")
-
-    help_text = " ".join(smoke_cli_docs_artifacts_smoke.build_parser().format_help().split())
-
-    assert (
-        "Which public smoke-wrapper docs artifact contract to exercise. Aliases: all -> standalone_smoke, "
-        "session_triage_smoke, session_recovery_smoke, smoke_matrix."
-    ) in help_text
-    assert (
-        "smoke_cli_docs_artifacts_smoke.py # default target -> standalone_smoke" in help_text
-    )
-    assert (
-        "smoke_cli_docs_artifacts_smoke.py smoke_matrix # single smoke wrapper artifact contract"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_artifacts_smoke.py session_triage_smoke --output-dir artifacts/smoke-cli-docs-artifacts/session-triage # persist a session-triage wrapper artifact bundle for later review"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --readme-path README.md # persist drifted README plus render/fix review artifacts for every public smoke wrapper"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --bundle-index-path artifacts/smoke-cli-docs-artifacts/index.json # persist one machine-readable bundle index for CI or later review"
-        in help_text
-    )
-    assert "--output-dir OUTPUT_DIR" in help_text
-    assert "--readme-path README_PATH" in help_text
-    assert "--drifted-readme-path DRIFTED_README_PATH" in help_text
-    assert "--render-output-dir RENDER_OUTPUT_DIR" in help_text
-    assert "--render-manifest-path RENDER_MANIFEST_PATH" in help_text
-    assert "--render-diff-path RENDER_DIFF_PATH" in help_text
-    assert "--fix-check-json-path FIX_CHECK_JSON_PATH" in help_text
-    assert "--fix-repair-json-path FIX_REPAIR_JSON_PATH" in help_text
-    assert "--fix-post-check-json-path FIX_POST_CHECK_JSON_PATH" in help_text
-    assert "--bundle-index-path BUNDLE_INDEX_PATH" in help_text
+    _assert_script_parser_help_matches_shared_expectations("smoke_cli_docs_artifacts_smoke")
 
 
 
@@ -1339,20 +1312,7 @@ def test_smoke_wrapper_help_and_readme_docs_stay_in_sync(doc_spec) -> None:
 
 
 def test_smoke_cli_docs_smoke_build_parser_lists_public_targets_and_examples() -> None:
-    smoke_cli_docs_smoke = _load_script_module("smoke_cli_docs_smoke")
-
-    help_text = " ".join(smoke_cli_docs_smoke.build_parser().format_help().split())
-
-    assert (
-        "Which smoke-wrapper docs surface to audit. Aliases: all -> standalone_smoke, "
-        "session_triage_smoke, session_recovery_smoke, smoke_matrix."
-    ) in help_text
-    assert (
-        "smoke_cli_docs_smoke.py # default all alias -> standalone_smoke, "
-        "session_triage_smoke, session_recovery_smoke, smoke_matrix"
-    ) in help_text
-    assert "smoke_cli_docs_smoke.py standalone_smoke # single smoke wrapper" in help_text
-    assert "smoke_cli_docs_smoke.py smoke_matrix # single smoke wrapper" in help_text
+    _assert_script_parser_help_matches_shared_expectations("smoke_cli_docs_smoke")
 
 
 def test_smoke_cli_docs_smoke_reports_doc_parity_for_all_wrappers(monkeypatch) -> None:
@@ -1503,40 +1463,7 @@ def test_smoke_cli_docs_smoke_invalid_choice_errors_show_public_cli_choices(caps
 
 
 def test_smoke_cli_docs_render_build_parser_lists_public_targets_examples_and_flags() -> None:
-    smoke_cli_docs_render = _load_script_module("smoke_cli_docs_render")
-
-    help_text = " ".join(smoke_cli_docs_render.build_parser().format_help().split())
-
-    assert (
-        "Which smoke-wrapper README surface to render. Aliases: all -> standalone_smoke, "
-        "session_triage_smoke, session_recovery_smoke, smoke_matrix."
-    ) in help_text
-    assert (
-        "smoke_cli_docs_render.py # default all alias -> standalone_smoke, "
-        "session_triage_smoke, session_recovery_smoke, smoke_matrix"
-    ) in help_text
-    assert (
-        "smoke_cli_docs_render.py standalone_smoke --body-only # single smoke wrapper body preview"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_render.py all --output-dir artifacts/smoke-cli-docs-preview # export all rendered smoke wrapper sections"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview # export only the drifted rendered smoke wrapper sections"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_render.py all --drift-only --output-dir artifacts/smoke-cli-docs-preview --manifest-output artifacts/smoke-cli-docs-preview.json --diff-output artifacts/smoke-cli-docs-review.patch # persist drift-only review artifacts as rendered sections plus JSON manifest summaries/checksums and unified diff files"
-        in help_text
-    )
-    assert "--body-only" in help_text
-    assert "--output-dir OUTPUT_DIR" in help_text
-    assert "--readme-path README_PATH" in help_text
-    assert "--drift-only" in help_text
-    assert "--manifest-output MANIFEST_OUTPUT" in help_text
-    assert "--diff-output DIFF_OUTPUT" in help_text
+    _assert_script_parser_help_matches_shared_expectations("smoke_cli_docs_render")
 
 
 
@@ -1784,53 +1711,7 @@ def test_smoke_cli_docs_render_invalid_choice_errors_show_public_cli_choices(cap
 
 
 def test_smoke_cli_docs_fix_build_parser_lists_public_targets_examples_and_flags() -> None:
-    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
-
-    help_text = " ".join(smoke_cli_docs_fix.build_parser().format_help().split())
-
-    assert (
-        "Which smoke-wrapper README surface to repair. Aliases: all -> standalone_smoke, "
-        "session_triage_smoke, session_recovery_smoke, smoke_matrix."
-    ) in help_text
-    assert (
-        "smoke_cli_docs_fix.py # default all alias -> standalone_smoke, "
-        "session_triage_smoke, session_recovery_smoke, smoke_matrix"
-    ) in help_text
-    assert (
-        "smoke_cli_docs_fix.py standalone_smoke --diff # preview a single smoke wrapper README section diff without writing it"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_fix.py all --check # exit non-zero when any selected smoke wrapper README section drifts"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_fix.py all --check --json # emit machine-readable JSON drift results with manifest-style summaries/checksums for CI without scraping prose"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_fix.py all --check --json-output artifacts/smoke-cli-docs-fix.json # persist the same machine-readable drift report with manifest-style summaries/checksums alongside the normal console summary"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_fix.py standalone_smoke # repair a single smoke wrapper README section in place"
-        in help_text
-    )
-    assert (
-        "smoke_cli_docs_fix.py all --stdout # print the fully repaired README to stdout instead of writing it"
-        in help_text
-    )
-    assert "--readme-path README_PATH" in help_text
-    assert "--diff" in help_text
-    assert "--check" in help_text
-    assert "--json" in help_text
-    assert "--json-output JSON_OUTPUT" in help_text
-    assert "--drifted-readme-path DRIFTED_README_PATH" in help_text
-    assert "--bundle-index-path BUNDLE_INDEX_PATH" in help_text
-    assert "--render-output-dir RENDER_OUTPUT_DIR" in help_text
-    assert "--render-manifest-path RENDER_MANIFEST_PATH" in help_text
-    assert "--render-diff-path RENDER_DIFF_PATH" in help_text
-    assert "--stdout" in help_text
+    _assert_script_parser_help_matches_shared_expectations("smoke_cli_docs_fix")
 
 
 def test_smoke_cli_docs_fix_stdout_prints_repaired_readme_without_writing(tmp_path, capsys) -> None:

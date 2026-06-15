@@ -10,14 +10,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
-    SMOKE_CLI_DOC_SPECS,
-    SmokeCliExample,
-    SmokeScriptTarget,
-    SmokeTargetSelector,
+    SMOKE_CLI_DOC_ARTIFACTS_DEFAULT_TARGET_NAME,
+    SMOKE_CLI_DOC_ARTIFACTS_TARGET_SELECTOR,
     build_smoke_cli_doc_drift_report_payload,
+    build_smoke_cli_doc_artifacts_parser,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
-    build_smoke_cli_parser,
     collect_smoke_cli_readme_diffs,
     emit_smoke_results,
     normalize_text_output,
@@ -30,42 +28,10 @@ from strands_agent_tui.testing import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 README_PATH = REPO_ROOT / "README.md"
-DEFAULT_TARGET_NAME = "standalone_smoke"
+DEFAULT_TARGET_NAME = SMOKE_CLI_DOC_ARTIFACTS_DEFAULT_TARGET_NAME
 RENDER_SCRIPT_PATH = SCRIPT_DIR / "smoke_cli_docs_render.py"
 FIX_SCRIPT_PATH = SCRIPT_DIR / "smoke_cli_docs_fix.py"
-ARTIFACT_TARGET_SELECTOR = SmokeTargetSelector(
-    targets={
-        spec.script_name: SmokeScriptTarget(spec.script_name, Path(f"{spec.script_name}.py"))
-        for spec in SMOKE_CLI_DOC_SPECS
-    },
-    default_target_name=DEFAULT_TARGET_NAME,
-    alias_target_names={"all": tuple(spec.script_name for spec in SMOKE_CLI_DOC_SPECS)},
-)
-ARTIFACT_SCRIPT_EXAMPLES = (
-    SmokeCliExample("smoke_cli_docs_artifacts_smoke.py"),
-    SmokeCliExample(
-        "smoke_cli_docs_artifacts_smoke.py smoke_matrix",
-        target_name="smoke_matrix",
-        description="single smoke wrapper artifact contract",
-    ),
-    SmokeCliExample(
-        "smoke_cli_docs_artifacts_smoke.py session_triage_smoke --output-dir artifacts/smoke-cli-docs-artifacts/session-triage",
-        target_name="session_triage_smoke",
-        description="persist a session-triage wrapper artifact bundle for later review",
-    ),
-    SmokeCliExample(
-        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --readme-path README.md",
-        target_name="all",
-        description=(
-            "persist drifted README plus render/fix review artifacts for every public smoke wrapper"
-        ),
-    ),
-    SmokeCliExample(
-        "smoke_cli_docs_artifacts_smoke.py all --output-dir artifacts/smoke-cli-docs-artifacts --bundle-index-path artifacts/smoke-cli-docs-artifacts/index.json",
-        target_name="all",
-        description="persist one machine-readable bundle index for CI or later review",
-    ),
-)
+ARTIFACT_TARGET_SELECTOR = SMOKE_CLI_DOC_ARTIFACTS_TARGET_SELECTOR
 
 
 class ArtifactContractPaths(tuple):
@@ -121,80 +87,7 @@ class ArtifactContractPaths(tuple):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = build_smoke_cli_parser(
-        description=(
-            "Exercise the smoke CLI docs render/fix artifact contract against drifted README sections "
-            "and fail on any contract mismatch."
-        ),
-        choices=ARTIFACT_TARGET_SELECTOR.choices,
-        default_target_name=ARTIFACT_TARGET_SELECTOR.default_target_name,
-        resolve_target_names=ARTIFACT_TARGET_SELECTOR.resolve_target_names,
-        resolve_display_names=ARTIFACT_TARGET_SELECTOR.resolve_display_names,
-        item_help="Which public smoke-wrapper docs artifact contract to exercise.",
-        alias_target_names=ARTIFACT_TARGET_SELECTOR.alias_target_names,
-        examples=ARTIFACT_SCRIPT_EXAMPLES,
-        single_choice_description="single smoke wrapper artifact contract",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        help=(
-            "Keep the drifted README plus render/fix JSON/diff artifacts in this directory "
-            "instead of using a temporary directory."
-        ),
-    )
-    parser.add_argument(
-        "--readme-path",
-        type=Path,
-        default=README_PATH,
-        help=(
-            "Source README used to synthesize drift before exercising the render/fix contract "
-            f"(default: {README_PATH})."
-        ),
-    )
-    parser.add_argument(
-        "--drifted-readme-path",
-        type=Path,
-        help="Write the synthetic drifted README copy to this path instead of <artifact-root>/README-drifted.md.",
-    )
-    parser.add_argument(
-        "--render-output-dir",
-        type=Path,
-        help="Directory for rendered README sections instead of <artifact-root>/rendered.",
-    )
-    parser.add_argument(
-        "--render-manifest-path",
-        type=Path,
-        help="Path for the render manifest JSON instead of <artifact-root>/render-manifest.json.",
-    )
-    parser.add_argument(
-        "--render-diff-path",
-        type=Path,
-        help="Path for the render review patch instead of <artifact-root>/render-review.patch.",
-    )
-    parser.add_argument(
-        "--fix-check-json-path",
-        type=Path,
-        help="Path for the fix-side drift-check JSON instead of <artifact-root>/fix-check.json.",
-    )
-    parser.add_argument(
-        "--fix-repair-json-path",
-        type=Path,
-        help="Path for the fix-side repair JSON instead of <artifact-root>/fix-repair.json.",
-    )
-    parser.add_argument(
-        "--fix-post-check-json-path",
-        type=Path,
-        help="Path for the post-repair drift-check JSON instead of <artifact-root>/fix-post-check.json.",
-    )
-    parser.add_argument(
-        "--bundle-index-path",
-        type=Path,
-        help=(
-            "Path for the machine-readable bundle index instead of <artifact-root>/bundle-index.json."
-        ),
-    )
-    return parser
+    return build_smoke_cli_doc_artifacts_parser(readme_path=README_PATH)
 
 
 def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
