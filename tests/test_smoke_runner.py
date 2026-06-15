@@ -7,7 +7,10 @@ from textwrap import dedent
 import pytest
 
 from strands_agent_tui.testing.smoke_contract_registries import (
+    STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION,
+    STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME,
     STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS,
 )
 from strands_agent_tui.testing.smoke_script_harness import (
     build_standalone_malformed_contract_failure_output_lines,
@@ -775,6 +778,31 @@ def test_smoke_wrapper_cli_spec_derives_readme_shortcuts_from_examples() -> None
     assert standalone_spec.readme_operator_shortcut_lines() == tuple(
         f"- {snippet}" for snippet in standalone_spec.readme_all_shortcut_snippets()
     )
+
+
+def test_standalone_malformed_contract_registry_drives_targets_and_examples() -> None:
+    standalone_spec = STANDALONE_SMOKE_CLI_SPEC
+    target_templates_by_name = {template.name: template for template in standalone_spec.target_templates}
+    examples_by_target_name = {
+        example.target_name: example
+        for example in standalone_spec.examples
+        if example.target_name in (
+            *STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+            STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME,
+        )
+    }
+
+    assert STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES == tuple(
+        spec.target_name for spec in STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS
+    )
+    for spec in STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS:
+        assert target_templates_by_name[spec.target_name].script_filename == spec.script_filename
+        assert examples_by_target_name[spec.target_name].command == spec.command()
+        assert examples_by_target_name[spec.target_name].readme_description == spec.readme_description
+
+    alias_example = examples_by_target_name[STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME]
+    assert alias_example.command == f"standalone_smoke.py {STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME}"
+    assert alias_example.readme_description == STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION
 
 
 def test_select_alias_target_names_supports_any_all_and_candidate_filters() -> None:

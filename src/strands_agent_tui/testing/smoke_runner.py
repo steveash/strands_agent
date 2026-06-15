@@ -9,7 +9,12 @@ from pathlib import Path
 from time import perf_counter
 from typing import TextIO
 
-from .smoke_contract_registries import STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
+from .smoke_contract_registries import (
+    STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION,
+    STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS,
+)
 from .smoke_assertions import is_failed_smoke_check_line
 from .smoke_output import (
     emit_smoke_target_run_stdout_lines,
@@ -944,8 +949,10 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
         SmokeScriptTargetTemplate("docs", "smoke_cli_docs_smoke.py"),
         SmokeScriptTargetTemplate("docs-artifacts", "smoke_cli_docs_artifacts_smoke.py"),
         SmokeScriptTargetTemplate("docs-rerun-hint", "standalone_docs_rerun_hint_smoke.py"),
-        SmokeScriptTargetTemplate("malformed-result", "smoke_script_malformed_result_smoke.py"),
-        SmokeScriptTargetTemplate("malformed-detail", "smoke_script_malformed_detail_smoke.py"),
+        *(
+            SmokeScriptTargetTemplate(spec.target_name, spec.script_filename)
+            for spec in STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS
+        ),
         SmokeScriptTargetTemplate("matrix-artifact-roots", "smoke_matrix_artifact_roots_smoke.py"),
         SmokeScriptTargetTemplate("matrix-all-review-order", "smoke_matrix_all_review_order_smoke.py"),
         SmokeScriptTargetTemplate(
@@ -958,7 +965,7 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
     default_target_name="local",
     alias_target_names={
         "local": ("summary-utils", "shell-tool", "replay", "timeline", "docs", "docs-artifacts"),
-        "contract-negative": STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+        STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME: STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
         "docs-contract": (
             "docs-rerun-hint",
             *STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
@@ -1026,29 +1033,18 @@ STANDALONE_SMOKE_CLI_SPEC = SmokeWrapperCliSpec(
                 "docs-parity-only rerun hint lands before the fail-fast summary"
             ),
         ),
-        SmokeCliExample(
-            "standalone_smoke.py malformed-result",
-            target_name="malformed-result",
-            readme_description=(
-                "runs the malformed-result smoke-script contract regression that proves malformed "
-                "three-item result tuples are reported before wrapper consumers depend on them"
-            ),
+        *(
+            SmokeCliExample(
+                spec.command(),
+                target_name=spec.target_name,
+                readme_description=spec.readme_description,
+            )
+            for spec in STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS
         ),
         SmokeCliExample(
-            "standalone_smoke.py malformed-detail",
-            target_name="malformed-detail",
-            readme_description=(
-                "runs the malformed-detail smoke-script contract regression that proves missing, "
-                "mismatched, and boolean detail payloads are reported"
-            ),
-        ),
-        SmokeCliExample(
-            "standalone_smoke.py contract-negative",
-            target_name="contract-negative",
-            readme_description=(
-                "re-runs only the malformed smoke-script contract alias "
-                "(`malformed-result`, `malformed-detail`)"
-            ),
+            f"standalone_smoke.py {STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME}",
+            target_name=STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME,
+            readme_description=STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION,
         ),
         SmokeCliExample(
             "standalone_smoke.py docs-contract",
