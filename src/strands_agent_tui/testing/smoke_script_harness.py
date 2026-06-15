@@ -1892,8 +1892,14 @@ SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS = SmokeMatrixDocsReviewSuccessDefau
 )
 SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX = "[smoke-matrix] running docs-review"
 SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX = "docs-review smoke failed fast: "
+SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE = "live_runtime_requested= False"
+SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE = SmokeTargetRunFailureFixture.build_failed_fast(
+    target_name="standalone",
+    failed_line=SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE,
+    observed_lines=(SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE,),
+)
 SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE = (
-    "standalone smoke failed fast: live_runtime_requested= False"
+    SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.stderr_lines[0]
 )
 SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in "

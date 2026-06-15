@@ -14,6 +14,8 @@ from strands_agent_tui.testing import (
     DEFAULT_MALFORMED_SMOKE_SCRIPT_RESULT_ENTRY,
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE,
+    SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE,
+    SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE,
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
@@ -252,6 +254,18 @@ def test_exported_missing_api_key_failure_fixture_tracks_runtime_error_and_wrapp
         target_name="standalone",
         exit_code=1,
         observed_lines=(SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE,),
+    )
+
+
+def test_exported_live_runtime_failure_fixture_tracks_observer_and_wrapper_failure_lines() -> None:
+    assert SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE == SmokeTargetRunFailureFixture.build_failed_fast(
+        target_name="standalone",
+        failed_line=SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE,
+        observed_lines=(SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE,),
+    )
+    assert (
+        SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE
+        == SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.stderr_lines[0]
     )
 
 

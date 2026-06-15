@@ -26,6 +26,7 @@ from strands_agent_tui.testing import (
     SESSION_TRIAGE_SMOKE_WRAPPER,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_MATRIX_SELECTION_CASES,
+    SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE,
     SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS,
@@ -3080,12 +3081,14 @@ def test_smoke_matrix_all_failure_emits_live_runtime_export_hint(monkeypatch) ->
 
     def _run_smoke_target(target, **kwargs):
         observer = kwargs["output_line_observer"]
-        stderr = kwargs["stderr"]
         if target.name == "standalone-all":
             observer("provider=fake-strands mode=fake\n")
-            observer("live_runtime_requested= False\n")
-            print("standalone smoke failed fast: live_runtime_requested= False", file=stderr)
-            return 1
+            return SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.emit_failed_target_run(
+                stdout=kwargs["stdout"],
+                stderr=kwargs["stderr"],
+                output_line_observer=observer,
+                output_line_filter=kwargs.get("output_line_filter"),
+            )
         return 0
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
@@ -3101,7 +3104,7 @@ def test_smoke_matrix_all_failure_emits_live_runtime_export_hint(monkeypatch) ->
     summary_metadata = SMOKE_MATRIX_WRAPPER
     assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
     assert stderr.getvalue().splitlines() == [
-        "standalone smoke failed fast: live_runtime_requested= False",
+        *SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.stderr_lines,
         summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.6),
         (
             "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`; "
@@ -3156,12 +3159,13 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
     smoke_matrix = _load_script_module("smoke_matrix")
 
     def _run_smoke_target(target, **kwargs):
-        observer = kwargs["output_line_observer"]
-        stderr = kwargs["stderr"]
         if target.name == "standalone-all":
-            observer("live_runtime_requested= False\n")
-            print("standalone smoke failed fast: live_runtime_requested= False", file=stderr)
-            return 1
+            return SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.emit_failed_target_run(
+                stdout=kwargs["stdout"],
+                stderr=kwargs["stderr"],
+                output_line_observer=kwargs["output_line_observer"],
+                output_line_filter=kwargs.get("output_line_filter"),
+            )
         return 0
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)
@@ -3177,7 +3181,7 @@ def test_smoke_matrix_all_review_failure_emits_live_runtime_hint(monkeypatch) ->
     summary_metadata = SMOKE_MATRIX_WRAPPER
     assert stdout.getvalue().splitlines() == [summary_metadata.running_line(item_name="standalone")]
     assert stderr.getvalue().splitlines() == [
-        "standalone smoke failed fast: live_runtime_requested= False",
+        *SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.stderr_lines,
         summary_metadata.failed_line(item_name="standalone", elapsed_seconds=0.3),
         _expected_smoke_matrix_review_metadata_line(
             artifact_root="artifacts/smoke-cli-docs-artifacts/smoke-matrix-all-review",
@@ -3263,12 +3267,13 @@ def test_smoke_matrix_all_review_failure_persists_pending_review_metadata_artifa
     smoke_matrix = _load_script_module("smoke_matrix")
 
     def _run_smoke_target(target, **kwargs):
-        observer = kwargs["output_line_observer"]
-        stderr = kwargs["stderr"]
         if target.name == "standalone-all":
-            observer("live_runtime_requested= False\n")
-            print("standalone smoke failed fast: live_runtime_requested= False", file=stderr)
-            return 1
+            return SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.emit_failed_target_run(
+                stdout=kwargs["stdout"],
+                stderr=kwargs["stderr"],
+                output_line_observer=kwargs["output_line_observer"],
+                output_line_filter=kwargs.get("output_line_filter"),
+            )
         return 0
 
     monkeypatch.chdir(tmp_path)
