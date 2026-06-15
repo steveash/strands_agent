@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
@@ -203,6 +204,7 @@ class SessionArtifactStore:
         self.session_dir.mkdir(parents=True, exist_ok=True)
         self.jsonl_path = self.session_dir / "turns.jsonl"
         self.markdown_path = self.session_dir / "transcript.md"
+        self.manifest_path = self.session_dir / "manifest.json"
         self.session_state_path = self.session_dir / "session_state.json"
         self.pending_approvals_path = self.session_dir / "pending_approvals.json"
 
@@ -211,6 +213,7 @@ class SessionArtifactStore:
         with self.jsonl_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload) + "\n")
         self._append_markdown(payload)
+        self._write_manifest()
 
     def load_turns(self) -> list[TurnArtifact]:
         if not self.jsonl_path.exists():
@@ -234,6 +237,7 @@ class SessionArtifactStore:
             self._write_legacy_pending_approvals(state.pending_approvals)
         elif self.pending_approvals_path.exists():
             self.pending_approvals_path.unlink()
+        self._write_manifest(pending_approvals=state.pending_approvals)
 
     def load_session_state(self) -> SessionState | None:
         if self.session_state_path.exists():
@@ -253,7 +257,13 @@ class SessionArtifactStore:
         if self.pending_approvals_path.exists():
             self.pending_approvals_path.unlink()
             cleared = True
+        self._write_manifest(pending_approvals=[])
         return cleared
+
+    def load_manifest(self) -> dict[str, object] | None:
+        if not self.manifest_path.exists():
+            return None
+        return json.loads(self.manifest_path.read_text(encoding="utf-8"))
 
     def save_pending_approvals(self, approvals: list[ApprovalRequest]) -> None:
         state = self.load_session_state() or SessionState()
@@ -323,6 +333,71 @@ class SessionArtifactStore:
             with self.markdown_path.open("a", encoding="utf-8") as handle:
                 handle.write(body)
 
+    def _write_manifest(self, pending_approvals: list[ApprovalRequest] | None = None) -> None:
+        turns = self._load_turn_payloads()
+        turn_count = len(turns)
+        first_turn = turns[0] if turns else {}
+        last_turn = turns[-1] if turns else {}
+        event_counts: Counter[str] = Counter()
+        tool_counts: Counter[str] = Counter()
+        for turn in turns:
+            for event in turn.get("events") or []:
+                if not isinstance(event, dict):
+                    continue
+                kind = str(event.get("kind", "unknown") or "unknown")
+                event_counts[kind] += 1
+                data = event.get("data") or {}
+                if isinstance(data, dict):
+                    tool_name = str(data.get("tool_name", "") or "")
+                    if tool_name:
+                        tool_counts[tool_name] += 1
+
+        if pending_approvals is None:
+            pending_approvals = self.load_pending_approvals()
+
+        last_metadata = dict(last_turn.get("response_metadata") or {}) if isinstance(last_turn, dict) else {}
+        payload: dict[str, object] = {
+            "schema_version": "strands-agent/session-manifest-v1",
+            "session_id": self.session_id,
+            "session_dir": str(self.session_dir),
+            "updated_at": datetime.now(UTC).isoformat(),
+            "created_at": first_turn.get("created_at") if isinstance(first_turn, dict) else None,
+            "last_turn_at": last_turn.get("created_at") if isinstance(last_turn, dict) else None,
+            "turn_count": turn_count,
+            "error_count": sum(1 for turn in turns if bool(turn.get("error"))),
+            "pending_approval_count": len(pending_approvals),
+            "provider": str(last_turn.get("provider", "")) if isinstance(last_turn, dict) else "",
+            "mode": str(last_turn.get("mode", "")) if isinstance(last_turn, dict) else "",
+            "model": str(last_metadata.get("model", "") or ""),
+            "workspace_root": str(last_metadata.get("workspace_root", "") or ""),
+            "last_prompt_preview": _preview_text(str(last_turn.get("prompt", "") if isinstance(last_turn, dict) else "")),
+            "last_response_preview": _preview_text(
+                str(last_turn.get("response", "") if isinstance(last_turn, dict) else "")
+            ),
+            "event_counts": dict(sorted(event_counts.items())),
+            "tool_counts": dict(sorted(tool_counts.items())),
+            "artifacts": {
+                "turns": str(self.jsonl_path),
+                "transcript": str(self.markdown_path),
+                "session_state": str(self.session_state_path),
+            },
+        }
+        self.manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    def _load_turn_payloads(self) -> list[dict[str, object]]:
+        if not self.jsonl_path.exists():
+            return []
+        payloads: list[dict[str, object]] = []
+        with self.jsonl_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                payload = json.loads(stripped)
+                if isinstance(payload, dict):
+                    payloads.append(payload)
+        return payloads
+
     def _write_legacy_pending_approvals(self, approvals: list[ApprovalRequest]) -> None:
         payload = {
             "schema_version": "strands-agent/pending-approvals-v1",
@@ -367,3 +442,10 @@ def clear_session_picker_state(root: str | Path) -> bool:
 
 def _session_picker_state_path(root: str | Path) -> Path:
     return Path(root).expanduser().resolve() / SESSION_PICKER_STATE_FILENAME
+
+
+def _preview_text(value: str, limit: int = 120) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."

@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -143,6 +144,78 @@ def test_list_recent_sessions_orders_by_latest_activity_and_includes_prompt_prev
     assert "turn(s)" in sessions[0].render_line(1)
     assert "last tool: .: README.md" in sessions[0].render_line(1)
     assert "last event: tool_finished: list_files" in sessions[0].render_line(1)
+
+
+def test_session_manifest_tracks_turn_metadata_events_and_tools(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-manifest")
+    store.append_turn(
+        TurnArtifact(
+            prompt="list files in the active workspace",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "prompt_received",
+                    "Prompt accepted",
+                    "list files in the active workspace",
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files", "result_preview": ".: README.md"},
+                ),
+            ],
+            response_metadata={
+                "mode": "fake",
+                "model": "gpt-4o-mini",
+                "workspace_root": str(tmp_path),
+            },
+        )
+    )
+
+    manifest = store.load_manifest()
+
+    assert manifest is not None
+    assert manifest["schema_version"] == "strands-agent/session-manifest-v1"
+    assert manifest["session_id"] == "session-manifest"
+    assert manifest["turn_count"] == 1
+    assert manifest["error_count"] == 0
+    assert manifest["pending_approval_count"] == 0
+    assert manifest["provider"] == "fake-strands"
+    assert manifest["mode"] == "fake"
+    assert manifest["model"] == "gpt-4o-mini"
+    assert manifest["workspace_root"] == str(tmp_path)
+    assert manifest["last_prompt_preview"] == "list files in the active workspace"
+    assert manifest["event_counts"] == {"prompt_received": 1, "tool_finished": 1}
+    assert manifest["tool_counts"] == {"list_files": 1}
+    assert manifest["artifacts"]["turns"] == str(store.jsonl_path)
+    assert json.loads(store.manifest_path.read_text(encoding="utf-8")) == manifest
+
+
+def test_session_manifest_updates_pending_approval_count_with_session_state(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-manifest-pending")
+    _append_turn(store, "queue edit")
+
+    store.save_session_state(
+        SessionState(
+            pending_approvals=[
+                ApprovalRequest(
+                    request_id="approval-0001",
+                    tool_name="write_file",
+                    reason="Overwrite requires confirmation",
+                    args={"relative_path": "README.md"},
+                )
+            ]
+        )
+    )
+
+    assert store.load_manifest()["pending_approval_count"] == 1
+
+    store.clear_session_state()
+
+    assert store.load_manifest()["pending_approval_count"] == 0
 
 
 def test_latest_session_returns_newest_summary(tmp_path: Path) -> None:

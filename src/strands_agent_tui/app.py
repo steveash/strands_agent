@@ -777,6 +777,8 @@ class StrandsAgentApp(App):
 
     def _record_response(self, prompt: str, response) -> None:
         response_metadata = dict(response.metadata)
+        response_metadata.setdefault("model", self.config.openai_model)
+        response_metadata.setdefault("workspace_root", str(self.config.workspace_path))
         if response.pending_approval is not None:
             response_metadata["pending_approval_id"] = response.pending_approval.request_id
             response_metadata["pending_approval_tool"] = response.pending_approval.tool_name
@@ -803,6 +805,7 @@ class StrandsAgentApp(App):
                 data={
                     "session_id": self.artifact_store.session_id,
                     "session_dir": str(self.artifact_store.session_dir),
+                    "manifest_path": str(self.artifact_store.manifest_path),
                     "pending_approval": self.pending_approval is not None,
                 },
             )
@@ -829,7 +832,12 @@ class StrandsAgentApp(App):
                 provider="runtime-error",
                 mode=self.config.runtime_mode,
                 events=[error_event],
-                response_metadata={"provider": "runtime-error", "mode": self.config.runtime_mode},
+                response_metadata={
+                    "provider": "runtime-error",
+                    "mode": self.config.runtime_mode,
+                    "model": self.config.openai_model,
+                    "workspace_root": str(self.config.workspace_path),
+                },
                 error=True,
             )
         )
@@ -841,6 +849,7 @@ class StrandsAgentApp(App):
                 data={
                     "session_id": self.artifact_store.session_id,
                     "session_dir": str(self.artifact_store.session_dir),
+                    "manifest_path": str(self.artifact_store.manifest_path),
                     "error": True,
                 },
             )

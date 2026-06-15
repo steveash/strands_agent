@@ -498,6 +498,47 @@ def test_timeline_smoke_emits_runtime_and_persistence_summary_checks(monkeypatch
     assert "Focus: event 2/4 | spotlight on" in text
 
 
+def test_session_manifest_smoke_emits_artifact_contract_checks(monkeypatch) -> None:
+    session_manifest_smoke = _load_script_module("session_manifest_smoke")
+    output = StringIO()
+    real_emit_smoke_checks = session_manifest_smoke.emit_smoke_checks
+    monkeypatch.setattr(
+        session_manifest_smoke,
+        "emit_smoke_checks",
+        lambda checks: real_emit_smoke_checks(checks, stdout=output),
+    )
+
+    with redirect_stdout(output):
+        exit_code = session_manifest_smoke.main()
+    lines = output.getvalue().splitlines()
+
+    assert exit_code == 0
+    _assert_mixed_smoke_result_contract(
+        lines,
+        detail_names=[
+            "manifest_path",
+            "manifest_turn_count",
+            "manifest_tools",
+            "manifest_pending_after_save",
+            "manifest_pending_after_clear",
+        ],
+        check_names=[
+            "session_manifest_written",
+            "session_manifest_metadata",
+            "session_manifest_tool_counts",
+            "session_manifest_pending_state",
+        ],
+    )
+    assert any(line.endswith("manifest.json") for line in lines if line.startswith("manifest_path: "))
+    assert "manifest_turn_count: 1" in lines
+    assert "manifest_pending_after_save: 1" in lines
+    assert "manifest_pending_after_clear: 0" in lines
+    assert "session_manifest_written= True" in lines
+    assert "session_manifest_metadata= True" in lines
+    assert "session_manifest_tool_counts= True" in lines
+    assert "session_manifest_pending_state= True" in lines
+
+
 def test_approval_restart_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:
     approval_restart_smoke = _load_script_module("approval_restart_smoke")
     output = StringIO()

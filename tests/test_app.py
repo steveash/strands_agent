@@ -103,8 +103,18 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert payload["provider"] == "fake-strands"
         assert payload["schema_version"] == "strands-agent/v1"
         assert payload["response_metadata"]["mode"] == "fake"
+        assert payload["response_metadata"]["model"] == "gpt-4o-mini"
+        assert payload["response_metadata"]["workspace_root"]
         assert payload["events"][0]["timestamp"]
         assert payload["events"][2]["data"]["tool_name"] == "list_files"
+        manifest = json.loads((tmp_path / "test-session" / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["turn_count"] == 1
+        assert manifest["last_prompt_preview"] == "list files"
+        assert manifest["tool_counts"] == {"list_files": 2}
+        assert manifest["model"] == "gpt-4o-mini"
+        assert manifest["workspace_root"]
+        assert manifest["pending_approval_count"] == 0
+        assert manifest["artifacts"]["transcript"].endswith("transcript.md")
         transcript = (tmp_path / "test-session" / "transcript.md").read_text(encoding="utf-8")
         assert "# Session transcript: test-session" in transcript
         assert "**Response metadata**" in transcript
