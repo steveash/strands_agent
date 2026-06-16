@@ -111,6 +111,9 @@ class SmokeCliDocParserSpec:
             flag_snippets=self.flag_snippets,
         )
 
+    def invalid_choice_expected_choices(self) -> str:
+        return self.selector.invalid_choice_expected_choices()
+
     def build_parser(self, *, readme_path: Path | None = None) -> argparse.ArgumentParser:
         parser = build_smoke_cli_parser(
             description=self.description,
@@ -214,15 +217,6 @@ SMOKE_CLI_DOC_RENDER_SCRIPT_NAME = "smoke_cli_docs_render"
 SMOKE_CLI_DOC_FIX_SCRIPT_NAME = "smoke_cli_docs_fix"
 SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME = "smoke_cli_docs_artifacts_smoke"
 SMOKE_CLI_DOC_ARTIFACTS_DEFAULT_TARGET_NAME = "standalone_smoke"
-SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME = {
-    script_name: SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES
-    for script_name in (
-        SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME,
-        SMOKE_CLI_DOC_RENDER_SCRIPT_NAME,
-        SMOKE_CLI_DOC_FIX_SCRIPT_NAME,
-        SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME,
-    )
-}
 
 
 def _selector_alias_help_snippet(*, item_help: str, selector: SmokeTargetSelector) -> str:
@@ -671,6 +665,22 @@ SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME = {
 SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME = {
     spec.script_name: spec.help_required_snippets() for spec in SMOKE_CLI_DOC_PARSER_SPECS
 }
+
+
+def build_smoke_cli_doc_invalid_choice_expected_choices_registry(
+    specs: Iterable[SmokeCliDocParserSpec],
+) -> dict[str, str]:
+    registry: dict[str, str] = {}
+    for spec in specs:
+        if spec.script_name in registry:
+            raise ValueError(f"duplicate smoke cli doc invalid-choice registry entry {spec.script_name!r}")
+        registry[spec.script_name] = spec.invalid_choice_expected_choices()
+    return registry
+
+
+SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME = (
+    build_smoke_cli_doc_invalid_choice_expected_choices_registry(SMOKE_CLI_DOC_PARSER_SPECS)
+)
 
 
 def resolve_smoke_cli_doc_target_names(requested_target_name: str | None = None) -> tuple[str, ...]:

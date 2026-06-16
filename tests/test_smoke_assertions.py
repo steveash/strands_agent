@@ -8,6 +8,7 @@ from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_AUDIT_EXAMPLES,
     SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_FIX_EXAMPLES,
+    SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME,
     SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME,
     SMOKE_CLI_DOC_PARSER_SPECS,
     SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME,
@@ -21,6 +22,7 @@ from strands_agent_tui.testing import (
     build_smoke_cli_doc_audit_selector,
     build_smoke_cli_doc_fix_examples,
     build_smoke_cli_doc_fix_parser,
+    build_smoke_cli_doc_invalid_choice_expected_choices_registry,
     build_smoke_cli_doc_render_examples,
     build_smoke_cli_doc_render_parser,
     build_smoke_cli_doc_spec_registry,
@@ -164,6 +166,12 @@ def test_smoke_cli_doc_parser_specs_drive_parser_and_help_expectations(tmp_path:
     )
     assert SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME == {
         spec.script_name: spec.help_required_snippets() for spec in SMOKE_CLI_DOC_PARSER_SPECS
+    }
+    assert SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME == (
+        build_smoke_cli_doc_invalid_choice_expected_choices_registry(SMOKE_CLI_DOC_PARSER_SPECS)
+    )
+    assert SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME == {
+        spec.script_name: spec.invalid_choice_expected_choices() for spec in SMOKE_CLI_DOC_PARSER_SPECS
     }
 
     readme_path = tmp_path / "README.md"
