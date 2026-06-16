@@ -370,6 +370,8 @@ class SessionArtifactStore:
             "mode": str(last_turn.get("mode", "")) if isinstance(last_turn, dict) else "",
             "model": str(last_metadata.get("model", "") or ""),
             "workspace_root": str(last_metadata.get("workspace_root", "") or ""),
+            "profile_name": str(last_metadata.get("profile_name", "") or ""),
+            "profile_path": str(last_metadata.get("profile_path", "") or ""),
             "last_prompt_preview": _preview_text(str(last_turn.get("prompt", "") if isinstance(last_turn, dict) else "")),
             "last_response_preview": _preview_text(
                 str(last_turn.get("response", "") if isinstance(last_turn, dict) else "")

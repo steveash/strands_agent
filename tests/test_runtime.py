@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -574,6 +575,78 @@ def test_app_config_loads_stale_approval_warning_days(monkeypatch: pytest.Monkey
 
     assert config.stale_approval_warning_days == 14
     assert config.stale_approval_warning_seconds == 14 * 24 * 60 * 60
+
+
+def test_app_config_loads_workspace_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    profile_path = tmp_path / "profile.json"
+    workspace = tmp_path / "workspace"
+    artifacts = tmp_path / "custom-artifacts"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "name": "demo repo",
+                "runtime": "live",
+                "model": "gpt-4.1-mini",
+                "workspace": str(workspace),
+                "artifacts_root": str(artifacts),
+                "allow_overwrite": True,
+                "stale_approval_days": 3,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("STRANDS_AGENT_RUNTIME", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_ARTIFACTS_ROOT", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_ALLOW_OVERWRITE", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_STALE_APPROVAL_DAYS", raising=False)
+
+    from strands_agent_tui.config import load_config
+
+    config = load_config(profile_path=str(profile_path))
+
+    assert config.profile_name == "demo repo"
+    assert config.profile_path == str(profile_path.resolve())
+    assert config.runtime_mode == "live"
+    assert config.openai_model == "gpt-4.1-mini"
+    assert config.workspace_root == str(workspace)
+    assert config.artifacts_root == str(artifacts)
+    assert config.allow_overwrite is True
+    assert config.stale_approval_warning_days == 3
+
+
+def test_app_config_env_overrides_workspace_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    profile_path = tmp_path / "profile.json"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "name": "profile defaults",
+                "runtime": "fake",
+                "model": "profile-model",
+                "workspace": str(tmp_path / "profile-workspace"),
+                "allow_overwrite": "false",
+                "stale_approval_days": 3,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("STRANDS_AGENT_RUNTIME", "live")
+    monkeypatch.setenv("STRANDS_AGENT_OPENAI_MODEL", "env-model")
+    monkeypatch.setenv("STRANDS_AGENT_WORKSPACE_ROOT", str(tmp_path / "env-workspace"))
+    monkeypatch.setenv("STRANDS_AGENT_ALLOW_OVERWRITE", "true")
+    monkeypatch.setenv("STRANDS_AGENT_STALE_APPROVAL_DAYS", "9")
+
+    from strands_agent_tui.config import load_config
+
+    config = load_config(profile_path=str(profile_path))
+
+    assert config.profile_name == "profile defaults"
+    assert config.runtime_mode == "live"
+    assert config.openai_model == "env-model"
+    assert config.workspace_root == str(tmp_path / "env-workspace")
+    assert config.allow_overwrite is True
+    assert config.stale_approval_warning_days == 9
 
 
 def test_event_kind_categories_cover_runtime_tool_failure_persistence_and_intervention() -> None:

@@ -49,9 +49,11 @@ async def test_app_renders_runtime_status() -> None:
         events = app.query_one("#events").render()
         assert "FakeStrandsRuntime" in str(status)
         assert "Model: gpt-4o-mini" in str(status)
+        assert "Profile: ad hoc" in str(status)
         assert "Overwrite: off" in str(status)
         assert "Approval: none" in str(status)
         assert "Workspace:" in str(workspace)
+        assert "Profile: ad hoc" in str(workspace)
         assert "Approval: none pending" in str(approval)
         assert "Event Timeline" in str(events)
 
@@ -105,6 +107,8 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert payload["response_metadata"]["mode"] == "fake"
         assert payload["response_metadata"]["model"] == "gpt-4o-mini"
         assert payload["response_metadata"]["workspace_root"]
+        assert payload["response_metadata"]["profile_name"] == "ad hoc"
+        assert payload["response_metadata"]["profile_path"] == ""
         assert payload["events"][0]["timestamp"]
         assert payload["events"][2]["data"]["tool_name"] == "list_files"
         manifest = json.loads((tmp_path / "test-session" / "manifest.json").read_text(encoding="utf-8"))
@@ -113,6 +117,8 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert manifest["tool_counts"] == {"list_files": 2}
         assert manifest["model"] == "gpt-4o-mini"
         assert manifest["workspace_root"]
+        assert manifest["profile_name"] == "ad hoc"
+        assert manifest["profile_path"] == ""
         assert manifest["pending_approval_count"] == 0
         assert manifest["artifacts"]["transcript"].endswith("transcript.md")
         transcript = (tmp_path / "test-session" / "transcript.md").read_text(encoding="utf-8")
@@ -177,6 +183,58 @@ def test_parse_args_overrides_runtime_model_and_workspace(monkeypatch: pytest.Mo
     assert config.openai_model == "gpt-4.1-mini"
     assert config.workspace_root == "/tmp/demo"
     assert config.stale_approval_warning_days == 14
+
+
+def test_parse_args_loads_workspace_profile_and_cli_overrides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    profile_path = tmp_path / "profile.json"
+    profile_workspace = tmp_path / "profile-workspace"
+    cli_workspace = tmp_path / "cli-workspace"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "name": "daily prototype",
+                "runtime": "fake",
+                "model": "profile-model",
+                "workspace": str(profile_workspace),
+                "allow_overwrite": True,
+                "stale_approval_days": 2,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "strands-agent",
+            "--profile",
+            str(profile_path),
+            "--runtime",
+            "live",
+            "--workspace",
+            str(cli_workspace),
+            "--stale-approval-days",
+            "5",
+        ],
+    )
+    monkeypatch.delenv("STRANDS_AGENT_RUNTIME", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_ARTIFACTS_ROOT", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_ALLOW_OVERWRITE", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_STALE_APPROVAL_DAYS", raising=False)
+
+    config = parse_args()
+
+    assert config.profile_name == "daily prototype"
+    assert config.profile_path == str(profile_path.resolve())
+    assert config.runtime_mode == "live"
+    assert config.openai_model == "profile-model"
+    assert config.workspace_root == str(cli_workspace)
+    assert config.allow_overwrite is True
+    assert config.stale_approval_warning_days == 5
 
 
 def test_parse_args_loads_existing_session_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

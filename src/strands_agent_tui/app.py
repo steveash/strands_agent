@@ -462,7 +462,14 @@ class StrandsAgentApp(App):
             )
 
     def render_context_banner(self) -> str:
-        return f"Workspace: {self.config.workspace_path} | Session: {self.artifact_store.session_id}"
+        profile_bits = [f"Profile: {self.config.profile_name}"]
+        if self.config.profile_path:
+            profile_bits.append(str(self.config.profile_path))
+        return (
+            f"Workspace: {self.config.workspace_path} | "
+            f"{' | '.join(profile_bits)} | "
+            f"Session: {self.artifact_store.session_id}"
+        )
 
     def _pending_approval_queue(self) -> list[ApprovalRequest]:
         if hasattr(self.runtime, "pending_approvals"):
@@ -515,7 +522,8 @@ class StrandsAgentApp(App):
                 approval_state += f"(1/{len(pending_queue)})"
         return (
             f"Runtime: {runtime_value} | Mode: {mode_value} | "
-            f"Model: {self.config.openai_model} | Overwrite: {overwrite_policy} | "
+            f"Model: {self.config.openai_model} | Profile: {self.config.profile_name} | "
+            f"Overwrite: {overwrite_policy} | "
             f"Approval: {approval_state} | View: {self.history_view_label()} | "
             f"Turns: {len(self.history)} | Events: {len(self.events)}"
         )
@@ -779,6 +787,8 @@ class StrandsAgentApp(App):
         response_metadata = dict(response.metadata)
         response_metadata.setdefault("model", self.config.openai_model)
         response_metadata.setdefault("workspace_root", str(self.config.workspace_path))
+        response_metadata.setdefault("profile_name", self.config.profile_name)
+        response_metadata.setdefault("profile_path", self.config.profile_path)
         if response.pending_approval is not None:
             response_metadata["pending_approval_id"] = response.pending_approval.request_id
             response_metadata["pending_approval_tool"] = response.pending_approval.tool_name
@@ -837,6 +847,8 @@ class StrandsAgentApp(App):
                     "mode": self.config.runtime_mode,
                     "model": self.config.openai_model,
                     "workspace_root": str(self.config.workspace_path),
+                    "profile_name": self.config.profile_name,
+                    "profile_path": self.config.profile_path,
                 },
                 error=True,
             )
@@ -1279,6 +1291,13 @@ def parse_args() -> AppConfig:
         description="Launch the Strands coding-agent TUI prototype.",
     )
     parser.add_argument(
+        "--profile",
+        help=(
+            "Load a JSON workspace profile before env and CLI overrides. "
+            "May also be set with STRANDS_AGENT_PROFILE."
+        ),
+    )
+    parser.add_argument(
         "--runtime",
         choices=["fake", "live"],
         help="Override the runtime mode for this launch.",
@@ -1345,7 +1364,7 @@ def parse_args() -> AppConfig:
     if (args.pick_filter or args.pick_sort) and not args.pick_session:
         parser.error("Use --pick-filter/--pick-sort only with --pick-session.")
 
-    config = load_config().merge(
+    config = load_config(profile_path=args.profile).merge(
         runtime_mode=args.runtime,
         openai_model=args.model,
         workspace_root=args.workspace,

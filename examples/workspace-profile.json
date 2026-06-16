@@ -1,0 +1,9 @@
+{
+  "name": "local fake workspace",
+  "runtime": "fake",
+  "model": "gpt-4o-mini",
+  "workspace": ".",
+  "artifacts_root": "artifacts/sessions",
+  "allow_overwrite": false,
+  "stale_approval_days": 7
+}
