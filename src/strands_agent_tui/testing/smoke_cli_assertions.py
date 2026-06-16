@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from difflib import unified_diff
 from pathlib import Path
@@ -81,6 +81,49 @@ class SmokeCliDocSpec:
     readme_section_heading: str
     help_required_snippets: tuple[str, ...]
     readme_required_snippets: tuple[str, ...]
+
+
+ParserArgumentBuilder = Callable[[argparse.ArgumentParser, Path | None], None]
+
+
+def _no_extra_parser_arguments(parser: argparse.ArgumentParser, readme_path: Path | None) -> None:
+    return None
+
+
+@dataclass(frozen=True)
+class SmokeCliDocParserSpec:
+    script_name: str
+    description: str
+    selector: SmokeTargetSelector
+    item_help: str
+    examples: tuple[SmokeCliExample, ...]
+    single_choice_description: str
+    flag_snippets: tuple[str, ...] = ()
+    add_arguments: ParserArgumentBuilder = _no_extra_parser_arguments
+
+    def help_required_snippets(self) -> tuple[str, ...]:
+        return _smoke_cli_doc_parser_help_snippets(
+            item_help=self.item_help,
+            selector=self.selector,
+            examples=self.examples,
+            single_choice_description=self.single_choice_description,
+            flag_snippets=self.flag_snippets,
+        )
+
+    def build_parser(self, *, readme_path: Path | None = None) -> argparse.ArgumentParser:
+        parser = build_smoke_cli_parser(
+            description=self.description,
+            choices=self.selector.choices,
+            default_target_name=self.selector.default_target_name,
+            resolve_target_names=self.selector.resolve_target_names,
+            resolve_display_names=self.selector.resolve_display_names,
+            item_help=self.item_help,
+            alias_target_names=self.selector.alias_target_names,
+            examples=self.examples,
+            single_choice_description=self.single_choice_description,
+        )
+        self.add_arguments(parser, readme_path)
+        return parser
 
 
 def smoke_cli_doc_spec_id(spec: SmokeCliDocSpec) -> str:
@@ -363,112 +406,45 @@ def build_smoke_cli_doc_artifacts_examples() -> tuple[SmokeCliExample, ...]:
 SMOKE_CLI_DOC_ARTIFACTS_EXAMPLES = build_smoke_cli_doc_artifacts_examples()
 
 
-SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME = {
-    SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME: _smoke_cli_doc_parser_help_snippets(
-        item_help="Which smoke-wrapper docs surface to audit.",
-        selector=SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR,
-        examples=SMOKE_CLI_DOC_AUDIT_EXAMPLES,
-        single_choice_description="single smoke wrapper",
-    ),
-    SMOKE_CLI_DOC_RENDER_SCRIPT_NAME: _smoke_cli_doc_parser_help_snippets(
-        item_help="Which smoke-wrapper README surface to render.",
-        selector=SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR,
-        examples=SMOKE_CLI_DOC_RENDER_EXAMPLES,
-        single_choice_description="single smoke wrapper body preview",
-        flag_snippets=(
-            "--body-only",
-            "--output-dir OUTPUT_DIR",
-            "--readme-path README_PATH",
-            "--drift-only",
-            "--manifest-output MANIFEST_OUTPUT",
-            "--diff-output DIFF_OUTPUT",
-        ),
-    ),
-    SMOKE_CLI_DOC_FIX_SCRIPT_NAME: _smoke_cli_doc_parser_help_snippets(
-        item_help="Which smoke-wrapper README surface to repair.",
-        selector=SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR,
-        examples=SMOKE_CLI_DOC_FIX_EXAMPLES,
-        single_choice_description="single smoke wrapper section repair",
-        flag_snippets=(
-            "--readme-path README_PATH",
-            "--diff",
-            "--check",
-            "--json",
-            "--json-output JSON_OUTPUT",
-            "--drifted-readme-path DRIFTED_README_PATH",
-            "--bundle-index-path BUNDLE_INDEX_PATH",
-            "--render-output-dir RENDER_OUTPUT_DIR",
-            "--render-manifest-path RENDER_MANIFEST_PATH",
-            "--render-diff-path RENDER_DIFF_PATH",
-            "--stdout",
-        ),
-    ),
-    SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME: _smoke_cli_doc_parser_help_snippets(
-        item_help="Which public smoke-wrapper docs artifact contract to exercise.",
-        selector=SMOKE_CLI_DOC_ARTIFACTS_TARGET_SELECTOR,
-        examples=SMOKE_CLI_DOC_ARTIFACTS_EXAMPLES,
-        single_choice_description="single smoke wrapper artifact contract",
-        flag_snippets=(
-            "--output-dir OUTPUT_DIR",
-            "--readme-path README_PATH",
-            "--drifted-readme-path DRIFTED_README_PATH",
-            "--render-output-dir RENDER_OUTPUT_DIR",
-            "--render-manifest-path RENDER_MANIFEST_PATH",
-            "--render-diff-path RENDER_DIFF_PATH",
-            "--fix-check-json-path FIX_CHECK_JSON_PATH",
-            "--fix-repair-json-path FIX_REPAIR_JSON_PATH",
-            "--fix-post-check-json-path FIX_POST_CHECK_JSON_PATH",
-            "--bundle-index-path BUNDLE_INDEX_PATH",
-        ),
-    ),
-}
+SMOKE_CLI_DOC_RENDER_FLAG_SNIPPETS = (
+    "--body-only",
+    "--output-dir OUTPUT_DIR",
+    "--readme-path README_PATH",
+    "--drift-only",
+    "--manifest-output MANIFEST_OUTPUT",
+    "--diff-output DIFF_OUTPUT",
+)
+SMOKE_CLI_DOC_FIX_FLAG_SNIPPETS = (
+    "--readme-path README_PATH",
+    "--diff",
+    "--check",
+    "--json",
+    "--json-output JSON_OUTPUT",
+    "--drifted-readme-path DRIFTED_README_PATH",
+    "--bundle-index-path BUNDLE_INDEX_PATH",
+    "--render-output-dir RENDER_OUTPUT_DIR",
+    "--render-manifest-path RENDER_MANIFEST_PATH",
+    "--render-diff-path RENDER_DIFF_PATH",
+    "--stdout",
+)
+SMOKE_CLI_DOC_ARTIFACTS_FLAG_SNIPPETS = (
+    "--output-dir OUTPUT_DIR",
+    "--readme-path README_PATH",
+    "--drifted-readme-path DRIFTED_README_PATH",
+    "--render-output-dir RENDER_OUTPUT_DIR",
+    "--render-manifest-path RENDER_MANIFEST_PATH",
+    "--render-diff-path RENDER_DIFF_PATH",
+    "--fix-check-json-path FIX_CHECK_JSON_PATH",
+    "--fix-repair-json-path FIX_REPAIR_JSON_PATH",
+    "--fix-post-check-json-path FIX_POST_CHECK_JSON_PATH",
+    "--bundle-index-path BUNDLE_INDEX_PATH",
+)
 
 
-def resolve_smoke_cli_doc_target_names(requested_target_name: str | None = None) -> tuple[str, ...]:
-    return tuple(SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.resolve_target_names(requested_target_name))
-
-
-
-def build_smoke_cli_doc_audit_parser() -> argparse.ArgumentParser:
-    selector = SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR
-    return build_smoke_cli_parser(
-        description=(
-            "Audit smoke-wrapper `--help` text against the README and fail on missing public-doc snippets."
-        ),
-        choices=selector.choices,
-        default_target_name=selector.default_target_name,
-        resolve_target_names=selector.resolve_target_names,
-        resolve_display_names=selector.resolve_display_names,
-        item_help="Which smoke-wrapper docs surface to audit.",
-        alias_target_names=selector.alias_target_names,
-        examples=SMOKE_CLI_DOC_AUDIT_EXAMPLES,
-        single_choice_description="single smoke wrapper",
-    )
-
-
-def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:
-    spec = SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME.get(script_name)
-    if spec is None:
-        raise ValueError(f"unknown smoke cli doc spec {script_name!r}")
-    return spec
-
-
-
-def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
-    selector = SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR
-    parser = build_smoke_cli_parser(
-        description=(
-            "Render the expected smoke-wrapper README sections from shared metadata for preview or export."
-        ),
-        choices=selector.choices,
-        default_target_name=selector.default_target_name,
-        resolve_target_names=selector.resolve_target_names,
-        resolve_display_names=selector.resolve_display_names,
-        item_help="Which smoke-wrapper README surface to render.",
-        alias_target_names=selector.alias_target_names,
-        examples=SMOKE_CLI_DOC_RENDER_EXAMPLES,
-        single_choice_description="single smoke wrapper body preview",
-    )
+def _add_smoke_cli_doc_render_parser_arguments(
+    parser: argparse.ArgumentParser,
+    readme_path: Path | None,
+) -> None:
     parser.add_argument(
         "--body-only",
         action="store_true",
@@ -506,22 +482,12 @@ def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Write the drift-only unified diff review artifact to this file path (requires --drift-only).",
     )
-    return parser
 
 
-def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
-    selector = SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR
-    parser = build_smoke_cli_parser(
-        description="Repair smoke-wrapper README sections in place from shared metadata.",
-        choices=selector.choices,
-        default_target_name=selector.default_target_name,
-        resolve_target_names=selector.resolve_target_names,
-        resolve_display_names=selector.resolve_display_names,
-        item_help="Which smoke-wrapper README surface to repair.",
-        alias_target_names=selector.alias_target_names,
-        examples=SMOKE_CLI_DOC_FIX_EXAMPLES,
-        single_choice_description="single smoke wrapper section repair",
-    )
+def _add_smoke_cli_doc_fix_parser_arguments(
+    parser: argparse.ArgumentParser,
+    readme_path: Path | None,
+) -> None:
     parser.add_argument(
         "--readme-path",
         type=Path,
@@ -596,25 +562,14 @@ def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the fully repaired README to stdout instead of writing the README path.",
     )
-    return parser
 
 
-def build_smoke_cli_doc_artifacts_parser(*, readme_path: Path) -> argparse.ArgumentParser:
-    selector = SMOKE_CLI_DOC_ARTIFACTS_TARGET_SELECTOR
-    parser = build_smoke_cli_parser(
-        description=(
-            "Exercise the smoke CLI docs render/fix artifact contract against drifted README sections "
-            "and fail on any contract mismatch."
-        ),
-        choices=selector.choices,
-        default_target_name=selector.default_target_name,
-        resolve_target_names=selector.resolve_target_names,
-        resolve_display_names=selector.resolve_display_names,
-        item_help="Which public smoke-wrapper docs artifact contract to exercise.",
-        alias_target_names=selector.alias_target_names,
-        examples=SMOKE_CLI_DOC_ARTIFACTS_EXAMPLES,
-        single_choice_description="single smoke wrapper artifact contract",
-    )
+def _add_smoke_cli_doc_artifacts_parser_arguments(
+    parser: argparse.ArgumentParser,
+    readme_path: Path | None,
+) -> None:
+    if readme_path is None:
+        raise ValueError("readme_path is required for smoke CLI docs artifact parser")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -674,7 +629,94 @@ def build_smoke_cli_doc_artifacts_parser(*, readme_path: Path) -> argparse.Argum
             "Path for the machine-readable bundle index instead of <artifact-root>/bundle-index.json."
         ),
     )
-    return parser
+
+
+SMOKE_CLI_DOC_AUDIT_PARSER_SPEC = SmokeCliDocParserSpec(
+    script_name=SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME,
+    description=(
+        "Audit smoke-wrapper `--help` text against the README and fail on missing public-doc snippets."
+    ),
+    selector=SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR,
+    item_help="Which smoke-wrapper docs surface to audit.",
+    examples=SMOKE_CLI_DOC_AUDIT_EXAMPLES,
+    single_choice_description="single smoke wrapper",
+)
+SMOKE_CLI_DOC_RENDER_PARSER_SPEC = SmokeCliDocParserSpec(
+    script_name=SMOKE_CLI_DOC_RENDER_SCRIPT_NAME,
+    description=(
+        "Render the expected smoke-wrapper README sections from shared metadata for preview or export."
+    ),
+    selector=SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR,
+    item_help="Which smoke-wrapper README surface to render.",
+    examples=SMOKE_CLI_DOC_RENDER_EXAMPLES,
+    single_choice_description="single smoke wrapper body preview",
+    flag_snippets=SMOKE_CLI_DOC_RENDER_FLAG_SNIPPETS,
+    add_arguments=_add_smoke_cli_doc_render_parser_arguments,
+)
+SMOKE_CLI_DOC_FIX_PARSER_SPEC = SmokeCliDocParserSpec(
+    script_name=SMOKE_CLI_DOC_FIX_SCRIPT_NAME,
+    description="Repair smoke-wrapper README sections in place from shared metadata.",
+    selector=SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR,
+    item_help="Which smoke-wrapper README surface to repair.",
+    examples=SMOKE_CLI_DOC_FIX_EXAMPLES,
+    single_choice_description="single smoke wrapper section repair",
+    flag_snippets=SMOKE_CLI_DOC_FIX_FLAG_SNIPPETS,
+    add_arguments=_add_smoke_cli_doc_fix_parser_arguments,
+)
+SMOKE_CLI_DOC_ARTIFACTS_PARSER_SPEC = SmokeCliDocParserSpec(
+    script_name=SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME,
+    description=(
+        "Exercise the smoke CLI docs render/fix artifact contract against drifted README sections "
+        "and fail on any contract mismatch."
+    ),
+    selector=SMOKE_CLI_DOC_ARTIFACTS_TARGET_SELECTOR,
+    item_help="Which public smoke-wrapper docs artifact contract to exercise.",
+    examples=SMOKE_CLI_DOC_ARTIFACTS_EXAMPLES,
+    single_choice_description="single smoke wrapper artifact contract",
+    flag_snippets=SMOKE_CLI_DOC_ARTIFACTS_FLAG_SNIPPETS,
+    add_arguments=_add_smoke_cli_doc_artifacts_parser_arguments,
+)
+SMOKE_CLI_DOC_PARSER_SPECS = (
+    SMOKE_CLI_DOC_AUDIT_PARSER_SPEC,
+    SMOKE_CLI_DOC_RENDER_PARSER_SPEC,
+    SMOKE_CLI_DOC_FIX_PARSER_SPEC,
+    SMOKE_CLI_DOC_ARTIFACTS_PARSER_SPEC,
+)
+SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME = {
+    spec.script_name: spec for spec in SMOKE_CLI_DOC_PARSER_SPECS
+}
+SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME = {
+    spec.script_name: spec.help_required_snippets() for spec in SMOKE_CLI_DOC_PARSER_SPECS
+}
+
+
+def resolve_smoke_cli_doc_target_names(requested_target_name: str | None = None) -> tuple[str, ...]:
+    return tuple(SMOKE_CLI_DOC_AUDIT_TARGET_SELECTOR.resolve_target_names(requested_target_name))
+
+
+
+def build_smoke_cli_doc_audit_parser() -> argparse.ArgumentParser:
+    return SMOKE_CLI_DOC_AUDIT_PARSER_SPEC.build_parser()
+
+
+def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:
+    spec = SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME.get(script_name)
+    if spec is None:
+        raise ValueError(f"unknown smoke cli doc spec {script_name!r}")
+    return spec
+
+
+
+def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
+    return SMOKE_CLI_DOC_RENDER_PARSER_SPEC.build_parser()
+
+
+def build_smoke_cli_doc_fix_parser() -> argparse.ArgumentParser:
+    return SMOKE_CLI_DOC_FIX_PARSER_SPEC.build_parser()
+
+
+def build_smoke_cli_doc_artifacts_parser(*, readme_path: Path) -> argparse.ArgumentParser:
+    return SMOKE_CLI_DOC_ARTIFACTS_PARSER_SPEC.build_parser(readme_path=readme_path)
 
 
 

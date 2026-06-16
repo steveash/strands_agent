@@ -8,10 +8,14 @@ from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_AUDIT_EXAMPLES,
     SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_FIX_EXAMPLES,
+    SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME,
+    SMOKE_CLI_DOC_PARSER_SPECS,
+    SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME,
     SMOKE_CLI_DOC_SPECS,
     SMOKE_CLI_DOC_SPECS_BY_SCRIPT_NAME,
     SMOKE_WRAPPER_CLI_SPECS,
     SmokeCliDocSpec,
+    SmokeCliDocParserSpec,
     SmokeCliExample,
     build_smoke_cli_doc_audit_parser,
     build_smoke_cli_doc_audit_selector,
@@ -150,6 +154,29 @@ def test_smoke_cli_doc_audit_selector_and_parser_follow_wrapper_registry() -> No
         SmokeCliExample("smoke_cli_docs_smoke.py standalone_smoke", target_name="standalone_smoke"),
         SmokeCliExample("smoke_cli_docs_smoke.py smoke_matrix", target_name="smoke_matrix"),
     )
+
+
+def test_smoke_cli_doc_parser_specs_drive_parser_and_help_expectations(tmp_path: Path) -> None:
+    assert all(isinstance(spec, SmokeCliDocParserSpec) for spec in SMOKE_CLI_DOC_PARSER_SPECS)
+    assert tuple(SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME) == tuple(
+        spec.script_name for spec in SMOKE_CLI_DOC_PARSER_SPECS
+    )
+    assert SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME == {
+        spec.script_name: spec.help_required_snippets() for spec in SMOKE_CLI_DOC_PARSER_SPECS
+    }
+
+    readme_path = tmp_path / "README.md"
+    parser_help_by_script_name = {
+        spec.script_name: spec.build_parser(readme_path=readme_path).format_help()
+        for spec in SMOKE_CLI_DOC_PARSER_SPECS
+    }
+
+    assert parser_help_by_script_name["smoke_cli_docs_smoke"] == build_smoke_cli_doc_audit_parser().format_help()
+    assert parser_help_by_script_name["smoke_cli_docs_render"] == build_smoke_cli_doc_render_parser().format_help()
+    assert parser_help_by_script_name["smoke_cli_docs_fix"] == build_smoke_cli_doc_fix_parser().format_help()
+    assert SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME[
+        "smoke_cli_docs_artifacts_smoke"
+    ].build_parser(readme_path=readme_path).parse_args([]).readme_path == readme_path
 
     help_text = build_smoke_cli_doc_audit_parser().format_help()
     assert matches_public_cli_help(
