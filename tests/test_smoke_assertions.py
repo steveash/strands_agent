@@ -24,6 +24,7 @@ from strands_agent_tui.testing import (
     build_smoke_cli_doc_render_examples,
     build_smoke_cli_doc_render_parser,
     build_smoke_cli_doc_spec_registry,
+    describe_smoke_cli_example,
     failed_smoke_check_lines,
     is_failed_smoke_check_line,
     markdown_section_text,
@@ -188,6 +189,24 @@ def test_smoke_cli_doc_parser_specs_drive_parser_and_help_expectations(tmp_path:
             "smoke_cli_docs_smoke.py smoke_matrix # single smoke wrapper",
         ],
     )
+
+
+def test_smoke_cli_doc_parser_help_examples_use_shared_description_formatter() -> None:
+    spec = SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME["smoke_cli_docs_smoke"]
+
+    expected_example_snippets = tuple(
+        f"{example.command} # "
+        + describe_smoke_cli_example(
+            example,
+            default_target_name=spec.selector.default_target_name,
+            alias_target_names=spec.selector.alias_target_names,
+            resolve_display_names=spec.selector.resolve_display_names,
+            single_choice_description=spec.single_choice_description,
+        )
+        for example in spec.examples
+    )
+
+    assert spec.help_required_snippets()[1 : 1 + len(spec.examples)] == expected_example_snippets
 
 
 def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> None:

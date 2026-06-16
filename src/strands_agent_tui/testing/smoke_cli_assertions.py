@@ -13,6 +13,7 @@ from .smoke_runner import (
     SmokeTargetSelector,
     SmokeWrapperCliSpec,
     build_smoke_cli_parser,
+    describe_smoke_cli_example,
     format_cli_choices,
     smoke_wrapper_cli_spec,
 )
@@ -237,26 +238,6 @@ def _selector_alias_help_snippet(*, item_help: str, selector: SmokeTargetSelecto
     )
 
 
-def _describe_smoke_cli_doc_example(
-    example: SmokeCliExample,
-    *,
-    selector: SmokeTargetSelector,
-    single_choice_description: str,
-) -> str:
-    if example.description is not None:
-        return example.description
-
-    requested_target_name = selector.default_target_name if example.target_name is None else example.target_name
-    resolved_target_names = ", ".join(selector.resolve_display_names(example.target_name))
-    if requested_target_name in selector.alias_target_names:
-        if example.target_name is None:
-            return f"default {requested_target_name} alias -> {resolved_target_names}"
-        return f"{requested_target_name} alias -> {resolved_target_names}"
-    if example.target_name is None:
-        return f"default target -> {resolved_target_names}"
-    return single_choice_description
-
-
 def _smoke_cli_doc_example_help_snippets(
     examples: Iterable[SmokeCliExample],
     *,
@@ -265,9 +246,11 @@ def _smoke_cli_doc_example_help_snippets(
 ) -> tuple[str, ...]:
     return tuple(
         f"{example.command} # "
-        + _describe_smoke_cli_doc_example(
+        + describe_smoke_cli_example(
             example,
-            selector=selector,
+            default_target_name=selector.default_target_name,
+            alias_target_names=selector.alias_target_names,
+            resolve_display_names=selector.resolve_display_names,
             single_choice_description=single_choice_description,
         )
         for example in examples

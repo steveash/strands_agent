@@ -265,7 +265,7 @@ SmokeOutputLineObserver = Callable[[str], None]
 SmokeFailureHintBuilder = Callable[[SmokeScriptTarget, Sequence[str]], str | None]
 
 
-def _describe_cli_example(
+def describe_smoke_cli_example(
     example: SmokeCliExample,
     *,
     default_target_name: str,
@@ -313,7 +313,7 @@ def build_smoke_cli_parser(
             epilog_lines.append("")
         epilog_lines.append("Examples:")
         epilog_lines.extend(
-            f"  {example.command}  # {_describe_cli_example(example, default_target_name=default_target_name, alias_target_names=alias_target_names, resolve_display_names=resolve_display_names, single_choice_description=single_choice_description)}"
+            f"  {example.command}  # {describe_smoke_cli_example(example, default_target_name=default_target_name, alias_target_names=alias_target_names, resolve_display_names=resolve_display_names, single_choice_description=single_choice_description)}"
             for example in examples
         )
 
@@ -450,7 +450,7 @@ class SmokeWrapperCliSpec:
         selector = self._build_doc_selector()
         return tuple(
             f"{example.command} # "
-            + _describe_cli_example(
+            + describe_smoke_cli_example(
                 example,
                 default_target_name=selector.default_target_name,
                 alias_target_names=selector.alias_target_names,
