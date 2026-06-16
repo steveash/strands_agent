@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import strands_agent_tui.testing as testing_api
 from strands_agent_tui.testing import (
     DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_AUDIT_EXAMPLES,
@@ -85,6 +86,18 @@ from strands_agent_tui.testing import (
     smoke_wrapper_cli_spec,
     smoke_text_matches,
 )
+from strands_agent_tui.testing.smoke_contract_registries import (
+    STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION,
+    STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME,
+    STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS,
+    STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS_BY_NAME,
+    STANDALONE_MALFORMED_DETAIL_TARGET_NAME,
+    STANDALONE_MALFORMED_RESULT_TARGET_NAME,
+    StandaloneMalformedContractTargetSpec,
+    standalone_malformed_contract_failure_check_name,
+)
 
 
 README_PATH = Path(__file__).resolve().parent.parent / "README.md"
@@ -142,6 +155,65 @@ def test_smoke_cli_doc_spec_registry_tracks_shared_order_and_lookup_helper() -> 
 
     with pytest.raises(ValueError, match="unknown smoke cli doc spec 'missing_smoke'"):
         smoke_cli_doc_spec("missing_smoke")
+
+
+def test_package_testing_api_exports_standalone_malformed_contract_registry() -> None:
+    exported_names = {
+        "STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION",
+        "STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME",
+        "STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES",
+        "STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES",
+        "STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS",
+        "STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS_BY_NAME",
+        "STANDALONE_MALFORMED_DETAIL_TARGET_NAME",
+        "STANDALONE_MALFORMED_RESULT_TARGET_NAME",
+        "StandaloneMalformedContractTargetSpec",
+        "standalone_malformed_contract_failure_check_name",
+    }
+
+    assert exported_names <= set(testing_api.__all__)
+    assert testing_api.STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION == (
+        STANDALONE_MALFORMED_CONTRACT_ALIAS_README_DESCRIPTION
+    )
+    assert (
+        testing_api.STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME
+        == STANDALONE_MALFORMED_CONTRACT_ALIAS_TARGET_NAME
+    )
+    assert (
+        testing_api.STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES
+        == STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES
+    )
+    assert (
+        testing_api.STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
+        == STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
+    )
+    assert (
+        testing_api.STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS
+        == STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS
+    )
+    assert (
+        testing_api.STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS_BY_NAME
+        == STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS_BY_NAME
+    )
+    assert testing_api.STANDALONE_MALFORMED_DETAIL_TARGET_NAME == STANDALONE_MALFORMED_DETAIL_TARGET_NAME
+    assert testing_api.STANDALONE_MALFORMED_RESULT_TARGET_NAME == STANDALONE_MALFORMED_RESULT_TARGET_NAME
+    assert testing_api.StandaloneMalformedContractTargetSpec is StandaloneMalformedContractTargetSpec
+    assert (
+        testing_api.standalone_malformed_contract_failure_check_name
+        is standalone_malformed_contract_failure_check_name
+    )
+
+    assert tuple(testing_api.STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS_BY_NAME) == (
+        STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
+    )
+    assert all(
+        isinstance(spec, testing_api.StandaloneMalformedContractTargetSpec)
+        for spec in testing_api.STANDALONE_MALFORMED_CONTRACT_TARGET_SPECS
+    )
+    assert {
+        target_name: testing_api.standalone_malformed_contract_failure_check_name(target_name)
+        for target_name in testing_api.STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
+    } == testing_api.STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES
 
 
 
