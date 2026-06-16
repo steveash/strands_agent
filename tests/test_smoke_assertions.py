@@ -512,6 +512,16 @@ def test_build_smoke_cli_doc_spec_registry_rejects_duplicate_script_names() -> N
         build_smoke_cli_doc_spec_registry((spec, spec))
 
 
+def test_build_smoke_cli_doc_invalid_choice_registry_rejects_duplicate_script_names() -> None:
+    spec = SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME["smoke_cli_docs_smoke"]
+
+    with pytest.raises(
+        ValueError,
+        match="duplicate smoke cli doc invalid-choice registry entry 'smoke_cli_docs_smoke'",
+    ):
+        build_smoke_cli_doc_invalid_choice_expected_choices_registry((spec, spec))
+
+
 
 def test_smoke_cli_doc_specs_extract_markdown_sections_and_reuse_shared_snippets() -> None:
     standalone_spec = smoke_cli_doc_spec("standalone_smoke")
