@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 import strands_agent_tui.testing as testing_api
+import strands_agent_tui.testing.smoke_cli_assertions as smoke_cli_assertions
 from strands_agent_tui.testing import (
     DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_AUDIT_EXAMPLES,
@@ -215,6 +216,65 @@ def test_package_testing_api_exports_standalone_malformed_contract_registry() ->
         for target_name in testing_api.STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES
     } == testing_api.STANDALONE_MALFORMED_CONTRACT_FAILURE_CHECK_NAMES
 
+
+def test_package_testing_api_exports_smoke_cli_doc_parser_registry(tmp_path: Path) -> None:
+    exported_names = {
+        "SMOKE_CLI_DOC_ARTIFACTS_DEFAULT_TARGET_NAME",
+        "SMOKE_CLI_DOC_ARTIFACTS_EXAMPLES",
+        "SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME",
+        "SMOKE_CLI_DOC_ARTIFACTS_TARGET_SELECTOR",
+        "SMOKE_CLI_DOC_AUDIT_EXAMPLES",
+        "SMOKE_CLI_DOC_AUDIT_SCRIPT_NAME",
+        "SMOKE_CLI_DOC_FIX_EXAMPLES",
+        "SMOKE_CLI_DOC_FIX_SCRIPT_NAME",
+        "SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME",
+        "SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME",
+        "SMOKE_CLI_DOC_PARSER_SPECS",
+        "SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME",
+        "SMOKE_CLI_DOC_RENDER_EXAMPLES",
+        "SMOKE_CLI_DOC_RENDER_SCRIPT_NAME",
+        "SmokeCliDocParserSpec",
+        "build_smoke_cli_doc_artifacts_examples",
+        "build_smoke_cli_doc_artifacts_parser",
+        "build_smoke_cli_doc_artifacts_selector",
+        "build_smoke_cli_doc_audit_examples",
+        "build_smoke_cli_doc_audit_parser",
+        "build_smoke_cli_doc_audit_selector",
+        "build_smoke_cli_doc_fix_examples",
+        "build_smoke_cli_doc_fix_parser",
+        "build_smoke_cli_doc_invalid_choice_expected_choices_registry",
+        "build_smoke_cli_doc_render_examples",
+        "build_smoke_cli_doc_render_parser",
+    }
+
+    assert exported_names <= set(testing_api.__all__)
+    for name in exported_names:
+        assert getattr(testing_api, name) is getattr(smoke_cli_assertions, name)
+
+    assert tuple(testing_api.SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME) == tuple(
+        spec.script_name for spec in testing_api.SMOKE_CLI_DOC_PARSER_SPECS
+    )
+    assert all(
+        isinstance(spec, testing_api.SmokeCliDocParserSpec)
+        for spec in testing_api.SMOKE_CLI_DOC_PARSER_SPECS
+    )
+    assert testing_api.SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME == {
+        spec.script_name: spec.help_required_snippets()
+        for spec in testing_api.SMOKE_CLI_DOC_PARSER_SPECS
+    }
+    assert testing_api.SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME == {
+        spec.script_name: spec.invalid_choice_expected_choices()
+        for spec in testing_api.SMOKE_CLI_DOC_PARSER_SPECS
+    }
+    assert (
+        testing_api.SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME[
+            testing_api.SMOKE_CLI_DOC_ARTIFACTS_SCRIPT_NAME
+        ]
+        .build_parser(readme_path=tmp_path / "README.md")
+        .parse_args([])
+        .readme_path
+        == tmp_path / "README.md"
+    )
 
 
 def test_smoke_cli_doc_audit_selector_and_parser_follow_wrapper_registry() -> None:
