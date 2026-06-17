@@ -51,6 +51,7 @@ from strands_agent_tui.testing import (
     build_smoke_matrix_review_artifact_location_messages,
     build_smoke_matrix_review_metadata_line,
     build_smoke_matrix_review_metadata_payload,
+    build_smoke_matrix_public_label_fail_fast_fixture,
     build_smoke_cli_doc_drift_report_payload,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
@@ -3050,10 +3051,15 @@ def test_smoke_matrix_preserves_public_bundle_labels_in_fail_fast_stderr(monkeyp
     smoke_matrix = _load_script_module("smoke_matrix")
 
     def _run_smoke_target(target, **kwargs):
-        stderr = kwargs["stderr"]
         if target.name == "standalone-all":
-            print(f"{target.display_label} smoke failed fast: standalone_check= False", file=stderr)
-            return 1
+            return build_smoke_matrix_public_label_fail_fast_fixture(
+                display_label=target.display_label,
+            ).emit_failed_target_run(
+                stdout=kwargs["stdout"],
+                stderr=kwargs["stderr"],
+                output_line_observer=kwargs.get("output_line_observer"),
+                output_line_filter=kwargs.get("output_line_filter"),
+            )
         return 0
 
     monkeypatch.setattr(smoke_matrix, "run_smoke_target", _run_smoke_target)

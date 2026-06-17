@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import strands_agent_tui.testing as testing_api
 from strands_agent_tui.testing.smoke_contract_registries import (
     STANDALONE_MALFORMED_CONTRACT_TARGET_NAMES,
 )
@@ -35,6 +36,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_RESULT_PRESET,
     SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX,
+    SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
     SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT,
@@ -79,6 +81,7 @@ from strands_agent_tui.testing import (
     build_script_driver_source,
     build_smoke_matrix_docs_review_observation_fixture,
     build_smoke_matrix_docs_review_observer_spec,
+    build_smoke_matrix_public_label_fail_fast_fixture,
     build_standalone_docs_rerun_hint_contract,
     build_standalone_docs_rerun_hint_results,
     collect_smoke_wrapper_failure_output,
@@ -266,6 +269,31 @@ def test_exported_live_runtime_failure_fixture_tracks_observer_and_wrapper_failu
     assert (
         SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE
         == SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE.stderr_lines[0]
+    )
+
+
+def test_package_testing_api_exports_smoke_matrix_public_label_fail_fast_fixture() -> None:
+    exported_names = {
+        "SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE",
+        "build_smoke_matrix_public_label_fail_fast_fixture",
+    }
+
+    assert exported_names <= set(testing_api.__all__)
+    assert (
+        testing_api.SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE
+        == SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE
+    )
+    assert (
+        testing_api.build_smoke_matrix_public_label_fail_fast_fixture
+        is build_smoke_matrix_public_label_fail_fast_fixture
+    )
+
+    fixture = testing_api.build_smoke_matrix_public_label_fail_fast_fixture(
+        display_label="standalone",
+    )
+    assert fixture == SmokeTargetRunFailureFixture.build_failed_fast(
+        target_name="standalone",
+        failed_line=SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE,
     )
 
 

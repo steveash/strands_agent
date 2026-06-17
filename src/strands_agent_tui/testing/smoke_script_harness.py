@@ -1893,6 +1893,20 @@ SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS = SmokeMatrixDocsReviewSuccessDefau
 SMOKE_MATRIX_DOCS_REVIEW_RUNNING_PREFIX = "[smoke-matrix] running docs-review"
 SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX = "docs-review smoke failed fast: "
 SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE = "live_runtime_requested= False"
+SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE = "standalone_check= False"
+
+
+def build_smoke_matrix_public_label_fail_fast_fixture(
+    *,
+    display_label: str,
+    failed_line: str = SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE,
+) -> SmokeTargetRunFailureFixture:
+    return SmokeTargetRunFailureFixture.build_failed_fast(
+        target_name=display_label,
+        failed_line=failed_line,
+    )
+
+
 SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE = SmokeTargetRunFailureFixture.build_failed_fast(
     target_name="standalone",
     failed_line=SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE,
