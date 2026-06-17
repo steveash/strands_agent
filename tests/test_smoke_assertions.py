@@ -1,3 +1,4 @@
+import json
 from textwrap import dedent
 from pathlib import Path
 
@@ -397,6 +398,73 @@ def test_package_testing_api_exports_smoke_cli_doc_artifact_payload_helpers(tmp_
     assert "diff_lines" not in report_payload["sections"][0]
     assert repair_payload["changed"] is True
     assert repair_payload["wrote_readme"] is True
+
+
+def test_package_testing_api_smoke_cli_doc_artifact_paths_and_summaries_use_filesystem(
+    tmp_path: Path,
+) -> None:
+    checkout_root = tmp_path / "checkout"
+    review_root = checkout_root / "artifacts" / "review"
+    matrix_summary_path = review_root / "matrix-summary.json"
+    rendered_output_path = review_root / "rendered" / "standalone_smoke.md"
+
+    testing_api.write_text_output(rendered_output_path, "rendered docs")
+    assert rendered_output_path.read_text(encoding="utf-8") == "rendered docs\n"
+    assert testing_api.normalize_text_output("already normalized\n") == "already normalized\n"
+    assert testing_api.rendered_summary("\n\nfirst summary line\nsecond line") == "first summary line"
+
+    long_summary = "summary " + "x" * 140
+    truncated_summary = testing_api.rendered_summary(long_summary)
+    assert len(truncated_summary) == 120
+    assert truncated_summary.startswith("summary ")
+    assert truncated_summary != long_summary
+
+    matrix_summary_payload = {
+        "display_name": "docs-review",
+        "target_name": "docs-review",
+        "bundle_index_rerun_hint": ".venv/bin/python scripts/smoke_matrix.py review",
+        "artifact_root": "artifacts/review",
+        "bundle_index_path": "artifacts/review/index.json",
+        "matrix_summary_path": "artifacts/review/matrix-summary.json",
+        "absolute_report_path": str(tmp_path / "absolute-report.json"),
+    }
+    testing_api.write_text_output(matrix_summary_path, json.dumps(matrix_summary_payload))
+
+    resolved_from_text = testing_api.output_path_from_prefixed_lines(
+        f"noise\n[smoke-matrix] review matrix summary: {matrix_summary_path.relative_to(checkout_root)}\n",
+        prefix="[smoke-matrix] review matrix summary: ",
+        checkout_root=checkout_root,
+    )
+    assert resolved_from_text == matrix_summary_path
+    assert (
+        testing_api.output_path_from_prefixed_lines(
+            "noise only",
+            prefix="[smoke-matrix] review matrix summary: ",
+            checkout_root=checkout_root,
+        )
+        is None
+    )
+
+    payload, paths = testing_api.load_review_matrix_summary(matrix_summary_path, checkout_root=checkout_root)
+    assert payload == matrix_summary_payload
+    assert paths == {
+        "absolute_report_path": tmp_path / "absolute-report.json",
+        "artifact_root": review_root,
+        "bundle_index_path": review_root / "index.json",
+        "matrix_summary_path": matrix_summary_path,
+    }
+    assert testing_api.resolve_review_artifact_paths(
+        matrix_summary_payload,
+        checkout_root=checkout_root,
+    ) == paths
+    assert testing_api.resolve_checkout_path(
+        "artifacts/review/index.json",
+        checkout_root=checkout_root,
+    ) == review_root / "index.json"
+    assert testing_api.load_review_matrix_summary(
+        review_root / "missing-summary.json",
+        checkout_root=checkout_root,
+    ) == ({}, {})
 
 
 def test_smoke_cli_doc_audit_selector_and_parser_follow_wrapper_registry() -> None:
