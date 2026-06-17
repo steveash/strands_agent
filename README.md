@@ -75,7 +75,7 @@ strands_agent/
 
 ## Current status
 
-**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, restart-safe per-event timeline spotlight navigation on top of the existing compact-vs-expanded observability controls, an explicit jump-back-to-latest timeline control alongside spotlight mode, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, focused timeline inspection context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds session-level `manifest.json` artifacts plus basic JSON workspace profiles so saved runs can carry provider/model/workspace/profile metadata, compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views with oldest pending age/timestamp cues that now fall back to session activity when approval timestamps are missing and explicitly label when that fallback was used, selected-session preview provenance lines that now show pending-only age/timestamp/source plus fresh-vs-restored queue provenance and bounded numbered multi-approval queue breakdowns inside both reopen surfaces, explicit stale-cutoff hints in picker/switcher legends, prompts, empty states, and stale page-level rollup lines, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording while collapsing after three visible items with an explicit hidden-count cue, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts, recent-session intervention previews/rollups that now reuse the same timeline wording plus target-kind and continuation mix metrics, operator-controlled timeline detail/raw toggles plus per-event spotlight inspection and jump-back-to-latest control whose state now survives a TUI restart, recent-session restore badges/previews that now surface saved timeline filter/detail/raw/spotlight context before reopening a session, and a shared intervention-mix smoke helper so picker/switcher triage checks keep one contract for their intervention surface, target-kind mix, and continuation mix expectations.**
+**Phase 1 is complete, Phase 2 now splits the shell-command seam into direct read-only inspection plus approval-gated test execution alongside higher-signal workspace summary and conservative edit/mutation seams, Phase 3 includes resumable session-artifact replay plus both launch-time and in-app recent-session reopen flows, restart-safe per-event timeline spotlight navigation on top of the existing compact-vs-expanded observability controls, an explicit jump-back-to-latest timeline control alongside spotlight mode, Phase 4 now persists restart-safe session state beyond approvals so confirm-needed mutations, replay/filter context, focused timeline inspection context, partially typed follow-up prompts, and the in-app session-switcher chooser state can survive a TUI restart, and Phase 5 now adds session-level `manifest.json` artifacts plus basic JSON workspace profiles with explicit config-source provenance so saved runs can carry provider/model/workspace/profile metadata and show whether effective runtime/model/workspace/artifact/safety settings came from defaults, profiles, env vars, CLI overrides, or resumed-session selection, compact restore-state badges, selected-session preview blocks, shell/test outcome rollups, workspace-inspect vs workspace-edit triage lanes, dedicated workspace/shell/tool/intervention backlog rollup headers with overlap and page summaries across both reopen surfaces, compact tool-failure and intervention-family/request mix summaries for those tool/intervention headers, pending/denied approval backlog rollups with queue volume, family mix, restored-queue hints, and oldest-age cues across both reopen surfaces, denied-approval triage filters, approval-age and stale-session cues for recent-session triage, absolute UTC timestamps alongside approval/stale/intervention age cues plus the tool/workspace/shell lane rollups, attention sorting that now distinguishes denied test approvals from denied edits and executed test failures, recent multi-tool streak summaries, restart-safe launch-time picker state, lane-collapsed workspace/shell previews inside focused triage filters so overlap sessions stop leaking off-lane history, explicit pending-only lane hints when `workspace-edit` or `shell-test` matches are coming from queued approvals rather than executed lane events yet, dedicated pending-only queue-mix summary lines for focused `workspace-edit` and `shell-test` views with oldest pending age/timestamp cues that now fall back to session activity when approval timestamps are missing and explicitly label when that fallback was used, selected-session preview provenance lines that now show pending-only age/timestamp/source plus fresh-vs-restored queue provenance and bounded numbered multi-approval queue breakdowns inside both reopen surfaces, explicit stale-cutoff hints in picker/switcher legends, prompts, empty states, and stale page-level rollup lines, a stubbed live-runtime approval-restore smoke path that persists/reloads approval metadata end-to-end, restored multi-approval queue breakdowns that mirror the existing pending-triage wording while collapsing after three visible items with an explicit hidden-count cue, shared approval queue/age metadata that now follows confirmation-required, approved, denied, and continuation events into both fake/live runtime flows and the TUI banners, compact event-timeline summary lines that expose approval provenance, queue context, and tool/result previews without forcing the operator to parse raw event dicts, recent-session intervention previews/rollups that now reuse the same timeline wording plus target-kind and continuation mix metrics, operator-controlled timeline detail/raw toggles plus per-event spotlight inspection and jump-back-to-latest control whose state now survives a TUI restart, recent-session restore badges/previews that now surface saved timeline filter/detail/raw/spotlight context before reopening a session, and a shared intervention-mix smoke helper so picker/switcher triage checks keep one contract for their intervention surface, target-kind mix, and continuation mix expectations.**
 
 What exists now:
 - a runnable Textual TUI scaffold,
@@ -134,30 +134,32 @@ What exists now:
 - and a dedicated `scripts/session_triage_intervention_mix_smoke.py` contract runner that exercises the public session-triage wrapper and asserts intervention target/continuation mix lines end-to-end across both picker and switcher flows.
 
 What changed this run:
-- added explicit JSON workspace profile support through `--profile` and `STRANDS_AGENT_PROFILE`,
-- made profile files a baseline config layer while keeping environment variables and CLI flags as visible overrides,
-- surfaced the active profile in the TUI status/context banner,
-- persisted `profile_name` and `profile_path` into per-turn response metadata and session `manifest.json`,
-- added `examples/workspace-profile.json` as a small editable profile template,
+- added field-level config-source provenance to `AppConfig`,
+- surfaced effective config sources in the TUI context banner,
+- persisted `config_sources` into per-turn response metadata and session `manifest.json`,
+- made resumed-session artifact-root selection visible as a `session` source instead of blending into ordinary CLI overrides,
+- added `scripts/profile_config_smoke.py` to validate profile/env/CLI provenance without launching the TUI or calling a live model,
 - extended focused tests for profile loading, env/CLI precedence, TUI rendering, turn metadata, and manifest output,
-- validated the increment with focused config/app coverage and broader app/runtime tests,
+- validated the increment with focused coverage, the new smoke, compile checks, and the full pytest suite,
 - and no destructive unblock step was needed this run.
 
 Why this matters now:
-- Phase 5 calls for basic workspace profile config, and profiles make repeated fake/live Strands experiments reproducible without editing shell state every time,
-- profile metadata now follows the run into artifacts, so Steve can compare sessions by workspace/model/profile instead of guessing from transcript prose,
-- and it sharpens the Strands learning value because runtime selection, model choice, workspace root, artifact root, overwrite posture, and stale-approval policy become one inspectable launch contract.
+- Phase 5 calls for config switching and resumable session metadata, and source provenance shows the exact launch contract that produced a Strands run,
+- Steve can now distinguish "the profile said this" from "the env or CLI overrode this" when comparing fake/live sessions,
+- and it sharpens the Strands learning value because runtime selection, model choice, workspace root, artifact root, overwrite posture, and stale-approval policy become one inspectable, persisted contract instead of hidden shell state.
 
 How we know the prototype is working right now:
-- focused pytest coverage now proves profiles load from JSON, env and CLI overrides win in the expected order, and profile metadata lands in turn artifacts plus session manifests,
-- the TUI status/context surfaces show the active profile alongside runtime/model/workspace context,
-- focused app/runtime coverage and the full pytest suite both pass after the profile increment.
+- focused pytest coverage now proves profiles load from JSON, env and CLI overrides win in the expected order, and source provenance lands in turn artifacts plus session manifests,
+- the TUI context surface shows the active profile plus effective config sources alongside runtime/model/workspace context,
+- the new profile-config smoke proves profile/env/CLI provenance from a plain command-line check,
+- focused coverage and the full pytest suite both pass after the provenance increment.
 
 Current evidence:
-- focused profile/app coverage: `.venv/bin/pytest -q tests/test_runtime.py::test_app_config_loads_workspace_profile tests/test_runtime.py::test_app_config_env_overrides_workspace_profile tests/test_app.py::test_parse_args_loads_workspace_profile_and_cli_overrides tests/test_app.py::test_submit_prompt_updates_history_output_and_event_timeline tests/test_app.py::test_app_renders_runtime_status` => `5 passed in 2.92s`,
+- focused profile/app/session coverage: `.venv/bin/pytest -q tests/test_runtime.py::test_app_config_loads_workspace_profile tests/test_runtime.py::test_app_config_env_overrides_workspace_profile tests/test_app.py::test_parse_args_loads_workspace_profile_and_cli_overrides tests/test_app.py::test_submit_prompt_updates_history_output_and_event_timeline tests/test_app.py::test_app_renders_runtime_status tests/test_sessions.py::test_session_manifest_tracks_turn_metadata_events_and_tools` => `6 passed in 2.55s`,
+- profile provenance smoke: `.venv/bin/python scripts/profile_config_smoke.py` => `profile_config_sources= True`, `env_config_sources= True`, `cli_config_sources= True`,
 - source compile check: `.venv/bin/python -m compileall -q src scripts` => passed,
-- broader app/runtime coverage: `.venv/bin/pytest -q tests/test_runtime.py tests/test_app.py` => `85 passed in 45.95s`,
-- full automated tests: `.venv/bin/pytest -q` => `581 passed in 146.35s (0:02:26)`.
+- broader app/runtime coverage: included in the full suite,
+- full automated tests: `.venv/bin/pytest -q` => `586 passed in 147.98s (0:02:27)`.
 
 ## First five phases
 
@@ -389,6 +391,14 @@ strands-agent --profile examples/workspace-profile.json --runtime live --model g
 ```
 
 Profile files are a baseline config layer. Environment variables and CLI flags still override them, so a profile can define the workspace, artifact root, runtime, model, overwrite posture, and stale-approval cutoff without hiding one-off experiments. The active profile is shown in the status/context banner and saved into turn metadata plus `manifest.json`.
+
+The app also records where each effective config value came from. The context banner, turn metadata, and session manifest now distinguish defaults, profile values, environment variables, CLI overrides, and resumed-session artifact roots. To validate that provenance contract without launching the TUI:
+
+```bash
+.venv/bin/python scripts/profile_config_smoke.py
+```
+
+Expected result includes `profile_config_sources= True`, `env_config_sources= True`, and `cli_config_sources= True`.
 
 ### Use live runtime locally
 

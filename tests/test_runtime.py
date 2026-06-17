@@ -614,6 +614,13 @@ def test_app_config_loads_workspace_profile(monkeypatch: pytest.MonkeyPatch, tmp
     assert config.artifacts_root == str(artifacts)
     assert config.allow_overwrite is True
     assert config.stale_approval_warning_days == 3
+    assert config.config_sources["runtime_mode"] == "profile"
+    assert config.config_sources["openai_model"] == "profile"
+    assert config.config_sources["workspace_root"] == "profile"
+    assert config.config_sources["artifacts_root"] == "profile"
+    assert config.config_sources["allow_overwrite"] == "profile"
+    assert config.config_sources["stale_approval_warning_days"] == "profile"
+    assert "runtime=profile" in config.config_source_summary()
 
 
 def test_app_config_env_overrides_workspace_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -647,6 +654,11 @@ def test_app_config_env_overrides_workspace_profile(monkeypatch: pytest.MonkeyPa
     assert config.workspace_root == str(tmp_path / "env-workspace")
     assert config.allow_overwrite is True
     assert config.stale_approval_warning_days == 9
+    assert config.config_sources["runtime_mode"] == "env"
+    assert config.config_sources["openai_model"] == "env"
+    assert config.config_sources["workspace_root"] == "env"
+    assert config.config_sources["allow_overwrite"] == "env"
+    assert config.config_sources["stale_approval_warning_days"] == "env"
 
 
 def test_event_kind_categories_cover_runtime_tool_failure_persistence_and_intervention() -> None:

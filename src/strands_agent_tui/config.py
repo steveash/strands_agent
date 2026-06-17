@@ -4,6 +4,7 @@ import os
 import json
 from dataclasses import asdict
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,20 @@ class AppConfig:
     session_id: str | None = None
     profile_name: str = "ad hoc"
     profile_path: str = ""
+    config_sources: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for key in [
+            "runtime_mode",
+            "openai_model",
+            "workspace_root",
+            "artifacts_root",
+            "allow_overwrite",
+            "stale_approval_warning_days",
+            "profile_name",
+            "profile_path",
+        ]:
+            self.config_sources.setdefault(key, "default")
 
     @property
     def workspace_path(self) -> Path:
@@ -28,24 +43,43 @@ class AppConfig:
     def stale_approval_warning_seconds(self) -> int:
         return max(self.stale_approval_warning_days, 1) * 24 * 60 * 60
 
-    def merge(self, **overrides: str | int | bool | None) -> "AppConfig":
+    def merge(self, *, source: str = "cli", **overrides: str | int | bool | None) -> "AppConfig":
         data = asdict(self)
+        sources = dict(self.config_sources)
         for key, value in overrides.items():
             if value is None:
                 continue
             if key == "allow_overwrite":
                 data[key] = bool(value)
+                sources[key] = source
                 continue
             if key == "stale_approval_warning_days":
                 parsed = int(str(value).strip()) if isinstance(value, str) else int(value)
                 if parsed < 1:
                     raise ValueError("stale_approval_warning_days must be >= 1")
                 data[key] = parsed
+                sources[key] = source
                 continue
             normalized = value.strip()
             if normalized:
                 data[key] = normalized.lower() if key == "runtime_mode" else normalized
+                sources[key] = source
+        data["config_sources"] = sources
         return AppConfig(**data)
+
+    def config_source_summary(self) -> str:
+        labels = [
+            ("runtime", "runtime_mode"),
+            ("model", "openai_model"),
+            ("workspace", "workspace_root"),
+            ("artifacts", "artifacts_root"),
+            ("overwrite", "allow_overwrite"),
+            ("stale", "stale_approval_warning_days"),
+        ]
+        return ", ".join(
+            f"{label}={self.config_sources.get(field_name, 'default')}"
+            for label, field_name in labels
+        )
 
 
 def _load_positive_int_env(name: str, default: int) -> int:
@@ -93,6 +127,10 @@ def _profile_value(profile: dict[str, Any], *names: str) -> Any:
     return None
 
 
+def _profile_source(profile: dict[str, Any], *names: str) -> str:
+    return "profile" if _profile_value(profile, *names) is not None else "default"
+
+
 def load_workspace_profile(profile_path: str | None = None) -> tuple[dict[str, Any], Path | None]:
     selected = (profile_path or os.getenv("STRANDS_AGENT_PROFILE", "")).strip()
     if not selected:
@@ -127,6 +165,12 @@ def load_config(profile_path: str | None = None) -> AppConfig:
     runtime_default = str(_profile_value(profile, "runtime_mode", "runtime") or "fake")
     model_default = str(_profile_value(profile, "openai_model", "model") or "gpt-4o-mini")
     allow_overwrite_default = _coerce_bool(_profile_value(profile, "allow_overwrite"), default=False)
+    runtime_from_env = _env_is_set("STRANDS_AGENT_RUNTIME")
+    model_from_env = _env_is_set("STRANDS_AGENT_OPENAI_MODEL")
+    workspace_from_env = _env_is_set("STRANDS_AGENT_WORKSPACE_ROOT")
+    artifacts_from_env = _env_is_set("STRANDS_AGENT_ARTIFACTS_ROOT")
+    overwrite_from_env = _env_is_set("STRANDS_AGENT_ALLOW_OVERWRITE")
+    stale_from_env = _env_is_set("STRANDS_AGENT_STALE_APPROVAL_DAYS")
     return AppConfig(
         runtime_mode=os.getenv("STRANDS_AGENT_RUNTIME", runtime_default).strip().lower() or runtime_default,
         openai_model=os.getenv("STRANDS_AGENT_OPENAI_MODEL", model_default).strip() or model_default,
@@ -135,9 +179,21 @@ def load_config(profile_path: str | None = None) -> AppConfig:
         allow_overwrite=_load_bool_env("STRANDS_AGENT_ALLOW_OVERWRITE", allow_overwrite_default),
         stale_approval_warning_days=(
             _load_positive_int_env("STRANDS_AGENT_STALE_APPROVAL_DAYS", stale_days)
-            if _env_is_set("STRANDS_AGENT_STALE_APPROVAL_DAYS")
+            if stale_from_env
             else stale_days
         ),
         profile_name=profile_name,
         profile_path=str(resolved_profile_path) if resolved_profile_path else "",
+        config_sources={
+            "runtime_mode": "env" if runtime_from_env else _profile_source(profile, "runtime_mode", "runtime"),
+            "openai_model": "env" if model_from_env else _profile_source(profile, "openai_model", "model"),
+            "workspace_root": "env" if workspace_from_env else _profile_source(profile, "workspace_root", "workspace"),
+            "artifacts_root": "env" if artifacts_from_env else _profile_source(profile, "artifacts_root", "artifacts"),
+            "allow_overwrite": "env" if overwrite_from_env else _profile_source(profile, "allow_overwrite"),
+            "stale_approval_warning_days": (
+                "env" if stale_from_env else _profile_source(profile, "stale_approval_warning_days", "stale_approval_days")
+            ),
+            "profile_name": "profile" if resolved_profile_path else "default",
+            "profile_path": "profile" if resolved_profile_path else "default",
+        },
     )

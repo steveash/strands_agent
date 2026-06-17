@@ -468,6 +468,7 @@ class StrandsAgentApp(App):
         return (
             f"Workspace: {self.config.workspace_path} | "
             f"{' | '.join(profile_bits)} | "
+            f"Sources: {self.config.config_source_summary()} | "
             f"Session: {self.artifact_store.session_id}"
         )
 
@@ -789,6 +790,7 @@ class StrandsAgentApp(App):
         response_metadata.setdefault("workspace_root", str(self.config.workspace_path))
         response_metadata.setdefault("profile_name", self.config.profile_name)
         response_metadata.setdefault("profile_path", self.config.profile_path)
+        response_metadata.setdefault("config_sources", dict(self.config.config_sources))
         if response.pending_approval is not None:
             response_metadata["pending_approval_id"] = response.pending_approval.request_id
             response_metadata["pending_approval_tool"] = response.pending_approval.tool_name
@@ -849,6 +851,7 @@ class StrandsAgentApp(App):
                     "workspace_root": str(self.config.workspace_path),
                     "profile_name": self.config.profile_name,
                     "profile_path": self.config.profile_path,
+                    "config_sources": dict(self.config.config_sources),
                 },
                 error=True,
             )
@@ -1391,7 +1394,7 @@ def parse_args() -> AppConfig:
 
     if selected_session_dir:
         artifact_store = SessionArtifactStore.from_session_dir(selected_session_dir)
-        config = config.merge(artifacts_root=str(artifact_store.root))
+        config = config.merge(source="session", artifacts_root=str(artifact_store.root))
         config.session_id = artifact_store.session_id
     return config
 

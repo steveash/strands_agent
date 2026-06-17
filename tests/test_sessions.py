@@ -171,6 +171,7 @@ def test_session_manifest_tracks_turn_metadata_events_and_tools(tmp_path: Path) 
                 "mode": "fake",
                 "model": "gpt-4o-mini",
                 "workspace_root": str(tmp_path),
+                "config_sources": {"runtime_mode": "profile", "workspace_root": "cli"},
             },
         )
     )
@@ -187,6 +188,7 @@ def test_session_manifest_tracks_turn_metadata_events_and_tools(tmp_path: Path) 
     assert manifest["mode"] == "fake"
     assert manifest["model"] == "gpt-4o-mini"
     assert manifest["workspace_root"] == str(tmp_path)
+    assert manifest["config_sources"] == {"runtime_mode": "profile", "workspace_root": "cli"}
     assert manifest["last_prompt_preview"] == "list files in the active workspace"
     assert manifest["event_counts"] == {"prompt_received": 1, "tool_finished": 1}
     assert manifest["tool_counts"] == {"list_files": 1}

@@ -54,6 +54,7 @@ async def test_app_renders_runtime_status() -> None:
         assert "Approval: none" in str(status)
         assert "Workspace:" in str(workspace)
         assert "Profile: ad hoc" in str(workspace)
+        assert "Sources: runtime=default" in str(workspace)
         assert "Approval: none pending" in str(approval)
         assert "Event Timeline" in str(events)
 
@@ -109,6 +110,7 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert payload["response_metadata"]["workspace_root"]
         assert payload["response_metadata"]["profile_name"] == "ad hoc"
         assert payload["response_metadata"]["profile_path"] == ""
+        assert payload["response_metadata"]["config_sources"]["runtime_mode"] == "default"
         assert payload["events"][0]["timestamp"]
         assert payload["events"][2]["data"]["tool_name"] == "list_files"
         manifest = json.loads((tmp_path / "test-session" / "manifest.json").read_text(encoding="utf-8"))
@@ -119,6 +121,7 @@ async def test_submit_prompt_updates_history_output_and_event_timeline(tmp_path:
         assert manifest["workspace_root"]
         assert manifest["profile_name"] == "ad hoc"
         assert manifest["profile_path"] == ""
+        assert manifest["config_sources"]["runtime_mode"] == "default"
         assert manifest["pending_approval_count"] == 0
         assert manifest["artifacts"]["transcript"].endswith("transcript.md")
         transcript = (tmp_path / "test-session" / "transcript.md").read_text(encoding="utf-8")
@@ -235,6 +238,11 @@ def test_parse_args_loads_workspace_profile_and_cli_overrides(
     assert config.workspace_root == str(cli_workspace)
     assert config.allow_overwrite is True
     assert config.stale_approval_warning_days == 5
+    assert config.config_sources["runtime_mode"] == "cli"
+    assert config.config_sources["openai_model"] == "profile"
+    assert config.config_sources["workspace_root"] == "cli"
+    assert config.config_sources["allow_overwrite"] == "profile"
+    assert config.config_sources["stale_approval_warning_days"] == "cli"
 
 
 def test_parse_args_loads_existing_session_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

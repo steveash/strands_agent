@@ -372,6 +372,7 @@ class SessionArtifactStore:
             "workspace_root": str(last_metadata.get("workspace_root", "") or ""),
             "profile_name": str(last_metadata.get("profile_name", "") or ""),
             "profile_path": str(last_metadata.get("profile_path", "") or ""),
+            "config_sources": dict(last_metadata.get("config_sources") or {}),
             "last_prompt_preview": _preview_text(str(last_turn.get("prompt", "") if isinstance(last_turn, dict) else "")),
             "last_response_preview": _preview_text(
                 str(last_turn.get("response", "") if isinstance(last_turn, dict) else "")
