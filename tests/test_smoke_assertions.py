@@ -26,6 +26,7 @@ from strands_agent_tui.testing import (
     build_smoke_cli_doc_fix_examples,
     build_smoke_cli_doc_fix_parser,
     build_smoke_cli_doc_invalid_choice_expected_choices_registry,
+    build_smoke_cli_doc_parser_spec_registry,
     build_smoke_cli_doc_render_examples,
     build_smoke_cli_doc_render_parser,
     build_smoke_cli_doc_spec_registry,
@@ -245,6 +246,7 @@ def test_package_testing_api_exports_smoke_cli_doc_parser_registry(tmp_path: Pat
         "build_smoke_cli_doc_fix_examples",
         "build_smoke_cli_doc_fix_parser",
         "build_smoke_cli_doc_invalid_choice_expected_choices_registry",
+        "build_smoke_cli_doc_parser_spec_registry",
         "build_smoke_cli_doc_render_examples",
         "build_smoke_cli_doc_render_parser",
     }
@@ -415,6 +417,9 @@ def test_smoke_cli_doc_parser_specs_drive_parser_and_help_expectations(tmp_path:
     assert all(isinstance(spec, SmokeCliDocParserSpec) for spec in SMOKE_CLI_DOC_PARSER_SPECS)
     assert tuple(SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME) == tuple(
         spec.script_name for spec in SMOKE_CLI_DOC_PARSER_SPECS
+    )
+    assert SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME == build_smoke_cli_doc_parser_spec_registry(
+        SMOKE_CLI_DOC_PARSER_SPECS
     )
     assert SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME == {
         spec.script_name: spec.help_required_snippets() for spec in SMOKE_CLI_DOC_PARSER_SPECS
@@ -707,6 +712,13 @@ def test_build_smoke_cli_doc_spec_registry_rejects_duplicate_script_names() -> N
 
     with pytest.raises(ValueError, match="duplicate smoke cli doc spec 'standalone_smoke'"):
         build_smoke_cli_doc_spec_registry((spec, spec))
+
+
+def test_build_smoke_cli_doc_parser_spec_registry_rejects_duplicate_script_names() -> None:
+    spec = SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME["smoke_cli_docs_smoke"]
+
+    with pytest.raises(ValueError, match="duplicate smoke cli doc parser spec 'smoke_cli_docs_smoke'"):
+        build_smoke_cli_doc_parser_spec_registry((spec, spec))
 
 
 def test_build_smoke_cli_doc_invalid_choice_registry_rejects_duplicate_script_names() -> None:

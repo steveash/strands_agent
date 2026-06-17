@@ -655,9 +655,22 @@ SMOKE_CLI_DOC_PARSER_SPECS = (
     SMOKE_CLI_DOC_FIX_PARSER_SPEC,
     SMOKE_CLI_DOC_ARTIFACTS_PARSER_SPEC,
 )
-SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME = {
-    spec.script_name: spec for spec in SMOKE_CLI_DOC_PARSER_SPECS
-}
+
+
+def build_smoke_cli_doc_parser_spec_registry(
+    specs: Iterable[SmokeCliDocParserSpec],
+) -> dict[str, SmokeCliDocParserSpec]:
+    registry: dict[str, SmokeCliDocParserSpec] = {}
+    for spec in specs:
+        if spec.script_name in registry:
+            raise ValueError(f"duplicate smoke cli doc parser spec {spec.script_name!r}")
+        registry[spec.script_name] = spec
+    return registry
+
+
+SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME = build_smoke_cli_doc_parser_spec_registry(
+    SMOKE_CLI_DOC_PARSER_SPECS
+)
 SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME = {
     spec.script_name: spec.help_required_snippets() for spec in SMOKE_CLI_DOC_PARSER_SPECS
 }
