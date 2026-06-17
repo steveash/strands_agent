@@ -5,6 +5,7 @@ import pytest
 
 import strands_agent_tui.testing as testing_api
 import strands_agent_tui.testing.smoke_cli_assertions as smoke_cli_assertions
+import strands_agent_tui.testing.smoke_cli_doc_artifacts as smoke_cli_doc_artifacts
 from strands_agent_tui.testing import (
     DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_AUDIT_EXAMPLES,
@@ -275,6 +276,124 @@ def test_package_testing_api_exports_smoke_cli_doc_parser_registry(tmp_path: Pat
         .readme_path
         == tmp_path / "README.md"
     )
+
+
+def test_package_testing_api_exports_smoke_cli_doc_artifact_payload_helpers(tmp_path: Path) -> None:
+    exported_names = {
+        "build_smoke_cli_doc_drift_report_payload",
+        "build_smoke_cli_doc_render_manifest_payload",
+        "build_smoke_cli_doc_repair_report_payload",
+        "build_smoke_cli_doc_section_payloads",
+        "diff_bundle_sha256",
+        "diff_stats",
+        "format_diff_output",
+        "load_review_matrix_summary",
+        "normalize_text_output",
+        "output_path_from_prefixed_lines",
+        "rendered_bundle_sha256",
+        "rendered_summary",
+        "resolve_checkout_path",
+        "resolve_review_artifact_paths",
+        "sha256_text",
+        "write_text_output",
+    }
+
+    assert exported_names <= set(testing_api.__all__)
+    for name in exported_names:
+        assert getattr(testing_api, name) is getattr(smoke_cli_doc_artifacts, name)
+
+    rendered_sections = (("standalone_smoke", "## Standalone\n\nSmoke docs\n"),)
+    diff_sections = (
+        (
+            "standalone_smoke",
+            (
+                "--- README.md",
+                "+++ rendered/standalone_smoke.md",
+                "@@ -1 +1 @@",
+                "-old",
+                "+new",
+            ),
+        ),
+    )
+    output_path = tmp_path / "rendered" / "standalone_smoke.md"
+    manifest_path = tmp_path / "manifest.json"
+    diff_path = tmp_path / "docs.patch"
+
+    section_payloads = testing_api.build_smoke_cli_doc_section_payloads(
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        written_paths=(output_path,),
+    )
+    assert section_payloads == smoke_cli_doc_artifacts.build_smoke_cli_doc_section_payloads(
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        written_paths=(output_path,),
+    )
+    assert section_payloads[0]["output_path"] == str(output_path)
+    assert section_payloads[0]["diff_stats"] == {
+        "added_line_count": 1,
+        "hunk_count": 1,
+        "line_count": 5,
+        "removed_line_count": 1,
+    }
+
+    manifest_payload = testing_api.build_smoke_cli_doc_render_manifest_payload(
+        body_only=False,
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        rendered_sections=rendered_sections,
+        written_paths=(output_path,),
+        readme_path=tmp_path / "README.md",
+        output_dir=tmp_path / "rendered",
+        manifest_output=manifest_path,
+        diff_output=diff_path,
+        diff_sections=diff_sections,
+    )
+    assert manifest_payload == smoke_cli_doc_artifacts.build_smoke_cli_doc_render_manifest_payload(
+        body_only=False,
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        rendered_sections=rendered_sections,
+        written_paths=(output_path,),
+        readme_path=tmp_path / "README.md",
+        output_dir=tmp_path / "rendered",
+        manifest_output=manifest_path,
+        diff_output=diff_path,
+        diff_sections=diff_sections,
+    )
+    assert manifest_payload["sections"] == section_payloads
+    assert manifest_payload["diff_bundle_sha256"] == testing_api.diff_bundle_sha256(diff_sections)
+    assert manifest_payload["rendered_bundle_sha256"] == testing_api.rendered_bundle_sha256(
+        rendered_sections
+    )
+    assert manifest_payload["up_to_date"] is False
+
+    report_payload = testing_api.build_smoke_cli_doc_drift_report_payload(
+        readme_path=tmp_path / "README.md",
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        include_diff_lines=False,
+        check=True,
+    )
+    repair_payload = testing_api.build_smoke_cli_doc_repair_report_payload(
+        readme_path=tmp_path / "README.md",
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        repaired_script_names=("standalone_smoke",),
+        original_markdown="old",
+        repaired_markdown="new",
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        stdout=False,
+    )
+    assert report_payload["sections"][0]["diff_sha256"] == testing_api.sha256_text(
+        "\n".join(diff_sections[0][1])
+    )
+    assert "diff_lines" not in report_payload["sections"][0]
+    assert repair_payload["changed"] is True
+    assert repair_payload["wrote_readme"] is True
 
 
 def test_smoke_cli_doc_audit_selector_and_parser_follow_wrapper_registry() -> None:
