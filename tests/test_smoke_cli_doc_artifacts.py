@@ -15,6 +15,7 @@ from strands_agent_tui.testing import (
     resolve_checkout_path,
     resolve_review_artifact_paths,
     smoke_cli_doc_spec,
+    smoke_cli_docs_parity_rerun_hint,
 )
 
 
@@ -116,6 +117,56 @@ def test_build_smoke_cli_doc_drift_report_payload_can_hide_raw_diff_lines() -> N
     assert section["diff_stats"]["line_count"] == len(diff_sections[0][1])
     assert "diff_lines" not in section
     assert drifted_markdown != README_TEXT
+
+
+def test_smoke_cli_doc_drift_and_repair_payloads_share_rerun_hint_semantics() -> None:
+    drifted_markdown, diff_sections, rendered_sections = _drift_fixture()
+
+    drift_payload = build_smoke_cli_doc_drift_report_payload(
+        readme_path=Path("README.md"),
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        include_diff_lines=False,
+        check=True,
+    )
+    repair_payload = build_smoke_cli_doc_repair_report_payload(
+        readme_path=Path("README.md"),
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        repaired_script_names=("standalone_smoke",),
+        original_markdown=drifted_markdown,
+        repaired_markdown=README_TEXT,
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        stdout=False,
+    )
+    clean_drift_payload = build_smoke_cli_doc_drift_report_payload(
+        readme_path=Path("README.md"),
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        rendered_sections=(),
+        diff_sections=(),
+        include_diff_lines=False,
+        check=True,
+    )
+    clean_repair_payload = build_smoke_cli_doc_repair_report_payload(
+        readme_path=Path("README.md"),
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        repaired_script_names=(),
+        original_markdown=README_TEXT,
+        repaired_markdown=README_TEXT,
+        rendered_sections=(),
+        diff_sections=(),
+        stdout=False,
+    )
+
+    assert drift_payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
+    assert repair_payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
+    assert clean_drift_payload["rerun_hint"] is None
+    assert clean_repair_payload["rerun_hint"] is None
 
 
 def test_output_path_from_prefixed_lines_resolves_relative_review_matrix_summary_path(tmp_path) -> None:

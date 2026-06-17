@@ -397,6 +397,8 @@ def test_package_testing_api_exports_smoke_cli_doc_artifact_payload_helpers(tmp_
     )
     assert "diff_lines" not in report_payload["sections"][0]
     assert repair_payload["changed"] is True
+    assert report_payload["rerun_hint"] == testing_api.smoke_cli_docs_parity_rerun_hint()
+    assert repair_payload["rerun_hint"] == testing_api.smoke_cli_docs_parity_rerun_hint()
     assert repair_payload["wrote_readme"] is True
 
 

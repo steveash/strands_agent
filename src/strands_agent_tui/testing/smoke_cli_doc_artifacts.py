@@ -272,6 +272,7 @@ def build_smoke_cli_doc_repair_report_payload(
         "rendered_count": len(rendered_sections),
         "rendered_targets": [script_name for script_name, _ in rendered_sections],
         "requested_target": requested_target_name,
+        "rerun_hint": smoke_cli_docs_parity_rerun_hint() if diff_sections else None,
         "sections": build_smoke_cli_doc_section_payloads(
             rendered_sections=rendered_sections,
             diff_sections=diff_sections,

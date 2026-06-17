@@ -2005,6 +2005,7 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
         render_diff_path=render_diff_path,
         bundle_index_path=bundle_index_path,
     )
+    assert payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
 
 
 
