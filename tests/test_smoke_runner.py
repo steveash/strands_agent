@@ -62,6 +62,8 @@ from strands_agent_tui.testing.smoke_runner import (
     build_timed_standalone_smoke_failure_cases,
     build_timed_standalone_smoke_failure_pytest_params,
     build_standalone_malformed_contract_failure_cases,
+    format_smoke_cli_alias_help,
+    format_smoke_cli_alias_lines,
     run_smoke_target,
     run_smoke_targets,
     smoke_wrapper_cli_spec,
@@ -563,6 +565,44 @@ def test_build_smoke_cli_parser_renders_alias_help_and_examples(tmp_path) -> Non
     assert "Alias details: both -> demofirst, demosecond" in help_text
     assert "demo_smoke.py # default both alias -> demofirst, demosecond" in help_text
     assert "demo_smoke.py first # single target" in help_text
+
+
+def test_smoke_cli_alias_formatters_drive_parser_and_spec_help(tmp_path) -> None:
+    first_script = _write_script(tmp_path, "first.py", "print('first_check= True', flush=True)\n")
+    second_script = _write_script(tmp_path, "second.py", "print('second_check= True', flush=True)\n")
+    selector = SmokeTargetSelector(
+        targets={
+            "first": SmokeScriptTarget("first", first_script, display_name="demofirst"),
+            "second": SmokeScriptTarget("second", second_script, display_name="demosecond"),
+        },
+        default_target_name="both",
+        alias_target_names={"both": ("first", "second")},
+    )
+
+    alias_lines = format_smoke_cli_alias_lines(
+        alias_target_names=selector.alias_target_names,
+        resolve_display_names=selector.resolve_display_names,
+    )
+    alias_help = format_smoke_cli_alias_help(
+        "Which demo smoke surface to run.",
+        alias_target_names=selector.alias_target_names,
+        resolve_display_names=selector.resolve_display_names,
+    )
+    parser = build_smoke_cli_parser(
+        description="Run the demo smoke bundle.",
+        choices=selector.choices,
+        default_target_name=selector.default_target_name,
+        resolve_target_names=selector.resolve_target_names,
+        resolve_display_names=selector.resolve_display_names,
+        item_help="Which demo smoke surface to run.",
+        alias_target_names=selector.alias_target_names,
+    )
+    help_text = " ".join(parser.format_help().split())
+
+    assert alias_lines == ("both -> demofirst, demosecond",)
+    assert alias_help == "Which demo smoke surface to run. Aliases: both -> demofirst, demosecond."
+    assert alias_help in help_text
+    assert f"Alias details: {' '.join(alias_lines)}" in help_text
 
 
 def test_smoke_target_selector_invalid_choice_expected_choices_follow_choice_order(tmp_path) -> None:

@@ -64,6 +64,7 @@ from strands_agent_tui.testing import (
     matches_smoke_cli_readme_for_script,
     missing_markdown_section_snippets,
     missing_public_cli_help_snippets,
+    format_smoke_cli_alias_help,
     matches_queue_breakdown_output,
     repair_smoke_cli_readme_sections,
     replace_markdown_section,
@@ -466,6 +467,23 @@ def test_smoke_cli_doc_parser_help_examples_use_shared_description_formatter() -
     )
 
     assert spec.help_required_snippets()[1 : 1 + len(spec.examples)] == expected_example_snippets
+
+
+def test_smoke_cli_doc_parser_alias_help_uses_shared_formatter() -> None:
+    spec = SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME["smoke_cli_docs_smoke"]
+
+    expected_alias_help = format_smoke_cli_alias_help(
+        spec.item_help,
+        alias_target_names=spec.selector.alias_target_names,
+        resolve_display_names=spec.selector.resolve_display_names,
+    )
+
+    assert spec.help_required_snippets()[0] == expected_alias_help
+    assert testing_api.format_smoke_cli_alias_help is format_smoke_cli_alias_help
+    assert testing_api.format_smoke_cli_alias_lines(
+        alias_target_names=spec.selector.alias_target_names,
+        resolve_display_names=spec.selector.resolve_display_names,
+    ) == ("all -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",)
 
 
 def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> None:

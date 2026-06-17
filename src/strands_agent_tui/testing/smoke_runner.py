@@ -287,6 +287,31 @@ def describe_smoke_cli_example(
     return single_choice_description
 
 
+def format_smoke_cli_alias_lines(
+    *,
+    alias_target_names: Mapping[str, Sequence[str]],
+    resolve_display_names: Callable[[str | None], Sequence[str]],
+) -> tuple[str, ...]:
+    return tuple(
+        f"{name} -> {', '.join(resolve_display_names(name))}" for name in alias_target_names
+    )
+
+
+def format_smoke_cli_alias_help(
+    item_help: str,
+    *,
+    alias_target_names: Mapping[str, Sequence[str]],
+    resolve_display_names: Callable[[str | None], Sequence[str]],
+) -> str:
+    alias_lines = format_smoke_cli_alias_lines(
+        alias_target_names=alias_target_names,
+        resolve_display_names=resolve_display_names,
+    )
+    if not alias_lines:
+        return item_help
+    return f"{item_help} Aliases: " + "; ".join(alias_lines) + "."
+
+
 def build_smoke_cli_parser(
     *,
     description: str,
@@ -306,7 +331,10 @@ def build_smoke_cli_parser(
     if alias_target_names:
         epilog_lines.append(f"{alias_heading}:")
         epilog_lines.extend(
-            f"  {name} -> {', '.join(resolve_display_names(name))}" for name in alias_target_names
+            f"  {line}" for line in format_smoke_cli_alias_lines(
+                alias_target_names=alias_target_names,
+                resolve_display_names=resolve_display_names,
+            )
         )
     if examples:
         if epilog_lines:
@@ -317,13 +345,11 @@ def build_smoke_cli_parser(
             for example in examples
         )
 
-    help_text = item_help
-    if alias_target_names:
-        help_text = (
-            f"{help_text} Aliases: "
-            + "; ".join(f"{name} -> {', '.join(resolve_display_names(name))}" for name in alias_target_names)
-            + "."
-        )
+    help_text = format_smoke_cli_alias_help(
+        item_help,
+        alias_target_names=alias_target_names,
+        resolve_display_names=resolve_display_names,
+    )
 
     parser = argparse.ArgumentParser(
         description=description,
@@ -441,9 +467,9 @@ class SmokeWrapperCliSpec:
 
     def help_alias_lines(self) -> tuple[str, ...]:
         selector = self._build_doc_selector()
-        return tuple(
-            f"{name} -> {', '.join(selector.resolve_display_names(name))}"
-            for name in selector.alias_target_names
+        return format_smoke_cli_alias_lines(
+            alias_target_names=selector.alias_target_names,
+            resolve_display_names=selector.resolve_display_names,
         )
 
     def help_example_lines(self) -> tuple[str, ...]:

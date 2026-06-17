@@ -15,6 +15,7 @@ from .smoke_runner import (
     build_smoke_cli_parser,
     describe_smoke_cli_example,
     format_cli_choices,
+    format_smoke_cli_alias_help,
     smoke_wrapper_cli_spec,
 )
 
@@ -220,15 +221,10 @@ SMOKE_CLI_DOC_ARTIFACTS_DEFAULT_TARGET_NAME = "standalone_smoke"
 
 
 def _selector_alias_help_snippet(*, item_help: str, selector: SmokeTargetSelector) -> str:
-    if not selector.alias_target_names:
-        return item_help
-    return (
-        f"{item_help} Aliases: "
-        + "; ".join(
-            f"{name} -> {', '.join(selector.resolve_display_names(name))}"
-            for name in selector.alias_target_names
-        )
-        + "."
+    return format_smoke_cli_alias_help(
+        item_help,
+        alias_target_names=selector.alias_target_names,
+        resolve_display_names=selector.resolve_display_names,
     )
 
 
