@@ -403,6 +403,60 @@ def test_package_testing_api_exports_smoke_cli_doc_artifact_payload_helpers(tmp_
     assert repair_payload["wrote_readme"] is True
 
 
+def test_package_testing_api_smoke_cli_doc_diff_output_and_hash_helpers_use_filesystem(
+    tmp_path: Path,
+) -> None:
+    diff_sections = (
+        (
+            "standalone_smoke",
+            (
+                "--- README.md",
+                "+++ rendered/standalone_smoke.md",
+                "@@ -1,2 +1,2 @@",
+                " unchanged",
+                "-old standalone",
+                "+new standalone",
+            ),
+        ),
+        (
+            "smoke_matrix",
+            (
+                "--- README.md",
+                "+++ rendered/smoke_matrix.md",
+                "@@ -4 +4 @@",
+                "-old matrix",
+                "+new matrix",
+            ),
+        ),
+    )
+    rendered_sections = (
+        ("standalone_smoke", "## Standalone\n\nSmoke docs\n"),
+        ("smoke_matrix", "## Smoke Matrix\n\nMatrix docs\n"),
+    )
+    diff_output_path = tmp_path / "review" / "smoke-cli-docs.patch"
+
+    formatted_diff = testing_api.format_diff_output(diff_sections)
+    assert formatted_diff == smoke_cli_doc_artifacts.format_diff_output(diff_sections)
+    assert formatted_diff.startswith("### standalone_smoke\n--- README.md\n+++ rendered/")
+    assert "\n\n### smoke_matrix\n--- README.md\n+++ rendered/smoke_matrix.md\n" in formatted_diff
+    assert not formatted_diff.endswith("\n")
+
+    testing_api.write_text_output(diff_output_path, formatted_diff)
+    persisted_diff = diff_output_path.read_text(encoding="utf-8")
+    assert persisted_diff == formatted_diff + "\n"
+    assert testing_api.diff_bundle_sha256(diff_sections) == testing_api.sha256_text(persisted_diff)
+    assert testing_api.diff_bundle_sha256(()) is None
+
+    expected_rendered_bundle = "\n\n".join(
+        f"### {script_name}\n{text}" for script_name, text in rendered_sections
+    )
+    assert testing_api.rendered_bundle_sha256(rendered_sections) == testing_api.sha256_text(
+        expected_rendered_bundle
+    )
+    assert testing_api.rendered_bundle_sha256(()) is None
+    assert testing_api.normalize_text_output("") == ""
+
+
 def test_package_testing_api_smoke_cli_doc_artifact_paths_and_summaries_use_filesystem(
     tmp_path: Path,
 ) -> None:
