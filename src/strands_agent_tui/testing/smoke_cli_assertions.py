@@ -708,6 +708,13 @@ def smoke_cli_doc_spec(script_name: str) -> SmokeCliDocSpec:
     return spec
 
 
+def smoke_cli_doc_parser_spec(script_name: str) -> SmokeCliDocParserSpec:
+    spec = SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME.get(script_name)
+    if spec is None:
+        raise ValueError(f"unknown smoke cli doc parser spec {script_name!r}")
+    return spec
+
+
 
 def build_smoke_cli_doc_render_parser() -> argparse.ArgumentParser:
     return SMOKE_CLI_DOC_RENDER_PARSER_SPEC.build_parser()

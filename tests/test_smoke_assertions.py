@@ -87,6 +87,7 @@ from strands_agent_tui.testing import (
     render_smoke_cli_readme_section,
     render_smoke_cli_readme_sections,
     smoke_cli_doc_parity_diagnostic,
+    smoke_cli_doc_parser_spec,
     smoke_cli_doc_spec,
     smoke_cli_readme_diff_lines,
     smoke_wrapper_cli_spec,
@@ -543,6 +544,9 @@ def test_smoke_cli_doc_parser_specs_drive_parser_and_help_expectations(tmp_path:
     assert tuple(SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME) == tuple(
         spec.script_name for spec in SMOKE_CLI_DOC_PARSER_SPECS
     )
+    assert tuple(smoke_cli_doc_parser_spec(spec.script_name) for spec in SMOKE_CLI_DOC_PARSER_SPECS) == (
+        SMOKE_CLI_DOC_PARSER_SPECS
+    )
     assert SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME == build_smoke_cli_doc_parser_spec_registry(
         SMOKE_CLI_DOC_PARSER_SPECS
     )
@@ -579,6 +583,22 @@ def test_smoke_cli_doc_parser_specs_drive_parser_and_help_expectations(tmp_path:
             "smoke_cli_docs_smoke.py smoke_matrix # single smoke wrapper",
         ],
     )
+
+
+def test_smoke_cli_doc_parser_spec_lookup_rejects_unknown_script_name() -> None:
+    with pytest.raises(ValueError, match="unknown smoke cli doc parser spec 'missing_smoke'"):
+        smoke_cli_doc_parser_spec("missing_smoke")
+
+
+def test_package_testing_api_exports_smoke_cli_doc_parser_spec_lookup() -> None:
+    assert "smoke_cli_doc_parser_spec" in testing_api.__all__
+    assert testing_api.smoke_cli_doc_parser_spec is smoke_cli_doc_parser_spec
+    assert testing_api.smoke_cli_doc_parser_spec("smoke_cli_docs_smoke") is (
+        SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME["smoke_cli_docs_smoke"]
+    )
+
+    with pytest.raises(ValueError, match="unknown smoke cli doc parser spec 'missing_smoke'"):
+        testing_api.smoke_cli_doc_parser_spec("missing_smoke")
 
 
 def test_smoke_cli_doc_parser_help_examples_use_shared_description_formatter() -> None:
