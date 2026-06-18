@@ -18,6 +18,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_LINE,
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FAILURE_FIXTURE,
     SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
+    SMOKE_MATRIX_LIVE_INCLUSIVE_ALIASES,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
     SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE,
@@ -105,6 +106,8 @@ from strands_agent_tui.testing import (
     run_script_module_main_in_temp_checkout,
     run_script_module_main_via_driver_in_temp_checkout,
     smoke_cli_docs_parity_rerun_hint,
+    smoke_matrix_live_runtime_export_hint,
+    smoke_matrix_missing_api_key_hint,
     smoke_contract_detail_expectation,
     smoke_matrix_docs_review_failure_summary_prefix,
     smoke_matrix_docs_review_success_summary_prefix,
@@ -1217,6 +1220,51 @@ def test_exported_docs_review_failure_defaults_share_expected_prefixes() -> None
     assert SMOKE_MATRIX_ALL_REVIEW_ORDER_FAILURE_DEFAULTS.format_bundle_rerun_hint_line(
         "rerun docs parity"
     ) is None
+
+
+def test_package_testing_api_smoke_matrix_live_runtime_hints_cover_live_inclusive_aliases() -> None:
+    assert testing_api.SMOKE_MATRIX_LIVE_INCLUSIVE_ALIASES is SMOKE_MATRIX_LIVE_INCLUSIVE_ALIASES
+    assert testing_api.smoke_matrix_live_runtime_export_hint is smoke_matrix_live_runtime_export_hint
+    assert testing_api.smoke_matrix_missing_api_key_hint is smoke_matrix_missing_api_key_hint
+
+    live_runtime_hint = smoke_matrix_live_runtime_export_hint()
+    missing_api_key_hint = smoke_matrix_missing_api_key_hint()
+
+    for alias in SMOKE_MATRIX_LIVE_INCLUSIVE_ALIASES:
+        assert f"`smoke_matrix.py {alias}`" in live_runtime_hint
+        target_names = testing_api.SMOKE_MATRIX_CLI_SPEC.resolve_target_names(alias)
+        display_names = testing_api.SMOKE_MATRIX_CLI_SPEC.resolve_display_names(alias)
+
+        assert target_names[0] == "standalone-all"
+        assert display_names[0] == "standalone (live-inclusive)"
+
+    assert testing_api.SMOKE_MATRIX_WRAPPER.format_line(live_runtime_hint).startswith(
+        SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX
+    )
+    assert testing_api.SMOKE_MATRIX_WRAPPER.format_line(missing_api_key_hint).startswith(
+        SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX
+    )
+
+    observation = collect_smoke_wrapper_failure_output(
+        [
+            SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE,
+            testing_api.SMOKE_MATRIX_WRAPPER.format_line(live_runtime_hint),
+            testing_api.SMOKE_MATRIX_WRAPPER.failure_summary_line(
+                passed_count=0,
+                total_count=3,
+                elapsed_seconds=0.1,
+            ),
+        ],
+        failed_line_exact=SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_FALSE_FAILED_LINE,
+        hint_prefix=SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX,
+        failure_summary_prefix=testing_api.SMOKE_MATRIX_WRAPPER.summary_line_prefix,
+    )
+
+    assert observation.present("failed")
+    assert observation.present("hint")
+    assert observation.present("failure_summary")
+    assert observation.appears_before("failed", "hint")
+    assert observation.appears_before("hint", "failure_summary")
 
 
 def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None:

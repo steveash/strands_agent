@@ -1919,6 +1919,18 @@ SMOKE_MATRIX_ALL_REVIEW_LIVE_RUNTIME_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in "
     "`standalone_smoke.py all`;"
 )
+SMOKE_MATRIX_LIVE_INCLUSIVE_ALIASES = ("all", "all-review")
+
+
+def smoke_matrix_live_runtime_export_hint() -> str:
+    aliases = " and ".join(f"`smoke_matrix.py {alias}`" for alias in SMOKE_MATRIX_LIVE_INCLUSIVE_ALIASES)
+    return (
+        f"hint: {aliases} swap in `standalone_smoke.py all`; export "
+        "`STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
+        "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning the live-inclusive matrix."
+    )
+
+
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_RUNTIME_ERROR_LINE = (
     "RuntimeError: OPENAI_API_KEY is required for live runtime mode"
 )
@@ -1930,6 +1942,15 @@ SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_HINT_PREFIX = (
     "[smoke-matrix] hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but "
     "`OPENAI_API_KEY` was missing;"
 )
+
+
+def smoke_matrix_missing_api_key_hint() -> str:
+    return (
+        "hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` was missing; "
+        "export `OPENAI_API_KEY` (and optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning."
+    )
+
+
 SMOKE_MATRIX_DOCS_REVIEW_HINT_FALSE_LINE = "render_manifest_payload= False"
 SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_FIXTURE = SmokeTargetRunFailureFixture.build_exited_with_status(
     target_name="standalone",

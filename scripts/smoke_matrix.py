@@ -17,6 +17,8 @@ from strands_agent_tui.testing import (
     build_smoke_matrix_review_metadata_payload,
     run_smoke_target,
     smoke_cli_docs_parity_rerun_hint,
+    smoke_matrix_live_runtime_export_hint,
+    smoke_matrix_missing_api_key_hint,
     smoke_wrapper_cli_spec,
 )
 
@@ -250,16 +252,9 @@ def _live_inclusive_failure_hint(target: SmokeScriptTarget, observed_lines: Sequ
         return None
     normalized_lines = [line.rstrip("\n") for line in observed_lines]
     if any(LIVE_RUNTIME_REQUESTED_FALSE_LINE in line for line in normalized_lines):
-        return (
-            "hint: `smoke_matrix.py all` and `smoke_matrix.py all-review` swap in `standalone_smoke.py all`; export "
-            "`STRANDS_AGENT_RUNTIME=live` and `OPENAI_API_KEY` "
-            "(optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning the live-inclusive matrix."
-        )
+        return smoke_matrix_live_runtime_export_hint()
     if any(LIVE_RUNTIME_API_KEY_ERROR in line for line in normalized_lines):
-        return (
-            "hint: `smoke_matrix.py all`/`all-review` reached the live runtime, but `OPENAI_API_KEY` was missing; "
-            "export `OPENAI_API_KEY` (and optionally `STRANDS_AGENT_OPENAI_MODEL`) before rerunning."
-        )
+        return smoke_matrix_missing_api_key_hint()
     return None
 
 
