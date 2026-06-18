@@ -29,6 +29,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_ARTIFACT_ROOTS_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SCRIPT_CONTRACT,
     SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS,
+    SMOKE_MATRIX_CLI_SPEC,
     SMOKE_MATRIX_DOCS_REVIEW_FAILED_LINE_PREFIX,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_CONTRACT,
     SMOKE_MATRIX_DOCS_REVIEW_HINT_FAILURE_DEFAULTS,
@@ -39,6 +40,7 @@ from strands_agent_tui.testing import (
     SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE,
     SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
     SMOKE_MATRIX_REVIEW_BUNDLE_RERUN_HINT_PREFIX,
+    SMOKE_MATRIX_SELECTION_CASES,
     SMOKE_SCRIPT_MALFORMED_DETAIL_SCRIPT_CONTRACT,
     SMOKE_SCRIPT_MALFORMED_RESULT_SCRIPT_CONTRACT,
     SESSION_TRIAGE_INTERVENTION_MIX_CONTRACT,
@@ -274,11 +276,15 @@ def test_exported_live_runtime_failure_fixture_tracks_observer_and_wrapper_failu
 
 def test_package_testing_api_exports_smoke_matrix_public_label_fail_fast_fixture() -> None:
     exported_names = {
+        "SMOKE_MATRIX_CLI_SPEC",
         "SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE",
+        "SMOKE_MATRIX_SELECTION_CASES",
         "build_smoke_matrix_public_label_fail_fast_fixture",
     }
 
     assert exported_names <= set(testing_api.__all__)
+    assert testing_api.SMOKE_MATRIX_CLI_SPEC is SMOKE_MATRIX_CLI_SPEC
+    assert testing_api.SMOKE_MATRIX_SELECTION_CASES is SMOKE_MATRIX_SELECTION_CASES
     assert (
         testing_api.SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE
         == SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE
@@ -295,6 +301,38 @@ def test_package_testing_api_exports_smoke_matrix_public_label_fail_fast_fixture
         target_name="standalone",
         failed_line=SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE,
     )
+
+
+def test_package_testing_api_smoke_matrix_public_label_fail_fast_fixture_covers_selection_aliases() -> None:
+    seen_display_labels: set[str] = set()
+
+    for case in testing_api.SMOKE_MATRIX_SELECTION_CASES:
+        requested_target_name = case.requested_target_name
+        assert case.expected_display_names == testing_api.SMOKE_MATRIX_CLI_SPEC.resolve_display_names(
+            requested_target_name
+        )
+        for display_label in case.expected_display_names:
+            fixture = testing_api.build_smoke_matrix_public_label_fail_fast_fixture(
+                display_label=display_label,
+            )
+            expected_failed_line = (
+                f"{display_label} smoke failed fast: {SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE}"
+            )
+            assert fixture == SmokeTargetRunFailureFixture.build_failed_fast(
+                target_name=display_label,
+                failed_line=SMOKE_MATRIX_PUBLIC_LABEL_FAIL_FAST_FALSE_LINE,
+            )
+            assert fixture.stderr_lines == (expected_failed_line,)
+            assert fixture.emit_failed_target_run(stdout=StringIO(), stderr=StringIO()) == 1
+            seen_display_labels.add(display_label)
+
+    assert seen_display_labels == {
+        "standalone",
+        "standalone (live-inclusive)",
+        "triage",
+        "recovery",
+        "docs-review",
+    }
 
 
 def test_collect_review_artifact_output_tracks_metadata_and_matrix_summary(tmp_path: Path) -> None:
