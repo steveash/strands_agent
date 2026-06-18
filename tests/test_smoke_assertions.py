@@ -67,6 +67,7 @@ from strands_agent_tui.testing import (
     missing_markdown_section_snippets,
     missing_public_cli_help_snippets,
     format_smoke_cli_alias_help,
+    format_smoke_cli_alias_lines,
     matches_queue_breakdown_output,
     repair_smoke_cli_readme_sections,
     replace_markdown_section,
@@ -559,6 +560,28 @@ def test_smoke_cli_doc_parser_alias_help_uses_shared_formatter() -> None:
         alias_target_names=spec.selector.alias_target_names,
         resolve_display_names=spec.selector.resolve_display_names,
     ) == ("all -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",)
+
+
+def test_package_testing_api_smoke_cli_alias_help_formatters_cover_wrapper_specs() -> None:
+    assert testing_api.format_smoke_cli_alias_help is format_smoke_cli_alias_help
+    assert testing_api.format_smoke_cli_alias_lines is format_smoke_cli_alias_lines
+
+    for spec in SMOKE_WRAPPER_CLI_SPECS:
+        alias_lines = testing_api.format_smoke_cli_alias_lines(
+            alias_target_names=spec.alias_target_names,
+            resolve_display_names=spec.resolve_display_names,
+        )
+        alias_help = testing_api.format_smoke_cli_alias_help(
+            spec.item_help,
+            alias_target_names=spec.alias_target_names,
+            resolve_display_names=spec.resolve_display_names,
+        )
+
+        assert alias_lines == spec.help_alias_lines()
+        if alias_lines:
+            assert alias_help == f"{spec.item_help} Aliases: " + "; ".join(alias_lines) + "."
+        else:
+            assert alias_help == spec.item_help
 
 
 def test_smoke_cli_doc_render_parser_and_examples_follow_wrapper_registry() -> None:
