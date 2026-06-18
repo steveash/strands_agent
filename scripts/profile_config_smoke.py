@@ -5,7 +5,11 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from strands_agent_tui.config import load_config
+from strands_agent_tui.config import (
+    load_config,
+    render_workspace_profile_summary,
+    summarize_workspace_profile,
+)
 from strands_agent_tui.testing import emit_smoke_checks
 
 
@@ -25,6 +29,7 @@ def main() -> int:
                     "artifacts_root": str(artifacts),
                     "allow_overwrite": False,
                     "stale_approval_days": 4,
+                    "ignored_future_field": "visible warning",
                 }
             ),
             encoding="utf-8",
@@ -65,6 +70,9 @@ def main() -> int:
         print(f"profile_sources: {profile_config.config_source_summary()}")
         print(f"env_sources: {env_config.config_source_summary()}")
         print(f"cli_sources: {cli_config.config_source_summary()}")
+        profile_summary = summarize_workspace_profile(str(profile_path), config=cli_config)
+        for line in render_workspace_profile_summary(profile_summary):
+            print(line)
 
         return emit_smoke_checks(
             [
@@ -88,6 +96,20 @@ def main() -> int:
                     and cli_config.stale_approval_warning_days == 9
                     and cli_config.config_sources.get("runtime_mode") == "cli"
                     and cli_config.config_sources.get("stale_approval_warning_days") == "cli",
+                ),
+                (
+                    "profile_summary_effective_values",
+                    profile_summary["effective"]["runtime_mode"]["value"] == "live"
+                    and profile_summary["effective"]["runtime_mode"]["source"] == "cli"
+                    and profile_summary["effective"]["openai_model"]["value"] == "env-model"
+                    and profile_summary["effective"]["openai_model"]["source"] == "env"
+                    and profile_summary["effective"]["stale_approval_warning_days"]["value"] == 9,
+                ),
+                (
+                    "profile_summary_unknown_fields",
+                    profile_summary["unknown_fields"] == ["ignored_future_field"]
+                    and profile_summary["warnings"]
+                    == ["Unknown profile field ignored: ignored_future_field"],
                 ),
             ]
         )

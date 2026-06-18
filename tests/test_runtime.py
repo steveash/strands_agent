@@ -661,6 +661,59 @@ def test_app_config_env_overrides_workspace_profile(monkeypatch: pytest.MonkeyPa
     assert config.config_sources["stale_approval_warning_days"] == "env"
 
 
+def test_workspace_profile_summary_reports_effective_values_and_unknown_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    profile_path = tmp_path / "profile.json"
+    profile_workspace = tmp_path / "profile-workspace"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "name": "inspectable profile",
+                "runtime": "fake",
+                "model": "profile-model",
+                "workspace": str(profile_workspace),
+                "allow_overwrite": False,
+                "future_toggle": "not-yet-supported",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("STRANDS_AGENT_RUNTIME", "live")
+    monkeypatch.setenv("STRANDS_AGENT_OPENAI_MODEL", "env-model")
+    monkeypatch.delenv("STRANDS_AGENT_WORKSPACE_ROOT", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_ARTIFACTS_ROOT", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_ALLOW_OVERWRITE", raising=False)
+    monkeypatch.delenv("STRANDS_AGENT_STALE_APPROVAL_DAYS", raising=False)
+
+    from strands_agent_tui.config import render_workspace_profile_summary, summarize_workspace_profile
+
+    summary = summarize_workspace_profile(str(profile_path))
+    rendered = render_workspace_profile_summary(summary)
+
+    assert summary["profile_name"] == "inspectable profile"
+    assert summary["profile_path"] == str(profile_path.resolve())
+    assert summary["configured_fields"] == [
+        "allow_overwrite",
+        "openai_model",
+        "profile_name",
+        "runtime_mode",
+        "workspace_root",
+    ]
+    assert summary["effective"]["runtime_mode"] == {"value": "live", "source": "env"}
+    assert summary["effective"]["openai_model"] == {"value": "env-model", "source": "env"}
+    assert summary["effective"]["workspace_root"] == {
+        "value": str(profile_workspace),
+        "source": "profile",
+    }
+    assert summary["unknown_fields"] == ["future_toggle"]
+    assert summary["warnings"] == ["Unknown profile field ignored: future_toggle"]
+    assert "profile: inspectable profile" in rendered
+    assert f"workspace_root: {profile_workspace} (profile)" in rendered
+    assert "warning: Unknown profile field ignored: future_toggle" in rendered
+
+
 def test_event_kind_categories_cover_runtime_tool_failure_persistence_and_intervention() -> None:
     assert categorize_event_kind("prompt_received") == "runtime"
     assert categorize_event_kind("tool_started") == "tool"

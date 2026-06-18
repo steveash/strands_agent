@@ -8,6 +8,22 @@ from dataclasses import field
 from pathlib import Path
 from typing import Any
 
+PROFILE_FIELD_ALIASES = {
+    "profile_name": ("profile_name", "name"),
+    "runtime_mode": ("runtime_mode", "runtime"),
+    "openai_model": ("openai_model", "model"),
+    "workspace_root": ("workspace_root", "workspace"),
+    "artifacts_root": ("artifacts_root", "artifacts"),
+    "allow_overwrite": ("allow_overwrite",),
+    "stale_approval_warning_days": ("stale_approval_warning_days", "stale_approval_days"),
+}
+
+PROFILE_KNOWN_FIELDS = frozenset(
+    field_name
+    for aliases in PROFILE_FIELD_ALIASES.values()
+    for field_name in aliases
+)
+
 
 @dataclass(slots=True)
 class AppConfig:
@@ -80,6 +96,34 @@ class AppConfig:
             f"{label}={self.config_sources.get(field_name, 'default')}"
             for label, field_name in labels
         )
+
+    def effective_config_summary(self) -> dict[str, dict[str, str | bool | int]]:
+        return {
+            "runtime_mode": {
+                "value": self.runtime_mode,
+                "source": self.config_sources.get("runtime_mode", "default"),
+            },
+            "openai_model": {
+                "value": self.openai_model,
+                "source": self.config_sources.get("openai_model", "default"),
+            },
+            "workspace_root": {
+                "value": self.workspace_root,
+                "source": self.config_sources.get("workspace_root", "default"),
+            },
+            "artifacts_root": {
+                "value": self.artifacts_root,
+                "source": self.config_sources.get("artifacts_root", "default"),
+            },
+            "allow_overwrite": {
+                "value": self.allow_overwrite,
+                "source": self.config_sources.get("allow_overwrite", "default"),
+            },
+            "stale_approval_warning_days": {
+                "value": self.stale_approval_warning_days,
+                "source": self.config_sources.get("stale_approval_warning_days", "default"),
+            },
+        }
 
 
 def _load_positive_int_env(name: str, default: int) -> int:
@@ -197,3 +241,60 @@ def load_config(profile_path: str | None = None) -> AppConfig:
             "profile_path": "profile" if resolved_profile_path else "default",
         },
     )
+
+
+def summarize_workspace_profile(
+    profile_path: str | None = None,
+    *,
+    config: AppConfig | None = None,
+) -> dict[str, Any]:
+    profile, resolved_profile_path = load_workspace_profile(profile_path)
+    effective_config = config or load_config(profile_path=profile_path)
+    unknown_fields = sorted(set(profile) - PROFILE_KNOWN_FIELDS)
+    profile_values = {
+        field_name: _profile_value(profile, *aliases)
+        for field_name, aliases in PROFILE_FIELD_ALIASES.items()
+    }
+    configured_fields = sorted(
+        field_name
+        for field_name, value in profile_values.items()
+        if value not in (None, "")
+    )
+    warnings = [
+        f"Unknown profile field ignored: {field_name}"
+        for field_name in unknown_fields
+    ]
+    return {
+        "profile_name": effective_config.profile_name,
+        "profile_path": str(resolved_profile_path) if resolved_profile_path else "",
+        "configured_fields": configured_fields,
+        "unknown_fields": unknown_fields,
+        "warnings": warnings,
+        "effective": effective_config.effective_config_summary(),
+        "source_summary": effective_config.config_source_summary(),
+    }
+
+
+def render_workspace_profile_summary(summary: dict[str, Any]) -> list[str]:
+    lines = [
+        f"profile: {summary.get('profile_name') or 'ad hoc'}",
+        f"path: {summary.get('profile_path') or '(none)'}",
+        f"configured: {', '.join(summary.get('configured_fields') or []) or '(none)'}",
+        f"sources: {summary.get('source_summary') or ''}",
+    ]
+    effective = summary.get("effective") or {}
+    for field_name in [
+        "runtime_mode",
+        "openai_model",
+        "workspace_root",
+        "artifacts_root",
+        "allow_overwrite",
+        "stale_approval_warning_days",
+    ]:
+        field_summary = effective.get(field_name) or {}
+        lines.append(
+            f"{field_name}: {field_summary.get('value')} ({field_summary.get('source', 'default')})"
+        )
+    for warning in summary.get("warnings") or []:
+        lines.append(f"warning: {warning}")
+    return lines

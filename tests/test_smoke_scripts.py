@@ -406,6 +406,32 @@ def test_live_smoke_main_emits_clean_runtime_error_summary_without_traceback(mon
     ]
 
 
+def test_profile_config_smoke_reports_effective_profile_summary(monkeypatch) -> None:
+    profile_config_smoke = _load_script_module("profile_config_smoke")
+
+    output = StringIO()
+    monkeypatch.setattr(
+        profile_config_smoke,
+        "emit_smoke_checks",
+        lambda checks: real_emit_smoke_checks(checks, stdout=output),
+    )
+    with redirect_stdout(output):
+        exit_code = profile_config_smoke.main()
+
+    lines = output.getvalue().splitlines()
+    assert exit_code == 0
+    assert any(line.startswith("profile: profile smoke") for line in lines)
+    assert "runtime_mode: live (cli)" in lines
+    assert "openai_model: env-model (env)" in lines
+    assert "stale_approval_warning_days: 9 (cli)" in lines
+    assert "warning: Unknown profile field ignored: ignored_future_field" in lines
+    assert "profile_config_sources= True" in lines
+    assert "env_config_sources= True" in lines
+    assert "cli_config_sources= True" in lines
+    assert "profile_summary_effective_values= True" in lines
+    assert "profile_summary_unknown_fields= True" in lines
+
+
 def test_approval_smoke_emits_timeline_summary_checks(monkeypatch) -> None:
     approval_smoke = _load_script_module("approval_smoke")
     output = StringIO()
