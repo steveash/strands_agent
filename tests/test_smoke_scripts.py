@@ -2034,6 +2034,65 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
     assert payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
 
 
+def test_smoke_cli_docs_fix_clean_repair_json_output_keeps_rerun_hint_null(
+    tmp_path, capsys
+) -> None:
+    smoke_cli_docs_fix = _load_script_module("smoke_cli_docs_fix")
+    readme_path = tmp_path / "README.md"
+    json_path = tmp_path / "artifacts" / "smoke-cli-docs-fix.json"
+    drifted_readme_path = tmp_path / "artifacts" / "README-drifted.md"
+    bundle_index_path = tmp_path / "artifacts" / "bundle-index.json"
+    render_output_dir = tmp_path / "artifacts" / "rendered"
+    render_manifest_path = tmp_path / "artifacts" / "render-manifest.json"
+    render_diff_path = tmp_path / "artifacts" / "render-review.patch"
+    readme_path.write_text(README_TEXT, encoding="utf-8")
+
+    exit_code = smoke_cli_docs_fix.main(
+        [
+            "standalone_smoke",
+            "--readme-path",
+            str(readme_path),
+            "--json-output",
+            str(json_path),
+            "--drifted-readme-path",
+            str(drifted_readme_path),
+            "--bundle-index-path",
+            str(bundle_index_path),
+            "--render-output-dir",
+            str(render_output_dir),
+            "--render-manifest-path",
+            str(render_manifest_path),
+            "--render-diff-path",
+            str(render_diff_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert captured.out == f"smoke README already up to date: {readme_path}\n"
+    assert readme_path.read_text(encoding="utf-8") == README_TEXT
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    _assert_smoke_cli_doc_repair_report_payload(
+        payload,
+        requested_target_name="standalone_smoke",
+        original_markdown=README_TEXT,
+        repaired_markdown=README_TEXT,
+        readme_path=readme_path,
+        stdout=False,
+        drifted_readme_path=drifted_readme_path,
+        render_output_dir=render_output_dir,
+        render_manifest_path=render_manifest_path,
+        render_diff_path=render_diff_path,
+        bundle_index_path=bundle_index_path,
+    )
+    assert payload["changed"] is False
+    assert payload["repaired_targets"] == []
+    assert payload["rerun_hint"] is None
+    assert payload["up_to_date"] is True
+    assert payload["wrote_readme"] is False
+
+
 
 def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_without_writing_readme(
     tmp_path, capsys
