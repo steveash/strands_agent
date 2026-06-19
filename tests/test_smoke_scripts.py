@@ -20,6 +20,7 @@ from strands_agent_tui.testing import (
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
     SMOKE_CLI_DOC_INVALID_CHOICE_EXPECTED_CHOICES_BY_SCRIPT_NAME,
     SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME,
+    SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME,
     SESSION_RECOVERY_SMOKE_SELECTION_CASES,
     SESSION_RECOVERY_SMOKE_WRAPPER,
     SESSION_TRIAGE_SMOKE_SELECTION_CASES,
@@ -85,6 +86,7 @@ from strands_agent_tui.testing import (
     set_session_artifact_mtime,
     smoke_cli_doc_spec,
     smoke_cli_doc_spec_id,
+    smoke_cli_doc_parser_spec,
     smoke_cli_docs_parity_rerun_hint,
     smoke_script_contract_case_id,
     smoke_wrapper_selection_case_id,
@@ -335,6 +337,15 @@ def _assert_script_parser_help_matches_shared_expectations(script_name: str) -> 
 
     for snippet in SMOKE_CLI_DOC_PARSER_HELP_EXPECTED_SNIPPETS_BY_SCRIPT_NAME[script_name]:
         assert snippet in help_text
+
+
+def test_smoke_cli_docs_scripts_build_parsers_from_public_parser_spec_registry() -> None:
+    for script_name, parser_spec in SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME.items():
+        module = _load_script_module(script_name)
+        kwargs = {"readme_path": module.README_PATH} if hasattr(module, "README_PATH") else {}
+
+        assert smoke_cli_doc_parser_spec(script_name) is parser_spec
+        assert module.build_parser().format_help() == parser_spec.build_parser(**kwargs).format_help()
 
 
 def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:

@@ -6,11 +6,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from strands_agent_tui.testing import (
-    build_smoke_cli_doc_fix_parser,
     collect_smoke_cli_readme_diffs,
     render_smoke_cli_readme_section,
     repair_smoke_cli_readme_sections,
     resolve_smoke_cli_doc_target_names,
+    smoke_cli_doc_parser_spec,
     smoke_cli_docs_parity_rerun_hint,
 )
 from strands_agent_tui.testing.smoke_cli_doc_artifacts import (
@@ -21,7 +21,7 @@ from strands_agent_tui.testing.smoke_cli_doc_artifacts import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    return build_smoke_cli_doc_fix_parser()
+    return smoke_cli_doc_parser_spec("smoke_cli_docs_fix").build_parser()
 
 
 def repair_readme(

@@ -7,10 +7,10 @@ from pathlib import Path
 from strands_agent_tui.testing import (
     DEFAULT_SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
     SMOKE_CLI_DOC_AUDIT_TARGET_NAMES,
-    build_smoke_cli_doc_audit_parser,
     collect_smoke_cli_doc_parity,
     emit_smoke_results,
     resolve_smoke_cli_doc_target_names,
+    smoke_cli_doc_parser_spec,
     smoke_cli_docs_parity_rerun_hint,
     smoke_wrapper_cli_spec,
 )
@@ -34,7 +34,7 @@ def resolve_target_names(requested_target_name: str | None = None) -> tuple[str,
 
 
 def build_parser() -> argparse.ArgumentParser:
-    return build_smoke_cli_doc_audit_parser()
+    return smoke_cli_doc_parser_spec("smoke_cli_docs_smoke").build_parser()
 
 
 def run_smoke_cli_docs_smoke(

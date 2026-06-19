@@ -13,7 +13,6 @@ from strands_agent_tui.testing import (
     SMOKE_CLI_DOC_ARTIFACTS_DEFAULT_TARGET_NAME,
     SMOKE_CLI_DOC_ARTIFACTS_TARGET_SELECTOR,
     build_smoke_cli_doc_drift_report_payload,
-    build_smoke_cli_doc_artifacts_parser,
     build_smoke_cli_doc_render_manifest_payload,
     build_smoke_cli_doc_repair_report_payload,
     collect_smoke_cli_readme_diffs,
@@ -22,6 +21,7 @@ from strands_agent_tui.testing import (
     render_smoke_cli_readme_section,
     replace_markdown_section,
     resolve_smoke_cli_doc_target_names,
+    smoke_cli_doc_parser_spec,
     smoke_cli_doc_spec,
 )
 
@@ -87,7 +87,7 @@ class ArtifactContractPaths(tuple):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    return build_smoke_cli_doc_artifacts_parser(readme_path=README_PATH)
+    return smoke_cli_doc_parser_spec("smoke_cli_docs_artifacts_smoke").build_parser(readme_path=README_PATH)
 
 
 def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
