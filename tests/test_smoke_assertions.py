@@ -458,6 +458,77 @@ def test_package_testing_api_smoke_cli_doc_diff_output_and_hash_helpers_use_file
     assert testing_api.normalize_text_output("") == ""
 
 
+def test_package_testing_api_smoke_cli_doc_artifact_hashes_match_persisted_diff_output(
+    tmp_path: Path,
+) -> None:
+    readme_path = tmp_path / "README.md"
+    output_dir = tmp_path / "rendered"
+    manifest_path = tmp_path / "review" / "smoke-cli-docs-preview.json"
+    diff_output_path = tmp_path / "review" / "smoke-cli-docs.patch"
+    rendered_output_path = output_dir / "standalone_smoke.md"
+    rendered_sections = (
+        ("standalone_smoke", "## Standalone\n\nSmoke docs\n"),
+    )
+    diff_sections = (
+        (
+            "standalone_smoke",
+            (
+                "--- expected",
+                "+++ README",
+                "@@ -1,2 +1,2 @@",
+                "-old standalone",
+                "+new standalone",
+            ),
+        ),
+    )
+
+    testing_api.write_text_output(
+        rendered_output_path,
+        rendered_sections[0][1],
+    )
+    testing_api.write_text_output(
+        diff_output_path,
+        testing_api.format_diff_output(diff_sections),
+    )
+    persisted_diff_sha256 = testing_api.sha256_text(
+        diff_output_path.read_text(encoding="utf-8")
+    )
+
+    manifest_payload = testing_api.build_smoke_cli_doc_render_manifest_payload(
+        body_only=False,
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        rendered_sections=rendered_sections,
+        written_paths=(rendered_output_path,),
+        readme_path=readme_path,
+        output_dir=output_dir,
+        manifest_output=manifest_path,
+        diff_output=diff_output_path,
+        diff_sections=diff_sections,
+    )
+    check_report_payload = testing_api.build_smoke_cli_doc_drift_report_payload(
+        readme_path=readme_path,
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        rendered_sections=rendered_sections,
+        diff_sections=diff_sections,
+        include_diff_lines=False,
+        check=True,
+        render_output_dir=output_dir,
+        render_manifest_path=manifest_path,
+        render_diff_path=diff_output_path,
+    )
+
+    assert manifest_payload["diff_output_path"] == str(diff_output_path)
+    assert manifest_payload["diff_bundle_sha256"] == persisted_diff_sha256
+    assert check_report_payload["render_diff_path"] == str(diff_output_path)
+    assert check_report_payload["diff_bundle_sha256"] == persisted_diff_sha256
+    assert check_report_payload["sections"][0]["diff_sha256"] == testing_api.sha256_text(
+        "\n".join(diff_sections[0][1])
+    )
+    assert "diff_lines" not in check_report_payload["sections"][0]
+
+
 def test_package_testing_api_smoke_cli_doc_artifact_paths_and_summaries_use_filesystem(
     tmp_path: Path,
 ) -> None:
