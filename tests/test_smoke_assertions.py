@@ -529,6 +529,53 @@ def test_package_testing_api_smoke_cli_doc_artifact_hashes_match_persisted_diff_
     assert "diff_lines" not in check_report_payload["sections"][0]
 
 
+def test_package_testing_api_smoke_cli_doc_repair_report_hashes_match_persisted_readme(
+    tmp_path: Path,
+) -> None:
+    readme_path = tmp_path / "README.md"
+    standalone_spec = smoke_wrapper_cli_spec("standalone_smoke")
+    drifted_markdown = replace_markdown_section(
+        README_TEXT,
+        heading=standalone_spec.readme_section_heading,
+        body="old standalone smoke docs\n",
+    )
+    readme_path.write_text(drifted_markdown, encoding="utf-8")
+    original_markdown = readme_path.read_text(encoding="utf-8")
+    diff_sections = collect_smoke_cli_readme_diffs(
+        original_markdown,
+        requested_target_name="standalone_smoke",
+    )
+
+    repaired_markdown, repaired_script_names = repair_smoke_cli_readme_sections(
+        original_markdown,
+        requested_target_name="standalone_smoke",
+    )
+    readme_path.write_text(repaired_markdown, encoding="utf-8")
+
+    repair_payload = testing_api.build_smoke_cli_doc_repair_report_payload(
+        readme_path=readme_path,
+        requested_target_name="standalone_smoke",
+        selected_script_names=("standalone_smoke",),
+        repaired_script_names=repaired_script_names,
+        original_markdown=original_markdown,
+        repaired_markdown=readme_path.read_text(encoding="utf-8"),
+        rendered_sections=(
+            ("standalone_smoke", render_smoke_cli_readme_section("standalone_smoke")),
+        ),
+        diff_sections=diff_sections,
+        stdout=False,
+    )
+
+    assert repaired_script_names == ("standalone_smoke",)
+    assert repair_payload["changed"] is True
+    assert repair_payload["wrote_readme"] is True
+    assert repair_payload["readme_sha256_before"] == testing_api.sha256_text(original_markdown)
+    assert repair_payload["readme_sha256_after"] == testing_api.sha256_text(
+        readme_path.read_text(encoding="utf-8")
+    )
+    assert readme_path.read_text(encoding="utf-8") == README_TEXT
+
+
 def test_package_testing_api_smoke_cli_doc_artifact_paths_and_summaries_use_filesystem(
     tmp_path: Path,
 ) -> None:
