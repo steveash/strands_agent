@@ -12,10 +12,13 @@ from strands_agent_tui.sessions import (
     TurnArtifact,
     count_recent_sessions,
     latest_session,
+    load_or_refresh_session_manifest,
     list_recent_sessions,
     pick_session,
+    render_session_manifest_summary,
     render_session_picker,
     save_session_picker_state,
+    summarize_session_manifest,
 )
 from strands_agent_tui.sessions.picker import (
     APPROVAL_RESTORE_LANE_DISPLAY_ORDER,
@@ -196,6 +199,60 @@ def test_session_manifest_tracks_turn_metadata_events_and_tools(tmp_path: Path) 
     assert json.loads(store.manifest_path.read_text(encoding="utf-8")) == manifest
 
 
+def test_session_manifest_summary_renders_runtime_sources_and_artifacts(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-summary")
+    store.append_turn(
+        TurnArtifact(
+            prompt="inspect saved run",
+            response="workspace looks tidy",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event("prompt_received", "Prompt accepted", "inspect saved run"),
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files"},
+                ),
+                runtime_event(
+                    "tool_finished",
+                    "read_file",
+                    "Finished reading file",
+                    data={"tool_name": "read_file"},
+                ),
+            ],
+            response_metadata={
+                "mode": "fake",
+                "model": "gpt-4o-mini",
+                "workspace_root": str(tmp_path),
+                "profile_name": "summary profile",
+                "profile_path": str(tmp_path / "profile.json"),
+                "config_sources": {
+                    "runtime_mode": "profile",
+                    "openai_model": "env",
+                    "workspace_root": "cli",
+                },
+            },
+        )
+    )
+
+    summary = summarize_session_manifest(store.load_manifest() or {})
+    rendered = render_session_manifest_summary(summary)
+
+    assert summary["session_id"] == "session-summary"
+    assert summary["turn_count"] == 1
+    assert summary["profile_name"] == "summary profile"
+    assert summary["source_summary"] == "runtime=profile, model=env, workspace=cli"
+    assert summary["top_events"] == [("tool_finished", 2), ("prompt_received", 1)]
+    assert summary["top_tools"] == [("list_files", 1), ("read_file", 1)]
+    assert summary["warnings"] == []
+    assert "session: session-summary" in rendered
+    assert "sources: runtime=profile, model=env, workspace=cli" in rendered
+    assert "top tools: list_files=1, read_file=1" in rendered
+    assert f"artifact turns: {store.jsonl_path}" in rendered
+
+
 def test_session_manifest_updates_pending_approval_count_with_session_state(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path, session_id="session-manifest-pending")
     _append_turn(store, "queue edit")
@@ -218,6 +275,18 @@ def test_session_manifest_updates_pending_approval_count_with_session_state(tmp_
     store.clear_session_state()
 
     assert store.load_manifest()["pending_approval_count"] == 0
+
+
+def test_load_or_refresh_session_manifest_rebuilds_missing_manifest(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path, session_id="session-legacy")
+    _append_turn(store, "legacy saved turn")
+    store.manifest_path.unlink()
+
+    manifest = load_or_refresh_session_manifest(store.session_dir)
+
+    assert manifest["session_id"] == "session-legacy"
+    assert manifest["turn_count"] == 1
+    assert store.manifest_path.exists()
 
 
 def test_latest_session_returns_newest_summary(tmp_path: Path) -> None:

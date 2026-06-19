@@ -7,6 +7,12 @@ from .artifacts import (
     load_session_picker_state,
     save_session_picker_state,
 )
+from .manifest import (
+    load_or_refresh_session_manifest,
+    load_session_manifest,
+    render_session_manifest_summary,
+    summarize_session_manifest,
+)
 from .picker import (
     MAX_RECENT_SESSIONS,
     SessionSummary,
@@ -34,12 +40,16 @@ __all__ = [
     "count_recent_sessions",
     "format_stale_approval_cutoff",
     "latest_session",
+    "load_or_refresh_session_manifest",
+    "load_session_manifest",
     "list_recent_sessions",
     "pick_session",
+    "render_session_manifest_summary",
     "render_recent_session_empty_state_lines",
     "render_recent_session_filter_summary_lines",
     "render_session_picker",
     "save_session_picker_state",
     "sanitize_session_switcher_filter_mode",
     "sanitize_session_switcher_sort_mode",
+    "summarize_session_manifest",
 ]

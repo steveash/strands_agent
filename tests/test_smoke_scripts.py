@@ -14,7 +14,7 @@ import pytest
 from strands_agent_tui.app import StrandsAgentApp
 from strands_agent_tui.config import AppConfig
 from strands_agent_tui.runtime import FakeStrandsRuntime, runtime_event
-from strands_agent_tui.sessions import SessionArtifactStore, render_session_picker
+from strands_agent_tui.sessions import SessionArtifactStore, TurnArtifact, render_session_picker
 from strands_agent_tui.testing import (
     DOCS_REVIEW_MATRIX_SMOKE_SCRIPT_CONTRACTS,
     NON_MATRIX_SMOKE_WRAPPER_SUMMARY_PREFIXES,
@@ -574,6 +574,58 @@ def test_session_manifest_smoke_emits_artifact_contract_checks(monkeypatch) -> N
     assert "session_manifest_metadata= True" in lines
     assert "session_manifest_tool_counts= True" in lines
     assert "session_manifest_pending_state= True" in lines
+
+
+def test_session_manifest_summary_script_renders_text_and_json(tmp_path: Path) -> None:
+    session_manifest_summary = _load_script_module("session_manifest_summary")
+    store = SessionArtifactStore(tmp_path, session_id="summary-script-session")
+    store.append_turn(
+        TurnArtifact(
+            prompt="inspect summary script",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event("prompt_received", "Prompt accepted", "inspect summary script"),
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files"},
+                ),
+            ],
+            response_metadata={
+                "model": "gpt-4o-mini",
+                "workspace_root": str(tmp_path),
+                "config_sources": {
+                    "runtime_mode": "default",
+                    "openai_model": "default",
+                    "workspace_root": "cli",
+                },
+            },
+        )
+    )
+    store.manifest_path.unlink()
+
+    text_output = StringIO()
+    with redirect_stdout(text_output):
+        text_exit_code = session_manifest_summary.main([str(store.session_dir)])
+
+    json_output = StringIO()
+    with redirect_stdout(json_output):
+        json_exit_code = session_manifest_summary.main([str(store.session_dir), "--json"])
+
+    assert text_exit_code == 0
+    assert json_exit_code == 0
+    assert store.manifest_path.exists()
+    text_lines = text_output.getvalue().splitlines()
+    payload = json.loads(json_output.getvalue())
+
+    assert "session: summary-script-session" in text_lines
+    assert "top tools: list_files=1" in text_lines
+    assert "sources: runtime=default, model=default, workspace=cli" in text_lines
+    assert payload["session_id"] == "summary-script-session"
+    assert payload["top_tools"] == [["list_files", 1]]
 
 
 def test_approval_restart_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:

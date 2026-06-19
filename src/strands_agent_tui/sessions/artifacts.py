@@ -265,6 +265,10 @@ class SessionArtifactStore:
             return None
         return json.loads(self.manifest_path.read_text(encoding="utf-8"))
 
+    def refresh_manifest(self) -> dict[str, object]:
+        self._write_manifest()
+        return self.load_manifest() or {}
+
     def save_pending_approvals(self, approvals: list[ApprovalRequest]) -> None:
         state = self.load_session_state() or SessionState()
         state.pending_approvals = list(approvals)

@@ -103,6 +103,7 @@ What exists now:
 - per-session artifact persistence under `artifacts/sessions/<session-id>/` with `turns.jsonl`, `transcript.md`, and a machine-readable `manifest.json`,
 - structured event payloads with timestamps and metadata for both fake and live runtime paths,
 - session manifests that roll up turn counts, provider/mode/model/workspace metadata, event/tool counts, error counts, pending approval counts, and artifact paths for each saved run,
+- a reusable session-manifest summary helper plus `scripts/session_manifest_summary.py` so saved runs can be inspected as compact text or JSON outside the TUI, including a non-destructive manifest refresh path for older/empty session directories,
 - explicit `artifact_saved` persistence events emitted by the app after each turn is written,
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
@@ -134,30 +135,30 @@ What exists now:
 - and a dedicated `scripts/session_triage_intervention_mix_smoke.py` contract runner that exercises the public session-triage wrapper and asserts intervention target/continuation mix lines end-to-end across both picker and switcher flows.
 
 What changed this run:
-- added `AppConfig.effective_config_summary()` for structured effective-value/source inspection,
-- added `summarize_workspace_profile()` and `render_workspace_profile_summary()` so profile audits can report configured fields, effective launch values, source precedence, and ignored/unknown profile keys,
-- extended `scripts/profile_config_smoke.py` to print the profile audit and assert effective CLI/env/profile precedence plus unknown-field warnings,
-- added focused coverage for the profile-audit API and public smoke output,
-- validated the increment with focused tests, the updated profile smoke, compile checks, and the full pytest suite,
+- added `load_or_refresh_session_manifest()`, `summarize_session_manifest()`, and `render_session_manifest_summary()` as a reusable session-artifact inspection seam,
+- added `scripts/session_manifest_summary.py` so an operator can inspect any saved session directory as compact text or normalized JSON without launching the TUI,
+- made the manifest-summary command rebuild a missing `manifest.json` from existing session artifacts, which keeps older or empty session directories inspectable instead of failing immediately,
+- added focused coverage for the manifest summary API, the legacy manifest rebuild path, and the public summary script,
+- validated the increment with focused tests, command-level script output, compile checks, and the full pytest suite,
 - and no destructive unblock step was needed this run.
 
 Why this matters now:
-- Phase 5 calls for config switching and resumable session metadata, and profile audits show the exact launch contract before the TUI or Strands runtime starts,
-- Steve can now distinguish "the profile said this" from "the env or CLI overrode this" and also see when a profile field would be silently ignored,
-- and it sharpens the Strands learning value because runtime selection, model choice, workspace root, artifact root, overwrite posture, and stale-approval policy become one inspectable contract instead of hidden shell state.
+- Phase 5 calls for resumable sessions and metadata, and the manifest-summary script makes a saved Strands run readable from the shell before reopening it,
+- Steve can now compare provider/model/workspace/profile provenance, turn counts, event/tool mix, pending approvals, and artifact paths without manually parsing JSON,
+- and it sharpens the Strands learning value because each run now has a small operator-facing "what happened here?" surface separate from the live TUI.
 
 How we know the prototype is working right now:
-- focused pytest coverage now proves profile audits expose effective values, source precedence, configured fields, and unknown-field warnings,
-- the profile-config smoke proves profile/env/CLI provenance plus audit rendering from a plain command-line check,
+- focused pytest coverage now proves session-manifest summaries expose runtime/config provenance, event/tool rollups, artifact paths, and missing-manifest rebuild behavior,
+- the summary script successfully rendered a saved session directory that originally had no `manifest.json`, producing a refreshed manifest plus a clear "no saved turns" warning,
 - compile checks pass across `src` and `scripts`,
-- focused coverage and the full pytest suite both pass after the profile-audit increment.
+- focused coverage and the full pytest suite both pass after the manifest-summary increment.
 
 Current evidence:
-- focused profile-audit coverage: `.venv/bin/pytest -q tests/test_runtime.py::test_workspace_profile_summary_reports_effective_values_and_unknown_fields tests/test_smoke_scripts.py::test_profile_config_smoke_reports_effective_profile_summary` => `2 passed in 1.43s`,
-- profile provenance smoke: `.venv/bin/python scripts/profile_config_smoke.py` => `profile_config_sources= True`, `env_config_sources= True`, `cli_config_sources= True`, `profile_summary_effective_values= True`, `profile_summary_unknown_fields= True`,
+- focused manifest-summary coverage: `.venv/bin/pytest -q tests/test_sessions.py::test_session_manifest_summary_renders_runtime_sources_and_artifacts tests/test_sessions.py::test_load_or_refresh_session_manifest_rebuilds_missing_manifest tests/test_smoke_scripts.py::test_session_manifest_summary_script_renders_text_and_json` => `3 passed in 1.80s`,
+- command-level manifest summary: `.venv/bin/python scripts/session_manifest_summary.py artifacts/sessions/session-20260619T020432Z` => rendered session/runtime/artifact lines and `warning: Manifest has no saved turns.`,
 - source compile check: `.venv/bin/python -m compileall -q src scripts` => passed,
 - broader app/runtime coverage: included in the full suite,
-- full automated tests: `.venv/bin/pytest -q` => `595 passed in 152.92s (0:02:32)`.
+- full automated tests: `.venv/bin/pytest -q` => `605 passed in 141.06s (0:02:21)`.
 
 ## First five phases
 
@@ -563,6 +564,15 @@ To verify the session-level manifest artifact without launching the TUI:
 ```
 
 Expected result includes `session_manifest_written= True`, `session_manifest_metadata= True`, `session_manifest_tool_counts= True`, and `session_manifest_pending_state= True`.
+
+To inspect a saved session manifest as an operator-facing summary:
+
+```bash
+.venv/bin/python scripts/session_manifest_summary.py artifacts/sessions/session-YYYYMMDDTHHMMSSZ
+.venv/bin/python scripts/session_manifest_summary.py artifacts/sessions/session-YYYYMMDDTHHMMSSZ --json
+```
+
+The summary prints the session id, turn/error/pending counts, provider/mode/model, workspace/profile provenance, top event/tool counts, artifact paths, and warnings. If `manifest.json` is missing but the session directory exists, the script refreshes the manifest from the saved artifacts before rendering the summary.
 
 ### Run tests
 
