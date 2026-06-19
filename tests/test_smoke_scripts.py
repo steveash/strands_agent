@@ -2097,6 +2097,17 @@ def test_smoke_cli_docs_fix_repair_json_output_writes_machine_readable_result(tm
         render_diff_path=render_diff_path,
         bundle_index_path=bundle_index_path,
     )
+    repaired_sections = (("standalone_smoke", render_smoke_cli_readme_section("standalone_smoke")),)
+    drift_sections = collect_smoke_cli_readme_diffs(
+        drifted_markdown,
+        requested_target_name="standalone_smoke",
+    )
+    assert payload["rendered_bundle_sha256"] == rendered_bundle_sha256(repaired_sections)
+    assert payload["diff_bundle_sha256"] == diff_bundle_sha256(drift_sections)
+    assert payload["sections"][0]["rendered_sha256"] == sha256_text(repaired_sections[0][1])
+    assert payload["sections"][0]["diff_sha256"] == sha256_text(
+        "\n".join(drift_sections[0][1])
+    )
     assert payload["rerun_hint"] == smoke_cli_docs_parity_rerun_hint()
 
 
@@ -2153,7 +2164,11 @@ def test_smoke_cli_docs_fix_clean_repair_json_output_keeps_rerun_hint_null(
         bundle_index_path=bundle_index_path,
     )
     assert payload["changed"] is False
+    assert payload["diff_bundle_sha256"] is None
+    assert payload["mode"] == "repair"
     assert payload["repaired_targets"] == []
+    assert payload["rendered_bundle_sha256"] is None
+    assert payload["sections"] == []
     assert payload["rerun_hint"] is None
     assert payload["up_to_date"] is True
     assert payload["wrote_readme"] is False
