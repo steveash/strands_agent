@@ -62,6 +62,7 @@ from strands_agent_tui.testing import (
     build_standalone_malformed_contract_failure_cases,
     build_timed_standalone_smoke_failure_pytest_params,
     collect_smoke_cli_readme_diffs,
+    diff_bundle_sha256,
     emit_smoke_checks as real_emit_smoke_checks,
     matches_markdown_section,
     matches_public_cli_help,
@@ -73,6 +74,7 @@ from strands_agent_tui.testing import (
     replace_markdown_section,
     render_smoke_cli_readme_section,
     render_smoke_cli_readme_sections,
+    rendered_bundle_sha256,
     seed_approval_restore_focus_scenario,
     seed_denied_approval_session,
     seed_pending_approval_session,
@@ -90,6 +92,7 @@ from strands_agent_tui.testing import (
     smoke_cli_docs_parity_rerun_hint,
     smoke_script_contract_case_id,
     smoke_wrapper_selection_case_id,
+    sha256_text,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -2216,6 +2219,17 @@ def test_smoke_cli_docs_fix_stdout_json_output_writes_machine_readable_result_wi
         render_diff_path=render_diff_path,
         bundle_index_path=bundle_index_path,
     )
+    repaired_sections = (("standalone_smoke", render_smoke_cli_readme_section("standalone_smoke")),)
+    drift_sections = collect_smoke_cli_readme_diffs(
+        drifted_markdown,
+        requested_target_name="standalone_smoke",
+    )
+    assert payload["rendered_bundle_sha256"] == rendered_bundle_sha256(repaired_sections)
+    assert payload["diff_bundle_sha256"] == diff_bundle_sha256(drift_sections)
+    assert payload["sections"][0]["rendered_sha256"] == sha256_text(repaired_sections[0][1])
+    assert payload["sections"][0]["diff_sha256"] == sha256_text(
+        "\n".join(drift_sections[0][1])
+    )
 
 
 def test_smoke_cli_docs_fix_clean_stdout_json_output_keeps_rerun_hint_null(
@@ -2272,8 +2286,11 @@ def test_smoke_cli_docs_fix_clean_stdout_json_output_keeps_rerun_hint_null(
         bundle_index_path=bundle_index_path,
     )
     assert payload["changed"] is False
+    assert payload["diff_bundle_sha256"] is None
     assert payload["mode"] == "stdout"
     assert payload["repaired_targets"] == []
+    assert payload["rendered_bundle_sha256"] is None
+    assert payload["sections"] == []
     assert payload["rerun_hint"] is None
     assert payload["up_to_date"] is True
     assert payload["wrote_readme"] is False
