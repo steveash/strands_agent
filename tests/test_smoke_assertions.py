@@ -754,11 +754,12 @@ def test_smoke_cli_doc_parser_alias_help_uses_shared_formatter() -> None:
     ) == ("all -> standalone_smoke, session_triage_smoke, session_recovery_smoke, smoke_matrix",)
 
 
-def test_package_testing_api_smoke_cli_alias_help_formatters_cover_wrapper_specs() -> None:
+def test_package_testing_api_smoke_cli_alias_help_formatters_cover_wrapper_specs(tmp_path) -> None:
     assert testing_api.format_smoke_cli_alias_help is format_smoke_cli_alias_help
     assert testing_api.format_smoke_cli_alias_lines is format_smoke_cli_alias_lines
 
     for spec in SMOKE_WRAPPER_CLI_SPECS:
+        parser_help = normalize_cli_text(spec.build_parser(script_dir=tmp_path).format_help())
         alias_lines = testing_api.format_smoke_cli_alias_lines(
             alias_target_names=spec.alias_target_names,
             resolve_display_names=spec.resolve_display_names,
@@ -770,6 +771,9 @@ def test_package_testing_api_smoke_cli_alias_help_formatters_cover_wrapper_specs
         )
 
         assert alias_lines == spec.help_alias_lines()
+        assert spec.item_help in parser_help
+        for alias_line in alias_lines:
+            assert alias_line in parser_help
         if alias_lines:
             assert alias_help == f"{spec.item_help} Aliases: " + "; ".join(alias_lines) + "."
         else:
