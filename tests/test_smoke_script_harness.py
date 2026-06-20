@@ -1267,6 +1267,91 @@ def test_package_testing_api_smoke_matrix_live_runtime_hints_cover_live_inclusiv
     assert observation.appears_before("hint", "failure_summary")
 
 
+def test_package_testing_api_all_review_missing_api_key_artifact_hint_ordering(
+    tmp_path: Path,
+) -> None:
+    exported_names = {
+        "SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT",
+        "SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_SCRIPT_CONTRACT",
+        "SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS",
+        "SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET",
+        "build_smoke_matrix_docs_review_observation_fixture",
+        "collect_review_artifact_output",
+        "collect_smoke_matrix_docs_review_failure_output",
+    }
+
+    assert exported_names <= set(testing_api.__all__)
+    assert (
+        testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT
+        is testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_SCRIPT_CONTRACT.contract
+    )
+
+    fixture = testing_api.build_smoke_matrix_docs_review_observation_fixture(
+        tmp_path / "checkout",
+        requested_target_name="all-review",
+    )
+    bundle_rerun_hint = (
+        testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.format_bundle_rerun_hint_line(
+            fixture.review_spec.expected_bundle_index_rerun_hint
+        )
+    )
+    assert bundle_rerun_hint is not None
+
+    combined_output_lines = [
+        fixture.review_output.metadata_line,
+        fixture.review_output.artifacts_line,
+        fixture.review_output.matrix_summary_line,
+        testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILED_LINE,
+        bundle_rerun_hint,
+        testing_api.SMOKE_MATRIX_WRAPPER.format_line(testing_api.smoke_matrix_missing_api_key_hint()),
+        testing_api.SMOKE_MATRIX_DOCS_REVIEW_ONLY_HINT_PREFIX,
+        (
+            f"{testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.failure_summary_prefix}"
+            "0.10s"
+        ),
+    ]
+    review_output = testing_api.collect_review_artifact_output(
+        combined_output_lines,
+        checkout_root=fixture.review_output.checkout_root,
+        metadata_prefix=testing_api.SMOKE_MATRIX_REVIEW_METADATA_PREFIX,
+        artifacts_prefix=testing_api.SMOKE_MATRIX_REVIEW_ARTIFACTS_PREFIX,
+        matrix_summary_prefix=testing_api.SMOKE_MATRIX_REVIEW_MATRIX_SUMMARY_PREFIX,
+    )
+    failure_output = testing_api.collect_smoke_matrix_docs_review_failure_output(
+        combined_output_lines,
+        review_output=review_output,
+        **testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS.collect_kwargs(),
+    )
+    results = testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_RESULT_PRESET.build_results(
+        testing_api.SmokeScriptRunResult(
+            checkout_root=review_output.checkout_root,
+            exit_code=1,
+            stdout="",
+            stderr="",
+            cleanup_callback=lambda: None,
+        ),
+        failure_output,
+        fixture.review_spec,
+        failure_defaults=testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_FAILURE_DEFAULTS,
+    )
+    output = StringIO()
+
+    assert testing_api.emit_smoke_results(results, stdout=output) == 0
+    lines = output.getvalue().splitlines()
+    contract = testing_api.SMOKE_MATRIX_ALL_REVIEW_MISSING_API_KEY_CONTRACT
+
+    for prefix in contract.required_line_prefixes:
+        assert any(line.startswith(prefix) for line in lines), prefix
+    for check_name in contract.true_check_names:
+        assert f"{check_name}= True" in lines
+
+    result_map = dict(results)
+    assert result_map["artifacts_before_missing_api_key_hint"] is True
+    assert result_map["bundle_rerun_hint_before_missing_api_key_hint"] is True
+    assert result_map["missing_api_key_hint_before_docs_hint"] is True
+    assert result_map["docs_hint_before_failure_summary"] is True
+
+
 def test_exported_docs_review_success_defaults_share_expected_prefixes() -> None:
     assert SMOKE_MATRIX_ARTIFACT_ROOTS_SUCCESS_DEFAULTS == SmokeMatrixDocsReviewSuccessDefaults(
         success_summary_prefix=smoke_matrix_docs_review_success_summary_prefix(),
