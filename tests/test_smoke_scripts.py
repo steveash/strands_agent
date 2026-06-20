@@ -351,6 +351,19 @@ def test_smoke_cli_docs_scripts_build_parsers_from_public_parser_spec_registry()
         assert module.build_parser().format_help() == parser_spec.build_parser(**kwargs).format_help()
 
 
+def test_smoke_cli_docs_scripts_reject_unknown_public_parser_spec_names() -> None:
+    for script_name in SMOKE_CLI_DOC_PARSER_SPECS_BY_SCRIPT_NAME:
+        module = _load_script_module(script_name)
+        unknown_script_name = f"{script_name}_missing"
+
+        assert module.smoke_cli_doc_parser_spec is smoke_cli_doc_parser_spec
+        with pytest.raises(
+            ValueError,
+            match=f"unknown smoke cli doc parser spec {unknown_script_name!r}",
+        ):
+            module.smoke_cli_doc_parser_spec(unknown_script_name)
+
+
 def test_live_smoke_main_emits_requested_live_contract(monkeypatch) -> None:
     live_smoke = _load_script_module("live_smoke")
 
