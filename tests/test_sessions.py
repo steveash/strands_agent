@@ -12,12 +12,15 @@ from strands_agent_tui.sessions import (
     TurnArtifact,
     count_recent_sessions,
     latest_session,
+    list_session_manifest_summaries,
     load_or_refresh_session_manifest,
     list_recent_sessions,
     pick_session,
+    render_session_manifest_collection_summary,
     render_session_manifest_summary,
     render_session_picker,
     save_session_picker_state,
+    summarize_session_manifest_collection,
     summarize_session_manifest,
 )
 from strands_agent_tui.sessions.picker import (
@@ -251,6 +254,93 @@ def test_session_manifest_summary_renders_runtime_sources_and_artifacts(tmp_path
     assert "sources: runtime=profile, model=env, workspace=cli" in rendered
     assert "top tools: list_files=1, read_file=1" in rendered
     assert f"artifact turns: {store.jsonl_path}" in rendered
+
+
+def test_session_manifest_collection_sorts_recent_runs_and_rolls_up_counts(tmp_path: Path) -> None:
+    first_store = SessionArtifactStore(tmp_path, session_id="session-first")
+    first_store.append_turn(
+        TurnArtifact(
+            prompt="inspect earlier run",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event("prompt_received", "Prompt accepted", "inspect earlier run"),
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Listed files",
+                    data={"tool_name": "list_files"},
+                ),
+            ],
+            response_metadata={
+                "model": "gpt-4o-mini",
+                "workspace_root": str(tmp_path / "workspace-a"),
+            },
+            created_at="2026-06-19T10:00:00+00:00",
+        )
+    )
+    latest_store = SessionArtifactStore(tmp_path, session_id="session-latest")
+    latest_store.append_turn(
+        TurnArtifact(
+            prompt="debug latest run",
+            response="fixed",
+            provider="strands",
+            mode="live",
+            events=[
+                runtime_event("prompt_received", "Prompt accepted", "debug latest run"),
+                runtime_event(
+                    "tool_finished",
+                    "read_file",
+                    "Read file",
+                    data={"tool_name": "read_file"},
+                ),
+                runtime_event(
+                    "tool_failed",
+                    "pytest",
+                    "Tests failed",
+                    data={"tool_name": "run_shell_command"},
+                ),
+            ],
+            response_metadata={
+                "model": "gpt-4.1-mini",
+                "workspace_root": str(tmp_path / "workspace-b"),
+            },
+            created_at="2026-06-20T10:00:00+00:00",
+        )
+    )
+    latest_store.save_session_state(
+        SessionState(
+            pending_approvals=[
+                ApprovalRequest(
+                    request_id="approval-0001",
+                    tool_name="replace_text",
+                    reason="Edit requires confirmation",
+                    args={"relative_path": "app.py"},
+                )
+            ]
+        )
+    )
+
+    summaries = list_session_manifest_summaries(tmp_path)
+    collection = summarize_session_manifest_collection(summaries)
+    rendered = render_session_manifest_collection_summary(collection)
+
+    assert [summary["session_id"] for summary in summaries] == ["session-latest", "session-first"]
+    assert collection["session_count"] == 2
+    assert collection["turn_count"] == 2
+    assert collection["pending_approval_count"] == 1
+    assert collection["workspace_count"] == 2
+    assert collection["providers"] == [("fake-strands", 1), ("strands", 1)]
+    assert collection["top_tools"] == [
+        ("list_files", 1),
+        ("read_file", 1),
+        ("run_shell_command", 1),
+    ]
+    assert "sessions: 2 | turns: 2 | errors: 0 | pending approvals: 1 | workspaces: 2" in rendered
+    assert "providers: fake-strands=1, strands=1" in rendered
+    assert any(line.startswith("1. session-latest | 2026-06-20T10:00:00+00:00") for line in rendered)
+    assert any(line.strip() == "last prompt: debug latest run" for line in rendered)
 
 
 def test_session_manifest_updates_pending_approval_count_with_session_state(tmp_path: Path) -> None:

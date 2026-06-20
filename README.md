@@ -104,6 +104,7 @@ What exists now:
 - structured event payloads with timestamps and metadata for both fake and live runtime paths,
 - session manifests that roll up turn counts, provider/mode/model/workspace metadata, event/tool counts, error counts, pending approval counts, and artifact paths for each saved run,
 - a reusable session-manifest summary helper plus `scripts/session_manifest_summary.py` so saved runs can be inspected as compact text or JSON outside the TUI, including a non-destructive manifest refresh path for older/empty session directories,
+- recent-session manifest rollups so a whole `artifacts/sessions/` directory can be inspected by most-recent saved runs, aggregate provider/mode/model mix, event/tool counts, pending approvals, and last prompt previews without launching the TUI,
 - explicit `artifact_saved` persistence events emitted by the app after each turn is written,
 - response metadata capture for provider, mode, model, workspace root, tool count, and elapsed time where available,
 - deterministic fake-runtime event emission for inspect, search, write, and edit activity, including confirm-needed mutation prompts, so UI behavior is testable without live model calls,
@@ -135,30 +136,29 @@ What exists now:
 - and a dedicated `scripts/session_triage_intervention_mix_smoke.py` contract runner that exercises the public session-triage wrapper and asserts intervention target/continuation mix lines end-to-end across both picker and switcher flows.
 
 What changed this run:
-- added `load_or_refresh_session_manifest()`, `summarize_session_manifest()`, and `render_session_manifest_summary()` as a reusable session-artifact inspection seam,
-- added `scripts/session_manifest_summary.py` so an operator can inspect any saved session directory as compact text or normalized JSON without launching the TUI,
-- made the manifest-summary command rebuild a missing `manifest.json` from existing session artifacts, which keeps older or empty session directories inspectable instead of failing immediately,
-- added focused coverage for the manifest summary API, the legacy manifest rebuild path, and the public summary script,
-- validated the increment with focused tests, command-level script output, compile checks, and the full pytest suite,
+- added `list_session_manifest_summaries()`, `summarize_session_manifest_collection()`, and `render_session_manifest_collection_summary()` for inspecting a saved-session directory as a cross-run collection,
+- extended `scripts/session_manifest_summary.py` with `--recent N`, including JSON output, so the same operator command can summarize the newest saved runs instead of one manifest at a time,
+- rolled up provider/mode/model mix, aggregate turn/error/pending counts, workspace count, top event/tool counts, and last prompt previews across recent sessions,
+- added focused coverage for the collection API, recent-session ordering, rollup counts, and the public `--recent` CLI path,
+- validated the increment with focused tests, command-level script output, and compile checks,
 - and no destructive unblock step was needed this run.
 
 Why this matters now:
-- Phase 5 calls for resumable sessions and metadata, and the manifest-summary script makes a saved Strands run readable from the shell before reopening it,
-- Steve can now compare provider/model/workspace/profile provenance, turn counts, event/tool mix, pending approvals, and artifact paths without manually parsing JSON,
-- and it sharpens the Strands learning value because each run now has a small operator-facing "what happened here?" surface separate from the live TUI.
+- Phase 5 calls for resumable sessions and metadata, and the manifest summary now answers both "what happened in this run?" and "what patterns are showing up across recent runs?",
+- Steve can compare fake vs live runtime usage, tool mix, failure signals, pending approvals, and workspace spread before reopening a session,
+- and it sharpens the Strands learning value because saved agent-loop behavior becomes a small dataset Steve can inspect from the shell.
 
 How we know the prototype is working right now:
-- focused pytest coverage now proves session-manifest summaries expose runtime/config provenance, event/tool rollups, artifact paths, and missing-manifest rebuild behavior,
-- the summary script successfully rendered a saved session directory that originally had no `manifest.json`, producing a refreshed manifest plus a clear "no saved turns" warning,
+- focused pytest coverage now proves session-manifest collection summaries preserve recent ordering, aggregate event/tool/runtime counts, and expose recent-session previews,
+- the summary script successfully rendered the repo's `artifacts/sessions` directory with `--recent 3`, producing an aggregate overview plus numbered recent sessions,
 - compile checks pass across `src` and `scripts`,
-- focused coverage and the full pytest suite both pass after the manifest-summary increment.
+- focused coverage and the full pytest suite both pass after the recent-session manifest increment.
 
 Current evidence:
-- focused manifest-summary coverage: `.venv/bin/pytest -q tests/test_sessions.py::test_session_manifest_summary_renders_runtime_sources_and_artifacts tests/test_sessions.py::test_load_or_refresh_session_manifest_rebuilds_missing_manifest tests/test_smoke_scripts.py::test_session_manifest_summary_script_renders_text_and_json` => `3 passed in 1.80s`,
-- command-level manifest summary: `.venv/bin/python scripts/session_manifest_summary.py artifacts/sessions/session-20260619T020432Z` => rendered session/runtime/artifact lines and `warning: Manifest has no saved turns.`,
+- focused manifest-summary coverage: `.venv/bin/pytest -q tests/test_sessions.py::test_session_manifest_collection_sorts_recent_runs_and_rolls_up_counts tests/test_smoke_scripts.py::test_session_manifest_summary_script_renders_recent_collection tests/test_smoke_scripts.py::test_session_manifest_summary_script_renders_text_and_json` => `3 passed in 1.55s`,
+- command-level recent manifest summary: `.venv/bin/python scripts/session_manifest_summary.py artifacts/sessions --recent 3` => rendered aggregate session/provider/model/tool lines plus three numbered recent sessions,
 - source compile check: `.venv/bin/python -m compileall -q src scripts` => passed,
-- broader app/runtime coverage: included in the full suite,
-- full automated tests: `.venv/bin/pytest -q` => `605 passed in 141.06s (0:02:21)`.
+- full automated tests: `.venv/bin/pytest -q` => `610 passed in 141.88s (0:02:21)`.
 
 ## First five phases
 
@@ -570,9 +570,11 @@ To inspect a saved session manifest as an operator-facing summary:
 ```bash
 .venv/bin/python scripts/session_manifest_summary.py artifacts/sessions/session-YYYYMMDDTHHMMSSZ
 .venv/bin/python scripts/session_manifest_summary.py artifacts/sessions/session-YYYYMMDDTHHMMSSZ --json
+.venv/bin/python scripts/session_manifest_summary.py artifacts/sessions --recent 5
+.venv/bin/python scripts/session_manifest_summary.py artifacts/sessions --recent 5 --json
 ```
 
-The summary prints the session id, turn/error/pending counts, provider/mode/model, workspace/profile provenance, top event/tool counts, artifact paths, and warnings. If `manifest.json` is missing but the session directory exists, the script refreshes the manifest from the saved artifacts before rendering the summary.
+The single-session summary prints the session id, turn/error/pending counts, provider/mode/model, workspace/profile provenance, top event/tool counts, artifact paths, and warnings. If `manifest.json` is missing but the session directory exists, the script refreshes the manifest from the saved artifacts before rendering the summary. The `--recent` mode treats the path as a sessions root and prints aggregate counts plus the newest saved sessions with runtime mix and last-prompt previews.
 
 ### Run tests
 

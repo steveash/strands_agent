@@ -642,6 +642,68 @@ def test_session_manifest_summary_script_renders_text_and_json(tmp_path: Path) -
     assert payload["top_tools"] == [["list_files", 1]]
 
 
+def test_session_manifest_summary_script_renders_recent_collection(tmp_path: Path) -> None:
+    session_manifest_summary = _load_script_module("session_manifest_summary")
+    first_store = SessionArtifactStore(tmp_path, session_id="summary-recent-a")
+    first_store.append_turn(
+        TurnArtifact(
+            prompt="first saved task",
+            response="done",
+            provider="fake-strands",
+            mode="fake",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "list_files",
+                    "Finished listing files",
+                    data={"tool_name": "list_files"},
+                ),
+            ],
+            response_metadata={"model": "gpt-4o-mini", "workspace_root": str(tmp_path)},
+            created_at="2026-06-19T10:00:00+00:00",
+        )
+    )
+    latest_store = SessionArtifactStore(tmp_path, session_id="summary-recent-b")
+    latest_store.append_turn(
+        TurnArtifact(
+            prompt="latest saved task",
+            response="done",
+            provider="strands",
+            mode="live",
+            events=[
+                runtime_event(
+                    "tool_finished",
+                    "read_file",
+                    "Finished reading file",
+                    data={"tool_name": "read_file"},
+                ),
+            ],
+            response_metadata={"model": "gpt-4.1-mini", "workspace_root": str(tmp_path)},
+            created_at="2026-06-20T10:00:00+00:00",
+        )
+    )
+
+    text_output = StringIO()
+    with redirect_stdout(text_output):
+        text_exit_code = session_manifest_summary.main([str(tmp_path), "--recent", "2"])
+
+    json_output = StringIO()
+    with redirect_stdout(json_output):
+        json_exit_code = session_manifest_summary.main([str(tmp_path), "--recent", "1", "--json"])
+
+    assert text_exit_code == 0
+    assert json_exit_code == 0
+    text_lines = text_output.getvalue().splitlines()
+    payload = json.loads(json_output.getvalue())
+
+    assert "sessions: 2 | turns: 2 | errors: 0 | pending approvals: 0 | workspaces: 1" in text_lines
+    assert "top tools: list_files=1, read_file=1" in text_lines
+    assert any(line.startswith("1. summary-recent-b | 2026-06-20T10:00:00+00:00") for line in text_lines)
+    assert any(line.startswith("2. summary-recent-a | 2026-06-19T10:00:00+00:00") for line in text_lines)
+    assert payload["session_count"] == 1
+    assert payload["sessions"][0]["session_id"] == "summary-recent-b"
+
+
 def test_approval_restart_smoke_emits_mixed_detail_and_boolean_lines(monkeypatch) -> None:
     approval_restart_smoke = _load_script_module("approval_restart_smoke")
     output = StringIO()
